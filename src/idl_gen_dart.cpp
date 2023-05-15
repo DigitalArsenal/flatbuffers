@@ -15,6 +15,8 @@
  */
 
 // independent from idl_parser, since this code is not needed for most clients
+#include "idl_gen_dart.h"
+
 #include <cassert>
 #include <cmath>
 
@@ -88,8 +90,8 @@ class DartGenerator : public BaseGenerator {
 
   template<typename T>
   void import_generator(const std::vector<T *> &definitions,
-                         const std::string &included,
-                         std::set<std::string> &imports) {
+                        const std::string &included,
+                        std::set<std::string> &imports) {
     for (const auto &item : definitions) {
       if (item->file == included) {
         std::string component = namer_.Namespace(*item->defined_namespace);
@@ -758,9 +760,7 @@ class DartGenerator : public BaseGenerator {
 
   std::string getDefaultValue(const Value &value) const {
     if (!value.constant.empty() && value.constant != "0") {
-      if (IsBool(value.type.base_type)) {
-        return "true";
-      }
+      if (IsBool(value.type.base_type)) { return "true"; }
       if (IsScalar(value.type.base_type)) {
         if (StringIsFlatbufferNan(value.constant)) {
           return "double.nan";
@@ -1122,14 +1122,14 @@ class DartGenerator : public BaseGenerator {
 };
 }  // namespace dart
 
-bool GenerateDart(const Parser &parser, const std::string &path,
-                  const std::string &file_name) {
+static bool GenerateDart(const Parser &parser, const std::string &path,
+                         const std::string &file_name) {
   dart::DartGenerator generator(parser, path, file_name);
   return generator.generate();
 }
 
-std::string DartMakeRule(const Parser &parser, const std::string &path,
-                         const std::string &file_name) {
+static std::string DartMakeRule(const Parser &parser, const std::string &path,
+                                const std::string &file_name) {
   auto filebase =
       flatbuffers::StripPath(flatbuffers::StripExtension(file_name));
   dart::DartGenerator generator(parser, path, file_name);
@@ -1140,6 +1140,59 @@ std::string DartMakeRule(const Parser &parser, const std::string &path,
     make_rule += " " + *it;
   }
   return make_rule;
+}
+
+namespace {
+
+class DartCodeGenerator : public CodeGenerator {
+ public:
+  Status GenerateCode(const Parser &parser, const std::string &path,
+                      const std::string &filename) override {
+    if (!GenerateDart(parser, path, filename)) { return Status::ERROR; }
+    return Status::OK;
+  }
+
+  Status GenerateCode(const uint8_t *, int64_t,
+                      const CodeGenOptions &) override {
+    return Status::NOT_IMPLEMENTED;
+  }
+
+  Status GenerateMakeRule(const Parser &parser, const std::string &path,
+                          const std::string &filename,
+                          std::string &output) override {
+    output = DartMakeRule(parser, path, filename);
+    return Status::OK;
+  }
+
+  Status GenerateGrpcCode(const Parser &parser, const std::string &path,
+                          const std::string &filename) override {
+    (void)parser;
+    (void)path;
+    (void)filename;
+    return Status::NOT_IMPLEMENTED;
+  }
+
+  Status GenerateRootFile(const Parser &parser,
+                          const std::string &path) override {
+    (void)parser;
+    (void)path;
+    return Status::NOT_IMPLEMENTED;
+  }
+
+  bool IsSchemaOnly() const override { return true; }
+
+  bool SupportsBfbsGeneration() const override { return false; }
+
+  bool SupportsRootFileGeneration() const override { return false; }
+
+  IDLOptions::Language Language() const override { return IDLOptions::kDart; }
+
+  std::string LanguageName() const override { return "Dart"; }
+};
+}  // namespace
+
+std::unique_ptr<CodeGenerator> NewDartCodeGenerator() {
+  return std::unique_ptr<DartCodeGenerator>(new DartCodeGenerator());
 }
 
 }  // namespace flatbuffers

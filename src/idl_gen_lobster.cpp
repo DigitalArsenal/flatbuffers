@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "idl_gen_lobster.h"
+
 #include <string>
 #include <unordered_set>
 
@@ -61,8 +63,10 @@ class LobsterGenerator : public BaseGenerator {
   std::string GenTypeName(const Type &type) {
     auto bits = NumToString(SizeOf(type.base_type) * 8);
     if (IsInteger(type.base_type)) {
-      if (IsUnsigned(type.base_type)) return "uint" + bits;
-      else return "int" + bits;
+      if (IsUnsigned(type.base_type))
+        return "uint" + bits;
+      else
+        return "int" + bits;
     }
     if (IsFloat(type.base_type)) return "float" + bits;
     if (IsString(type)) return "string";
@@ -118,16 +122,17 @@ class LobsterGenerator : public BaseGenerator {
         auto defval = field.IsOptional() ? "0" : field.value.constant;
         acc = "buf_.flatbuffers_field_" + GenTypeName(field.value.type) +
               "(pos_, " + offsets + ", " + defval + ")";
-        if (IsBool(field.value.type.base_type))
-          acc = "bool(" + acc + ")";
+        if (IsBool(field.value.type.base_type)) acc = "bool(" + acc + ")";
       }
       if (field.value.type.enum_def)
         acc = NormalizedName(*field.value.type.enum_def) + "(" + acc + ")";
       if (field.IsOptional()) {
         acc += ", buf_.flatbuffers_field_present(pos_, " + offsets + ")";
-        code += def + "() -> " + LobsterType(field.value.type) + ", bool:\n        return " + acc + "\n";
+        code += def + "() -> " + LobsterType(field.value.type) +
+                ", bool:\n        return " + acc + "\n";
       } else {
-        code += def + "() -> " + LobsterType(field.value.type) + ":\n        return " + acc + "\n";
+        code += def + "() -> " + LobsterType(field.value.type) +
+                ":\n        return " + acc + "\n";
       }
       return;
     }
@@ -148,7 +153,8 @@ class LobsterGenerator : public BaseGenerator {
       }
       case BASE_TYPE_STRING:
         code += def +
-                "() -> string:\n        return buf_.flatbuffers_field_string(pos_, " +
+                "() -> string:\n        return "
+                "buf_.flatbuffers_field_string(pos_, " +
                 offsets + ")\n";
         break;
       case BASE_TYPE_VECTOR: {
@@ -159,7 +165,9 @@ class LobsterGenerator : public BaseGenerator {
           if (!(vectortype.struct_def->fixed)) {
             start = "buf_.flatbuffers_indirect(" + start + ")";
           }
-          code += def + "(i:int) -> " + NamespacedName(*field.value.type.struct_def) + ":\n        return ";
+          code += def + "(i:int) -> " +
+                  NamespacedName(*field.value.type.struct_def) +
+                  ":\n        return ";
           code += NamespacedName(*field.value.type.struct_def) + " { buf_, " +
                   start + " }\n";
         } else {
@@ -167,7 +175,8 @@ class LobsterGenerator : public BaseGenerator {
             code += def + "(i:int) -> string:\n        return ";
             code += "buf_.flatbuffers_string";
           } else {
-            code += def + "(i:int) -> " + LobsterType(vectortype) + ":\n        return ";
+            code += def + "(i:int) -> " + LobsterType(vectortype) +
+                    ":\n        return ";
             code += "buf_.read_" + GenTypeName(vectortype) + "_le";
           }
           code += "(buf_.flatbuffers_field_vector(pos_, " + offsets +
@@ -396,10 +405,68 @@ class LobsterGenerator : public BaseGenerator {
 
 }  // namespace lobster
 
-bool GenerateLobster(const Parser &parser, const std::string &path,
-                     const std::string &file_name) {
+static bool GenerateLobster(const Parser &parser, const std::string &path,
+                            const std::string &file_name) {
   lobster::LobsterGenerator generator(parser, path, file_name);
   return generator.generate();
+}
+
+namespace {
+
+class LobsterCodeGenerator : public CodeGenerator {
+ public:
+  Status GenerateCode(const Parser &parser, const std::string &path,
+                      const std::string &filename) override {
+    if (!GenerateLobster(parser, path, filename)) { return Status::ERROR; }
+    return Status::OK;
+  }
+
+  Status GenerateCode(const uint8_t *, int64_t,
+                      const CodeGenOptions &) override {
+    return Status::NOT_IMPLEMENTED;
+  }
+
+  Status GenerateMakeRule(const Parser &parser, const std::string &path,
+                          const std::string &filename,
+                          std::string &output) override {
+    (void)parser;
+    (void)path;
+    (void)filename;
+    (void)output;
+    return Status::NOT_IMPLEMENTED;
+  }
+
+  Status GenerateGrpcCode(const Parser &parser, const std::string &path,
+                          const std::string &filename) override {
+    (void)parser;
+    (void)path;
+    (void)filename;
+    return Status::NOT_IMPLEMENTED;
+  }
+
+  Status GenerateRootFile(const Parser &parser,
+                          const std::string &path) override {
+    (void)parser;
+    (void)path;
+    return Status::NOT_IMPLEMENTED;
+  }
+
+  bool IsSchemaOnly() const override { return true; }
+
+  bool SupportsBfbsGeneration() const override { return false; }
+
+  bool SupportsRootFileGeneration() const override { return false; }
+
+  IDLOptions::Language Language() const override {
+    return IDLOptions::kLobster;
+  }
+
+  std::string LanguageName() const override { return "Lobster"; }
+};
+}  // namespace
+
+std::unique_ptr<CodeGenerator> NewLobsterCodeGenerator() {
+  return std::unique_ptr<LobsterCodeGenerator>(new LobsterCodeGenerator());
 }
 
 }  // namespace flatbuffers

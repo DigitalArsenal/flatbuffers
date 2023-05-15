@@ -1,7 +1,8 @@
+#!/usr/bin/bash
 
 printf -v year '%(%y)T' -1
-printf -v month '%(%m)T' -1
-printf -v day '%(%d)T' -1
+printf -v month '%(%-m)T' -1
+printf -v day '%(%-d)T' -1
 
 version="$year.$month.$day"
 version_underscore="$year\_$month\_$day"

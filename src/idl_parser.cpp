@@ -2104,7 +2104,7 @@ CheckedError Parser::ParseSingleValue(const std::string *name, Value &e,
     // Get an indentifier: NAN, INF, or function name like cos/sin/deg.
     NEXT();
     if (token_ != kTokenIdentifier) return Error("constant name expected");
-    attribute_.insert(0, 1, sign);
+    attribute_.insert(size_t(0), size_t(1), sign);
   }
 
   const auto in_type = e.type.base_type;
@@ -2118,7 +2118,7 @@ CheckedError Parser::ParseSingleValue(const std::string *name, Value &e,
   auto match = false;
 
   #define IF_ECHECK_(force, dtoken, check, req)    \
-    if (!match && ((dtoken) == token_) && ((check) || IsConstTrue(force))) \
+    if (!match && ((dtoken) == token_) && ((check) || flatbuffers::IsConstTrue(force))) \
       ECHECK(TryTypedValue(name, dtoken, check, e, req, &match))
   #define TRY_ECHECK(dtoken, check, req) IF_ECHECK_(false, dtoken, check, req)
   #define FORCE_ECHECK(dtoken, check, req) IF_ECHECK_(true, dtoken, check, req)
@@ -2679,9 +2679,10 @@ std::vector<IncludedFile> Parser::GetIncludedFiles() const {
 bool Parser::SupportsOptionalScalars(const flatbuffers::IDLOptions &opts) {
   static FLATBUFFERS_CONSTEXPR unsigned long supported_langs =
       IDLOptions::kRust | IDLOptions::kSwift | IDLOptions::kLobster |
-      IDLOptions::kKotlin | IDLOptions::kCpp | IDLOptions::kJava |
-      IDLOptions::kCSharp | IDLOptions::kTs | IDLOptions::kBinary |
-      IDLOptions::kGo | IDLOptions::kPython | IDLOptions::kJson |
+      IDLOptions::kKotlin | IDLOptions::kKotlinKmp | IDLOptions::kCpp |
+      IDLOptions::kJava | IDLOptions::kCSharp | IDLOptions::kTs |
+      IDLOptions::kBinary | IDLOptions::kGo | IDLOptions::kPython |
+      IDLOptions::kJson |
       IDLOptions::kNim;
   unsigned long langs = opts.lang_to_generate;
   return (langs > 0 && langs < IDLOptions::kMAX) && !(langs & ~supported_langs);
@@ -2702,7 +2703,7 @@ bool Parser::SupportsAdvancedUnionFeatures() const {
           ~(IDLOptions::kCpp | IDLOptions::kTs | IDLOptions::kPhp |
             IDLOptions::kJava | IDLOptions::kCSharp | IDLOptions::kKotlin |
             IDLOptions::kBinary | IDLOptions::kSwift | IDLOptions::kNim |
-            IDLOptions::kJson)) == 0;
+            IDLOptions::kJson | IDLOptions::kKotlinKmp)) == 0;
 }
 
 bool Parser::SupportsAdvancedArrayFeatures() const {
@@ -2718,7 +2719,8 @@ bool Parser::Supports64BitOffsets() const {
 }
 
 bool Parser::SupportsUnionUnderlyingType() const {
-    return (opts.lang_to_generate & ~IDLOptions::kCpp) == 0;
+    return (opts.lang_to_generate & ~(IDLOptions::kCpp | IDLOptions::kTs |
+         IDLOptions::kBinary)) == 0;
 }
 
 Namespace *Parser::UniqueNamespace(Namespace *ns) {
@@ -3423,7 +3425,7 @@ CheckedError Parser::ParseFlexBufferValue(flexbuffers::Builder *builder) {
       NEXT();
       if (token_ != kTokenIdentifier)
         return Error("floating-point constant expected");
-      attribute_.insert(0, 1, sign);
+      attribute_.insert(size_t(0), size_t(1), sign);
       ECHECK(ParseFlexBufferNumericConstant(builder));
       NEXT();
       break;

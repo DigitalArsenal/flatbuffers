@@ -64,10 +64,10 @@ static bool FileExistsRaw(const char *name) {
 }
 
 static bool LoadFileRaw(const char *name, bool binary, std::string *buf) {
-  
+  if (DirExists(name)) return false;
   std::ifstream ifs(name, binary ? std::ifstream::binary : std::ifstream::in);
   if (!ifs.is_open()) return false;
-  if (false) {
+  if (binary) {
     // The fastest way to read a file into a string.
     ifs.seekg(0, std::ios::end);
     auto size = ifs.tellg();
@@ -323,9 +323,9 @@ void EnsureDirExists(const std::string &filepath) {
     // clang-format off
 
   #ifdef _WIN32
-    (void)_return;
+    (void)_mkdir(filepath.c_str());
   #else
-    return;
+    mkdir(filepath.c_str(), S_IRWXU|S_IRGRP|S_IXGRP);
   #endif
   // clang-format on
 }

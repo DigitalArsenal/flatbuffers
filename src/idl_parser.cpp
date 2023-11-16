@@ -890,7 +890,7 @@ CheckedError Parser::ParseField(StructDef &struct_def) {
   if (LookupCreateStruct(name, false, false))
     return Error("field name can not be the same as table/struct name");
 
-  if (!IsLowerSnakeCase(name)) {
+  if (false) {
     Warning("field names should be lowercase snake_case, got: " + name);
   }
 

@@ -86,11 +86,17 @@ static bool LoadFileRaw(const char *name, bool binary, std::string *buf) {
 LoadFileFunction g_load_file_function = LoadFileRaw;
 FileExistsFunction g_file_exists_function = FileExistsRaw;
 
-static std::string ToCamelCase(const std::string &input, bool first) {
+static std::string ToCamelCase(const std::string &input, bool is_upper) {
   std::string s;
   for (size_t i = 0; i < input.length(); i++) {
-    if (!i && first)
-      s += CharToUpper(input[i]);
+    if (!i && input[i] == '_') {
+      s += input[i];
+      // we ignore leading underscore but make following
+      // alphabet char upper.
+      if (i + 1 < input.length() && is_alpha(input[i + 1]))
+        s += CharToUpper(input[++i]);
+    } else if (!i)
+      s += is_upper ? CharToUpper(input[i]) : CharToLower(input[i]);
     else if (input[i] == '_' && i + 1 < input.length())
       s += CharToUpper(input[++i]);
     else
@@ -328,6 +334,10 @@ void EnsureDirExists(const std::string &filepath) {
     return;
   #endif
   // clang-format on
+}
+
+std::string FilePath(const std::string& project, const std::string& filePath, bool absolute) {
+    return (absolute) ? AbsolutePath(filePath) : RelativeToRootPath(project, filePath);
 }
 
 std::string AbsolutePath(const std::string &filepath) {

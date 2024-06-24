@@ -188,7 +188,8 @@ const static FlatCOption flatc_options[] = {
     "relative to. The 'root' is denoted with  `//`. E.g. if PATH=/a/b/c "
     "then /a/d/e.fbs will be serialized as //../d/e.fbs. (PATH defaults to the "
     "directory of the first provided schema file." },
-  { "", "bfbs-absolute-paths", "", "Uses absolute paths instead of relative paths in the BFBS output." },
+  { "", "bfbs-absolute-paths", "",
+    "Uses absolute paths instead of relative paths in the BFBS output." },
   { "", "bfbs-comments", "", "Add doc comments to the binary schema files." },
   { "", "bfbs-builtins", "",
     "Add builtin attributes to the binary schema files." },
@@ -255,6 +256,7 @@ const static FlatCOption flatc_options[] = {
   { "", "python-no-type-prefix-suffix", "",
     "Skip emission of Python functions that are prefixed with typenames" },
   { "", "python-typing", "", "Generate Python type annotations" },
+  { "", "preserve-case", "", "Preserve all property cases as defined in IDL" },
   { "", "python-version", "", "Generate code for the given Python version." },
   { "", "python-gen-numpy", "", "Whether to generate numpy helpers." },
   { "", "ts-omit-entrypoint", "",
@@ -637,6 +639,8 @@ FlatCOptions FlatCompiler::ParseFromCommandLineArguments(int argc,
         opts.set_empty_vectors_to_null = false;
       } else if (arg == "--force-empty-vectors") {
         opts.set_empty_vectors_to_null = false;
+      }else if (arg == "--preserve-case"){
+        options.preserve_case = true;
       } else if (arg == "--java-primitive-has-method") {
         opts.java_primitive_has_method = true;
       } else if (arg == "--cs-gen-json-serializer") {

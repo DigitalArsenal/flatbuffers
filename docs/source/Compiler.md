@@ -237,6 +237,7 @@ Additional options:
     with typenames
 
 -   `--python-typing` : Generate Python type annotations
+-   `--preserve-case` : Preserve all property cases as defined in IDL
 
 Additional gRPC options:
 

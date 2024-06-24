@@ -177,6 +177,7 @@ set(FlatBuffers_Compiler_SRCS
   src/file_writer.cpp
   src/idl_namer.h
   src/namer.h
+  src/global_options.h
   src/flatc.cpp
   src/flatc_main.cpp
   src/bfbs_gen.h

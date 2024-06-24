@@ -1,5 +1,27 @@
-load("@npm//@bazel/typescript:index.bzl", "ts_project")
-load("@build_bazel_rules_nodejs//:index.bzl", "js_library")
+load("@aspect_rules_js//npm:defs.bzl", "npm_package")
+load("@aspect_rules_ts//ts:defs.bzl", "ts_project")
+load("@flatbuffers_npm//:npm_link_all_packages.bzl", "npm_link_all_packages")
+
+filegroup(
+    name = "distribution",
+    srcs = [
+        "BUILD.bazel",
+        "compile_flat_file.sh",
+        "repositories.bzl",
+    ] + glob([
+        "*.ts",
+    ]),
+    visibility = ["//visibility:public"],
+)
+
+npm_link_all_packages(name = "node_modules")
+
+# Add an index to emulate the top-level package.json's "main" entry.
+genrule(
+    name = "generate_index.ts",
+    outs = ["index.ts"],
+    cmd = """echo "export * from './flatbuffers.js'" > $(OUTS)""",
+)
 
 ts_project(
     name = "flatbuffers_ts",
@@ -11,6 +33,7 @@ ts_project(
         "flatbuffers.ts",
         "types.ts",
         "utils.ts",
+        ":index.ts",
     ],
     declaration = True,
     tsconfig = {
@@ -28,14 +51,17 @@ ts_project(
         },
     },
     visibility = ["//visibility:public"],
-    deps = ["@npm//@types/node"],
+    deps = [
+        ":node_modules/@types/node",
+    ],
 )
 
-js_library(
+npm_package(
     name = "flatbuffers",
-    package_name = "flatbuffers",
+    srcs = [":flatbuffers_ts"],
+    include_external_repositories = ["*"],
+    package = "flatbuffers",
     visibility = ["//visibility:public"],
-    deps = [":flatbuffers_ts"],
 )
 
 sh_binary(
@@ -44,7 +70,6 @@ sh_binary(
     data = [
         "@com_github_google_flatbuffers//:flatc",
         "@nodejs_linux_amd64//:node_bin",
-        "@npm//esbuild/bin:esbuild",
     ],
     # We just depend directly on the linux amd64 nodejs binary, so only support
     # running this script on amd64 for now.

@@ -151,3 +151,7 @@ flatbuffers.pc
 # https://cmake.org/cmake/help/latest/module/FetchContent.html#variable:FETCHCONTENT_BASE_DIR
 cmake-build-debug/
 _deps/
+**/.gradle/**
+kotlin/**/generated
+MODULE.bazel
+MODULE.bazel.lock

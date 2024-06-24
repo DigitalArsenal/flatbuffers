@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Google Inc. All rights reserved.
+ * Copyright 2024 Google Inc. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -216,6 +216,10 @@ class FlatBuffersMonsterWriterTests: XCTestCase {
     XCTAssertNotNil(monster.testarrayoftablesBy(key: "Wilma"))
 
     XCTAssertEqual(monster.testType, .monster)
+
+    XCTAssertTrue(monster.mutate(testbool: false))
+    XCTAssertEqual(monster.testbool, false)
+    XCTAssertTrue(monster.mutate(testbool: true))
 
     XCTAssertEqual(monster.mutate(inventory: 1, at: 0), true)
     XCTAssertEqual(monster.mutate(inventory: 2, at: 1), true)

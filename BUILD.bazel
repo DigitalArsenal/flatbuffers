@@ -25,6 +25,28 @@ config_setting(
     ],
 )
 
+filegroup(
+    name = "distribution",
+    srcs = [
+        ".bazelignore",
+        ".npmrc",
+        "BUILD.bazel",
+        "WORKSPACE",
+        "build_defs.bzl",
+        "package.json",
+        "pnpm-lock.yaml",
+        "typescript.bzl",
+        "//grpc/src/compiler:distribution",
+        "//include/codegen:distribution",
+        "//reflection:distribution",
+        "//src:distribution",
+        "//ts:distribution",
+    ] + glob([
+        "include/flatbuffers/*.h",
+    ]),
+    visibility = ["//visibility:public"],
+)
+
 # Public flatc library to compile flatbuffer files at runtime.
 cc_library(
     name = "flatbuffers",
@@ -47,6 +69,7 @@ filegroup(
         "include/flatbuffers/code_generators.h",
         "include/flatbuffers/default_allocator.h",
         "include/flatbuffers/detached_buffer.h",
+        "include/flatbuffers/file_manager.h",
         "include/flatbuffers/flatbuffer_builder.h",
         "include/flatbuffers/flatbuffers.h",
         "include/flatbuffers/flex_flat_util.h",

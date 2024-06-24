@@ -778,6 +778,10 @@ struct IDLOptions {
   // make the flatbuffer more compact.
   bool set_empty_vectors_to_null;
 
+  // If set (default behavior), empty vector fields will be set to nullptr to
+  // make the flatbuffer more compact.
+  bool preserve_case;
+
   /*********************************** gRPC ***********************************/
   std::string grpc_filename_suffix;
   bool grpc_use_system_headers;

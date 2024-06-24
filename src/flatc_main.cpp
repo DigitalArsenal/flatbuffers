@@ -23,6 +23,7 @@
 #include "flatbuffers/code_generator.h"
 #include "flatbuffers/flatc.h"
 #include "flatbuffers/util.h"
+#include "global_options.h"
 #include "idl_gen_binary.h"
 #include "idl_gen_cpp.h"
 #include "idl_gen_csharp.h"
@@ -126,8 +127,9 @@ int main(int argc, const char *argv[]) {
       flatbuffers::NewKotlinCodeGenerator());
 
   flatc.RegisterCodeGenerator(
-      flatbuffers::FlatCOption{ "", "kotlin-kmp", "",
-                                "Generate Kotlin multiplatform classes for tables/structs" },
+      flatbuffers::FlatCOption{
+          "", "kotlin-kmp", "",
+          "Generate Kotlin multiplatform classes for tables/structs" },
       flatbuffers::NewKotlinKMPCodeGenerator());
 
   flatc.RegisterCodeGenerator(
@@ -176,9 +178,8 @@ int main(int argc, const char *argv[]) {
       flatbuffers::NewTsCodeGenerator());
 
   // Create the FlatC options by parsing the command line arguments.
-  const flatbuffers::FlatCOptions &options =
-      flatc.ParseFromCommandLineArguments(argc, argv);
+  global_options = flatc.ParseFromCommandLineArguments(argc, argv);
 
   // Compile with the extracted FlatC options.
-  return flatc.Compile(options);
+  return flatc.Compile(global_options);
 }

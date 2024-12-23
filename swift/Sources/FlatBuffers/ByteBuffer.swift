@@ -100,7 +100,7 @@ public struct ByteBuffer {
 
   /// The size of the elements written to the buffer + their paddings
   private var _writerSize: Int = 0
-  /// Aliginment of the current  memory being written to the buffer
+  /// Alignment of the current  memory being written to the buffer
   var alignment = 1
   /// Current Index which is being used to write to the buffer, it is written from the end to the start of the buffer
   var writerIndex: Int { _storage.capacity &- _writerSize }
@@ -251,7 +251,7 @@ public struct ByteBuffer {
       ensureSpace(size: ptr.count)
       memcpy(
         _storage.memory.advanced(by: writerIndex &- ptr.count),
-        UnsafeRawPointer(ptr.baseAddress!),
+        ptr.baseAddress!,
         ptr.count)
       _writerSize = _writerSize &+ ptr.count
     }
@@ -264,9 +264,10 @@ public struct ByteBuffer {
   mutating func push<T: NativeStruct>(elements: [T]) {
     elements.withUnsafeBytes { ptr in
       ensureSpace(size: ptr.count)
-      _storage.memory
-        .advanced(by: writerIndex &- ptr.count)
-        .copyMemory(from: ptr.baseAddress!, byteCount: ptr.count)
+      memcpy(
+        _storage.memory.advanced(by: writerIndex &- ptr.count),
+        ptr.baseAddress!,
+        ptr.count)
       _writerSize = _writerSize &+ ptr.count
     }
   }
@@ -281,7 +282,7 @@ public struct ByteBuffer {
       ensureSpace(size: ptr.count)
       memcpy(
         _storage.memory.advanced(by: writerIndex &- ptr.count),
-        UnsafeRawPointer(ptr.baseAddress!),
+        ptr.baseAddress!,
         ptr.count)
       _writerSize = _writerSize &+ ptr.count
     }
@@ -296,11 +297,10 @@ public struct ByteBuffer {
   @inline(__always)
   mutating func push<T: NativeStruct>(struct value: T, size: Int) {
     ensureSpace(size: size)
-    var v = value
-    withUnsafeBytes(of: &v) {
+    withUnsafePointer(to: value) {
       memcpy(
         _storage.memory.advanced(by: writerIndex &- size),
-        $0.baseAddress!,
+        $0,
         size)
       _writerSize = _writerSize &+ size
     }
@@ -314,11 +314,10 @@ public struct ByteBuffer {
   @usableFromInline
   mutating func push<T: Scalar>(value: T, len: Int) {
     ensureSpace(size: len)
-    var v = value
-    withUnsafeBytes(of: &v) {
+    withUnsafePointer(to: value) {
       memcpy(
         _storage.memory.advanced(by: writerIndex &- len),
-        $0.baseAddress!,
+        $0,
         len)
       _writerSize = _writerSize &+ len
     }
@@ -355,7 +354,7 @@ public struct ByteBuffer {
   {
     memcpy(
       _storage.memory.advanced(by: writerIndex &- len),
-      UnsafeRawPointer(bytes.baseAddress!),
+      bytes.baseAddress!,
       len)
     _writerSize = _writerSize &+ len
     return true
@@ -377,7 +376,12 @@ public struct ByteBuffer {
     }
     assert(index < _storage.capacity, "Write index is out of writing bound")
     assert(index >= 0, "Writer index should be above zero")
-    _storage.memory.storeBytes(of: value, toByteOffset: index, as: T.self)
+    withUnsafePointer(to: value) {
+      memcpy(
+        _storage.memory.advanced(by: index),
+        $0,
+        MemoryLayout<T>.size)
+    }
   }
 
   /// Makes sure that buffer has enouch space for each of the objects that will be written into it
@@ -474,7 +478,6 @@ public struct ByteBuffer {
   /// - Parameters:
   ///   - index: index of the string in the buffer
   ///   - count: length of the string
-  ///   - type: Encoding of the string
   @inline(__always)
   public func readString(
     at index: Int,

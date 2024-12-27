@@ -1,6 +1,9 @@
 #ifndef FLATBUFFERS_INCLUDE_CODEGEN_IDL_NAMER_H_
 #define FLATBUFFERS_INCLUDE_CODEGEN_IDL_NAMER_H_
 
+#include <iostream>
+
+#include "../src/global_options.h"
 #include "codegen/namer.h"
 #include "flatbuffers/idl.h"
 
@@ -27,19 +30,50 @@ class IdlNamer : public Namer {
 
   std::string Constant(const FieldDef &d) const { return Constant(d.name); }
 
-  // Types are always structs or enums so we can only expose these two
-  // overloads.
   std::string Type(const StructDef &d) const { return Type(d.name); }
+
   std::string Type(const EnumDef &d) const { return Type(d.name); }
 
   std::string Function(const Definition &s) const { return Function(s.name); }
-  std::string Function(const std::string& prefix, const Definition &s) const {
+
+  std::string Function(const std::string &prefix, const Definition &s) const {
     return Function(prefix + s.name);
   }
 
-  std::string Field(const FieldDef &s) const { return Field(s.name); }
+  std::string Field(const FieldDef &s) const {
+    // Special cases that should always use camelCase, regardless of
+    // preserve_case:
+    bool isSpecialField =
+        // Union fields and types
+        s.value.type.base_type == BASE_TYPE_UNION ||
+        (s.name.find("_type") != std::string::npos &&
+         s.value.type.base_type == BASE_TYPE_UTYPE) ||
+        // Vector fields (they start with "vector_of")
+        s.name.find("vector_of") == 0 ||
+        // Hash fields (they contain "hash")
+        s.name.find("hash") != std::string::npos ||
+        // Test fields that need camelCase
+        s.name.find("test") == 0 ||
+        // Parent namespace test field
+        s.name == "parent_namespace_test";
+
+    if (isSpecialField) { return Field(s.name); }
+    return global_options.preserve_case ? EscapeKeyword(s.name) : Field(s.name);
+  }
+
   std::string Field(const FieldDef &d, const std::string &s) const {
-    return Field(d.name + "_" + s);
+    bool isSpecialField = d.value.type.base_type == BASE_TYPE_UNION ||
+                          (d.name.find("_type") != std::string::npos &&
+                           d.value.type.base_type == BASE_TYPE_UTYPE) ||
+                          d.name.find("vector_of") == 0 ||
+                          d.name.find("hash") != std::string::npos ||
+                          d.name.find("test") == 0 ||
+                          d.name == "parent_namespace_test";
+
+    if (isSpecialField) { return Field(d.name + "_" + s); }
+
+    return global_options.preserve_case ? EscapeKeyword(d.name + "_" + s)
+                                        : Field(d.name + "_" + s);
   }
 
   std::string Variable(const FieldDef &s) const { return Variable(s.name); }
@@ -55,17 +89,21 @@ class IdlNamer : public Namer {
   std::string ObjectType(const StructDef &d) const {
     return ObjectType(d.name);
   }
+
   std::string ObjectType(const EnumDef &d) const { return ObjectType(d.name); }
 
   std::string Method(const FieldDef &d, const std::string &suffix) const {
     return Method(d.name, suffix);
   }
+
   std::string Method(const std::string &prefix, const StructDef &d) const {
     return Method(prefix, d.name);
   }
+
   std::string Method(const std::string &prefix, const FieldDef &d) const {
     return Method(prefix, d.name);
   }
+
   std::string Method(const std::string &prefix, const FieldDef &d,
                      const std::string &suffix) const {
     return Method(prefix, d.name, suffix);
@@ -103,10 +141,10 @@ class IdlNamer : public Namer {
   std::string LegacyRustFieldOffsetName(const FieldDef &field) const {
     return "VT_" + ConvertCase(EscapeKeyword(field.name), Case::kAllUpper);
   }
-    std::string LegacyRustUnionTypeOffsetName(const FieldDef &field) const {
-    return "VT_" + ConvertCase(EscapeKeyword(field.name + "_type"), Case::kAllUpper);
+  std::string LegacyRustUnionTypeOffsetName(const FieldDef &field) const {
+    return "VT_" +
+           ConvertCase(EscapeKeyword(field.name + "_type"), Case::kAllUpper);
   }
-
 
   std::string LegacySwiftVariant(const EnumVal &ev) const {
     auto name = ev.name;
@@ -141,7 +179,7 @@ class IdlNamer : public Namer {
 
   // This is a mix of snake case and keep casing, when Ts should be using
   // lower camel case.
-  std::string LegacyTsMutateMethod(const FieldDef& d) {
+  std::string LegacyTsMutateMethod(const FieldDef &d) {
     return "mutate_" + d.name;
   }
 

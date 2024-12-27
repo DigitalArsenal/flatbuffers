@@ -1,6 +1,8 @@
 {
     "type": "module",
     "dependencies": {
-        "flatbuffers": "../../"
+        "esbuild": "^0.24.2",
+        "flatbuffers": "file:../..",
+        "typescript": "^5.7.2"
     }
 }

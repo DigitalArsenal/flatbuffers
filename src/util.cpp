@@ -51,6 +51,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <functional>
+#include <iostream>
 
 #include "flatbuffers/base.h"
 #include "global_options.h"
@@ -445,9 +446,7 @@ bool ReadEnvironmentVariable(const char *var_name, std::string *_value) {
 
 std::string ConvertCase(const std::string &input, Case output_case,
                         Case input_case) {
-  if (global_options.preserve_case || output_case == Case::kKeep) {
-    return input;
-  }
+  if (output_case == Case::kKeep) { return input; }
   // The output cases expect snake_case inputs, so if we don't have that input
   // format, try to convert to snake_case.
   switch (input_case) {

@@ -62,6 +62,7 @@ class IdlNamer : public Namer {
   }
 
   std::string Field(const FieldDef &d, const std::string &s) const {
+    if (s == "Length") { return Field(d.name) + s; }
     bool isSpecialField = d.value.type.base_type == BASE_TYPE_UNION ||
                           (d.name.find("_type") != std::string::npos &&
                            d.value.type.base_type == BASE_TYPE_UTYPE) ||

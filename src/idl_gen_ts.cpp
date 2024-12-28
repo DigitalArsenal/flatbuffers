@@ -150,7 +150,9 @@ class TsGenerator : public BaseGenerator {
     std::string code;
 
     code += "// " + std::string(FlatBuffersGeneratedWarning()) + "\n\n" +
-        "/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */\n\n";
+            "/* eslint-disable @typescript-eslint/no-unused-vars, "
+            "@typescript-eslint/no-explicit-any, "
+            "@typescript-eslint/no-non-null-assertion */\n\n";
 
     for (auto it = bare_imports.begin(); it != bare_imports.end(); it++) {
       code += it->second.import_statement + "\n";
@@ -256,8 +258,10 @@ class TsGenerator : public BaseGenerator {
 
     for (const auto &it : ns_defs_) {
       code = "// " + std::string(FlatBuffersGeneratedWarning()) + "\n\n" +
-        "/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */\n\n";
-      
+             "/* eslint-disable @typescript-eslint/no-unused-vars, "
+             "@typescript-eslint/no-explicit-any, "
+             "@typescript-eslint/no-non-null-assertion */\n\n";
+
       // export all definitions in ns entry point module
       int export_counter = 0;
       for (const auto &def : it.second.definitions) {
@@ -565,19 +569,19 @@ class TsGenerator : public BaseGenerator {
     }
   }
 
-  static Type GetUnionUnderlyingType(const Type &type)
-  {
-    if (type.enum_def != nullptr && 
+  static Type GetUnionUnderlyingType(const Type &type) {
+    if (type.enum_def != nullptr &&
         type.enum_def->underlying_type.base_type != type.base_type) {
       return type.enum_def->underlying_type;
     } else {
-        return Type(BASE_TYPE_UCHAR);
+      return Type(BASE_TYPE_UCHAR);
     }
   }
 
-  static Type GetUnderlyingVectorType(const Type &vector_type)
-  {
-    return (vector_type.base_type == BASE_TYPE_UTYPE) ? GetUnionUnderlyingType(vector_type) : vector_type;
+  static Type GetUnderlyingVectorType(const Type &vector_type) {
+    return (vector_type.base_type == BASE_TYPE_UTYPE)
+               ? GetUnionUnderlyingType(vector_type)
+               : vector_type;
   }
 
   // Returns the method name for use with add/put calls.
@@ -2164,8 +2168,13 @@ class TsGenerator : public BaseGenerator {
   }
 
   std::string GetArgName(const FieldDef &field) {
-    auto argname = namer_.Variable(field);
-    if (!IsScalar(field.value.type.base_type)) { argname += "Offset"; }
+    std::string argname = namer_.Variable(field);
+    if (!IsScalar(field.value.type.base_type)) {
+      argname += "Offset";
+    } else if (field.value.type.enum_def != nullptr) {
+      // Add Value suffix for enum parameters to avoid shadowing
+      argname += "Value";
+    }
     return argname;
   }
 

@@ -1,0 +1,27 @@
+Testing with interpreter: python3
+Testing with multi-file generated code
+numpy not available
+vtable deduplication rate (n=1, vtables=1): 147935.31 sec
+vtable deduplication rate (n=10, vtables=17): 59843.26 sec
+vtable deduplication rate (n=100, vtables=126): 32215.40 sec
+vtable deduplication rate (n=1000, vtables=1039): 19606.75 sec
+traversed 100 512-byte flatbuffers in 0.03sec: 3508.41/sec, 1.71MB/sec
+built 100 512-byte flatbuffers in 0.03sec: 3749.78/sec, 1.83MB/sec
+built 100 512-byte flatbuffers (reused buffer) in 0.02sec: 5888.76/sec, 2.88MB/sec
+
+Testing with interpreter: python3
+Testing with the one-file generated code
+numpy not available
+vtable deduplication rate (n=1, vtables=1): 155036.85 sec
+vtable deduplication rate (n=10, vtables=13): 66039.34 sec
+vtable deduplication rate (n=100, vtables=119): 35204.74 sec
+vtable deduplication rate (n=1000, vtables=1037): 21826.27 sec
+traversed 100 512-byte flatbuffers in 0.03sec: 3801.68/sec, 1.86MB/sec
+built 100 512-byte flatbuffers in 0.03sec: 3794.77/sec, 1.85MB/sec
+built 100 512-byte flatbuffers (reused buffer) in 0.02sec: 5981.67/sec, 2.92MB/sec
+
+Found coverage utility, running coverage with default Python:
+
+Code coverage: 40%
+
+OK: all tests passed for 2 interpreters: python3 python3.

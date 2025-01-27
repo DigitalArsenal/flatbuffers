@@ -177,12 +177,17 @@ set(FlatBuffers_Compiler_SRCS
   src/file_writer.cpp
   src/idl_namer.h
   src/namer.h
+  src/global_options.h
   src/flatc.cpp
   src/flatc_main.cpp
   src/bfbs_gen.h
   src/bfbs_gen_lua.h
   src/bfbs_gen_nim.h
   src/bfbs_namer.h
+  include/codegen/idl_namer.h
+  include/codegen/namer.h
+  include/codegen/python.h
+  include/codegen/python.cc
   include/flatbuffers/code_generators.h
   src/binary_annotator.h
   src/binary_annotator.cpp

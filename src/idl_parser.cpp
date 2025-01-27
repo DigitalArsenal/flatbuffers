@@ -27,6 +27,8 @@
 #include "flatbuffers/reflection_generated.h"
 #include "flatbuffers/util.h"
 
+#include "global_options.h"
+
 namespace flatbuffers {
 
 // Reflects the version at the compiling time of binary(lib/dll/so).
@@ -902,7 +904,7 @@ CheckedError Parser::ParseField(StructDef &struct_def) {
   if (LookupCreateStruct(name, false, false))
     return Error("field name can not be the same as table/struct name");
 
-  if (false) {
+  if (!global_options.preserve_case && !IsLowerSnakeCase(name)) {
     Warning("field names should be lowercase snake_case, got: " + name);
   }
 

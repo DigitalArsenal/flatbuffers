@@ -1,0 +1,403 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug flatc - Binary",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "-b", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - Binary (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "-b", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - C++",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "-c", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - C++ (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "-c", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - C#",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "-n", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - C# (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "-n", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - Dart",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "-d", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - Dart (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "-d", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - Go",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "-g", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - Go (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "-g", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - Java",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "-j", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - Java (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "-j", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - JSON",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "-t", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - JSON (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "-t", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - JSON Schema",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--jsonschema", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - JSON Schema (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "--jsonschema", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - Kotlin",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--kotlin", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - Kotlin (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "--kotlin", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - Kotlin KMP",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--kotlin-kmp", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - Kotlin KMP (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "--kotlin-kmp", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - Lobster",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--lobster", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - Lobster (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "--lobster", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - Lua",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "-l", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - Lua (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "-l", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - Nim",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--nim", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - Nim (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "--nim", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - PHP",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--php", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - PHP (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "--php", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - Proto",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--proto", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - Proto (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "--proto", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - Python",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - Python (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - Rust",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "-r", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - Rust (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "-r", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - Swift",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--swift", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - Swift (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "--swift", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+
+    {
+      "name": "Debug flatc - TypeScript",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "-T", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    },
+    {
+      "name": "Debug flatc - TypeScript (Preserve Case)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/flatc",
+      "args": [ "--preserve-case", "-T", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "stopAtEntry": true,
+      "cwd": "${workspaceFolder}/tests",
+      "MIMode": "gdb"
+    }
+  ]
+}

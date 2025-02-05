@@ -1439,32 +1439,32 @@ class MonsterT(object):
         self.vectorOfDoubles = None  # type: List[float]
         self.parentNamespaceTest = None  # type: Optional[MyGame.InParentNamespace.InParentNamespaceT]
         self.vectorOfReferrables = None  # type: List[MyGame.Example.Referrable.ReferrableT]
-        self.singleWeakReference = 0  # type: int
+        self.single_weak_reference = 0  # type: int
         self.vectorOfWeakReferences = None  # type: List[int]
         self.vectorOfStrongReferrables = None  # type: List[MyGame.Example.Referrable.ReferrableT]
-        self.coOwningReference = 0  # type: int
+        self.co_owning_reference = 0  # type: int
         self.vectorOfCoOwningReferences = None  # type: List[int]
-        self.nonOwningReference = 0  # type: int
+        self.non_owning_reference = 0  # type: int
         self.vectorOfNonOwningReferences = None  # type: List[int]
         self.anyUniqueType = 0  # type: int
         self.anyUnique = None  # type: Union[None, MyGame.Example.Monster.MonsterT, MyGame.Example.TestSimpleTableWithEnum.TestSimpleTableWithEnumT, MyGame.Example2.Monster.MonsterT]
         self.anyAmbiguousType = 0  # type: int
         self.anyAmbiguous = None  # type: Union[None, MyGame.Example.Monster.MonsterT, MyGame.Example.Monster.MonsterT, MyGame.Example.Monster.MonsterT]
         self.vectorOfEnums = None  # type: List[int]
-        self.signedEnum = -1  # type: int
+        self.signed_enum = -1  # type: int
         self.testrequirednestedflatbuffer = None  # type: List[int]
-        self.scalarKeySortedTables = None  # type: List[MyGame.Example.Stat.StatT]
-        self.nativeInline = None  # type: Optional[MyGame.Example.Test.TestT]
-        self.longEnumNonEnumDefault = 0  # type: int
-        self.longEnumNormalDefault = 2  # type: int
-        self.nanDefault = float('nan')  # type: float
-        self.infDefault = float('inf')  # type: float
-        self.positiveInfDefault = float('inf')  # type: float
-        self.infinityDefault = float('inf')  # type: float
-        self.positiveInfinityDefault = float('inf')  # type: float
-        self.negativeInfDefault = float('-inf')  # type: float
-        self.negativeInfinityDefault = float('-inf')  # type: float
-        self.doubleInfDefault = float('inf')  # type: float
+        self.scalar_key_sorted_tables = None  # type: List[MyGame.Example.Stat.StatT]
+        self.native_inline = None  # type: Optional[MyGame.Example.Test.TestT]
+        self.long_enum_non_enum_default = 0  # type: int
+        self.long_enum_normal_default = 2  # type: int
+        self.nan_default = float('nan')  # type: float
+        self.inf_default = float('inf')  # type: float
+        self.positive_inf_default = float('inf')  # type: float
+        self.infinity_default = float('inf')  # type: float
+        self.positive_infinity_default = float('inf')  # type: float
+        self.negative_inf_default = float('-inf')  # type: float
+        self.negative_infinity_default = float('-inf')  # type: float
+        self.double_inf_default = float('inf')  # type: float
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -1603,7 +1603,7 @@ class MonsterT(object):
                 else:
                     referrable_ = MyGame.Example.Referrable.ReferrableT.InitFromObj(monster.VectorOfReferrables(i))
                     self.vectorOfReferrables.append(referrable_)
-        self.singleWeakReference = monster.SingleWeakReference()
+        self.single_weak_reference = monster.SingleWeakReference()
         if not monster.VectorOfWeakReferencesIsNone():
             if np is None:
                 self.vectorOfWeakReferences = []
@@ -1619,7 +1619,7 @@ class MonsterT(object):
                 else:
                     referrable_ = MyGame.Example.Referrable.ReferrableT.InitFromObj(monster.VectorOfStrongReferrables(i))
                     self.vectorOfStrongReferrables.append(referrable_)
-        self.coOwningReference = monster.CoOwningReference()
+        self.co_owning_reference = monster.CoOwningReference()
         if not monster.VectorOfCoOwningReferencesIsNone():
             if np is None:
                 self.vectorOfCoOwningReferences = []
@@ -1627,7 +1627,7 @@ class MonsterT(object):
                     self.vectorOfCoOwningReferences.append(monster.VectorOfCoOwningReferences(i))
             else:
                 self.vectorOfCoOwningReferences = monster.VectorOfCoOwningReferencesAsNumpy()
-        self.nonOwningReference = monster.NonOwningReference()
+        self.non_owning_reference = monster.NonOwningReference()
         if not monster.VectorOfNonOwningReferencesIsNone():
             if np is None:
                 self.vectorOfNonOwningReferences = []
@@ -1646,7 +1646,7 @@ class MonsterT(object):
                     self.vectorOfEnums.append(monster.VectorOfEnums(i))
             else:
                 self.vectorOfEnums = monster.VectorOfEnumsAsNumpy()
-        self.signedEnum = monster.SignedEnum()
+        self.signed_enum = monster.SignedEnum()
         if not monster.TestrequirednestedflatbufferIsNone():
             if np is None:
                 self.testrequirednestedflatbuffer = []
@@ -1655,25 +1655,25 @@ class MonsterT(object):
             else:
                 self.testrequirednestedflatbuffer = monster.TestrequirednestedflatbufferAsNumpy()
         if not monster.ScalarKeySortedTablesIsNone():
-            self.scalarKeySortedTables = []
+            self.scalar_key_sorted_tables = []
             for i in range(monster.ScalarKeySortedTablesLength()):
                 if monster.ScalarKeySortedTables(i) is None:
-                    self.scalarKeySortedTables.append(None)
+                    self.scalar_key_sorted_tables.append(None)
                 else:
                     stat_ = MyGame.Example.Stat.StatT.InitFromObj(monster.ScalarKeySortedTables(i))
-                    self.scalarKeySortedTables.append(stat_)
+                    self.scalar_key_sorted_tables.append(stat_)
         if monster.NativeInline() is not None:
-            self.nativeInline = MyGame.Example.Test.TestT.InitFromObj(monster.NativeInline())
-        self.longEnumNonEnumDefault = monster.LongEnumNonEnumDefault()
-        self.longEnumNormalDefault = monster.LongEnumNormalDefault()
-        self.nanDefault = monster.NanDefault()
-        self.infDefault = monster.InfDefault()
-        self.positiveInfDefault = monster.PositiveInfDefault()
-        self.infinityDefault = monster.InfinityDefault()
-        self.positiveInfinityDefault = monster.PositiveInfinityDefault()
-        self.negativeInfDefault = monster.NegativeInfDefault()
-        self.negativeInfinityDefault = monster.NegativeInfinityDefault()
-        self.doubleInfDefault = monster.DoubleInfDefault()
+            self.native_inline = MyGame.Example.Test.TestT.InitFromObj(monster.NativeInline())
+        self.long_enum_non_enum_default = monster.LongEnumNonEnumDefault()
+        self.long_enum_normal_default = monster.LongEnumNormalDefault()
+        self.nan_default = monster.NanDefault()
+        self.inf_default = monster.InfDefault()
+        self.positive_inf_default = monster.PositiveInfDefault()
+        self.infinity_default = monster.InfinityDefault()
+        self.positive_infinity_default = monster.PositiveInfinityDefault()
+        self.negative_inf_default = monster.NegativeInfDefault()
+        self.negative_infinity_default = monster.NegativeInfinityDefault()
+        self.double_inf_default = monster.DoubleInfDefault()
 
     # MonsterT
     def Pack(self, builder):
@@ -1834,14 +1834,14 @@ class MonsterT(object):
                 for i in reversed(range(len(self.testrequirednestedflatbuffer))):
                     builder.PrependUint8(self.testrequirednestedflatbuffer[i])
                 testrequirednestedflatbuffer = builder.EndVector()
-        if self.scalarKeySortedTables is not None:
-            scalarKeySortedTableslist = []
-            for i in range(len(self.scalarKeySortedTables)):
-                scalarKeySortedTableslist.append(self.scalarKeySortedTables[i].Pack(builder))
-            MonsterStartScalarKeySortedTablesVector(builder, len(self.scalarKeySortedTables))
-            for i in reversed(range(len(self.scalarKeySortedTables))):
-                builder.PrependUOffsetTRelative(scalarKeySortedTableslist[i])
-            scalarKeySortedTables = builder.EndVector()
+        if self.scalar_key_sorted_tables is not None:
+            scalar_key_sorted_tableslist = []
+            for i in range(len(self.scalar_key_sorted_tables)):
+                scalar_key_sorted_tableslist.append(self.scalar_key_sorted_tables[i].Pack(builder))
+            MonsterStartScalarKeySortedTablesVector(builder, len(self.scalar_key_sorted_tables))
+            for i in reversed(range(len(self.scalar_key_sorted_tables))):
+                builder.PrependUOffsetTRelative(scalar_key_sorted_tableslist[i])
+            scalar_key_sorted_tables = builder.EndVector()
         MonsterStart(builder)
         if self.pos is not None:
             pos = self.pos.Pack(builder)
@@ -1898,15 +1898,15 @@ class MonsterT(object):
             MonsterAddParentNamespaceTest(builder, parentNamespaceTest)
         if self.vectorOfReferrables is not None:
             MonsterAddVectorOfReferrables(builder, vectorOfReferrables)
-        MonsterAddSingleWeakReference(builder, self.singleWeakReference)
+        MonsterAddSingleWeakReference(builder, self.single_weak_reference)
         if self.vectorOfWeakReferences is not None:
             MonsterAddVectorOfWeakReferences(builder, vectorOfWeakReferences)
         if self.vectorOfStrongReferrables is not None:
             MonsterAddVectorOfStrongReferrables(builder, vectorOfStrongReferrables)
-        MonsterAddCoOwningReference(builder, self.coOwningReference)
+        MonsterAddCoOwningReference(builder, self.co_owning_reference)
         if self.vectorOfCoOwningReferences is not None:
             MonsterAddVectorOfCoOwningReferences(builder, vectorOfCoOwningReferences)
-        MonsterAddNonOwningReference(builder, self.nonOwningReference)
+        MonsterAddNonOwningReference(builder, self.non_owning_reference)
         if self.vectorOfNonOwningReferences is not None:
             MonsterAddVectorOfNonOwningReferences(builder, vectorOfNonOwningReferences)
         MonsterAddAnyUniqueType(builder, self.anyUniqueType)
@@ -1917,23 +1917,23 @@ class MonsterT(object):
             MonsterAddAnyAmbiguous(builder, anyAmbiguous)
         if self.vectorOfEnums is not None:
             MonsterAddVectorOfEnums(builder, vectorOfEnums)
-        MonsterAddSignedEnum(builder, self.signedEnum)
+        MonsterAddSignedEnum(builder, self.signed_enum)
         if self.testrequirednestedflatbuffer is not None:
             MonsterAddTestrequirednestedflatbuffer(builder, testrequirednestedflatbuffer)
-        if self.scalarKeySortedTables is not None:
-            MonsterAddScalarKeySortedTables(builder, scalarKeySortedTables)
-        if self.nativeInline is not None:
-            nativeInline = self.nativeInline.Pack(builder)
-            MonsterAddNativeInline(builder, nativeInline)
-        MonsterAddLongEnumNonEnumDefault(builder, self.longEnumNonEnumDefault)
-        MonsterAddLongEnumNormalDefault(builder, self.longEnumNormalDefault)
-        MonsterAddNanDefault(builder, self.nanDefault)
-        MonsterAddInfDefault(builder, self.infDefault)
-        MonsterAddPositiveInfDefault(builder, self.positiveInfDefault)
-        MonsterAddInfinityDefault(builder, self.infinityDefault)
-        MonsterAddPositiveInfinityDefault(builder, self.positiveInfinityDefault)
-        MonsterAddNegativeInfDefault(builder, self.negativeInfDefault)
-        MonsterAddNegativeInfinityDefault(builder, self.negativeInfinityDefault)
-        MonsterAddDoubleInfDefault(builder, self.doubleInfDefault)
+        if self.scalar_key_sorted_tables is not None:
+            MonsterAddScalarKeySortedTables(builder, scalar_key_sorted_tables)
+        if self.native_inline is not None:
+            native_inline = self.native_inline.Pack(builder)
+            MonsterAddNativeInline(builder, native_inline)
+        MonsterAddLongEnumNonEnumDefault(builder, self.long_enum_non_enum_default)
+        MonsterAddLongEnumNormalDefault(builder, self.long_enum_normal_default)
+        MonsterAddNanDefault(builder, self.nan_default)
+        MonsterAddInfDefault(builder, self.inf_default)
+        MonsterAddPositiveInfDefault(builder, self.positive_inf_default)
+        MonsterAddInfinityDefault(builder, self.infinity_default)
+        MonsterAddPositiveInfinityDefault(builder, self.positive_infinity_default)
+        MonsterAddNegativeInfDefault(builder, self.negative_inf_default)
+        MonsterAddNegativeInfinityDefault(builder, self.negative_infinity_default)
+        MonsterAddDoubleInfDefault(builder, self.double_inf_default)
         monster = MonsterEnd(builder)
         return monster

@@ -1,3 +1,10 @@
+import numpy as np
+
+def swap_endian(x):
+    if np.__version__.startswith("2."):
+        return x.byteswap().view(x.dtype.newbyteorder())
+    return swap_endian(x)
+
 # coding=utf-8
 # Copyright 2014 Google Inc. All rights reserved.
 #
@@ -1095,7 +1102,7 @@ class TestByteLayout(unittest.TestCase):
 
       # Reverse endian:
       b = flatbuffers.Builder(0)
-      x_other_endian = x.byteswap().newbyteorder()
+      x_other_endian = swap_endian(x)
       b.CreateNumpyVector(x_other_endian)
       self.assertBuilderEquals(
           b,
@@ -1144,7 +1151,7 @@ class TestByteLayout(unittest.TestCase):
 
       # Reverse endian:
       b = flatbuffers.Builder(0)
-      x_other_endian = x.byteswap().newbyteorder()
+      x_other_endian = swap_endian(x)
       b.CreateNumpyVector(x_other_endian)
       self.assertBuilderEquals(
           b,
@@ -1213,7 +1220,7 @@ class TestByteLayout(unittest.TestCase):
 
       # Reverse endian:
       b = flatbuffers.Builder(0)
-      x_other_endian = x.byteswap().newbyteorder()
+      x_other_endian = swap_endian(x)
       b.CreateNumpyVector(x_other_endian)
       self.assertBuilderEquals(
           b,
@@ -1287,7 +1294,7 @@ class TestByteLayout(unittest.TestCase):
 
       # Reverse endian:
       b = flatbuffers.Builder(0)
-      x_other_endian = x.byteswap().newbyteorder()
+      x_other_endian = swap_endian(x)
       b.CreateNumpyVector(x_other_endian)
       self.assertBuilderEquals(
           b,
@@ -1361,7 +1368,7 @@ class TestByteLayout(unittest.TestCase):
 
       # Reverse endian:
       b = flatbuffers.Builder(0)
-      x_other_endian = x.byteswap().newbyteorder()
+      x_other_endian = swap_endian(x)
       b.CreateNumpyVector(x_other_endian)
       self.assertBuilderEquals(
           b,
@@ -1427,7 +1434,7 @@ class TestByteLayout(unittest.TestCase):
 
       # Reverse endian:
       b = flatbuffers.Builder(0)
-      x_other_endian = x.byteswap().newbyteorder()
+      x_other_endian = swap_endian(x)
       b.CreateNumpyVector(x_other_endian)
       self.assertBuilderEquals(
           b,

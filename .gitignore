@@ -153,7 +153,11 @@ cmake-build-debug/
 _deps/
 **/.gradle/**
 kotlin/**/generated
-MODULE.bazel
 MODULE.bazel.lock
 
+<<<<<<< HEAD
 !/.vscode
+=======
+# Ignore the generated docs
+docs/site
+>>>>>>> upstream/master

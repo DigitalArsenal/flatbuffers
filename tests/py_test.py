@@ -1,9 +1,3 @@
-import numpy as np
-
-def swap_endian(x):
-    if np.__version__.startswith("2."):
-        return x.byteswap().view(x.dtype.newbyteorder())
-    return swap_endian(x)
 
 # coding=utf-8
 # Copyright 2014 Google Inc. All rights reserved.
@@ -30,6 +24,13 @@ import math
 import random
 import timeit
 import unittest
+
+import numpy as np
+
+def swap_endian(x):
+    if np.__version__.startswith("2."):
+        return x.byteswap().view(x.dtype.newbyteorder())
+    return swap_endian(x)
 
 from flatbuffers import compat
 from flatbuffers import util

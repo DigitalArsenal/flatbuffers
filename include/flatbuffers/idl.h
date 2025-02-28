@@ -335,7 +335,8 @@ struct FieldDef : public Definition {
         presence(kDefault),
         nested_flatbuffer(nullptr),
         padding(0),
-        sibling_union_field(nullptr) {}
+        sibling_union_field(nullptr),
+        declared_in_idl(false) {}
 
   Offset<reflection::Field> Serialize(FlatBufferBuilder *builder, uint16_t id,
                                       const Parser &parser) const;
@@ -390,6 +391,12 @@ struct FieldDef : public Definition {
   // sibling_union_field on a union field points to the union type field
   // and vice-versa.
   FieldDef *sibling_union_field;
+
+  // Indicates whether the field was defined in the IDL, as opposed
+  // to being an internal field.  This change is required when preserving
+  // case, as all fields / methods whether they refer to flatbuffer internals
+  // or not go through the same renamer.
+  bool declared_in_idl;
 };
 
 struct StructDef : public Definition {

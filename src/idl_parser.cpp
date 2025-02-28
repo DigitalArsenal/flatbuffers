@@ -972,6 +972,8 @@ CheckedError Parser::ParseField(StructDef &struct_def) {
   FieldDef *field;
   ECHECK(AddField(struct_def, name, type, &field));
 
+  field->declared_in_idl = true;
+
   if (typefield) {
     // We preserve the relation between the typefield
     // and field, so we can easily map it in the code

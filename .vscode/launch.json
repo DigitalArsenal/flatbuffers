@@ -6,7 +6,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "-b", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "-b",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -16,7 +24,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "-b", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "-b",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -27,7 +44,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "-c", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "-c",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -37,7 +62,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "-c", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "-c",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -48,7 +82,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "-n", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "-n",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -58,7 +100,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "-n", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "-n",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -69,7 +120,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "-d", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "-d",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -79,7 +138,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "-d", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "-d",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -90,7 +158,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "-g", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "-g",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -100,7 +176,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "-g", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "-g",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -111,7 +196,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "-j", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "-j",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -121,7 +214,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "-j", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "-j",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -132,7 +234,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "-t", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "-t",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -142,7 +252,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "-t", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "-t",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -153,7 +272,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--jsonschema", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--jsonschema",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -163,7 +290,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "--jsonschema", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "--jsonschema",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -174,7 +310,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--kotlin", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--kotlin",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -184,7 +328,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "--kotlin", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "--kotlin",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -195,7 +348,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--kotlin-kmp", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--kotlin-kmp",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -205,7 +366,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "--kotlin-kmp", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "--kotlin-kmp",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -216,7 +386,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--lobster", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--lobster",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -226,7 +404,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "--lobster", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "--lobster",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -237,7 +424,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "-l", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "-l",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -247,7 +442,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "-l", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "-l",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -258,7 +462,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--nim", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--nim",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -268,7 +480,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "--nim", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "--nim",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -279,7 +500,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--php", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--php",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -289,7 +518,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "--php", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "--php",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -300,7 +538,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--proto", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--proto",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -310,7 +556,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "--proto", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "--proto",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -321,7 +576,14 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -331,7 +593,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -342,7 +612,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "-r", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "-r",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -352,7 +630,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "-r", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "-r",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -363,7 +650,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--swift", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--swift",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -373,7 +668,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "--swift", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "--swift",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -384,7 +688,15 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "-T", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "-T",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"
@@ -394,7 +706,16 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/flatc",
-      "args": [ "--preserve-case", "-T", "-p", "-o", "${workspaceFolder}/tests", "monster_test.fbs" ],
+      "args": [
+        "--preserve-case",
+        "-T",
+        "-p",
+        "-o",
+        "${workspaceFolder}/tests",
+        "-I",
+        "${workspaceFolder}/tests/include_test",
+        "monster_test.fbs"
+      ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
       "MIMode": "gdb"

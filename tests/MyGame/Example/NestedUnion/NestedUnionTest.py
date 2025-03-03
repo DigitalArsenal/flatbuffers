@@ -93,21 +93,21 @@ def NestedUnionTestEnd(builder: flatbuffers.Builder) -> int:
 def End(builder: flatbuffers.Builder) -> int:
     return NestedUnionTestEnd(builder)
 
-import MyGame.Example.NestedUnion.Any
-import MyGame.Example.NestedUnion.TestSimpleTableWithEnum
-import MyGame.Example.NestedUnion.Vec3
+import Any
+import TestSimpleTableWithEnum
+import Vec3
 try:
     from typing import Union
 except:
     pass
 
-class NestedUnionTestT(object):
+class NestedUnionTest(object):
 
-    # NestedUnionTestT
+    # NestedUnionTest
     def __init__(self):
         self.name = None  # type: str
         self.dataType = 0  # type: int
-        self.data = None  # type: Union[None, MyGame.Example.NestedUnion.Vec3.Vec3T, MyGame.Example.NestedUnion.TestSimpleTableWithEnum.TestSimpleTableWithEnumT]
+        self.data = None  # type: Union[None, Vec3.Vec3, TestSimpleTableWithEnum.TestSimpleTableWithEnum]
         self.id = 0  # type: int
 
     @classmethod
@@ -123,20 +123,20 @@ class NestedUnionTestT(object):
 
     @classmethod
     def InitFromObj(cls, nestedUnionTest):
-        x = NestedUnionTestT()
+        x = NestedUnionTest()
         x._UnPack(nestedUnionTest)
         return x
 
-    # NestedUnionTestT
+    # NestedUnionTest
     def _UnPack(self, nestedUnionTest):
         if nestedUnionTest is None:
             return
         self.name = nestedUnionTest.Name()
         self.dataType = nestedUnionTest.DataType()
-        self.data = MyGame.Example.NestedUnion.Any.AnyCreator(self.dataType, nestedUnionTest.Data())
+        self.data = Any.AnyCreator(self.dataType, nestedUnionTest.Data())
         self.id = nestedUnionTest.Id()
 
-    # NestedUnionTestT
+    # NestedUnionTest
     def Pack(self, builder):
         if self.name is not None:
             name = builder.CreateString(self.name)

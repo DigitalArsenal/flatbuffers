@@ -5,7 +5,7 @@
 import flatbuffers
 from flatbuffers.compat import import_numpy
 from typing import Any
-from MyGame.Example.NestedStruct import NestedStruct
+from NestedStruct import NestedStruct
 np = import_numpy()
 
 class ArrayStruct(object):
@@ -105,20 +105,20 @@ def CreateArrayStruct(builder, a, b, c, d_a, d_b, d_c, d_d, e, f):
     builder.PrependFloat32(a)
     return builder.Offset()
 
-import MyGame.Example.NestedStruct
+import NestedStruct
 try:
     from typing import List
 except:
     pass
 
-class ArrayStructT(object):
+class ArrayStruct(object):
 
-    # ArrayStructT
+    # ArrayStruct
     def __init__(self):
         self.a = 0.0  # type: float
         self.b = None  # type: List[int]
         self.c = 0  # type: int
-        self.d = None  # type: List[MyGame.Example.NestedStruct.NestedStructT]
+        self.d = None  # type: List[NestedStruct.NestedStruct]
         self.e = 0  # type: int
         self.f = None  # type: List[int]
 
@@ -135,11 +135,11 @@ class ArrayStructT(object):
 
     @classmethod
     def InitFromObj(cls, arrayStruct):
-        x = ArrayStructT()
+        x = ArrayStruct()
         x._UnPack(arrayStruct)
         return x
 
-    # ArrayStructT
+    # ArrayStruct
     def _UnPack(self, arrayStruct):
         if arrayStruct is None:
             return
@@ -158,7 +158,7 @@ class ArrayStructT(object):
                 if arrayStruct.D(i) is None:
                     self.d.append(None)
                 else:
-                    nestedStruct_ = MyGame.Example.NestedStruct.NestedStructT.InitFromObj(arrayStruct.D(i))
+                    nestedStruct_ = NestedStruct.NestedStructT.InitFromObj(arrayStruct.D(i))
                     self.d.append(nestedStruct_)
         self.e = arrayStruct.E()
         if not arrayStruct.FIsNone():
@@ -169,6 +169,6 @@ class ArrayStructT(object):
             else:
                 self.f = arrayStruct.FAsNumpy()
 
-    # ArrayStructT
+    # ArrayStruct
     def Pack(self, builder):
         return CreateArrayStruct(builder, self.a, self.b, self.c, self.d.a, self.d.b, self.d.c, self.d.d, self.e, self.f)

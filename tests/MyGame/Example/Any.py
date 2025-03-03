@@ -7,3 +7,18 @@ class Any(object):
     Monster = 1
     TestSimpleTableWithEnum = 2
     MyGame_Example2_Monster = 3
+
+def AnyCreator(unionType, table):
+    from flatbuffers.table import Table
+    if not isinstance(table, Table):
+        return None
+    if unionType == Any.Monster:
+        import Monster
+        return Monster.Monster.InitFromBuf(table.Bytes, table.Pos)
+    if unionType == Any.TestSimpleTableWithEnum:
+        import TestSimpleTableWithEnum
+        return TestSimpleTableWithEnum.TestSimpleTableWithEnum.InitFromBuf(table.Bytes, table.Pos)
+    if unionType == Any.MyGame_Example2_Monster:
+        import Monster
+        return Monster.Monster.InitFromBuf(table.Bytes, table.Pos)
+    return None

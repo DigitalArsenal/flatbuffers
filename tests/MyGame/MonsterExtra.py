@@ -228,9 +228,9 @@ try:
 except:
     pass
 
-class MonsterExtraT(object):
+class MonsterExtra(object):
 
-    # MonsterExtraT
+    # MonsterExtra
     def __init__(self):
         self.d0 = float('nan')  # type: float
         self.d1 = float('nan')  # type: float
@@ -256,7 +256,7 @@ class MonsterExtraT(object):
 
     @classmethod
     def InitFromObj(cls, monsterExtra):
-        x = MonsterExtraT()
+        x = MonsterExtra()
         x._UnPack(monsterExtra)
         return x
 
@@ -273,7 +273,7 @@ class MonsterExtraT(object):
             self.dvec == other.dvec and \
             self.fvec == other.fvec
 
-    # MonsterExtraT
+    # MonsterExtra
     def _UnPack(self, monsterExtra):
         if monsterExtra is None:
             return
@@ -300,7 +300,7 @@ class MonsterExtraT(object):
             else:
                 self.fvec = monsterExtra.FvecAsNumpy()
 
-    # MonsterExtraT
+    # MonsterExtra
     def Pack(self, builder):
         if self.dvec is not None:
             if np is not None and type(self.dvec) is np.ndarray:

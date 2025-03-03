@@ -25,50 +25,68 @@ class IdlNamer : public Namer {
   using Namer::Variable;
   using Namer::Variant;
 
-  std::string Constant(const FieldDef &d) const { return Constant(d.name); }
-
-  // Types are always structs or enums so we can only expose these two
-  // overloads.
-  std::string Type(const StructDef &d) const { return Type(d.name); }
-  std::string Type(const EnumDef &d) const { return Type(d.name); }
-
-  std::string Function(const Definition &s) const { return Function(s.name); }
-  std::string Function(const std::string& prefix, const Definition &s) const {
-    return Function(prefix + s.name);
+  std::string Constant(const FieldDef &d) const {
+    return d.declared_in_idl ? d.name : Constant(d.name);
   }
 
-  std::string Field(const FieldDef &s) const { return Field(s.name); }
+  std::string Type(const StructDef &d) const {
+    return d.declared_in_idl ? d.name : Type(d.name);
+  }
+  std::string Type(const EnumDef &d) const {
+    return d.declared_in_idl ? d.name : Type(d.name);
+  }
+
+  std::string Function(const Definition &s) const {
+    return s.declared_in_idl ? s.name : Function(s.name);
+  }
+  std::string Function(const std::string &prefix, const Definition &s) const {
+    return s.declared_in_idl ? prefix + s.name : Function(prefix + s.name);
+  }
+
+  std::string Field(const FieldDef &s) const {
+    return s.declared_in_idl ? s.name : Field(s.name);
+  }
   std::string Field(const FieldDef &d, const std::string &s) const {
-    return Field(d.name + "_" + s);
+    return d.declared_in_idl ? d.name + "_" + s : Field(d.name + "_" + s);
   }
 
-  std::string Variable(const FieldDef &s) const { return Variable(s.name); }
+  std::string Variable(const FieldDef &s) const {
+    return s.declared_in_idl ? s.name : Variable(s.name);
+  }
+  std::string Variable(const StructDef &s) const {
+    return s.declared_in_idl ? s.name : Variable(s.name);
+  }
 
-  std::string Variable(const StructDef &s) const { return Variable(s.name); }
-
-  std::string Variant(const EnumVal &s) const { return Variant(s.name); }
+  std::string Variant(const EnumVal &s) const {
+    return s.declared_in_idl ? s.name : Variant(s.name);
+  }
 
   std::string EnumVariant(const EnumDef &e, const EnumVal &v) const {
+    // Since EnumVariant calls Type(e) and Variant(v), their rewrites will
+    // apply.
     return Type(e) + config_.enum_variant_seperator + Variant(v);
   }
 
   std::string ObjectType(const StructDef &d) const {
-    return ObjectType(d.name);
+    return d.declared_in_idl ? d.name : ObjectType(d.name);
   }
-  std::string ObjectType(const EnumDef &d) const { return ObjectType(d.name); }
+  std::string ObjectType(const EnumDef &d) const {
+    return d.declared_in_idl ? d.name : ObjectType(d.name);
+  }
 
   std::string Method(const FieldDef &d, const std::string &suffix) const {
-    return Method(d.name, suffix);
+    return d.declared_in_idl ? d.name + suffix : Method(d.name, suffix);
   }
   std::string Method(const std::string &prefix, const StructDef &d) const {
-    return Method(prefix, d.name);
+    return d.declared_in_idl ? prefix + d.name : Method(prefix, d.name);
   }
   std::string Method(const std::string &prefix, const FieldDef &d) const {
-    return Method(prefix, d.name);
+    return d.declared_in_idl ? prefix + d.name : Method(prefix, d.name);
   }
   std::string Method(const std::string &prefix, const FieldDef &d,
                      const std::string &suffix) const {
-    return Method(prefix, d.name, suffix);
+    return d.declared_in_idl ? prefix + d.name + suffix
+                             : Method(prefix, d.name, suffix);
   }
 
   std::string Namespace(const struct Namespace &ns) const {
@@ -80,11 +98,15 @@ class IdlNamer : public Namer {
   }
 
   std::string NamespacedType(const Definition &def) const {
-    return NamespacedString(def.defined_namespace, Type(def.name));
+    return def.declared_in_idl
+               ? def.name
+               : NamespacedString(def.defined_namespace, Type(def.name));
   }
 
   std::string NamespacedObjectType(const Definition &def) const {
-    return NamespacedString(def.defined_namespace, ObjectType(def.name));
+    return def.declared_in_idl
+               ? def.name
+               : NamespacedString(def.defined_namespace, ObjectType(def.name));
   }
 
   std::string Directories(const struct Namespace &ns,
@@ -103,10 +125,10 @@ class IdlNamer : public Namer {
   std::string LegacyRustFieldOffsetName(const FieldDef &field) const {
     return "VT_" + ConvertCase(EscapeKeyword(field.name), Case::kAllUpper);
   }
-    std::string LegacyRustUnionTypeOffsetName(const FieldDef &field) const {
-    return "VT_" + ConvertCase(EscapeKeyword(field.name + "_type"), Case::kAllUpper);
+  std::string LegacyRustUnionTypeOffsetName(const FieldDef &field) const {
+    return "VT_" +
+           ConvertCase(EscapeKeyword(field.name + "_type"), Case::kAllUpper);
   }
-
 
   std::string LegacySwiftVariant(const EnumVal &ev) const {
     auto name = ev.name;
@@ -141,7 +163,7 @@ class IdlNamer : public Namer {
 
   // This is a mix of snake case and keep casing, when Ts should be using
   // lower camel case.
-  std::string LegacyTsMutateMethod(const FieldDef& d) {
+  std::string LegacyTsMutateMethod(const FieldDef &d) {
     return "mutate_" + d.name;
   }
 

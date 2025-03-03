@@ -52,3 +52,40 @@ def ReferrableEnd(builder):
 
 def End(builder):
     return ReferrableEnd(builder)
+
+
+class Referrable(object):
+
+    # Referrable
+    def __init__(self):
+        self.id = 0  # type: int
+
+    @classmethod
+    def InitFromBuf(cls, buf, pos):
+        referrable = Referrable()
+        referrable.Init(buf, pos)
+        return cls.InitFromObj(referrable)
+
+    @classmethod
+    def InitFromPackedBuf(cls, buf, pos=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, pos)
+        return cls.InitFromBuf(buf, pos+n)
+
+    @classmethod
+    def InitFromObj(cls, referrable):
+        x = Referrable()
+        x._UnPack(referrable)
+        return x
+
+    # Referrable
+    def _UnPack(self, referrable):
+        if referrable is None:
+            return
+        self.id = referrable.Id()
+
+    # Referrable
+    def Pack(self, builder):
+        ReferrableStart(builder)
+        ReferrableAddId(builder, self.id)
+        referrable = ReferrableEnd(builder)
+        return referrable

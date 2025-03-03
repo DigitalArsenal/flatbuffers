@@ -28,3 +28,39 @@ def CreateTest(builder, a, b):
     builder.PrependInt8(b)
     builder.PrependInt16(a)
     return builder.Offset()
+
+
+class Test(object):
+
+    # Test
+    def __init__(self):
+        self.a = 0  # type: int
+        self.b = 0  # type: int
+
+    @classmethod
+    def InitFromBuf(cls, buf, pos):
+        test = Test()
+        test.Init(buf, pos)
+        return cls.InitFromObj(test)
+
+    @classmethod
+    def InitFromPackedBuf(cls, buf, pos=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, pos)
+        return cls.InitFromBuf(buf, pos+n)
+
+    @classmethod
+    def InitFromObj(cls, test):
+        x = Test()
+        x._UnPack(test)
+        return x
+
+    # Test
+    def _UnPack(self, test):
+        if test is None:
+            return
+        self.a = test.A()
+        self.b = test.B()
+
+    # Test
+    def Pack(self, builder):
+        return CreateTest(builder, self.a, self.b)

@@ -31,9 +31,9 @@ def CreateTest(builder, a, b):
     return builder.Offset()
 
 
-class TestT(object):
+class Test(object):
 
-    # TestT
+    # Test
     def __init__(self):
         self.a = 0  # type: int
         self.b = 0  # type: int
@@ -51,17 +51,17 @@ class TestT(object):
 
     @classmethod
     def InitFromObj(cls, test):
-        x = TestT()
+        x = Test()
         x._UnPack(test)
         return x
 
-    # TestT
+    # Test
     def _UnPack(self, test):
         if test is None:
             return
         self.a = test.A()
         self.b = test.B()
 
-    # TestT
+    # Test
     def Pack(self, builder):
         return CreateTest(builder, self.a, self.b)

@@ -5,9 +5,9 @@ import numpy as np
 
 import flatbuffers
 import typing
-from MyGame.Example.ArrayStruct import ArrayStruct
-from MyGame.Example.NestedStruct import NestedStruct, NestedStructT
-from MyGame.Example.TestEnum import TestEnum
+from ArrayStruct import ArrayStruct
+from NestedStruct import NestedStruct
+from TestEnum import TestEnum
 
 uoffset: typing.TypeAlias = flatbuffers.number_types.UOffsetTFlags.py_type
 
@@ -30,19 +30,19 @@ class ArrayStruct(object):
   def FAsNumpy(self) -> np.ndarray: ...
   def FLength(self) -> int: ...
   def FIsNone(self) -> bool: ...
-class ArrayStructT(object):
+class ArrayStruct(object):
   a: float
   b: typing.List[int]
   c: int
-  d: typing.List[NestedStructT]
+  d: typing.List[NestedStruct]
   e: int
   f: typing.List[int]
   @classmethod
-  def InitFromBuf(cls, buf: bytes, pos: int) -> ArrayStructT: ...
+  def InitFromBuf(cls, buf: bytes, pos: int) -> ArrayStruct: ...
   @classmethod
-  def InitFromPackedBuf(cls, buf: bytes, pos: int = 0) -> ArrayStructT: ...
+  def InitFromPackedBuf(cls, buf: bytes, pos: int = 0) -> ArrayStruct: ...
   @classmethod
-  def InitFromObj(cls, arrayStruct: ArrayStruct) -> ArrayStructT: ...
+  def InitFromObj(cls, arrayStruct: ArrayStruct) -> ArrayStruct: ...
   def _UnPack(self, arrayStruct: ArrayStruct) -> None: ...
   def Pack(self, builder: flatbuffers.Builder) -> None: ...
 

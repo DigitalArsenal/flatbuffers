@@ -12,9 +12,9 @@ def AnyCreator(unionType, table):
     if not isinstance(table, Table):
         return None
     if unionType == Any.Vec3:
-        import MyGame.Example.NestedUnion.Vec3
-        return MyGame.Example.NestedUnion.Vec3.Vec3T.InitFromBuf(table.Bytes, table.Pos)
+        import Vec3
+        return Vec3.Vec3.InitFromBuf(table.Bytes, table.Pos)
     if unionType == Any.TestSimpleTableWithEnum:
-        import MyGame.Example.NestedUnion.TestSimpleTableWithEnum
-        return MyGame.Example.NestedUnion.TestSimpleTableWithEnum.TestSimpleTableWithEnumT.InitFromBuf(table.Bytes, table.Pos)
+        import TestSimpleTableWithEnum
+        return TestSimpleTableWithEnum.TestSimpleTableWithEnum.InitFromBuf(table.Bytes, table.Pos)
     return None

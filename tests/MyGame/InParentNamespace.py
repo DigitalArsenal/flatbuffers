@@ -39,3 +39,38 @@ def InParentNamespaceEnd(builder):
 
 def End(builder):
     return InParentNamespaceEnd(builder)
+
+
+class InParentNamespace(object):
+
+    # InParentNamespace
+    def __init__(self):
+        pass
+
+    @classmethod
+    def InitFromBuf(cls, buf, pos):
+        inParentNamespace = InParentNamespace()
+        inParentNamespace.Init(buf, pos)
+        return cls.InitFromObj(inParentNamespace)
+
+    @classmethod
+    def InitFromPackedBuf(cls, buf, pos=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, pos)
+        return cls.InitFromBuf(buf, pos+n)
+
+    @classmethod
+    def InitFromObj(cls, inParentNamespace):
+        x = InParentNamespace()
+        x._UnPack(inParentNamespace)
+        return x
+
+    # InParentNamespace
+    def _UnPack(self, inParentNamespace):
+        if inParentNamespace is None:
+            return
+
+    # InParentNamespace
+    def Pack(self, builder):
+        InParentNamespaceStart(builder)
+        inParentNamespace = InParentNamespaceEnd(builder)
+        return inParentNamespace

@@ -458,8 +458,9 @@ struct EnumVal {
   friend bool operator==(const EnumVal &lhs, const EnumVal &rhs);
 
   EnumVal(const std::string &_name, int64_t _val)
-      : name(_name), value(_val), declared_in_idl(false) {}
-  EnumVal() : value(0), declared_in_idl(false) {}
+      : name(_name), declared_in_idl(false), value(_val) {}
+
+  EnumVal() : name(), declared_in_idl(false), value(0) {}
 
   int64_t value;
 };

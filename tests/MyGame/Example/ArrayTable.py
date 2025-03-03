@@ -5,7 +5,7 @@
 import flatbuffers
 from flatbuffers.compat import import_numpy
 from typing import Any
-from MyGame.Example.ArrayStruct import ArrayStruct
+from ArrayStruct import ArrayStruct
 from typing import Optional
 np = import_numpy()
 
@@ -59,17 +59,17 @@ def ArrayTableEnd(builder: flatbuffers.Builder) -> int:
 def End(builder: flatbuffers.Builder) -> int:
     return ArrayTableEnd(builder)
 
-import MyGame.Example.ArrayStruct
+import ArrayStruct
 try:
     from typing import Optional
 except:
     pass
 
-class ArrayTableT(object):
+class ArrayTable(object):
 
-    # ArrayTableT
+    # ArrayTable
     def __init__(self):
-        self.a = None  # type: Optional[MyGame.Example.ArrayStruct.ArrayStructT]
+        self.a = None  # type: Optional[ArrayStruct.ArrayStruct]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -84,18 +84,18 @@ class ArrayTableT(object):
 
     @classmethod
     def InitFromObj(cls, arrayTable):
-        x = ArrayTableT()
+        x = ArrayTable()
         x._UnPack(arrayTable)
         return x
 
-    # ArrayTableT
+    # ArrayTable
     def _UnPack(self, arrayTable):
         if arrayTable is None:
             return
         if arrayTable.A() is not None:
-            self.a = MyGame.Example.ArrayStruct.ArrayStructT.InitFromObj(arrayTable.A())
+            self.a = ArrayStruct.ArrayStructT.InitFromObj(arrayTable.A())
 
-    # ArrayTableT
+    # ArrayTable
     def Pack(self, builder):
         ArrayTableStart(builder)
         if self.a is not None:

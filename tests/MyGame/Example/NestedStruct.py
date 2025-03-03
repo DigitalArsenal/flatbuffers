@@ -101,9 +101,9 @@ try:
 except:
     pass
 
-class NestedStructT(object):
+class NestedStruct(object):
 
-    # NestedStructT
+    # NestedStruct
     def __init__(self):
         self.a = None  # type: List[int]
         self.b = 0  # type: int
@@ -123,11 +123,11 @@ class NestedStructT(object):
 
     @classmethod
     def InitFromObj(cls, nestedStruct):
-        x = NestedStructT()
+        x = NestedStruct()
         x._UnPack(nestedStruct)
         return x
 
-    # NestedStructT
+    # NestedStruct
     def _UnPack(self, nestedStruct):
         if nestedStruct is None:
             return
@@ -154,6 +154,6 @@ class NestedStructT(object):
             else:
                 self.d = nestedStruct.DAsNumpy()
 
-    # NestedStructT
+    # NestedStruct
     def Pack(self, builder):
         return CreateNestedStruct(builder, self.a, self.b, self.c, self.d)

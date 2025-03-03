@@ -5,7 +5,7 @@
 import flatbuffers
 from flatbuffers.compat import import_numpy
 from typing import Any
-from MyGame.Example.NestedUnion.Test import Test
+from Test import Test
 from typing import Optional
 np = import_numpy()
 
@@ -120,22 +120,22 @@ def Vec3End(builder: flatbuffers.Builder) -> int:
 def End(builder: flatbuffers.Builder) -> int:
     return Vec3End(builder)
 
-import MyGame.Example.NestedUnion.Test
+import Test
 try:
     from typing import Optional
 except:
     pass
 
-class Vec3T(object):
+class Vec3(object):
 
-    # Vec3T
+    # Vec3
     def __init__(self):
         self.x = 0.0  # type: float
         self.y = 0.0  # type: float
         self.z = 0.0  # type: float
         self.test1 = 0.0  # type: float
         self.test2 = 0  # type: int
-        self.test3 = None  # type: Optional[MyGame.Example.NestedUnion.Test.TestT]
+        self.test3 = None  # type: Optional[Test.Test]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -150,11 +150,11 @@ class Vec3T(object):
 
     @classmethod
     def InitFromObj(cls, vec3):
-        x = Vec3T()
+        x = Vec3()
         x._UnPack(vec3)
         return x
 
-    # Vec3T
+    # Vec3
     def _UnPack(self, vec3):
         if vec3 is None:
             return
@@ -164,9 +164,9 @@ class Vec3T(object):
         self.test1 = vec3.Test1()
         self.test2 = vec3.Test2()
         if vec3.Test3() is not None:
-            self.test3 = MyGame.Example.NestedUnion.Test.TestT.InitFromObj(vec3.Test3())
+            self.test3 = Test.TestT.InitFromObj(vec3.Test3())
 
-    # Vec3T
+    # Vec3
     def Pack(self, builder):
         Vec3Start(builder)
         Vec3AddX(builder, self.x)

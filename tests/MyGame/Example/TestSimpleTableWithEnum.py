@@ -52,3 +52,40 @@ def TestSimpleTableWithEnumEnd(builder):
 
 def End(builder):
     return TestSimpleTableWithEnumEnd(builder)
+
+
+class TestSimpleTableWithEnum(object):
+
+    # TestSimpleTableWithEnum
+    def __init__(self):
+        self.color = 2  # type: int
+
+    @classmethod
+    def InitFromBuf(cls, buf, pos):
+        testSimpleTableWithEnum = TestSimpleTableWithEnum()
+        testSimpleTableWithEnum.Init(buf, pos)
+        return cls.InitFromObj(testSimpleTableWithEnum)
+
+    @classmethod
+    def InitFromPackedBuf(cls, buf, pos=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, pos)
+        return cls.InitFromBuf(buf, pos+n)
+
+    @classmethod
+    def InitFromObj(cls, testSimpleTableWithEnum):
+        x = TestSimpleTableWithEnum()
+        x._UnPack(testSimpleTableWithEnum)
+        return x
+
+    # TestSimpleTableWithEnum
+    def _UnPack(self, testSimpleTableWithEnum):
+        if testSimpleTableWithEnum is None:
+            return
+        self.color = testSimpleTableWithEnum.Color()
+
+    # TestSimpleTableWithEnum
+    def Pack(self, builder):
+        TestSimpleTableWithEnumStart(builder)
+        TestSimpleTableWithEnumAddColor(builder, self.color)
+        testSimpleTableWithEnum = TestSimpleTableWithEnumEnd(builder)
+        return testSimpleTableWithEnum

@@ -7,3 +7,18 @@ class AnyAmbiguousAliases(object):
     M1 = 1
     M2 = 2
     M3 = 3
+
+def AnyAmbiguousAliasesCreator(unionType, table):
+    from flatbuffers.table import Table
+    if not isinstance(table, Table):
+        return None
+    if unionType == AnyAmbiguousAliases.M1:
+        import Monster
+        return Monster.Monster.InitFromBuf(table.Bytes, table.Pos)
+    if unionType == AnyAmbiguousAliases.M2:
+        import Monster
+        return Monster.Monster.InitFromBuf(table.Bytes, table.Pos)
+    if unionType == AnyAmbiguousAliases.M3:
+        import Monster
+        return Monster.Monster.InitFromBuf(table.Bytes, table.Pos)
+    return None

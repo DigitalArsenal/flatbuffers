@@ -40,11 +40,11 @@ def AnyCreator(unionType, table):
     if not isinstance(table, Table):
         return None
     if unionType == Any.Monster:
-        return MonsterT.InitFromBuf(table.Bytes, table.Pos)
+        return Monster.InitFromBuf(table.Bytes, table.Pos)
     if unionType == Any.TestSimpleTableWithEnum:
-        return TestSimpleTableWithEnumT.InitFromBuf(table.Bytes, table.Pos)
+        return TestSimpleTableWithEnum.InitFromBuf(table.Bytes, table.Pos)
     if unionType == Any.MyGame_Example2_Monster:
-        return MonsterT.InitFromBuf(table.Bytes, table.Pos)
+        return Monster.InitFromBuf(table.Bytes, table.Pos)
     return None
 
 
@@ -59,11 +59,11 @@ def AnyUniqueAliasesCreator(unionType, table):
     if not isinstance(table, Table):
         return None
     if unionType == AnyUniqueAliases.M:
-        return MonsterT.InitFromBuf(table.Bytes, table.Pos)
+        return Monster.InitFromBuf(table.Bytes, table.Pos)
     if unionType == AnyUniqueAliases.TS:
-        return TestSimpleTableWithEnumT.InitFromBuf(table.Bytes, table.Pos)
+        return TestSimpleTableWithEnum.InitFromBuf(table.Bytes, table.Pos)
     if unionType == AnyUniqueAliases.M2:
-        return MonsterT.InitFromBuf(table.Bytes, table.Pos)
+        return Monster.InitFromBuf(table.Bytes, table.Pos)
     return None
 
 
@@ -78,11 +78,11 @@ def AnyAmbiguousAliasesCreator(unionType, table):
     if not isinstance(table, Table):
         return None
     if unionType == AnyAmbiguousAliases.M1:
-        return MonsterT.InitFromBuf(table.Bytes, table.Pos)
+        return Monster.InitFromBuf(table.Bytes, table.Pos)
     if unionType == AnyAmbiguousAliases.M2:
-        return MonsterT.InitFromBuf(table.Bytes, table.Pos)
+        return Monster.InitFromBuf(table.Bytes, table.Pos)
     if unionType == AnyAmbiguousAliases.M3:
-        return MonsterT.InitFromBuf(table.Bytes, table.Pos)
+        return Monster.InitFromBuf(table.Bytes, table.Pos)
     return None
 
 
@@ -116,9 +116,9 @@ def InParentNamespaceEnd(builder):
 
 
 
-class InParentNamespaceT(object):
+class InParentNamespace(object):
 
-    # InParentNamespaceT
+    # InParentNamespace
     def __init__(self):
         pass
 
@@ -135,16 +135,16 @@ class InParentNamespaceT(object):
 
     @classmethod
     def InitFromObj(cls, inParentNamespace):
-        x = InParentNamespaceT()
+        x = InParentNamespace()
         x._UnPack(inParentNamespace)
         return x
 
-    # InParentNamespaceT
+    # InParentNamespace
     def _UnPack(self, inParentNamespace):
         if inParentNamespace is None:
             return
 
-    # InParentNamespaceT
+    # InParentNamespace
     def Pack(self, builder):
         InParentNamespaceStart(builder)
         inParentNamespace = InParentNamespaceEnd(builder)
@@ -181,9 +181,9 @@ def MonsterEnd(builder):
 
 
 
-class MonsterT(object):
+class Monster(object):
 
-    # MonsterT
+    # Monster
     def __init__(self):
         pass
 
@@ -200,16 +200,16 @@ class MonsterT(object):
 
     @classmethod
     def InitFromObj(cls, monster):
-        x = MonsterT()
+        x = Monster()
         x._UnPack(monster)
         return x
 
-    # MonsterT
+    # Monster
     def _UnPack(self, monster):
         if monster is None:
             return
 
-    # MonsterT
+    # Monster
     def Pack(self, builder):
         MonsterStart(builder)
         monster = MonsterEnd(builder)
@@ -240,9 +240,9 @@ def CreateTest(builder, a, b):
     return builder.Offset()
 
 
-class TestT(object):
+class Test(object):
 
-    # TestT
+    # Test
     def __init__(self):
         self.a = 0  # type: int
         self.b = 0  # type: int
@@ -260,18 +260,18 @@ class TestT(object):
 
     @classmethod
     def InitFromObj(cls, test):
-        x = TestT()
+        x = Test()
         x._UnPack(test)
         return x
 
-    # TestT
+    # Test
     def _UnPack(self, test):
         if test is None:
             return
         self.a = test.A()
         self.b = test.B()
 
-    # TestT
+    # Test
     def Pack(self, builder):
         return CreateTest(builder, self.a, self.b)
 
@@ -316,9 +316,9 @@ def TestSimpleTableWithEnumEnd(builder):
 
 
 
-class TestSimpleTableWithEnumT(object):
+class TestSimpleTableWithEnum(object):
 
-    # TestSimpleTableWithEnumT
+    # TestSimpleTableWithEnum
     def __init__(self):
         self.color = 2  # type: int
 
@@ -335,17 +335,17 @@ class TestSimpleTableWithEnumT(object):
 
     @classmethod
     def InitFromObj(cls, testSimpleTableWithEnum):
-        x = TestSimpleTableWithEnumT()
+        x = TestSimpleTableWithEnum()
         x._UnPack(testSimpleTableWithEnum)
         return x
 
-    # TestSimpleTableWithEnumT
+    # TestSimpleTableWithEnum
     def _UnPack(self, testSimpleTableWithEnum):
         if testSimpleTableWithEnum is None:
             return
         self.color = testSimpleTableWithEnum.Color()
 
-    # TestSimpleTableWithEnumT
+    # TestSimpleTableWithEnum
     def Pack(self, builder):
         TestSimpleTableWithEnumStart(builder)
         TestSimpleTableWithEnumAddColor(builder, self.color)
@@ -401,16 +401,16 @@ try:
 except:
     pass
 
-class Vec3T(object):
+class Vec3(object):
 
-    # Vec3T
+    # Vec3
     def __init__(self):
         self.x = 0.0  # type: float
         self.y = 0.0  # type: float
         self.z = 0.0  # type: float
         self.test1 = 0.0  # type: float
         self.test2 = 0  # type: int
-        self.test3 = None  # type: Optional[TestT]
+        self.test3 = None  # type: Optional[Test]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -425,11 +425,11 @@ class Vec3T(object):
 
     @classmethod
     def InitFromObj(cls, vec3):
-        x = Vec3T()
+        x = Vec3()
         x._UnPack(vec3)
         return x
 
-    # Vec3T
+    # Vec3
     def _UnPack(self, vec3):
         if vec3 is None:
             return
@@ -441,7 +441,7 @@ class Vec3T(object):
         if vec3.Test3(Test()) is not None:
             self.test3 = TestT.InitFromObj(vec3.Test3(Test()))
 
-    # Vec3T
+    # Vec3
     def Pack(self, builder):
         return CreateVec3(builder, self.x, self.y, self.z, self.test1, self.test2, self.test3.a, self.test3.b)
 
@@ -469,9 +469,9 @@ def CreateAbility(builder, id, distance):
     return builder.Offset()
 
 
-class AbilityT(object):
+class Ability(object):
 
-    # AbilityT
+    # Ability
     def __init__(self):
         self.id = 0  # type: int
         self.distance = 0  # type: int
@@ -489,18 +489,18 @@ class AbilityT(object):
 
     @classmethod
     def InitFromObj(cls, ability):
-        x = AbilityT()
+        x = Ability()
         x._UnPack(ability)
         return x
 
-    # AbilityT
+    # Ability
     def _UnPack(self, ability):
         if ability is None:
             return
         self.id = ability.Id()
         self.distance = ability.Distance()
 
-    # AbilityT
+    # Ability
     def Pack(self, builder):
         return CreateAbility(builder, self.id, self.distance)
 
@@ -551,13 +551,13 @@ try:
 except:
     pass
 
-class StructOfStructsT(object):
+class StructOfStructs(object):
 
-    # StructOfStructsT
+    # StructOfStructs
     def __init__(self):
-        self.a = None  # type: Optional[AbilityT]
-        self.b = None  # type: Optional[TestT]
-        self.c = None  # type: Optional[AbilityT]
+        self.a = None  # type: Optional[Ability]
+        self.b = None  # type: Optional[Test]
+        self.c = None  # type: Optional[Ability]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -572,11 +572,11 @@ class StructOfStructsT(object):
 
     @classmethod
     def InitFromObj(cls, structOfStructs):
-        x = StructOfStructsT()
+        x = StructOfStructs()
         x._UnPack(structOfStructs)
         return x
 
-    # StructOfStructsT
+    # StructOfStructs
     def _UnPack(self, structOfStructs):
         if structOfStructs is None:
             return
@@ -587,7 +587,7 @@ class StructOfStructsT(object):
         if structOfStructs.C(Ability()) is not None:
             self.c = AbilityT.InitFromObj(structOfStructs.C(Ability()))
 
-    # StructOfStructsT
+    # StructOfStructs
     def Pack(self, builder):
         return CreateStructOfStructs(builder, self.a.id, self.a.distance, self.b.a, self.b.b, self.c.id, self.c.distance)
 
@@ -629,11 +629,11 @@ try:
 except:
     pass
 
-class StructOfStructsOfStructsT(object):
+class StructOfStructsOfStructs(object):
 
-    # StructOfStructsOfStructsT
+    # StructOfStructsOfStructs
     def __init__(self):
-        self.a = None  # type: Optional[StructOfStructsT]
+        self.a = None  # type: Optional[StructOfStructs]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -648,18 +648,18 @@ class StructOfStructsOfStructsT(object):
 
     @classmethod
     def InitFromObj(cls, structOfStructsOfStructs):
-        x = StructOfStructsOfStructsT()
+        x = StructOfStructsOfStructs()
         x._UnPack(structOfStructsOfStructs)
         return x
 
-    # StructOfStructsOfStructsT
+    # StructOfStructsOfStructs
     def _UnPack(self, structOfStructsOfStructs):
         if structOfStructsOfStructs is None:
             return
         if structOfStructsOfStructs.A(StructOfStructs()) is not None:
             self.a = StructOfStructsT.InitFromObj(structOfStructsOfStructs.A(StructOfStructs()))
 
-    # StructOfStructsOfStructsT
+    # StructOfStructsOfStructs
     def Pack(self, builder):
         return CreateStructOfStructsOfStructs(builder, self.a.a.id, self.a.a.distance, self.a.b.a, self.a.b.b, self.a.c.id, self.a.c.distance)
 
@@ -724,9 +724,9 @@ def StatEnd(builder):
 
 
 
-class StatT(object):
+class Stat(object):
 
-    # StatT
+    # Stat
     def __init__(self):
         self.id = None  # type: str
         self.val = 0  # type: int
@@ -745,11 +745,11 @@ class StatT(object):
 
     @classmethod
     def InitFromObj(cls, stat):
-        x = StatT()
+        x = Stat()
         x._UnPack(stat)
         return x
 
-    # StatT
+    # Stat
     def _UnPack(self, stat):
         if stat is None:
             return
@@ -757,7 +757,7 @@ class StatT(object):
         self.val = stat.Val()
         self.count = stat.Count()
 
-    # StatT
+    # Stat
     def Pack(self, builder):
         if self.id is not None:
             id = builder.CreateString(self.id)
@@ -810,9 +810,9 @@ def ReferrableEnd(builder):
 
 
 
-class ReferrableT(object):
+class Referrable(object):
 
-    # ReferrableT
+    # Referrable
     def __init__(self):
         self.id = 0  # type: int
 
@@ -829,17 +829,17 @@ class ReferrableT(object):
 
     @classmethod
     def InitFromObj(cls, referrable):
-        x = ReferrableT()
+        x = Referrable()
         x._UnPack(referrable)
         return x
 
-    # ReferrableT
+    # Referrable
     def _UnPack(self, referrable):
         if referrable is None:
             return
         self.id = referrable.Id()
 
-    # ReferrableT
+    # Referrable
     def Pack(self, builder):
         ReferrableStart(builder)
         ReferrableAddId(builder, self.id)
@@ -1966,24 +1966,24 @@ try:
 except:
     pass
 
-class MonsterT(object):
+class Monster(object):
 
-    # MonsterT
+    # Monster
     def __init__(self):
-        self.pos = None  # type: Optional[Vec3T]
+        self.pos = None  # type: Optional[Vec3]
         self.mana = 150  # type: int
         self.hp = 100  # type: int
         self.name = None  # type: str
         self.inventory = None  # type: List[int]
         self.color = 8  # type: int
         self.testType = 0  # type: int
-        self.test = None  # type: Union[None, MonsterT, TestSimpleTableWithEnumT, MonsterT]
-        self.test4 = None  # type: List[TestT]
+        self.test = None  # type: Union[None, Monster, TestSimpleTableWithEnum, Monster]
+        self.test4 = None  # type: List[Test]
         self.testarrayofstring = None  # type: List[str]
-        self.testarrayoftables = None  # type: List[MonsterT]
-        self.enemy = None  # type: Optional[MonsterT]
+        self.testarrayoftables = None  # type: List[Monster]
+        self.enemy = None  # type: Optional[Monster]
         self.testnestedflatbuffer = None  # type: List[int]
-        self.testempty = None  # type: Optional[StatT]
+        self.testempty = None  # type: Optional[Stat]
         self.testbool = False  # type: bool
         self.testhashs32Fnv1 = 0  # type: int
         self.testhashu32Fnv1 = 0  # type: int
@@ -1998,29 +1998,29 @@ class MonsterT(object):
         self.testf2 = 3.0  # type: float
         self.testf3 = 0.0  # type: float
         self.testarrayofstring2 = None  # type: List[str]
-        self.testarrayofsortedstruct = None  # type: List[AbilityT]
+        self.testarrayofsortedstruct = None  # type: List[Ability]
         self.flex = None  # type: List[int]
-        self.test5 = None  # type: List[TestT]
+        self.test5 = None  # type: List[Test]
         self.vectorOfLongs = None  # type: List[int]
         self.vectorOfDoubles = None  # type: List[float]
-        self.parentNamespaceTest = None  # type: Optional[InParentNamespaceT]
-        self.vectorOfReferrables = None  # type: List[ReferrableT]
+        self.parentNamespaceTest = None  # type: Optional[InParentNamespace]
+        self.vectorOfReferrables = None  # type: List[Referrable]
         self.singleWeakReference = 0  # type: int
         self.vectorOfWeakReferences = None  # type: List[int]
-        self.vectorOfStrongReferrables = None  # type: List[ReferrableT]
+        self.vectorOfStrongReferrables = None  # type: List[Referrable]
         self.coOwningReference = 0  # type: int
         self.vectorOfCoOwningReferences = None  # type: List[int]
         self.nonOwningReference = 0  # type: int
         self.vectorOfNonOwningReferences = None  # type: List[int]
         self.anyUniqueType = 0  # type: int
-        self.anyUnique = None  # type: Union[None, MonsterT, TestSimpleTableWithEnumT, MonsterT]
+        self.anyUnique = None  # type: Union[None, Monster, TestSimpleTableWithEnum, Monster]
         self.anyAmbiguousType = 0  # type: int
-        self.anyAmbiguous = None  # type: Union[None, MonsterT, MonsterT, MonsterT]
+        self.anyAmbiguous = None  # type: Union[None, Monster, Monster, Monster]
         self.vectorOfEnums = None  # type: List[int]
         self.signedEnum = -1  # type: int
         self.testrequirednestedflatbuffer = None  # type: List[int]
-        self.scalarKeySortedTables = None  # type: List[StatT]
-        self.nativeInline = None  # type: Optional[TestT]
+        self.scalarKeySortedTables = None  # type: List[Stat]
+        self.nativeInline = None  # type: Optional[Test]
         self.longEnumNonEnumDefault = 0  # type: int
         self.longEnumNormalDefault = 2  # type: int
         self.nanDefault = float('nan')  # type: float
@@ -2045,11 +2045,11 @@ class MonsterT(object):
 
     @classmethod
     def InitFromObj(cls, monster):
-        x = MonsterT()
+        x = Monster()
         x._UnPack(monster)
         return x
 
-    # MonsterT
+    # Monster
     def _UnPack(self, monster):
         if monster is None:
             return
@@ -2241,7 +2241,7 @@ class MonsterT(object):
         self.negativeInfinityDefault = monster.NegativeInfinityDefault()
         self.doubleInfDefault = monster.DoubleInfDefault()
 
-    # MonsterT
+    # Monster
     def Pack(self, builder):
         if self.name is not None:
             name = builder.CreateString(self.name)
@@ -2705,9 +2705,9 @@ try:
 except:
     pass
 
-class TypeAliasesT(object):
+class TypeAliases(object):
 
-    # TypeAliasesT
+    # TypeAliases
     def __init__(self):
         self.i8 = 0  # type: int
         self.u8 = 0  # type: int
@@ -2735,11 +2735,11 @@ class TypeAliasesT(object):
 
     @classmethod
     def InitFromObj(cls, typeAliases):
-        x = TypeAliasesT()
+        x = TypeAliases()
         x._UnPack(typeAliases)
         return x
 
-    # TypeAliasesT
+    # TypeAliases
     def _UnPack(self, typeAliases):
         if typeAliases is None:
             return
@@ -2768,7 +2768,7 @@ class TypeAliasesT(object):
             else:
                 self.vf64 = typeAliases.Vf64AsNumpy()
 
-    # TypeAliasesT
+    # TypeAliases
     def Pack(self, builder):
         if self.v8 is not None:
             if np is not None and type(self.v8) is np.ndarray:

@@ -46,3 +46,50 @@ def CreateStructOfStructs(builder, a_id, a_distance, b_a, b_b, c_id, c_distance)
     builder.PrependUint32(a_distance)
     builder.PrependUint32(a_id)
     return builder.Offset()
+
+import Ability
+import Test
+try:
+    from typing import Optional
+except:
+    pass
+
+class StructOfStructs(object):
+
+    # StructOfStructs
+    def __init__(self):
+        self.a = None  # type: Optional[Ability.Ability]
+        self.b = None  # type: Optional[Test.Test]
+        self.c = None  # type: Optional[Ability.Ability]
+
+    @classmethod
+    def InitFromBuf(cls, buf, pos):
+        structOfStructs = StructOfStructs()
+        structOfStructs.Init(buf, pos)
+        return cls.InitFromObj(structOfStructs)
+
+    @classmethod
+    def InitFromPackedBuf(cls, buf, pos=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, pos)
+        return cls.InitFromBuf(buf, pos+n)
+
+    @classmethod
+    def InitFromObj(cls, structOfStructs):
+        x = StructOfStructs()
+        x._UnPack(structOfStructs)
+        return x
+
+    # StructOfStructs
+    def _UnPack(self, structOfStructs):
+        if structOfStructs is None:
+            return
+        if structOfStructs.A(Ability.Ability()) is not None:
+            self.a = Ability.AbilityT.InitFromObj(structOfStructs.A(Ability.Ability()))
+        if structOfStructs.B(Test.Test()) is not None:
+            self.b = Test.TestT.InitFromObj(structOfStructs.B(Test.Test()))
+        if structOfStructs.C(Ability.Ability()) is not None:
+            self.c = Ability.AbilityT.InitFromObj(structOfStructs.C(Ability.Ability()))
+
+    # StructOfStructs
+    def Pack(self, builder):
+        return CreateStructOfStructs(builder, self.a.id, self.a.distance, self.b.a, self.b.b, self.c.id, self.c.distance)

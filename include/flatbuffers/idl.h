@@ -301,7 +301,8 @@ struct Definition {
         serialized_location(0),
         index(-1),
         refcount(1),
-        declaration_file(nullptr) {}
+        declaration_file(nullptr),
+        declared_in_idl(false) {}
 
   flatbuffers::Offset<
       flatbuffers::Vector<flatbuffers::Offset<reflection::KeyValue>>>
@@ -322,6 +323,7 @@ struct Definition {
   int index;  // Inside the vector it is stored.
   int refcount;
   const std::string *declaration_file;
+  bool declared_in_idl;
 };
 
 struct FieldDef : public Definition {
@@ -335,19 +337,16 @@ struct FieldDef : public Definition {
         presence(kDefault),
         nested_flatbuffer(nullptr),
         padding(0),
-        sibling_union_field(nullptr),
-        declared_in_idl(false) {}
+        sibling_union_field(nullptr) {}
 
   Offset<reflection::Field> Serialize(FlatBufferBuilder *builder, uint16_t id,
                                       const Parser &parser) const;
 
   bool Deserialize(Parser &parser, const reflection::Field *field);
 
-  bool IsScalarOptional() const {
-    return IsScalar() && IsOptional();
-  }
+  bool IsScalarOptional() const { return IsScalar() && IsOptional(); }
   bool IsScalar() const {
-      return ::flatbuffers::IsScalar(value.type.base_type);
+    return ::flatbuffers::IsScalar(value.type.base_type);
   }
   bool IsOptional() const { return presence == kOptional; }
   bool IsRequired() const { return presence == kRequired; }
@@ -391,12 +390,6 @@ struct FieldDef : public Definition {
   // sibling_union_field on a union field points to the union type field
   // and vice-versa.
   FieldDef *sibling_union_field;
-
-  // Indicates whether the field was defined in the IDL, as opposed
-  // to being an internal field.  This change is required when preserving
-  // case, as all fields / methods whether they refer to flatbuffer internals
-  // or not go through the same renamer.
-  bool declared_in_idl;
 };
 
 struct StructDef : public Definition {
@@ -457,14 +450,16 @@ struct EnumVal {
   std::vector<std::string> doc_comment;
   Type union_type;
   SymbolTable<Value> attributes;
+  bool declared_in_idl;
 
  private:
   friend EnumDef;
   friend EnumValBuilder;
   friend bool operator==(const EnumVal &lhs, const EnumVal &rhs);
 
-  EnumVal(const std::string &_name, int64_t _val) : name(_name), value(_val) {}
-  EnumVal() : value(0) {}
+  EnumVal(const std::string &_name, int64_t _val)
+      : name(_name), value(_val), declared_in_idl(false) {}
+  EnumVal() : value(0), declared_in_idl(false) {}
 
   int64_t value;
 };
@@ -1261,10 +1256,9 @@ class Parser : public ParserState {
 // These functions return nullptr on success, or an error string,
 // which may happen if the flatbuffer cannot be encoded in JSON (e.g.,
 // it contains non-UTF-8 byte arrays in String values).
-extern bool GenerateTextFromTable(const Parser &parser,
-                                         const void *table,
-                                         const std::string &tablename,
-                                         std::string *text);
+extern bool GenerateTextFromTable(const Parser &parser, const void *table,
+                                  const std::string &tablename,
+                                  std::string *text);
 extern const char *GenerateText(const Parser &parser, const void *flatbuffer,
                                 std::string *text);
 extern const char *GenerateTextFile(const Parser &parser,

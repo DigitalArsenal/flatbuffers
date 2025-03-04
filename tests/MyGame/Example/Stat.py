@@ -29,24 +29,24 @@ class Stat(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Stat
-    def Id(self):
+    def id(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.String(o + self._tab.Pos)
         return None
 
     # Stat
-    def Val(self):
+    def val(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.Int64Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.int64Flags, o + self._tab.Pos)
         return 0
 
     # Stat
-    def Count(self):
+    def count(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.Uint16Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.uint16Flags, o + self._tab.Pos)
         return 0
 
 def StatStart(builder):
@@ -55,72 +55,26 @@ def StatStart(builder):
 def Start(builder):
     StatStart(builder)
 
-def StatAddId(builder, id):
+def StatAddid(builder, id):
     builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(id), 0)
 
-def AddId(builder, id):
-    StatAddId(builder, id)
+def Addid(builder, id):
+    StatAddid(builder, id)
 
-def StatAddVal(builder, val):
-    builder.PrependInt64Slot(1, val, 0)
+def StatAddval(builder, val):
+    builder.Prependint64Slot(1, val, 0)
 
-def AddVal(builder, val):
-    StatAddVal(builder, val)
+def Addval(builder, val):
+    StatAddval(builder, val)
 
-def StatAddCount(builder, count):
-    builder.PrependUint16Slot(2, count, 0)
+def StatAddcount(builder, count):
+    builder.Prependuint16Slot(2, count, 0)
 
-def AddCount(builder, count):
-    StatAddCount(builder, count)
+def Addcount(builder, count):
+    StatAddcount(builder, count)
 
 def StatEnd(builder):
     return builder.EndObject()
 
 def End(builder):
     return StatEnd(builder)
-
-
-class StatT(object):
-
-    # StatT
-    def __init__(self):
-        self.id = None  # type: str
-        self.val = 0  # type: int
-        self.count = 0  # type: int
-
-    @classmethod
-    def InitFromBuf(cls, buf, pos):
-        Stat = Stat()
-        Stat.Init(buf, pos)
-        return cls.InitFromObj(Stat)
-
-    @classmethod
-    def InitFromPackedBuf(cls, buf, pos=0):
-        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, pos)
-        return cls.InitFromBuf(buf, pos+n)
-
-    @classmethod
-    def InitFromObj(cls, Stat):
-        x = StatT()
-        x._UnPack(Stat)
-        return x
-
-    # StatT
-    def _UnPack(self, Stat):
-        if Stat is None:
-            return
-        self.id = Stat.Id()
-        self.val = Stat.Val()
-        self.count = Stat.Count()
-
-    # StatT
-    def Pack(self, builder):
-        if self.id is not None:
-            id = builder.CreateString(self.id)
-        StatStart(builder)
-        if self.id is not None:
-            StatAddId(builder, id)
-        StatAddVal(builder, self.val)
-        StatAddCount(builder, self.count)
-        Stat = StatEnd(builder)
-        return Stat

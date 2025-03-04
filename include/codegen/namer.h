@@ -1,6 +1,8 @@
 #ifndef FLATBUFFERS_INCLUDE_CODEGEN_NAMER_H_
 #define FLATBUFFERS_INCLUDE_CODEGEN_NAMER_H_
 
+#include <iostream>
+
 #include "flatbuffers/util.h"
 
 namespace flatbuffers {
@@ -118,14 +120,43 @@ class Namer {
   virtual std::string Method(const std::string &pre, const std::string &mid,
                              const std::string &suf,
                              bool from_idl = false) const {
-    return Format(pre + "_" + mid + "_" + suf, config_.methods, from_idl);
+    std::string methodName = pre + "_" + mid + "_" + suf;
+
+    if (methodName.find("any_uniqueType") != std::string::npos ||
+        methodName.find("any_unique") != std::string::npos ||
+        methodName.find("any_ambiguous") != std::string::npos ||
+        methodName.find("My") != std::string::npos) {
+      std::cout << "Breakpoint triggered: Broken method pattern detected: "
+                << methodName << std::endl;
+    }
+    return Format(methodName, config_.methods, from_idl);
   }
+
   virtual std::string Method(const std::string &pre, const std::string &suf,
                              bool from_idl = false) const {
-    return Format(pre + "_" + suf, config_.methods, from_idl);
+    std::string methodName = pre + "_" + suf;
+
+    if (methodName.find("any_uniqueType") != std::string::npos ||
+        methodName.find("any_unique") != std::string::npos ||
+        methodName.find("any_ambiguous") != std::string::npos ||
+        methodName.find("My") != std::string::npos) {
+      std::cout << "Breakpoint triggered: Broken method pattern detected: "
+                << methodName << std::endl;
+    }
+
+    return Format(methodName, config_.methods, from_idl);
   }
+
   virtual std::string Method(const std::string &s,
                              bool from_idl = false) const {
+    if (s.find("any_uniqueType") != std::string::npos ||
+        s.find("any_unique") != std::string::npos ||
+        s.find("any_ambiguous") != std::string::npos ||
+        s.find("My") != std::string::npos) {
+      std::cout << "Breakpoint triggered: Broken method pattern detected: " << s
+                << std::endl;
+    }
+
     return Format(s, config_.methods, from_idl);
   }
 
@@ -153,8 +184,14 @@ class Namer {
   }
 
   virtual std::string Variable(const std::string &s, bool from_idl) const {
-    // When from_idl is true, simply preserve the IDL name,
-    // otherwise apply the naming convention.
+    if (s.find("any_uniqueType") != std::string::npos ||
+        s.find("any_unique") != std::string::npos ||
+        s.find("any_ambiguous") != std::string::npos ||
+        s.find("My") != std::string::npos) {
+      std::cout << "Breakpoint triggered: Broken variable pattern detected: "
+                << s << std::endl;
+    }
+
     return from_idl ? s : Format(s, config_.variables, false);
   }
 

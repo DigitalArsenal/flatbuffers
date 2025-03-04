@@ -39,38 +39,3 @@ def MonsterEnd(builder):
 
 def End(builder):
     return MonsterEnd(builder)
-
-
-class MonsterT(object):
-
-    # MonsterT
-    def __init__(self):
-        pass
-
-    @classmethod
-    def InitFromBuf(cls, buf, pos):
-        Monster = Monster()
-        Monster.Init(buf, pos)
-        return cls.InitFromObj(Monster)
-
-    @classmethod
-    def InitFromPackedBuf(cls, buf, pos=0):
-        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, pos)
-        return cls.InitFromBuf(buf, pos+n)
-
-    @classmethod
-    def InitFromObj(cls, Monster):
-        x = MonsterT()
-        x._UnPack(Monster)
-        return x
-
-    # MonsterT
-    def _UnPack(self, Monster):
-        if Monster is None:
-            return
-
-    # MonsterT
-    def Pack(self, builder):
-        MonsterStart(builder)
-        Monster = MonsterEnd(builder)
-        return Monster

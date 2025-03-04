@@ -18,17 +18,17 @@ class Vec3(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Vec3
-    def X(self): return self._tab.Get(flatbuffers.number_types.Float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
+    def x(self): return self._tab.Get(flatbuffers.number_types.float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
     # Vec3
-    def Y(self): return self._tab.Get(flatbuffers.number_types.Float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(4))
+    def y(self): return self._tab.Get(flatbuffers.number_types.float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(4))
     # Vec3
-    def Z(self): return self._tab.Get(flatbuffers.number_types.Float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(8))
+    def z(self): return self._tab.Get(flatbuffers.number_types.float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(8))
     # Vec3
-    def Test1(self): return self._tab.Get(flatbuffers.number_types.Float64Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(16))
+    def test1(self): return self._tab.Get(flatbuffers.number_types.float64Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(16))
     # Vec3
-    def Test2(self): return self._tab.Get(flatbuffers.number_types.Uint8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(24))
+    def test2(self): return self._tab.Get(flatbuffers.number_types.uint8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(24))
     # Vec3
-    def Test3(self, obj):
+    def test3(self, obj):
         obj.Init(self._tab.Bytes, self._tab.Pos + 26)
         return obj
 
@@ -38,63 +38,13 @@ def CreateVec3(builder, x, y, z, test1, test2, test3_a, test3_b):
     builder.Pad(2)
     builder.Prep(2, 4)
     builder.Pad(1)
-    builder.PrependInt8(test3_b)
-    builder.PrependInt16(test3_a)
+    builder.Prependint8(test3_b)
+    builder.Prependint16(test3_a)
     builder.Pad(1)
-    builder.PrependUint8(test2)
-    builder.PrependFloat64(test1)
+    builder.Prependuint8(test2)
+    builder.Prependfloat64(test1)
     builder.Pad(4)
-    builder.PrependFloat32(z)
-    builder.PrependFloat32(y)
-    builder.PrependFloat32(x)
+    builder.Prependfloat32(z)
+    builder.Prependfloat32(y)
+    builder.Prependfloat32(x)
     return builder.Offset()
-
-import MyGame.Example.Test
-try:
-    from typing import Optional
-except:
-    pass
-
-class Vec3T(object):
-
-    # Vec3T
-    def __init__(self):
-        self.x = 0.0  # type: float
-        self.y = 0.0  # type: float
-        self.z = 0.0  # type: float
-        self.test1 = 0.0  # type: float
-        self.test2 = 0  # type: int
-        self.test3 = None  # type: Optional[MyGame.Example.Test.TestT]
-
-    @classmethod
-    def InitFromBuf(cls, buf, pos):
-        Vec3 = Vec3()
-        Vec3.Init(buf, pos)
-        return cls.InitFromObj(Vec3)
-
-    @classmethod
-    def InitFromPackedBuf(cls, buf, pos=0):
-        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, pos)
-        return cls.InitFromBuf(buf, pos+n)
-
-    @classmethod
-    def InitFromObj(cls, Vec3):
-        x = Vec3T()
-        x._UnPack(Vec3)
-        return x
-
-    # Vec3T
-    def _UnPack(self, Vec3):
-        if Vec3 is None:
-            return
-        self.x = Vec3.X()
-        self.y = Vec3.Y()
-        self.z = Vec3.Z()
-        self.test1 = Vec3.Test1()
-        self.test2 = Vec3.Test2()
-        if Vec3.Test3(MyGame.Example.Test.Test()) is not None:
-            self.test3 = MyGame.Example.Test.TestT.InitFromObj(Vec3.Test3(MyGame.Example.Test.Test()))
-
-    # Vec3T
-    def Pack(self, builder):
-        return CreateVec3(builder, self.x, self.y, self.z, self.test1, self.test2, self.test3.a, self.test3.b)

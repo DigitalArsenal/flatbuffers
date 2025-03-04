@@ -19,15 +19,15 @@ class Test(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Test
-    def A(self): return self._tab.Get(flatbuffers.number_types.Int16Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
+    def a(self): return self._tab.Get(flatbuffers.number_types.int16Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
     # Test
-    def B(self): return self._tab.Get(flatbuffers.number_types.Int8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(2))
+    def b(self): return self._tab.Get(flatbuffers.number_types.int8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(2))
 
 def CreateTest(builder, a, b):
     builder.Prep(2, 4)
     builder.Pad(1)
-    builder.PrependInt8(b)
-    builder.PrependInt16(a)
+    builder.Prependint8(b)
+    builder.Prependint16(a)
     return builder.Offset()
 
 
@@ -59,8 +59,8 @@ class TestT(object):
     def _UnPack(self, Test):
         if Test is None:
             return
-        self.a = Test.A()
-        self.b = Test.B()
+        self.a = Test.a()
+        self.b = Test.b()
 
     # TestT
     def Pack(self, builder):

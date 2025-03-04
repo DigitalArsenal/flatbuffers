@@ -41,17 +41,17 @@ def End(builder):
     return MonsterEnd(builder)
 
 
-class Monster(object):
+class MonsterT(object):
 
-    # Monster
+    # MonsterT
     def __init__(self):
         pass
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        monster = Monster()
-        monster.Init(buf, pos)
-        return cls.InitFromObj(monster)
+        Monster = Monster()
+        Monster.Init(buf, pos)
+        return cls.InitFromObj(Monster)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -59,18 +59,18 @@ class Monster(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, monster):
-        x = Monster()
-        x._UnPack(monster)
+    def InitFromObj(cls, Monster):
+        x = MonsterT()
+        x._UnPack(Monster)
         return x
 
-    # Monster
-    def _UnPack(self, monster):
-        if monster is None:
+    # MonsterT
+    def _UnPack(self, Monster):
+        if Monster is None:
             return
 
-    # Monster
+    # MonsterT
     def Pack(self, builder):
         MonsterStart(builder)
-        monster = MonsterEnd(builder)
-        return monster
+        Monster = MonsterEnd(builder)
+        return Monster

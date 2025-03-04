@@ -5,7 +5,7 @@
 import flatbuffers
 from flatbuffers.compat import import_numpy
 from typing import Any
-from NestedStruct import NestedStruct
+from MyGame.Example.NestedStruct import NestedStruct
 np = import_numpy()
 
 class ArrayStruct(object):
@@ -105,28 +105,28 @@ def CreateArrayStruct(builder, a, b, c, d_a, d_b, d_c, d_d, e, f):
     builder.PrependFloat32(a)
     return builder.Offset()
 
-import NestedStruct
+import MyGame.Example.NestedStruct
 try:
     from typing import List
 except:
     pass
 
-class ArrayStruct(object):
+class ArrayStructT(object):
 
-    # ArrayStruct
+    # ArrayStructT
     def __init__(self):
         self.a = 0.0  # type: float
         self.b = None  # type: List[int]
         self.c = 0  # type: int
-        self.d = None  # type: List[NestedStruct.NestedStruct]
+        self.d = None  # type: List[MyGame.Example.NestedStruct.NestedStructT]
         self.e = 0  # type: int
         self.f = None  # type: List[int]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        arrayStruct = ArrayStruct()
-        arrayStruct.Init(buf, pos)
-        return cls.InitFromObj(arrayStruct)
+        ArrayStruct = ArrayStruct()
+        ArrayStruct.Init(buf, pos)
+        return cls.InitFromObj(ArrayStruct)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -134,41 +134,41 @@ class ArrayStruct(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, arrayStruct):
-        x = ArrayStruct()
-        x._UnPack(arrayStruct)
+    def InitFromObj(cls, ArrayStruct):
+        x = ArrayStructT()
+        x._UnPack(ArrayStruct)
         return x
 
-    # ArrayStruct
-    def _UnPack(self, arrayStruct):
-        if arrayStruct is None:
+    # ArrayStructT
+    def _UnPack(self, ArrayStruct):
+        if ArrayStruct is None:
             return
-        self.a = arrayStruct.A()
-        if not arrayStruct.BIsNone():
+        self.a = ArrayStruct.A()
+        if not ArrayStruct.BIsNone():
             if np is None:
                 self.b = []
-                for i in range(arrayStruct.BLength()):
-                    self.b.append(arrayStruct.B(i))
+                for i in range(ArrayStruct.BLength()):
+                    self.b.append(ArrayStruct.B(i))
             else:
-                self.b = arrayStruct.BAsNumpy()
-        self.c = arrayStruct.C()
-        if not arrayStruct.DIsNone():
+                self.b = ArrayStruct.BAsNumpy()
+        self.c = ArrayStruct.C()
+        if not ArrayStruct.DIsNone():
             self.d = []
-            for i in range(arrayStruct.DLength()):
-                if arrayStruct.D(i) is None:
+            for i in range(ArrayStruct.DLength()):
+                if ArrayStruct.D(i) is None:
                     self.d.append(None)
                 else:
-                    nestedStruct_ = NestedStruct.NestedStructT.InitFromObj(arrayStruct.D(i))
+                    nestedStruct_ = MyGame.Example.NestedStruct.NestedStructT.InitFromObj(ArrayStruct.D(i))
                     self.d.append(nestedStruct_)
-        self.e = arrayStruct.E()
-        if not arrayStruct.FIsNone():
+        self.e = ArrayStruct.E()
+        if not ArrayStruct.FIsNone():
             if np is None:
                 self.f = []
-                for i in range(arrayStruct.FLength()):
-                    self.f.append(arrayStruct.F(i))
+                for i in range(ArrayStruct.FLength()):
+                    self.f.append(ArrayStruct.F(i))
             else:
-                self.f = arrayStruct.FAsNumpy()
+                self.f = ArrayStruct.FAsNumpy()
 
-    # ArrayStruct
+    # ArrayStructT
     def Pack(self, builder):
         return CreateArrayStruct(builder, self.a, self.b, self.c, self.d.a, self.d.b, self.d.c, self.d.d, self.e, self.f)

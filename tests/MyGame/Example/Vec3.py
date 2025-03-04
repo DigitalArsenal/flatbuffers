@@ -49,28 +49,28 @@ def CreateVec3(builder, x, y, z, test1, test2, test3_a, test3_b):
     builder.PrependFloat32(x)
     return builder.Offset()
 
-import Test
+import MyGame.Example.Test
 try:
     from typing import Optional
 except:
     pass
 
-class Vec3(object):
+class Vec3T(object):
 
-    # Vec3
+    # Vec3T
     def __init__(self):
         self.x = 0.0  # type: float
         self.y = 0.0  # type: float
         self.z = 0.0  # type: float
         self.test1 = 0.0  # type: float
         self.test2 = 0  # type: int
-        self.test3 = None  # type: Optional[Test.Test]
+        self.test3 = None  # type: Optional[MyGame.Example.Test.TestT]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        vec3 = Vec3()
-        vec3.Init(buf, pos)
-        return cls.InitFromObj(vec3)
+        Vec3 = Vec3()
+        Vec3.Init(buf, pos)
+        return cls.InitFromObj(Vec3)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -78,23 +78,23 @@ class Vec3(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, vec3):
-        x = Vec3()
-        x._UnPack(vec3)
+    def InitFromObj(cls, Vec3):
+        x = Vec3T()
+        x._UnPack(Vec3)
         return x
 
-    # Vec3
-    def _UnPack(self, vec3):
-        if vec3 is None:
+    # Vec3T
+    def _UnPack(self, Vec3):
+        if Vec3 is None:
             return
-        self.x = vec3.X()
-        self.y = vec3.Y()
-        self.z = vec3.Z()
-        self.test1 = vec3.Test1()
-        self.test2 = vec3.Test2()
-        if vec3.Test3(Test.Test()) is not None:
-            self.test3 = Test.TestT.InitFromObj(vec3.Test3(Test.Test()))
+        self.x = Vec3.X()
+        self.y = Vec3.Y()
+        self.z = Vec3.Z()
+        self.test1 = Vec3.Test1()
+        self.test2 = Vec3.Test2()
+        if Vec3.Test3(MyGame.Example.Test.Test()) is not None:
+            self.test3 = MyGame.Example.Test.TestT.InitFromObj(Vec3.Test3(MyGame.Example.Test.Test()))
 
-    # Vec3
+    # Vec3T
     def Pack(self, builder):
         return CreateVec3(builder, self.x, self.y, self.z, self.test1, self.test2, self.test3.a, self.test3.b)

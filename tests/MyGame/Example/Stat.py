@@ -80,9 +80,9 @@ def End(builder):
     return StatEnd(builder)
 
 
-class Stat(object):
+class StatT(object):
 
-    # Stat
+    # StatT
     def __init__(self):
         self.id = None  # type: str
         self.val = 0  # type: int
@@ -90,9 +90,9 @@ class Stat(object):
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        stat = Stat()
-        stat.Init(buf, pos)
-        return cls.InitFromObj(stat)
+        Stat = Stat()
+        Stat.Init(buf, pos)
+        return cls.InitFromObj(Stat)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -100,20 +100,20 @@ class Stat(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, stat):
-        x = Stat()
-        x._UnPack(stat)
+    def InitFromObj(cls, Stat):
+        x = StatT()
+        x._UnPack(Stat)
         return x
 
-    # Stat
-    def _UnPack(self, stat):
-        if stat is None:
+    # StatT
+    def _UnPack(self, Stat):
+        if Stat is None:
             return
-        self.id = stat.Id()
-        self.val = stat.Val()
-        self.count = stat.Count()
+        self.id = Stat.Id()
+        self.val = Stat.Val()
+        self.count = Stat.Count()
 
-    # Stat
+    # StatT
     def Pack(self, builder):
         if self.id is not None:
             id = builder.CreateString(self.id)
@@ -122,5 +122,5 @@ class Stat(object):
             StatAddId(builder, id)
         StatAddVal(builder, self.val)
         StatAddCount(builder, self.count)
-        stat = StatEnd(builder)
-        return stat
+        Stat = StatEnd(builder)
+        return Stat

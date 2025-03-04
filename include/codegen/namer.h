@@ -110,29 +110,33 @@ class Namer {
 
   virtual ~Namer() {}
 
-  template<typename T> std::string Method(const T &s) const {
-    return Method(s.name);
+  template<typename T>
+  std::string Method(const T &s, bool from_idl = false) const {
+    return Method(s.name, from_idl);
   }
 
-  virtual std::string Method(const std::string &pre,
-                             const std::string &mid,
-                             const std::string &suf) const {
-    return Format(pre + "_" +  mid + "_" + suf, config_.methods);
+  virtual std::string Method(const std::string &pre, const std::string &mid,
+                             const std::string &suf,
+                             bool from_idl = false) const {
+    return Format(pre + "_" + mid + "_" + suf, config_.methods, from_idl);
   }
-  virtual std::string Method(const std::string &pre,
-                             const std::string &suf) const {
-    return Format(pre + "_" + suf, config_.methods);
+  virtual std::string Method(const std::string &pre, const std::string &suf,
+                             bool from_idl = false) const {
+    return Format(pre + "_" + suf, config_.methods, from_idl);
   }
-  virtual std::string Method(const std::string &s) const {
-    return Format(s, config_.methods);
-  }
-
-  virtual std::string Constant(const std::string &s) const {
-    return Format(s, config_.constants);
+  virtual std::string Method(const std::string &s,
+                             bool from_idl = false) const {
+    return Format(s, config_.methods, from_idl);
   }
 
-  virtual std::string Function(const std::string &s) const {
-    return Format(s, config_.functions);
+  virtual std::string Constant(const std::string &s,
+                               bool from_idl = false) const {
+    return Format(s, config_.constants, from_idl);
+  }
+
+  virtual std::string Function(const std::string &s,
+                               bool from_idl = false) const {
+    return Format(s, config_.functions, from_idl);
   }
 
   virtual std::string Variable(const std::string &s) const {
@@ -146,6 +150,12 @@ class Namer {
   virtual std::string Variable(const std::string &p,
                                const std::string &s) const {
     return Format(p + "_" + s, config_.variables);
+  }
+
+  virtual std::string Variable(const std::string &s, bool from_idl) const {
+    // When from_idl is true, simply preserve the IDL name,
+    // otherwise apply the naming convention.
+    return from_idl ? s : Format(s, config_.variables, false);
   }
 
   virtual std::string Namespace(const std::string &s) const {
@@ -212,30 +222,34 @@ class Namer {
     }
   }
 
-  virtual std::string Type(const std::string &s) const {
-    return Format(s, config_.types);
+  virtual std::string Type(const std::string &s, bool from_idl = false) const {
+    return Format(s, config_.types, from_idl);
   }
-  virtual std::string Type(const std::string &t, const std::string &s) const {
-    return Format(t + "_" + s, config_.types);
-  }
-
-  virtual std::string ObjectType(const std::string &s) const {
-    return config_.object_prefix + Type(s) + config_.object_suffix;
+  virtual std::string Type(const std::string &t, const std::string &s,
+                           bool from_idl = false) const {
+    return Format(t + "_" + s, config_.types, from_idl);
   }
 
-  virtual std::string Field(const std::string &s) const {
-    return Format(s, config_.fields);
+  virtual std::string ObjectType(const std::string &s,
+                                 bool from_idl = false) const {
+    return config_.object_prefix + Type(s, from_idl) + config_.object_suffix;
   }
 
-  virtual std::string Variant(const std::string &s) const {
-    return Format(s, config_.variants);
+  virtual std::string Field(const std::string &s, bool from_idl = false) const {
+    return Format(s, config_.fields, from_idl);
   }
 
-  virtual std::string Format(const std::string &s, Case casing) const {
+  virtual std::string Variant(const std::string &s,
+                              bool from_idl = false) const {
+    return Format(s, config_.variants, from_idl);
+  }
+
+  virtual std::string Format(const std::string &s, Case casing,
+                             bool from_idl = false) const {
     if (config_.escape_keywords == Config::Escape::BeforeConvertingCase) {
-      return ConvertCase(EscapeKeyword(s), casing, Case::kLowerCamel);
+      return ConvertCase(EscapeKeyword(s), casing, Case::kLowerCamel, from_idl);
     } else {
-      return EscapeKeyword(ConvertCase(s, casing, Case::kLowerCamel));
+      return EscapeKeyword(ConvertCase(s, casing, Case::kLowerCamel, from_idl));
     }
   }
 

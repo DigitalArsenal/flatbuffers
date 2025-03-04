@@ -228,9 +228,9 @@ try:
 except:
     pass
 
-class MonsterExtra(object):
+class MonsterExtraT(object):
 
-    # MonsterExtra
+    # MonsterExtraT
     def __init__(self):
         self.d0 = float('nan')  # type: float
         self.d1 = float('nan')  # type: float
@@ -245,9 +245,9 @@ class MonsterExtra(object):
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        monsterExtra = MonsterExtra()
-        monsterExtra.Init(buf, pos)
-        return cls.InitFromObj(monsterExtra)
+        MonsterExtra = MonsterExtra()
+        MonsterExtra.Init(buf, pos)
+        return cls.InitFromObj(MonsterExtra)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -255,9 +255,9 @@ class MonsterExtra(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, monsterExtra):
-        x = MonsterExtra()
-        x._UnPack(monsterExtra)
+    def InitFromObj(cls, MonsterExtra):
+        x = MonsterExtraT()
+        x._UnPack(MonsterExtra)
         return x
 
     def __eq__(self, other):
@@ -273,34 +273,34 @@ class MonsterExtra(object):
             self.dvec == other.dvec and \
             self.fvec == other.fvec
 
-    # MonsterExtra
-    def _UnPack(self, monsterExtra):
-        if monsterExtra is None:
+    # MonsterExtraT
+    def _UnPack(self, MonsterExtra):
+        if MonsterExtra is None:
             return
-        self.d0 = monsterExtra.D0()
-        self.d1 = monsterExtra.D1()
-        self.d2 = monsterExtra.D2()
-        self.d3 = monsterExtra.D3()
-        self.f0 = monsterExtra.F0()
-        self.f1 = monsterExtra.F1()
-        self.f2 = monsterExtra.F2()
-        self.f3 = monsterExtra.F3()
-        if not monsterExtra.DvecIsNone():
+        self.d0 = MonsterExtra.D0()
+        self.d1 = MonsterExtra.D1()
+        self.d2 = MonsterExtra.D2()
+        self.d3 = MonsterExtra.D3()
+        self.f0 = MonsterExtra.F0()
+        self.f1 = MonsterExtra.F1()
+        self.f2 = MonsterExtra.F2()
+        self.f3 = MonsterExtra.F3()
+        if not MonsterExtra.DvecIsNone():
             if np is None:
                 self.dvec = []
-                for i in range(monsterExtra.DvecLength()):
-                    self.dvec.append(monsterExtra.Dvec(i))
+                for i in range(MonsterExtra.DvecLength()):
+                    self.dvec.append(MonsterExtra.Dvec(i))
             else:
-                self.dvec = monsterExtra.DvecAsNumpy()
-        if not monsterExtra.FvecIsNone():
+                self.dvec = MonsterExtra.DvecAsNumpy()
+        if not MonsterExtra.FvecIsNone():
             if np is None:
                 self.fvec = []
-                for i in range(monsterExtra.FvecLength()):
-                    self.fvec.append(monsterExtra.Fvec(i))
+                for i in range(MonsterExtra.FvecLength()):
+                    self.fvec.append(MonsterExtra.Fvec(i))
             else:
-                self.fvec = monsterExtra.FvecAsNumpy()
+                self.fvec = MonsterExtra.FvecAsNumpy()
 
-    # MonsterExtra
+    # MonsterExtraT
     def Pack(self, builder):
         if self.dvec is not None:
             if np is not None and type(self.dvec) is np.ndarray:
@@ -331,5 +331,5 @@ class MonsterExtra(object):
             MonsterExtraAddDvec(builder, dvec)
         if self.fvec is not None:
             MonsterExtraAddFvec(builder, fvec)
-        monsterExtra = MonsterExtraEnd(builder)
-        return monsterExtra
+        MonsterExtra = MonsterExtraEnd(builder)
+        return MonsterExtra

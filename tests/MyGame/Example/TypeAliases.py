@@ -253,9 +253,9 @@ try:
 except:
     pass
 
-class TypeAliases(object):
+class TypeAliasesT(object):
 
-    # TypeAliases
+    # TypeAliasesT
     def __init__(self):
         self.i8 = 0  # type: int
         self.u8 = 0  # type: int
@@ -272,9 +272,9 @@ class TypeAliases(object):
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        typeAliases = TypeAliases()
-        typeAliases.Init(buf, pos)
-        return cls.InitFromObj(typeAliases)
+        TypeAliases = TypeAliases()
+        TypeAliases.Init(buf, pos)
+        return cls.InitFromObj(TypeAliases)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -282,41 +282,41 @@ class TypeAliases(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, typeAliases):
-        x = TypeAliases()
-        x._UnPack(typeAliases)
+    def InitFromObj(cls, TypeAliases):
+        x = TypeAliasesT()
+        x._UnPack(TypeAliases)
         return x
 
-    # TypeAliases
-    def _UnPack(self, typeAliases):
-        if typeAliases is None:
+    # TypeAliasesT
+    def _UnPack(self, TypeAliases):
+        if TypeAliases is None:
             return
-        self.i8 = typeAliases.I8()
-        self.u8 = typeAliases.U8()
-        self.i16 = typeAliases.I16()
-        self.u16 = typeAliases.U16()
-        self.i32 = typeAliases.I32()
-        self.u32 = typeAliases.U32()
-        self.i64 = typeAliases.I64()
-        self.u64 = typeAliases.U64()
-        self.f32 = typeAliases.F32()
-        self.f64 = typeAliases.F64()
-        if not typeAliases.V8IsNone():
+        self.i8 = TypeAliases.I8()
+        self.u8 = TypeAliases.U8()
+        self.i16 = TypeAliases.I16()
+        self.u16 = TypeAliases.U16()
+        self.i32 = TypeAliases.I32()
+        self.u32 = TypeAliases.U32()
+        self.i64 = TypeAliases.I64()
+        self.u64 = TypeAliases.U64()
+        self.f32 = TypeAliases.F32()
+        self.f64 = TypeAliases.F64()
+        if not TypeAliases.V8IsNone():
             if np is None:
                 self.v8 = []
-                for i in range(typeAliases.V8Length()):
-                    self.v8.append(typeAliases.V8(i))
+                for i in range(TypeAliases.V8Length()):
+                    self.v8.append(TypeAliases.V8(i))
             else:
-                self.v8 = typeAliases.V8AsNumpy()
-        if not typeAliases.Vf64IsNone():
+                self.v8 = TypeAliases.V8AsNumpy()
+        if not TypeAliases.Vf64IsNone():
             if np is None:
                 self.vf64 = []
-                for i in range(typeAliases.Vf64Length()):
-                    self.vf64.append(typeAliases.Vf64(i))
+                for i in range(TypeAliases.Vf64Length()):
+                    self.vf64.append(TypeAliases.Vf64(i))
             else:
-                self.vf64 = typeAliases.Vf64AsNumpy()
+                self.vf64 = TypeAliases.Vf64AsNumpy()
 
-    # TypeAliases
+    # TypeAliasesT
     def Pack(self, builder):
         if self.v8 is not None:
             if np is not None and type(self.v8) is np.ndarray:
@@ -349,5 +349,5 @@ class TypeAliases(object):
             TypeAliasesAddV8(builder, v8)
         if self.vf64 is not None:
             TypeAliasesAddVf64(builder, vf64)
-        typeAliases = TypeAliasesEnd(builder)
-        return typeAliases
+        TypeAliases = TypeAliasesEnd(builder)
+        return TypeAliases

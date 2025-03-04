@@ -54,17 +54,17 @@ def End(builder):
     return ReferrableEnd(builder)
 
 
-class Referrable(object):
+class ReferrableT(object):
 
-    # Referrable
+    # ReferrableT
     def __init__(self):
         self.id = 0  # type: int
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        referrable = Referrable()
-        referrable.Init(buf, pos)
-        return cls.InitFromObj(referrable)
+        Referrable = Referrable()
+        Referrable.Init(buf, pos)
+        return cls.InitFromObj(Referrable)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -72,20 +72,20 @@ class Referrable(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, referrable):
-        x = Referrable()
-        x._UnPack(referrable)
+    def InitFromObj(cls, Referrable):
+        x = ReferrableT()
+        x._UnPack(Referrable)
         return x
 
-    # Referrable
-    def _UnPack(self, referrable):
-        if referrable is None:
+    # ReferrableT
+    def _UnPack(self, Referrable):
+        if Referrable is None:
             return
-        self.id = referrable.Id()
+        self.id = Referrable.Id()
 
-    # Referrable
+    # ReferrableT
     def Pack(self, builder):
         ReferrableStart(builder)
         ReferrableAddId(builder, self.id)
-        referrable = ReferrableEnd(builder)
-        return referrable
+        Referrable = ReferrableEnd(builder)
+        return Referrable

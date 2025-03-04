@@ -26,67 +26,66 @@ class IdlNamer : public Namer {
   using Namer::Variant;
 
   std::string Constant(const FieldDef &d) const {
-    return d.declared_in_idl ? d.name : Constant(d.name);
+    return Constant(d.name, d.declared_in_idl);
   }
 
+  // Types are always structs or enums so we can only expose these two
+  // overloads.
   std::string Type(const StructDef &d) const {
-    return d.declared_in_idl ? d.name : Type(d.name);
+    return Type(d.name, d.declared_in_idl);
   }
   std::string Type(const EnumDef &d) const {
-    return d.declared_in_idl ? d.name : Type(d.name);
+    return Type(d.name, d.declared_in_idl);
   }
 
   std::string Function(const Definition &s) const {
-    return s.declared_in_idl ? s.name : Function(s.name);
+    return Function(s.name, s.declared_in_idl);
   }
   std::string Function(const std::string &prefix, const Definition &s) const {
-    return s.declared_in_idl ? prefix + s.name : Function(prefix + s.name);
+    return Function(prefix + s.name, s.declared_in_idl);
   }
 
   std::string Field(const FieldDef &s) const {
-    return s.declared_in_idl ? s.name : Field(s.name);
+    return Field(s.name, s.declared_in_idl);
   }
   std::string Field(const FieldDef &d, const std::string &s) const {
-    return d.declared_in_idl ? d.name + "_" + s : Field(d.name + "_" + s);
+    return Field(d.name + "_" + s, d.declared_in_idl);
   }
 
   std::string Variable(const FieldDef &s) const {
-    return s.declared_in_idl ? s.name : Variable(s.name);
+    return Variable(s.name, s.declared_in_idl);
   }
+
   std::string Variable(const StructDef &s) const {
-    return s.declared_in_idl ? s.name : Variable(s.name);
+    return Variable(s.name, s.declared_in_idl);
   }
 
   std::string Variant(const EnumVal &s) const {
-    return s.declared_in_idl ? s.name : Variant(s.name);
+    return Variant(s.name, s.declared_in_idl);
   }
-
   std::string EnumVariant(const EnumDef &e, const EnumVal &v) const {
-    // Since EnumVariant calls Type(e) and Variant(v), their rewrites will
-    // apply.
     return Type(e) + config_.enum_variant_seperator + Variant(v);
   }
 
   std::string ObjectType(const StructDef &d) const {
-    return d.declared_in_idl ? d.name : ObjectType(d.name);
+    return ObjectType(d.name, d.declared_in_idl);
   }
   std::string ObjectType(const EnumDef &d) const {
-    return d.declared_in_idl ? d.name : ObjectType(d.name);
+    return ObjectType(d.name, d.declared_in_idl);
   }
 
   std::string Method(const FieldDef &d, const std::string &suffix) const {
-    return d.declared_in_idl ? d.name + suffix : Method(d.name, suffix);
+    return Method(d.name, suffix, d.declared_in_idl);
   }
   std::string Method(const std::string &prefix, const StructDef &d) const {
-    return d.declared_in_idl ? prefix + d.name : Method(prefix, d.name);
+    return Method(prefix, d.name, d.declared_in_idl);
   }
   std::string Method(const std::string &prefix, const FieldDef &d) const {
-    return d.declared_in_idl ? prefix + d.name : Method(prefix, d.name);
+    return Method(prefix, d.name, d.declared_in_idl);
   }
   std::string Method(const std::string &prefix, const FieldDef &d,
                      const std::string &suffix) const {
-    return d.declared_in_idl ? prefix + d.name + suffix
-                             : Method(prefix, d.name, suffix);
+    return Method(prefix, d.name, suffix, d.declared_in_idl);
   }
 
   std::string Namespace(const struct Namespace &ns) const {
@@ -98,15 +97,13 @@ class IdlNamer : public Namer {
   }
 
   std::string NamespacedType(const Definition &def) const {
-    return def.declared_in_idl
-               ? def.name
-               : NamespacedString(def.defined_namespace, Type(def.name));
+    return NamespacedString(def.defined_namespace,
+                            Type(def.name, def.declared_in_idl));
   }
 
   std::string NamespacedObjectType(const Definition &def) const {
-    return def.declared_in_idl
-               ? def.name
-               : NamespacedString(def.defined_namespace, ObjectType(def.name));
+    return NamespacedString(def.defined_namespace,
+                            ObjectType(def.name, def.declared_in_idl));
   }
 
   std::string Directories(const struct Namespace &ns,

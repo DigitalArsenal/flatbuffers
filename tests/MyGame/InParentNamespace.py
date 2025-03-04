@@ -41,17 +41,17 @@ def End(builder):
     return InParentNamespaceEnd(builder)
 
 
-class InParentNamespace(object):
+class InParentNamespaceT(object):
 
-    # InParentNamespace
+    # InParentNamespaceT
     def __init__(self):
         pass
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        inParentNamespace = InParentNamespace()
-        inParentNamespace.Init(buf, pos)
-        return cls.InitFromObj(inParentNamespace)
+        InParentNamespace = InParentNamespace()
+        InParentNamespace.Init(buf, pos)
+        return cls.InitFromObj(InParentNamespace)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -59,18 +59,18 @@ class InParentNamespace(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, inParentNamespace):
-        x = InParentNamespace()
-        x._UnPack(inParentNamespace)
+    def InitFromObj(cls, InParentNamespace):
+        x = InParentNamespaceT()
+        x._UnPack(InParentNamespace)
         return x
 
-    # InParentNamespace
-    def _UnPack(self, inParentNamespace):
-        if inParentNamespace is None:
+    # InParentNamespaceT
+    def _UnPack(self, InParentNamespace):
+        if InParentNamespace is None:
             return
 
-    # InParentNamespace
+    # InParentNamespaceT
     def Pack(self, builder):
         InParentNamespaceStart(builder)
-        inParentNamespace = InParentNamespaceEnd(builder)
-        return inParentNamespace
+        InParentNamespace = InParentNamespaceEnd(builder)
+        return InParentNamespace

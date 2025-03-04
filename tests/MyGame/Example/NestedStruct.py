@@ -101,9 +101,9 @@ try:
 except:
     pass
 
-class NestedStruct(object):
+class NestedStructT(object):
 
-    # NestedStruct
+    # NestedStructT
     def __init__(self):
         self.a = None  # type: List[int]
         self.b = 0  # type: int
@@ -112,9 +112,9 @@ class NestedStruct(object):
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        nestedStruct = NestedStruct()
-        nestedStruct.Init(buf, pos)
-        return cls.InitFromObj(nestedStruct)
+        NestedStruct = NestedStruct()
+        NestedStruct.Init(buf, pos)
+        return cls.InitFromObj(NestedStruct)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -122,38 +122,38 @@ class NestedStruct(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, nestedStruct):
-        x = NestedStruct()
-        x._UnPack(nestedStruct)
+    def InitFromObj(cls, NestedStruct):
+        x = NestedStructT()
+        x._UnPack(NestedStruct)
         return x
 
-    # NestedStruct
-    def _UnPack(self, nestedStruct):
-        if nestedStruct is None:
+    # NestedStructT
+    def _UnPack(self, NestedStruct):
+        if NestedStruct is None:
             return
-        if not nestedStruct.AIsNone():
+        if not NestedStruct.AIsNone():
             if np is None:
                 self.a = []
-                for i in range(nestedStruct.ALength()):
-                    self.a.append(nestedStruct.A(i))
+                for i in range(NestedStruct.ALength()):
+                    self.a.append(NestedStruct.A(i))
             else:
-                self.a = nestedStruct.AAsNumpy()
-        self.b = nestedStruct.B()
-        if not nestedStruct.CIsNone():
+                self.a = NestedStruct.AAsNumpy()
+        self.b = NestedStruct.B()
+        if not NestedStruct.CIsNone():
             if np is None:
                 self.c = []
-                for i in range(nestedStruct.CLength()):
-                    self.c.append(nestedStruct.C(i))
+                for i in range(NestedStruct.CLength()):
+                    self.c.append(NestedStruct.C(i))
             else:
-                self.c = nestedStruct.CAsNumpy()
-        if not nestedStruct.DIsNone():
+                self.c = NestedStruct.CAsNumpy()
+        if not NestedStruct.DIsNone():
             if np is None:
                 self.d = []
-                for i in range(nestedStruct.DLength()):
-                    self.d.append(nestedStruct.D(i))
+                for i in range(NestedStruct.DLength()):
+                    self.d.append(NestedStruct.D(i))
             else:
-                self.d = nestedStruct.DAsNumpy()
+                self.d = NestedStruct.DAsNumpy()
 
-    # NestedStruct
+    # NestedStructT
     def Pack(self, builder):
         return CreateNestedStruct(builder, self.a, self.b, self.c, self.d)

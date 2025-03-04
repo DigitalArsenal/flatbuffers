@@ -93,28 +93,28 @@ def NestedUnionTestEnd(builder: flatbuffers.Builder) -> int:
 def End(builder: flatbuffers.Builder) -> int:
     return NestedUnionTestEnd(builder)
 
-import Any
-import TestSimpleTableWithEnum
-import Vec3
+import MyGame.Example.NestedUnion.Any
+import MyGame.Example.NestedUnion.TestSimpleTableWithEnum
+import MyGame.Example.NestedUnion.Vec3
 try:
     from typing import Union
 except:
     pass
 
-class NestedUnionTest(object):
+class NestedUnionTestT(object):
 
-    # NestedUnionTest
+    # NestedUnionTestT
     def __init__(self):
         self.name = None  # type: str
         self.dataType = 0  # type: int
-        self.data = None  # type: Union[None, Vec3.Vec3, TestSimpleTableWithEnum.TestSimpleTableWithEnum]
+        self.data = None  # type: Union[None, MyGame.Example.NestedUnion.Vec3.Vec3T, MyGame.Example.NestedUnion.TestSimpleTableWithEnum.TestSimpleTableWithEnumT]
         self.id = 0  # type: int
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        nestedUnionTest = NestedUnionTest()
-        nestedUnionTest.Init(buf, pos)
-        return cls.InitFromObj(nestedUnionTest)
+        NestedUnionTest = NestedUnionTest()
+        NestedUnionTest.Init(buf, pos)
+        return cls.InitFromObj(NestedUnionTest)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -122,21 +122,21 @@ class NestedUnionTest(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, nestedUnionTest):
-        x = NestedUnionTest()
-        x._UnPack(nestedUnionTest)
+    def InitFromObj(cls, NestedUnionTest):
+        x = NestedUnionTestT()
+        x._UnPack(NestedUnionTest)
         return x
 
-    # NestedUnionTest
-    def _UnPack(self, nestedUnionTest):
-        if nestedUnionTest is None:
+    # NestedUnionTestT
+    def _UnPack(self, NestedUnionTest):
+        if NestedUnionTest is None:
             return
-        self.name = nestedUnionTest.Name()
-        self.dataType = nestedUnionTest.DataType()
-        self.data = Any.AnyCreator(self.dataType, nestedUnionTest.Data())
-        self.id = nestedUnionTest.Id()
+        self.name = NestedUnionTest.Name()
+        self.dataType = NestedUnionTest.DataType()
+        self.data = MyGame.Example.NestedUnion.Any.AnyCreator(self.dataType, NestedUnionTest.Data())
+        self.id = NestedUnionTest.Id()
 
-    # NestedUnionTest
+    # NestedUnionTestT
     def Pack(self, builder):
         if self.name is not None:
             name = builder.CreateString(self.name)
@@ -149,5 +149,5 @@ class NestedUnionTest(object):
         if self.data is not None:
             NestedUnionTestAddData(builder, data)
         NestedUnionTestAddId(builder, self.id)
-        nestedUnionTest = NestedUnionTestEnd(builder)
-        return nestedUnionTest
+        NestedUnionTest = NestedUnionTestEnd(builder)
+        return NestedUnionTest

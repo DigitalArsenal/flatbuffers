@@ -29,18 +29,18 @@ def CreateAbility(builder, id, distance):
     return builder.Offset()
 
 
-class Ability(object):
+class AbilityT(object):
 
-    # Ability
+    # AbilityT
     def __init__(self):
         self.id = 0  # type: int
         self.distance = 0  # type: int
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        ability = Ability()
-        ability.Init(buf, pos)
-        return cls.InitFromObj(ability)
+        Ability = Ability()
+        Ability.Init(buf, pos)
+        return cls.InitFromObj(Ability)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -48,18 +48,18 @@ class Ability(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, ability):
-        x = Ability()
-        x._UnPack(ability)
+    def InitFromObj(cls, Ability):
+        x = AbilityT()
+        x._UnPack(Ability)
         return x
 
-    # Ability
-    def _UnPack(self, ability):
-        if ability is None:
+    # AbilityT
+    def _UnPack(self, Ability):
+        if Ability is None:
             return
-        self.id = ability.Id()
-        self.distance = ability.Distance()
+        self.id = Ability.Id()
+        self.distance = Ability.Distance()
 
-    # Ability
+    # AbilityT
     def Pack(self, builder):
         return CreateAbility(builder, self.id, self.distance)

@@ -30,18 +30,18 @@ def CreateTest(builder, a, b):
     return builder.Offset()
 
 
-class Test(object):
+class TestT(object):
 
-    # Test
+    # TestT
     def __init__(self):
         self.a = 0  # type: int
         self.b = 0  # type: int
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        test = Test()
-        test.Init(buf, pos)
-        return cls.InitFromObj(test)
+        Test = Test()
+        Test.Init(buf, pos)
+        return cls.InitFromObj(Test)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -49,18 +49,18 @@ class Test(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, test):
-        x = Test()
-        x._UnPack(test)
+    def InitFromObj(cls, Test):
+        x = TestT()
+        x._UnPack(Test)
         return x
 
-    # Test
-    def _UnPack(self, test):
-        if test is None:
+    # TestT
+    def _UnPack(self, Test):
+        if Test is None:
             return
-        self.a = test.A()
-        self.b = test.B()
+        self.a = Test.A()
+        self.b = Test.B()
 
-    # Test
+    # TestT
     def Pack(self, builder):
         return CreateTest(builder, self.a, self.b)

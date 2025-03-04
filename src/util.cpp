@@ -441,8 +441,8 @@ bool ReadEnvironmentVariable(const char *var_name, std::string *_value) {
 }
 
 std::string ConvertCase(const std::string &input, Case output_case,
-                        Case input_case) {
-  if (output_case == Case::kKeep) return input;
+                        Case input_case, bool from_idl) {
+  if (output_case == Case::kKeep || from_idl) return input;
   // The output cases expect snake_case inputs, so if we don't have that input
   // format, try to convert to snake_case.
   switch (input_case) {

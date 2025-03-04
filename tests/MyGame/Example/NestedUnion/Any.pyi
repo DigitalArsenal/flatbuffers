@@ -5,9 +5,9 @@ import numpy as np
 
 import flatbuffers
 import typing
-from Any import Any
-from TestSimpleTableWithEnum import TestSimpleTableWithEnum
-from Vec3 import Vec3
+from MyGame.Example.NestedUnion.Any import Any
+from MyGame.Example.NestedUnion.TestSimpleTableWithEnum import TestSimpleTableWithEnum
+from MyGame.Example.NestedUnion.Vec3 import Vec3
 from flatbuffers import table
 
 uoffset: typing.TypeAlias = flatbuffers.number_types.UOffsetTFlags.py_type

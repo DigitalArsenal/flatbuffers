@@ -38,23 +38,23 @@ def CreateStructOfStructsOfStructs(builder, a_a_id, a_a_distance, a_b_a, a_b_b, 
     builder.PrependUint32(a_a_id)
     return builder.Offset()
 
-import StructOfStructs
+import MyGame.Example.StructOfStructs
 try:
     from typing import Optional
 except:
     pass
 
-class StructOfStructsOfStructs(object):
+class StructOfStructsOfStructsT(object):
 
-    # StructOfStructsOfStructs
+    # StructOfStructsOfStructsT
     def __init__(self):
-        self.a = None  # type: Optional[StructOfStructs.StructOfStructs]
+        self.a = None  # type: Optional[MyGame.Example.StructOfStructs.StructOfStructsT]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        structOfStructsOfStructs = StructOfStructsOfStructs()
-        structOfStructsOfStructs.Init(buf, pos)
-        return cls.InitFromObj(structOfStructsOfStructs)
+        StructOfStructsOfStructs = StructOfStructsOfStructs()
+        StructOfStructsOfStructs.Init(buf, pos)
+        return cls.InitFromObj(StructOfStructsOfStructs)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -62,18 +62,18 @@ class StructOfStructsOfStructs(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, structOfStructsOfStructs):
-        x = StructOfStructsOfStructs()
-        x._UnPack(structOfStructsOfStructs)
+    def InitFromObj(cls, StructOfStructsOfStructs):
+        x = StructOfStructsOfStructsT()
+        x._UnPack(StructOfStructsOfStructs)
         return x
 
-    # StructOfStructsOfStructs
-    def _UnPack(self, structOfStructsOfStructs):
-        if structOfStructsOfStructs is None:
+    # StructOfStructsOfStructsT
+    def _UnPack(self, StructOfStructsOfStructs):
+        if StructOfStructsOfStructs is None:
             return
-        if structOfStructsOfStructs.A(StructOfStructs.StructOfStructs()) is not None:
-            self.a = StructOfStructs.StructOfStructsT.InitFromObj(structOfStructsOfStructs.A(StructOfStructs.StructOfStructs()))
+        if StructOfStructsOfStructs.A(MyGame.Example.StructOfStructs.StructOfStructs()) is not None:
+            self.a = MyGame.Example.StructOfStructs.StructOfStructsT.InitFromObj(StructOfStructsOfStructs.A(MyGame.Example.StructOfStructs.StructOfStructs()))
 
-    # StructOfStructsOfStructs
+    # StructOfStructsOfStructsT
     def Pack(self, builder):
         return CreateStructOfStructsOfStructs(builder, self.a.a.id, self.a.a.distance, self.a.b.a, self.a.b.b, self.a.c.id, self.a.c.distance)

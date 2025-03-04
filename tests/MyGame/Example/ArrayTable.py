@@ -5,7 +5,7 @@
 import flatbuffers
 from flatbuffers.compat import import_numpy
 from typing import Any
-from ArrayStruct import ArrayStruct
+from MyGame.Example.ArrayStruct import ArrayStruct
 from typing import Optional
 np = import_numpy()
 
@@ -59,23 +59,23 @@ def ArrayTableEnd(builder: flatbuffers.Builder) -> int:
 def End(builder: flatbuffers.Builder) -> int:
     return ArrayTableEnd(builder)
 
-import ArrayStruct
+import MyGame.Example.ArrayStruct
 try:
     from typing import Optional
 except:
     pass
 
-class ArrayTable(object):
+class ArrayTableT(object):
 
-    # ArrayTable
+    # ArrayTableT
     def __init__(self):
-        self.a = None  # type: Optional[ArrayStruct.ArrayStruct]
+        self.a = None  # type: Optional[MyGame.Example.ArrayStruct.ArrayStructT]
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        arrayTable = ArrayTable()
-        arrayTable.Init(buf, pos)
-        return cls.InitFromObj(arrayTable)
+        ArrayTable = ArrayTable()
+        ArrayTable.Init(buf, pos)
+        return cls.InitFromObj(ArrayTable)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -83,23 +83,23 @@ class ArrayTable(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, arrayTable):
-        x = ArrayTable()
-        x._UnPack(arrayTable)
+    def InitFromObj(cls, ArrayTable):
+        x = ArrayTableT()
+        x._UnPack(ArrayTable)
         return x
 
-    # ArrayTable
-    def _UnPack(self, arrayTable):
-        if arrayTable is None:
+    # ArrayTableT
+    def _UnPack(self, ArrayTable):
+        if ArrayTable is None:
             return
-        if arrayTable.A() is not None:
-            self.a = ArrayStruct.ArrayStructT.InitFromObj(arrayTable.A())
+        if ArrayTable.A() is not None:
+            self.a = MyGame.Example.ArrayStruct.ArrayStructT.InitFromObj(ArrayTable.A())
 
-    # ArrayTable
+    # ArrayTableT
     def Pack(self, builder):
         ArrayTableStart(builder)
         if self.a is not None:
             a = self.a.Pack(builder)
             ArrayTableAddA(builder, a)
-        arrayTable = ArrayTableEnd(builder)
-        return arrayTable
+        ArrayTable = ArrayTableEnd(builder)
+        return ArrayTable

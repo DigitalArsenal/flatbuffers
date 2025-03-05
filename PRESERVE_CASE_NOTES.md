@@ -4,6 +4,17 @@
 
 Add support for a `--preserve-case` flag that ensures identifiers (such as **properties**, **tables**, **enums**, and **structs**) retain the exact casing defined in the `.fbs` schema files during code generation, while allowing internal code conventions to apply transformations when this flag is not set.
 
+## Build commands
+
+Same as flatbuffers, with debug flag (useful if using debugging commands in launch.json):
+
+    cmake -DENABLE_DEBUG_SYMBOLS=ON 
+    make -j${nproc}
+
+## Running a test
+
+    make -j${nproc} && cd tests && ./PythonTest.sh
+
 ---
 
 ## Detailed Methodology

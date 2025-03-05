@@ -30,112 +30,112 @@ class MonsterExtra(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # MonsterExtra
-    def d0(self):
+    def D0(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float64Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
         return float('nan')
 
     # MonsterExtra
-    def d1(self):
+    def D1(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float64Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
         return float('nan')
 
     # MonsterExtra
-    def d2(self):
+    def D2(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float64Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
         return float('inf')
 
     # MonsterExtra
-    def d3(self):
+    def D3(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float64Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
         return float('-inf')
 
     # MonsterExtra
-    def f0(self):
+    def F0(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float32Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
         return float('nan')
 
     # MonsterExtra
-    def f1(self):
+    def F1(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float32Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
         return float('nan')
 
     # MonsterExtra
-    def f2(self):
+    def F2(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float32Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
         return float('inf')
 
     # MonsterExtra
-    def f3(self):
+    def F3(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(18))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float32Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
         return float('-inf')
 
     # MonsterExtra
-    def dvec(self, j: int):
+    def Dvec(self, j: int):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
         if o != 0:
             a = self._tab.Vector(o)
-            return self._tab.Get(flatbuffers.number_types.float64Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 8))
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 8))
         return 0
 
     # MonsterExtra
-    def dvecAsNumpy(self):
+    def DvecAsNumpy(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
         if o != 0:
-            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.float64Flags, o)
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Float64Flags, o)
         return 0
 
     # MonsterExtra
-    def dvecLength(self) -> int:
+    def DvecLength(self) -> int:
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
         if o != 0:
             return self._tab.VectorLen(o)
         return 0
 
     # MonsterExtra
-    def dvecIsNone(self) -> bool:
+    def DvecIsNone(self) -> bool:
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
         return o == 0
 
     # MonsterExtra
-    def fvec(self, j: int):
+    def Fvec(self, j: int):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
         if o != 0:
             a = self._tab.Vector(o)
-            return self._tab.Get(flatbuffers.number_types.float32Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 4))
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 4))
         return 0
 
     # MonsterExtra
-    def fvecAsNumpy(self):
+    def FvecAsNumpy(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
         if o != 0:
-            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.float32Flags, o)
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Float32Flags, o)
         return 0
 
     # MonsterExtra
-    def fvecLength(self) -> int:
+    def FvecLength(self) -> int:
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
         if o != 0:
             return self._tab.VectorLen(o)
         return 0
 
     # MonsterExtra
-    def fvecIsNone(self) -> bool:
+    def FvecIsNone(self) -> bool:
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
         return o == 0
 
@@ -145,77 +145,77 @@ def MonsterExtraStart(builder: flatbuffers.Builder):
 def Start(builder: flatbuffers.Builder):
     MonsterExtraStart(builder)
 
-def MonsterExtraAddd0(builder: flatbuffers.Builder, d0: float):
-    builder.Prependfloat64Slot(0, d0, float('nan'))
+def MonsterExtraAddD0(builder: flatbuffers.Builder, d0: float):
+    builder.PrependFloat64Slot(0, d0, float('nan'))
 
-def Addd0(builder: flatbuffers.Builder, d0: float):
-    MonsterExtraAddd0(builder, d0)
+def AddD0(builder: flatbuffers.Builder, d0: float):
+    MonsterExtraAddD0(builder, d0)
 
-def MonsterExtraAddd1(builder: flatbuffers.Builder, d1: float):
-    builder.Prependfloat64Slot(1, d1, float('nan'))
+def MonsterExtraAddD1(builder: flatbuffers.Builder, d1: float):
+    builder.PrependFloat64Slot(1, d1, float('nan'))
 
-def Addd1(builder: flatbuffers.Builder, d1: float):
-    MonsterExtraAddd1(builder, d1)
+def AddD1(builder: flatbuffers.Builder, d1: float):
+    MonsterExtraAddD1(builder, d1)
 
-def MonsterExtraAddd2(builder: flatbuffers.Builder, d2: float):
-    builder.Prependfloat64Slot(2, d2, float('inf'))
+def MonsterExtraAddD2(builder: flatbuffers.Builder, d2: float):
+    builder.PrependFloat64Slot(2, d2, float('inf'))
 
-def Addd2(builder: flatbuffers.Builder, d2: float):
-    MonsterExtraAddd2(builder, d2)
+def AddD2(builder: flatbuffers.Builder, d2: float):
+    MonsterExtraAddD2(builder, d2)
 
-def MonsterExtraAddd3(builder: flatbuffers.Builder, d3: float):
-    builder.Prependfloat64Slot(3, d3, float('-inf'))
+def MonsterExtraAddD3(builder: flatbuffers.Builder, d3: float):
+    builder.PrependFloat64Slot(3, d3, float('-inf'))
 
-def Addd3(builder: flatbuffers.Builder, d3: float):
-    MonsterExtraAddd3(builder, d3)
+def AddD3(builder: flatbuffers.Builder, d3: float):
+    MonsterExtraAddD3(builder, d3)
 
-def MonsterExtraAddf0(builder: flatbuffers.Builder, f0: float):
-    builder.Prependfloat32Slot(4, f0, float('nan'))
+def MonsterExtraAddF0(builder: flatbuffers.Builder, f0: float):
+    builder.PrependFloat32Slot(4, f0, float('nan'))
 
-def Addf0(builder: flatbuffers.Builder, f0: float):
-    MonsterExtraAddf0(builder, f0)
+def AddF0(builder: flatbuffers.Builder, f0: float):
+    MonsterExtraAddF0(builder, f0)
 
-def MonsterExtraAddf1(builder: flatbuffers.Builder, f1: float):
-    builder.Prependfloat32Slot(5, f1, float('nan'))
+def MonsterExtraAddF1(builder: flatbuffers.Builder, f1: float):
+    builder.PrependFloat32Slot(5, f1, float('nan'))
 
-def Addf1(builder: flatbuffers.Builder, f1: float):
-    MonsterExtraAddf1(builder, f1)
+def AddF1(builder: flatbuffers.Builder, f1: float):
+    MonsterExtraAddF1(builder, f1)
 
-def MonsterExtraAddf2(builder: flatbuffers.Builder, f2: float):
-    builder.Prependfloat32Slot(6, f2, float('inf'))
+def MonsterExtraAddF2(builder: flatbuffers.Builder, f2: float):
+    builder.PrependFloat32Slot(6, f2, float('inf'))
 
-def Addf2(builder: flatbuffers.Builder, f2: float):
-    MonsterExtraAddf2(builder, f2)
+def AddF2(builder: flatbuffers.Builder, f2: float):
+    MonsterExtraAddF2(builder, f2)
 
-def MonsterExtraAddf3(builder: flatbuffers.Builder, f3: float):
-    builder.Prependfloat32Slot(7, f3, float('-inf'))
+def MonsterExtraAddF3(builder: flatbuffers.Builder, f3: float):
+    builder.PrependFloat32Slot(7, f3, float('-inf'))
 
-def Addf3(builder: flatbuffers.Builder, f3: float):
-    MonsterExtraAddf3(builder, f3)
+def AddF3(builder: flatbuffers.Builder, f3: float):
+    MonsterExtraAddF3(builder, f3)
 
-def MonsterExtraAdddvec(builder: flatbuffers.Builder, dvec: int):
+def MonsterExtraAddDvec(builder: flatbuffers.Builder, dvec: int):
     builder.PrependUOffsetTRelativeSlot(8, flatbuffers.number_types.UOffsetTFlags.py_type(dvec), 0)
 
-def Adddvec(builder: flatbuffers.Builder, dvec: int):
-    MonsterExtraAdddvec(builder, dvec)
+def AddDvec(builder: flatbuffers.Builder, dvec: int):
+    MonsterExtraAddDvec(builder, dvec)
 
-def MonsterExtraStartdvecVector(builder, numElems: int) -> int:
+def MonsterExtraStartDvecVector(builder, numElems: int) -> int:
     return builder.StartVector(8, numElems, 8)
 
-def StartdvecVector(builder, numElems: int) -> int:
-    return MonsterExtraStartdvecVector(builder, numElems)
+def StartDvecVector(builder, numElems: int) -> int:
+    return MonsterExtraStartDvecVector(builder, numElems)
 
-def MonsterExtraAddfvec(builder: flatbuffers.Builder, fvec: int):
+def MonsterExtraAddFvec(builder: flatbuffers.Builder, fvec: int):
     builder.PrependUOffsetTRelativeSlot(9, flatbuffers.number_types.UOffsetTFlags.py_type(fvec), 0)
 
-def Addfvec(builder: flatbuffers.Builder, fvec: int):
-    MonsterExtraAddfvec(builder, fvec)
+def AddFvec(builder: flatbuffers.Builder, fvec: int):
+    MonsterExtraAddFvec(builder, fvec)
 
-def MonsterExtraStartfvecVector(builder, numElems: int) -> int:
+def MonsterExtraStartFvecVector(builder, numElems: int) -> int:
     return builder.StartVector(4, numElems, 4)
 
-def StartfvecVector(builder, numElems: int) -> int:
-    return MonsterExtraStartfvecVector(builder, numElems)
+def StartFvecVector(builder, numElems: int) -> int:
+    return MonsterExtraStartFvecVector(builder, numElems)
 
 def MonsterExtraEnd(builder: flatbuffers.Builder) -> int:
     return builder.EndObject()
@@ -245,9 +245,9 @@ class MonsterExtraT(object):
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        MonsterExtra = MonsterExtra()
-        MonsterExtra.Init(buf, pos)
-        return cls.InitFromObj(MonsterExtra)
+        monsterExtra = MonsterExtra()
+        monsterExtra.Init(buf, pos)
+        return cls.InitFromObj(monsterExtra)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -255,9 +255,9 @@ class MonsterExtraT(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, MonsterExtra):
+    def InitFromObj(cls, monsterExtra):
         x = MonsterExtraT()
-        x._UnPack(MonsterExtra)
+        x._UnPack(monsterExtra)
         return x
 
     def __eq__(self, other):
@@ -274,31 +274,31 @@ class MonsterExtraT(object):
             self.fvec == other.fvec
 
     # MonsterExtraT
-    def _UnPack(self, MonsterExtra):
-        if MonsterExtra is None:
+    def _UnPack(self, monsterExtra):
+        if monsterExtra is None:
             return
-        self.d0 = MonsterExtra.d0()
-        self.d1 = MonsterExtra.d1()
-        self.d2 = MonsterExtra.d2()
-        self.d3 = MonsterExtra.d3()
-        self.f0 = MonsterExtra.f0()
-        self.f1 = MonsterExtra.f1()
-        self.f2 = MonsterExtra.f2()
-        self.f3 = MonsterExtra.f3()
-        if not MonsterExtra.dvecIsNone():
+        self.d0 = monsterExtra.D0()
+        self.d1 = monsterExtra.D1()
+        self.d2 = monsterExtra.D2()
+        self.d3 = monsterExtra.D3()
+        self.f0 = monsterExtra.F0()
+        self.f1 = monsterExtra.F1()
+        self.f2 = monsterExtra.F2()
+        self.f3 = monsterExtra.F3()
+        if not monsterExtra.DvecIsNone():
             if np is None:
                 self.dvec = []
-                for i in range(MonsterExtra.dvecLength()):
-                    self.dvec.append(MonsterExtra.dvec(i))
+                for i in range(monsterExtra.DvecLength()):
+                    self.dvec.append(monsterExtra.Dvec(i))
             else:
-                self.dvec = MonsterExtra.dvecAsNumpy()
-        if not MonsterExtra.fvecIsNone():
+                self.dvec = monsterExtra.DvecAsNumpy()
+        if not monsterExtra.FvecIsNone():
             if np is None:
                 self.fvec = []
-                for i in range(MonsterExtra.fvecLength()):
-                    self.fvec.append(MonsterExtra.fvec(i))
+                for i in range(monsterExtra.FvecLength()):
+                    self.fvec.append(monsterExtra.Fvec(i))
             else:
-                self.fvec = MonsterExtra.fvecAsNumpy()
+                self.fvec = monsterExtra.FvecAsNumpy()
 
     # MonsterExtraT
     def Pack(self, builder):
@@ -306,7 +306,7 @@ class MonsterExtraT(object):
             if np is not None and type(self.dvec) is np.ndarray:
                 dvec = builder.CreateNumpyVector(self.dvec)
             else:
-                MonsterExtraStartdvecVector(builder, len(self.dvec))
+                MonsterExtraStartDvecVector(builder, len(self.dvec))
                 for i in reversed(range(len(self.dvec))):
                     builder.PrependFloat64(self.dvec[i])
                 dvec = builder.EndVector()
@@ -314,22 +314,22 @@ class MonsterExtraT(object):
             if np is not None and type(self.fvec) is np.ndarray:
                 fvec = builder.CreateNumpyVector(self.fvec)
             else:
-                MonsterExtraStartfvecVector(builder, len(self.fvec))
+                MonsterExtraStartFvecVector(builder, len(self.fvec))
                 for i in reversed(range(len(self.fvec))):
                     builder.PrependFloat32(self.fvec[i])
                 fvec = builder.EndVector()
         MonsterExtraStart(builder)
-        MonsterExtraAddd0(builder, self.d0)
-        MonsterExtraAddd1(builder, self.d1)
-        MonsterExtraAddd2(builder, self.d2)
-        MonsterExtraAddd3(builder, self.d3)
-        MonsterExtraAddf0(builder, self.f0)
-        MonsterExtraAddf1(builder, self.f1)
-        MonsterExtraAddf2(builder, self.f2)
-        MonsterExtraAddf3(builder, self.f3)
+        MonsterExtraAddD0(builder, self.d0)
+        MonsterExtraAddD1(builder, self.d1)
+        MonsterExtraAddD2(builder, self.d2)
+        MonsterExtraAddD3(builder, self.d3)
+        MonsterExtraAddF0(builder, self.f0)
+        MonsterExtraAddF1(builder, self.f1)
+        MonsterExtraAddF2(builder, self.f2)
+        MonsterExtraAddF3(builder, self.f3)
         if self.dvec is not None:
-            MonsterExtraAdddvec(builder, dvec)
+            MonsterExtraAddDvec(builder, dvec)
         if self.fvec is not None:
-            MonsterExtraAddfvec(builder, fvec)
-        MonsterExtra = MonsterExtraEnd(builder)
-        return MonsterExtra
+            MonsterExtraAddFvec(builder, fvec)
+        monsterExtra = MonsterExtraEnd(builder)
+        return monsterExtra

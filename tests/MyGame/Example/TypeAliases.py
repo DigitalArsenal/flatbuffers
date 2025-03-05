@@ -29,126 +29,126 @@ class TypeAliases(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # TypeAliases
-    def i8(self):
+    def I8(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.int8Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Int8Flags, o + self._tab.Pos)
         return 0
 
     # TypeAliases
-    def u8(self):
+    def U8(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.uint8Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
         return 0
 
     # TypeAliases
-    def i16(self):
+    def I16(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.int16Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Int16Flags, o + self._tab.Pos)
         return 0
 
     # TypeAliases
-    def u16(self):
+    def U16(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.uint16Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Uint16Flags, o + self._tab.Pos)
         return 0
 
     # TypeAliases
-    def i32(self):
+    def I32(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.int32Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Int32Flags, o + self._tab.Pos)
         return 0
 
     # TypeAliases
-    def u32(self):
+    def U32(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.uint32Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Uint32Flags, o + self._tab.Pos)
         return 0
 
     # TypeAliases
-    def i64(self):
+    def I64(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(16))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.int64Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Int64Flags, o + self._tab.Pos)
         return 0
 
     # TypeAliases
-    def u64(self):
+    def U64(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(18))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.uint64Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
         return 0
 
     # TypeAliases
-    def f32(self):
+    def F32(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(20))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float32Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float32Flags, o + self._tab.Pos)
         return 0.0
 
     # TypeAliases
-    def f64(self):
+    def F64(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(22))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float64Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
         return 0.0
 
     # TypeAliases
-    def v8(self, j):
+    def V8(self, j):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(24))
         if o != 0:
             a = self._tab.Vector(o)
-            return self._tab.Get(flatbuffers.number_types.int8Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 1))
+            return self._tab.Get(flatbuffers.number_types.Int8Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 1))
         return 0
 
     # TypeAliases
-    def v8AsNumpy(self):
+    def V8AsNumpy(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(24))
         if o != 0:
-            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.int8Flags, o)
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Int8Flags, o)
         return 0
 
     # TypeAliases
-    def v8Length(self):
+    def V8Length(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(24))
         if o != 0:
             return self._tab.VectorLen(o)
         return 0
 
     # TypeAliases
-    def v8IsNone(self):
+    def V8IsNone(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(24))
         return o == 0
 
     # TypeAliases
-    def vf64(self, j):
+    def Vf64(self, j):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(26))
         if o != 0:
             a = self._tab.Vector(o)
-            return self._tab.Get(flatbuffers.number_types.float64Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 8))
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, a + flatbuffers.number_types.UOffsetTFlags.py_type(j * 8))
         return 0
 
     # TypeAliases
-    def vf64AsNumpy(self):
+    def Vf64AsNumpy(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(26))
         if o != 0:
-            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.float64Flags, o)
+            return self._tab.GetVectorAsNumpy(flatbuffers.number_types.Float64Flags, o)
         return 0
 
     # TypeAliases
-    def vf64Length(self):
+    def Vf64Length(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(26))
         if o != 0:
             return self._tab.VectorLen(o)
         return 0
 
     # TypeAliases
-    def vf64IsNone(self):
+    def Vf64IsNone(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(26))
         return o == 0
 
@@ -158,89 +158,89 @@ def TypeAliasesStart(builder):
 def Start(builder):
     TypeAliasesStart(builder)
 
-def TypeAliasesAddi8(builder, i8):
-    builder.Prependint8Slot(0, i8, 0)
+def TypeAliasesAddI8(builder, i8):
+    builder.PrependInt8Slot(0, i8, 0)
 
-def Addi8(builder, i8):
-    TypeAliasesAddi8(builder, i8)
+def AddI8(builder, i8):
+    TypeAliasesAddI8(builder, i8)
 
-def TypeAliasesAddu8(builder, u8):
-    builder.Prependuint8Slot(1, u8, 0)
+def TypeAliasesAddU8(builder, u8):
+    builder.PrependUint8Slot(1, u8, 0)
 
-def Addu8(builder, u8):
-    TypeAliasesAddu8(builder, u8)
+def AddU8(builder, u8):
+    TypeAliasesAddU8(builder, u8)
 
-def TypeAliasesAddi16(builder, i16):
-    builder.Prependint16Slot(2, i16, 0)
+def TypeAliasesAddI16(builder, i16):
+    builder.PrependInt16Slot(2, i16, 0)
 
-def Addi16(builder, i16):
-    TypeAliasesAddi16(builder, i16)
+def AddI16(builder, i16):
+    TypeAliasesAddI16(builder, i16)
 
-def TypeAliasesAddu16(builder, u16):
-    builder.Prependuint16Slot(3, u16, 0)
+def TypeAliasesAddU16(builder, u16):
+    builder.PrependUint16Slot(3, u16, 0)
 
-def Addu16(builder, u16):
-    TypeAliasesAddu16(builder, u16)
+def AddU16(builder, u16):
+    TypeAliasesAddU16(builder, u16)
 
-def TypeAliasesAddi32(builder, i32):
-    builder.Prependint32Slot(4, i32, 0)
+def TypeAliasesAddI32(builder, i32):
+    builder.PrependInt32Slot(4, i32, 0)
 
-def Addi32(builder, i32):
-    TypeAliasesAddi32(builder, i32)
+def AddI32(builder, i32):
+    TypeAliasesAddI32(builder, i32)
 
-def TypeAliasesAddu32(builder, u32):
-    builder.Prependuint32Slot(5, u32, 0)
+def TypeAliasesAddU32(builder, u32):
+    builder.PrependUint32Slot(5, u32, 0)
 
-def Addu32(builder, u32):
-    TypeAliasesAddu32(builder, u32)
+def AddU32(builder, u32):
+    TypeAliasesAddU32(builder, u32)
 
-def TypeAliasesAddi64(builder, i64):
-    builder.Prependint64Slot(6, i64, 0)
+def TypeAliasesAddI64(builder, i64):
+    builder.PrependInt64Slot(6, i64, 0)
 
-def Addi64(builder, i64):
-    TypeAliasesAddi64(builder, i64)
+def AddI64(builder, i64):
+    TypeAliasesAddI64(builder, i64)
 
-def TypeAliasesAddu64(builder, u64):
-    builder.Prependuint64Slot(7, u64, 0)
+def TypeAliasesAddU64(builder, u64):
+    builder.PrependUint64Slot(7, u64, 0)
 
-def Addu64(builder, u64):
-    TypeAliasesAddu64(builder, u64)
+def AddU64(builder, u64):
+    TypeAliasesAddU64(builder, u64)
 
-def TypeAliasesAddf32(builder, f32):
-    builder.Prependfloat32Slot(8, f32, 0.0)
+def TypeAliasesAddF32(builder, f32):
+    builder.PrependFloat32Slot(8, f32, 0.0)
 
-def Addf32(builder, f32):
-    TypeAliasesAddf32(builder, f32)
+def AddF32(builder, f32):
+    TypeAliasesAddF32(builder, f32)
 
-def TypeAliasesAddf64(builder, f64):
-    builder.Prependfloat64Slot(9, f64, 0.0)
+def TypeAliasesAddF64(builder, f64):
+    builder.PrependFloat64Slot(9, f64, 0.0)
 
-def Addf64(builder, f64):
-    TypeAliasesAddf64(builder, f64)
+def AddF64(builder, f64):
+    TypeAliasesAddF64(builder, f64)
 
-def TypeAliasesAddv8(builder, v8):
+def TypeAliasesAddV8(builder, v8):
     builder.PrependUOffsetTRelativeSlot(10, flatbuffers.number_types.UOffsetTFlags.py_type(v8), 0)
 
-def Addv8(builder, v8):
-    TypeAliasesAddv8(builder, v8)
+def AddV8(builder, v8):
+    TypeAliasesAddV8(builder, v8)
 
-def TypeAliasesStartv8Vector(builder, numElems):
+def TypeAliasesStartV8Vector(builder, numElems):
     return builder.StartVector(1, numElems, 1)
 
-def Startv8Vector(builder, numElems):
-    return TypeAliasesStartv8Vector(builder, numElems)
+def StartV8Vector(builder, numElems):
+    return TypeAliasesStartV8Vector(builder, numElems)
 
-def TypeAliasesAddvf64(builder, vf64):
+def TypeAliasesAddVf64(builder, vf64):
     builder.PrependUOffsetTRelativeSlot(11, flatbuffers.number_types.UOffsetTFlags.py_type(vf64), 0)
 
-def Addvf64(builder, vf64):
-    TypeAliasesAddvf64(builder, vf64)
+def AddVf64(builder, vf64):
+    TypeAliasesAddVf64(builder, vf64)
 
-def TypeAliasesStartvf64Vector(builder, numElems):
+def TypeAliasesStartVf64Vector(builder, numElems):
     return builder.StartVector(8, numElems, 8)
 
-def Startvf64Vector(builder, numElems):
-    return TypeAliasesStartvf64Vector(builder, numElems)
+def StartVf64Vector(builder, numElems):
+    return TypeAliasesStartVf64Vector(builder, numElems)
 
 def TypeAliasesEnd(builder):
     return builder.EndObject()
@@ -272,9 +272,9 @@ class TypeAliasesT(object):
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        TypeAliases = TypeAliases()
-        TypeAliases.Init(buf, pos)
-        return cls.InitFromObj(TypeAliases)
+        typeAliases = TypeAliases()
+        typeAliases.Init(buf, pos)
+        return cls.InitFromObj(typeAliases)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -282,39 +282,39 @@ class TypeAliasesT(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, TypeAliases):
+    def InitFromObj(cls, typeAliases):
         x = TypeAliasesT()
-        x._UnPack(TypeAliases)
+        x._UnPack(typeAliases)
         return x
 
     # TypeAliasesT
-    def _UnPack(self, TypeAliases):
-        if TypeAliases is None:
+    def _UnPack(self, typeAliases):
+        if typeAliases is None:
             return
-        self.i8 = TypeAliases.i8()
-        self.u8 = TypeAliases.u8()
-        self.i16 = TypeAliases.i16()
-        self.u16 = TypeAliases.u16()
-        self.i32 = TypeAliases.i32()
-        self.u32 = TypeAliases.u32()
-        self.i64 = TypeAliases.i64()
-        self.u64 = TypeAliases.u64()
-        self.f32 = TypeAliases.f32()
-        self.f64 = TypeAliases.f64()
-        if not TypeAliases.v8IsNone():
+        self.i8 = typeAliases.I8()
+        self.u8 = typeAliases.U8()
+        self.i16 = typeAliases.I16()
+        self.u16 = typeAliases.U16()
+        self.i32 = typeAliases.I32()
+        self.u32 = typeAliases.U32()
+        self.i64 = typeAliases.I64()
+        self.u64 = typeAliases.U64()
+        self.f32 = typeAliases.F32()
+        self.f64 = typeAliases.F64()
+        if not typeAliases.V8IsNone():
             if np is None:
                 self.v8 = []
-                for i in range(TypeAliases.v8Length()):
-                    self.v8.append(TypeAliases.v8(i))
+                for i in range(typeAliases.V8Length()):
+                    self.v8.append(typeAliases.V8(i))
             else:
-                self.v8 = TypeAliases.v8AsNumpy()
-        if not TypeAliases.vf64IsNone():
+                self.v8 = typeAliases.V8AsNumpy()
+        if not typeAliases.Vf64IsNone():
             if np is None:
                 self.vf64 = []
-                for i in range(TypeAliases.vf64Length()):
-                    self.vf64.append(TypeAliases.vf64(i))
+                for i in range(typeAliases.Vf64Length()):
+                    self.vf64.append(typeAliases.Vf64(i))
             else:
-                self.vf64 = TypeAliases.vf64AsNumpy()
+                self.vf64 = typeAliases.Vf64AsNumpy()
 
     # TypeAliasesT
     def Pack(self, builder):
@@ -322,7 +322,7 @@ class TypeAliasesT(object):
             if np is not None and type(self.v8) is np.ndarray:
                 v8 = builder.CreateNumpyVector(self.v8)
             else:
-                TypeAliasesStartv8Vector(builder, len(self.v8))
+                TypeAliasesStartV8Vector(builder, len(self.v8))
                 for i in reversed(range(len(self.v8))):
                     builder.PrependByte(self.v8[i])
                 v8 = builder.EndVector()
@@ -330,24 +330,24 @@ class TypeAliasesT(object):
             if np is not None and type(self.vf64) is np.ndarray:
                 vf64 = builder.CreateNumpyVector(self.vf64)
             else:
-                TypeAliasesStartvf64Vector(builder, len(self.vf64))
+                TypeAliasesStartVf64Vector(builder, len(self.vf64))
                 for i in reversed(range(len(self.vf64))):
                     builder.PrependFloat64(self.vf64[i])
                 vf64 = builder.EndVector()
         TypeAliasesStart(builder)
-        TypeAliasesAddi8(builder, self.i8)
-        TypeAliasesAddu8(builder, self.u8)
-        TypeAliasesAddi16(builder, self.i16)
-        TypeAliasesAddu16(builder, self.u16)
-        TypeAliasesAddi32(builder, self.i32)
-        TypeAliasesAddu32(builder, self.u32)
-        TypeAliasesAddi64(builder, self.i64)
-        TypeAliasesAddu64(builder, self.u64)
-        TypeAliasesAddf32(builder, self.f32)
-        TypeAliasesAddf64(builder, self.f64)
+        TypeAliasesAddI8(builder, self.i8)
+        TypeAliasesAddU8(builder, self.u8)
+        TypeAliasesAddI16(builder, self.i16)
+        TypeAliasesAddU16(builder, self.u16)
+        TypeAliasesAddI32(builder, self.i32)
+        TypeAliasesAddU32(builder, self.u32)
+        TypeAliasesAddI64(builder, self.i64)
+        TypeAliasesAddU64(builder, self.u64)
+        TypeAliasesAddF32(builder, self.f32)
+        TypeAliasesAddF64(builder, self.f64)
         if self.v8 is not None:
-            TypeAliasesAddv8(builder, v8)
+            TypeAliasesAddV8(builder, v8)
         if self.vf64 is not None:
-            TypeAliasesAddvf64(builder, vf64)
-        TypeAliases = TypeAliasesEnd(builder)
-        return TypeAliases
+            TypeAliasesAddVf64(builder, vf64)
+        typeAliases = TypeAliasesEnd(builder)
+        return typeAliases

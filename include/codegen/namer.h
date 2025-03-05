@@ -178,21 +178,10 @@ class Namer {
   std::string Variable(const std::string &p, const T &s) const {
     return Format(p + "_" + s.name, config_.variables);
   }
+  
   virtual std::string Variable(const std::string &p,
                                const std::string &s) const {
     return Format(p + "_" + s, config_.variables);
-  }
-
-  virtual std::string Variable(const std::string &s, bool from_idl) const {
-    if (s.find("any_uniqueType") != std::string::npos ||
-        s.find("any_unique") != std::string::npos ||
-        s.find("any_ambiguous") != std::string::npos ||
-        s.find("My") != std::string::npos) {
-      std::cout << "Breakpoint triggered: Broken variable pattern detected: "
-                << s << std::endl;
-    }
-
-    return from_idl ? s : Format(s, config_.variables, false);
   }
 
   virtual std::string Namespace(const std::string &s) const {

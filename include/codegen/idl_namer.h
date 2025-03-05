@@ -52,13 +52,9 @@ class IdlNamer : public Namer {
     return Field(d.name + "_" + s, d.declared_in_idl);
   }
 
-  std::string Variable(const FieldDef &s) const {
-    return Variable(s.name, s.declared_in_idl);
-  }
+  std::string Variable(const FieldDef &s) const { return Variable(s.name); }
 
-  std::string Variable(const StructDef &s) const {
-    return Variable(s.name, s.declared_in_idl);
-  }
+  std::string Variable(const StructDef &s) const { return Variable(s.name); }
 
   std::string Variant(const EnumVal &s) const {
     return Variant(s.name, s.declared_in_idl);

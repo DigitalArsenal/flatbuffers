@@ -32,7 +32,7 @@ class ArrayTable(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # ArrayTable
-    def a(self) -> Optional[ArrayStruct]:
+    def A(self) -> Optional[ArrayStruct]:
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             x = o + self._tab.Pos
@@ -47,11 +47,11 @@ def ArrayTableStart(builder: flatbuffers.Builder):
 def Start(builder: flatbuffers.Builder):
     ArrayTableStart(builder)
 
-def ArrayTableAdda(builder: flatbuffers.Builder, a: Any):
+def ArrayTableAddA(builder: flatbuffers.Builder, a: Any):
     builder.PrependStructSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(a), 0)
 
-def Adda(builder: flatbuffers.Builder, a: Any):
-    ArrayTableAdda(builder, a)
+def AddA(builder: flatbuffers.Builder, a: Any):
+    ArrayTableAddA(builder, a)
 
 def ArrayTableEnd(builder: flatbuffers.Builder) -> int:
     return builder.EndObject()
@@ -73,9 +73,9 @@ class ArrayTableT(object):
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        ArrayTable = ArrayTable()
-        ArrayTable.Init(buf, pos)
-        return cls.InitFromObj(ArrayTable)
+        arrayTable = ArrayTable()
+        arrayTable.Init(buf, pos)
+        return cls.InitFromObj(arrayTable)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -83,23 +83,23 @@ class ArrayTableT(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, ArrayTable):
+    def InitFromObj(cls, arrayTable):
         x = ArrayTableT()
-        x._UnPack(ArrayTable)
+        x._UnPack(arrayTable)
         return x
 
     # ArrayTableT
-    def _UnPack(self, ArrayTable):
-        if ArrayTable is None:
+    def _UnPack(self, arrayTable):
+        if arrayTable is None:
             return
-        if ArrayTable.a() is not None:
-            self.a = MyGame.Example.ArrayStruct.ArrayStructT.InitFromObj(ArrayTable.a())
+        if arrayTable.A() is not None:
+            self.a = MyGame.Example.ArrayStruct.ArrayStructT.InitFromObj(arrayTable.A())
 
     # ArrayTableT
     def Pack(self, builder):
         ArrayTableStart(builder)
         if self.a is not None:
             a = self.a.Pack(builder)
-            ArrayTableAdda(builder, a)
-        ArrayTable = ArrayTableEnd(builder)
-        return ArrayTable
+            ArrayTableAddA(builder, a)
+        arrayTable = ArrayTableEnd(builder)
+        return arrayTable

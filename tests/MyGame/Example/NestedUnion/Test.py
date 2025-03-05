@@ -19,15 +19,15 @@ class Test(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Test
-    def a(self): return self._tab.Get(flatbuffers.number_types.int16Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
+    def A(self): return self._tab.Get(flatbuffers.number_types.Int16Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
     # Test
-    def b(self): return self._tab.Get(flatbuffers.number_types.int8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(2))
+    def B(self): return self._tab.Get(flatbuffers.number_types.Int8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(2))
 
 def CreateTest(builder, a, b):
     builder.Prep(2, 4)
     builder.Pad(1)
-    builder.Prependint8(b)
-    builder.Prependint16(a)
+    builder.PrependInt8(b)
+    builder.PrependInt16(a)
     return builder.Offset()
 
 
@@ -40,9 +40,9 @@ class TestT(object):
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        Test = Test()
-        Test.Init(buf, pos)
-        return cls.InitFromObj(Test)
+        test = Test()
+        test.Init(buf, pos)
+        return cls.InitFromObj(test)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -50,17 +50,17 @@ class TestT(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, Test):
+    def InitFromObj(cls, test):
         x = TestT()
-        x._UnPack(Test)
+        x._UnPack(test)
         return x
 
     # TestT
-    def _UnPack(self, Test):
-        if Test is None:
+    def _UnPack(self, test):
+        if test is None:
             return
-        self.a = Test.a()
-        self.b = Test.b()
+        self.a = test.A()
+        self.b = test.B()
 
     # TestT
     def Pack(self, builder):

@@ -28,42 +28,42 @@ class Vec3(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Vec3
-    def x(self):
+    def X(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float64Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
         return 0.0
 
     # Vec3
-    def y(self):
+    def Y(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float64Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
         return 0.0
 
     # Vec3
-    def z(self):
+    def Z(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float64Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
         return 0.0
 
     # Vec3
-    def test1(self):
+    def Test1(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.float64Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Float64Flags, o + self._tab.Pos)
         return 0.0
 
     # Vec3
-    def test2(self):
+    def Test2(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(12))
         if o != 0:
-            return self._tab.Get(flatbuffers.number_types.uint8Flags, o + self._tab.Pos)
+            return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
         return 0
 
     # Vec3
-    def test3(self) -> Optional[Test]:
+    def Test3(self) -> Optional[Test]:
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(14))
         if o != 0:
             x = o + self._tab.Pos
@@ -78,41 +78,41 @@ def Vec3Start(builder: flatbuffers.Builder):
 def Start(builder: flatbuffers.Builder):
     Vec3Start(builder)
 
-def Vec3Addx(builder: flatbuffers.Builder, x: float):
-    builder.Prependfloat64Slot(0, x, 0.0)
+def Vec3AddX(builder: flatbuffers.Builder, x: float):
+    builder.PrependFloat64Slot(0, x, 0.0)
 
-def Addx(builder: flatbuffers.Builder, x: float):
-    Vec3Addx(builder, x)
+def AddX(builder: flatbuffers.Builder, x: float):
+    Vec3AddX(builder, x)
 
-def Vec3Addy(builder: flatbuffers.Builder, y: float):
-    builder.Prependfloat64Slot(1, y, 0.0)
+def Vec3AddY(builder: flatbuffers.Builder, y: float):
+    builder.PrependFloat64Slot(1, y, 0.0)
 
-def Addy(builder: flatbuffers.Builder, y: float):
-    Vec3Addy(builder, y)
+def AddY(builder: flatbuffers.Builder, y: float):
+    Vec3AddY(builder, y)
 
-def Vec3Addz(builder: flatbuffers.Builder, z: float):
-    builder.Prependfloat64Slot(2, z, 0.0)
+def Vec3AddZ(builder: flatbuffers.Builder, z: float):
+    builder.PrependFloat64Slot(2, z, 0.0)
 
-def Addz(builder: flatbuffers.Builder, z: float):
-    Vec3Addz(builder, z)
+def AddZ(builder: flatbuffers.Builder, z: float):
+    Vec3AddZ(builder, z)
 
-def Vec3Addtest1(builder: flatbuffers.Builder, test1: float):
-    builder.Prependfloat64Slot(3, test1, 0.0)
+def Vec3AddTest1(builder: flatbuffers.Builder, test1: float):
+    builder.PrependFloat64Slot(3, test1, 0.0)
 
-def Addtest1(builder: flatbuffers.Builder, test1: float):
-    Vec3Addtest1(builder, test1)
+def AddTest1(builder: flatbuffers.Builder, test1: float):
+    Vec3AddTest1(builder, test1)
 
-def Vec3Addtest2(builder: flatbuffers.Builder, test2: int):
-    builder.Prependuint8Slot(4, test2, 0)
+def Vec3AddTest2(builder: flatbuffers.Builder, test2: int):
+    builder.PrependUint8Slot(4, test2, 0)
 
-def Addtest2(builder: flatbuffers.Builder, test2: int):
-    Vec3Addtest2(builder, test2)
+def AddTest2(builder: flatbuffers.Builder, test2: int):
+    Vec3AddTest2(builder, test2)
 
-def Vec3Addtest3(builder: flatbuffers.Builder, test3: Any):
+def Vec3AddTest3(builder: flatbuffers.Builder, test3: Any):
     builder.PrependStructSlot(5, flatbuffers.number_types.UOffsetTFlags.py_type(test3), 0)
 
-def Addtest3(builder: flatbuffers.Builder, test3: Any):
-    Vec3Addtest3(builder, test3)
+def AddTest3(builder: flatbuffers.Builder, test3: Any):
+    Vec3AddTest3(builder, test3)
 
 def Vec3End(builder: flatbuffers.Builder) -> int:
     return builder.EndObject()
@@ -139,9 +139,9 @@ class Vec3T(object):
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
-        Vec3 = Vec3()
-        Vec3.Init(buf, pos)
-        return cls.InitFromObj(Vec3)
+        vec3 = Vec3()
+        vec3.Init(buf, pos)
+        return cls.InitFromObj(vec3)
 
     @classmethod
     def InitFromPackedBuf(cls, buf, pos=0):
@@ -149,33 +149,33 @@ class Vec3T(object):
         return cls.InitFromBuf(buf, pos+n)
 
     @classmethod
-    def InitFromObj(cls, Vec3):
+    def InitFromObj(cls, vec3):
         x = Vec3T()
-        x._UnPack(Vec3)
+        x._UnPack(vec3)
         return x
 
     # Vec3T
-    def _UnPack(self, Vec3):
-        if Vec3 is None:
+    def _UnPack(self, vec3):
+        if vec3 is None:
             return
-        self.x = Vec3.x()
-        self.y = Vec3.y()
-        self.z = Vec3.z()
-        self.test1 = Vec3.test1()
-        self.test2 = Vec3.test2()
-        if Vec3.test3() is not None:
-            self.test3 = MyGame.Example.NestedUnion.Test.TestT.InitFromObj(Vec3.test3())
+        self.x = vec3.X()
+        self.y = vec3.Y()
+        self.z = vec3.Z()
+        self.test1 = vec3.Test1()
+        self.test2 = vec3.Test2()
+        if vec3.Test3() is not None:
+            self.test3 = MyGame.Example.NestedUnion.Test.TestT.InitFromObj(vec3.Test3())
 
     # Vec3T
     def Pack(self, builder):
         Vec3Start(builder)
-        Vec3Addx(builder, self.x)
-        Vec3Addy(builder, self.y)
-        Vec3Addz(builder, self.z)
-        Vec3Addtest1(builder, self.test1)
-        Vec3Addtest2(builder, self.test2)
+        Vec3AddX(builder, self.x)
+        Vec3AddY(builder, self.y)
+        Vec3AddZ(builder, self.z)
+        Vec3AddTest1(builder, self.test1)
+        Vec3AddTest2(builder, self.test2)
         if self.test3 is not None:
             test3 = self.test3.Pack(builder)
-            Vec3Addtest3(builder, test3)
-        Vec3 = Vec3End(builder)
-        return Vec3
+            Vec3AddTest3(builder, test3)
+        vec3 = Vec3End(builder)
+        return vec3

@@ -63,24 +63,24 @@ class IdlNamer : public Namer {
     return Type(e) + config_.enum_variant_seperator + Variant(v);
   }
 
-  std::string ObjectType(const StructDef &d) const {
+  std::string ObjectType(const StructDef &d ) const {
     return ObjectType(d.name, d.declared_in_idl);
   }
-  std::string ObjectType(const EnumDef &d) const {
+  std::string ObjectType(const EnumDef &d ) const {
     return ObjectType(d.name, d.declared_in_idl);
   }
 
-  std::string Method(const FieldDef &d, const std::string &suffix) const {
+  std::string Method(const FieldDef &d, const std::string &suffix ) const {
     return Method(d.name, suffix, d.declared_in_idl);
   }
-  std::string Method(const std::string &prefix, const StructDef &d) const {
+  std::string Method(const std::string &prefix, const StructDef &d ) const {
     return Method(prefix, d.name, d.declared_in_idl);
   }
-  std::string Method(const std::string &prefix, const FieldDef &d) const {
+  std::string Method(const std::string &prefix, const FieldDef &d ) const {
     return Method(prefix, d.name, d.declared_in_idl);
   }
   std::string Method(const std::string &prefix, const FieldDef &d,
-                     const std::string &suffix) const {
+                     const std::string &suffix ) const {
     return Method(prefix, d.name, suffix, d.declared_in_idl);
   }
 

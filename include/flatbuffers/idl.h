@@ -302,7 +302,7 @@ struct Definition {
         index(-1),
         refcount(1),
         declaration_file(nullptr),
-        declared_in_idl(false) {}
+        declared_in_idl(true) {}
 
   flatbuffers::Offset<
       flatbuffers::Vector<flatbuffers::Offset<reflection::KeyValue>>>

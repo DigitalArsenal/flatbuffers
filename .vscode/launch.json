@@ -17,7 +17,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - Binary (Preserve Case)",
@@ -36,7 +37,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -55,7 +57,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - C++ (Preserve Case)",
@@ -74,7 +77,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -93,7 +97,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - C# (Preserve Case)",
@@ -112,7 +117,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -131,7 +137,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - Dart (Preserve Case)",
@@ -150,7 +157,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -169,7 +177,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - Go (Preserve Case)",
@@ -188,7 +197,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -207,7 +217,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - Java (Preserve Case)",
@@ -226,7 +237,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -245,7 +257,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - JSON (Preserve Case)",
@@ -264,7 +277,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -283,7 +297,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - JSON Schema (Preserve Case)",
@@ -302,7 +317,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -321,7 +337,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - Kotlin (Preserve Case)",
@@ -340,7 +357,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -359,7 +377,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - Kotlin KMP (Preserve Case)",
@@ -378,7 +397,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -397,7 +417,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - Lobster (Preserve Case)",
@@ -416,7 +437,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -435,7 +457,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - Lua (Preserve Case)",
@@ -454,7 +477,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -473,7 +497,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - Nim (Preserve Case)",
@@ -492,7 +517,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -511,7 +537,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - PHP (Preserve Case)",
@@ -530,7 +557,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -549,7 +577,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - Proto (Preserve Case)",
@@ -568,7 +597,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -582,11 +612,13 @@
         "${workspaceFolder}/tests",
         "-I",
         "${workspaceFolder}/tests/include_test",
-        "monster_test.fbs"
+        "monster_test.fbs",
+        "--gen-object-api"
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - Python (Preserve Case)",
@@ -604,7 +636,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -623,7 +656,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - Rust (Preserve Case)",
@@ -642,7 +676,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -661,7 +696,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - Swift (Preserve Case)",
@@ -680,7 +716,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
 
     {
@@ -699,7 +736,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     },
     {
       "name": "Debug flatc - TypeScript (Preserve Case)",
@@ -718,7 +756,8 @@
       ],
       "stopAtEntry": true,
       "cwd": "${workspaceFolder}/tests",
-      "MIMode": "gdb"
+      "MIMode": "gdb",
+      "preLaunchTask": "Build"
     }
   ]
 }

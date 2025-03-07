@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "flatbuffers/util.h"
+#include "flatbuffers/idl.h"
 
 namespace flatbuffers {
 
@@ -114,49 +115,28 @@ class Namer {
 
   template<typename T>
   std::string Method(const T &s, bool from_idl = false) const {
-    return Method(s.name, from_idl);
+    bool use_idl = from_idl;
+    if constexpr (std::is_base_of<Definition, T>::value) {
+      use_idl = s.declared_in_idl;
+    }
+    return Method(s.name, use_idl);
   }
 
   virtual std::string Method(const std::string &pre, const std::string &mid,
                              const std::string &suf,
                              bool from_idl = false) const {
     std::string methodName = pre + "_" + mid + "_" + suf;
-
-    if (methodName.find("any_uniqueType") != std::string::npos ||
-        methodName.find("any_unique") != std::string::npos ||
-        methodName.find("any_ambiguous") != std::string::npos ||
-        methodName.find("My") != std::string::npos) {
-      std::cout << "Breakpoint triggered: Broken method pattern detected: "
-                << methodName << std::endl;
-    }
     return Format(methodName, config_.methods, from_idl);
   }
 
   virtual std::string Method(const std::string &pre, const std::string &suf,
                              bool from_idl = false) const {
     std::string methodName = pre + "_" + suf;
-
-    if (methodName.find("any_uniqueType") != std::string::npos ||
-        methodName.find("any_unique") != std::string::npos ||
-        methodName.find("any_ambiguous") != std::string::npos ||
-        methodName.find("My") != std::string::npos) {
-      std::cout << "Breakpoint triggered: Broken method pattern detected: "
-                << methodName << std::endl;
-    }
-
     return Format(methodName, config_.methods, from_idl);
   }
 
   virtual std::string Method(const std::string &s,
                              bool from_idl = false) const {
-    if (s.find("any_uniqueType") != std::string::npos ||
-        s.find("any_unique") != std::string::npos ||
-        s.find("any_ambiguous") != std::string::npos ||
-        s.find("My") != std::string::npos) {
-      std::cout << "Breakpoint triggered: Broken method pattern detected: " << s
-                << std::endl;
-    }
-
     return Format(s, config_.methods, from_idl);
   }
 
@@ -178,7 +158,7 @@ class Namer {
   std::string Variable(const std::string &p, const T &s) const {
     return Format(p + "_" + s.name, config_.variables);
   }
-  
+
   virtual std::string Variable(const std::string &p,
                                const std::string &s) const {
     return Format(p + "_" + s, config_.variables);
@@ -272,11 +252,16 @@ class Namer {
 
   virtual std::string Format(const std::string &s, Case casing,
                              bool from_idl = false) const {
+    std::string result;
     if (config_.escape_keywords == Config::Escape::BeforeConvertingCase) {
-      return ConvertCase(EscapeKeyword(s), casing, Case::kLowerCamel, from_idl);
+      result =
+          ConvertCase(EscapeKeyword(s), casing, Case::kLowerCamel, from_idl);
     } else {
-      return EscapeKeyword(ConvertCase(s, casing, Case::kLowerCamel, from_idl));
+      result =
+          EscapeKeyword(ConvertCase(s, casing, Case::kLowerCamel, from_idl));
     }
+
+    return result;
   }
 
   // Denamespaces a string (e.g. The.Quick.Brown.Fox) by returning the last part

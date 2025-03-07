@@ -972,8 +972,6 @@ CheckedError Parser::ParseField(StructDef &struct_def) {
   FieldDef *field;
   ECHECK(AddField(struct_def, name, type, &field));
 
-  field->declared_in_idl = true;
-
   if (typefield) {
     // We preserve the relation between the typefield
     // and field, so we can easily map it in the code
@@ -2265,8 +2263,6 @@ StructDef *Parser::LookupCreateStruct(const std::string &name,
   }
   if (!struct_def && create_if_new) {
     struct_def = new StructDef();
-    struct_def->declared_in_idl = true;
-
     if (definition) {
       structs_.Add(qualified_name, struct_def);
       struct_def->name = name;
@@ -3003,7 +2999,6 @@ CheckedError Parser::ParseProtoDecl() {
 CheckedError Parser::StartEnum(const std::string &name, bool is_union,
                                EnumDef **dest) {
   auto &enum_def = *new EnumDef();
-  enum_def.declared_in_idl = true;
   enum_def.name = name;
   enum_def.file = file_being_parsed_;
   enum_def.doc_comment = doc_comment_;
@@ -4359,7 +4354,6 @@ bool Parser::Deserialize(const reflection::Schema *schema) {
          ++it) {
       std::string qualified_name = it->name()->str();
       auto service_def = new ServiceDef();
-      service_def->declared_in_idl = true;
       service_def->defined_namespace =
           GetNamespace(qualified_name, namespaces_, namespaces_index);
       if (!service_def->Deserialize(*this, *it) ||

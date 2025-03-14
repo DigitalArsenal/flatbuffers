@@ -234,21 +234,21 @@ class TestObjectBasedAPI(unittest.TestCase):
     self.assertEqual(monster2.testarrayofboolsLength(), 0)
     self.assertTrue(monster2.testarrayofboolsIsNone())
     self.assertEqual(monster2.testf(), 3.14159)
-    self.assertEqual(monster2.Testf2(), 3.0)
-    self.assertEqual(monster2.Testf3(), 0.0)
+    self.assertEqual(monster2.testf2(), 3.0)
+    self.assertEqual(monster2.testf3(), 0.0)
     self.assertEqual(monster2.testarrayofstring2(0), '')
     self.assertEqual(monster2.testarrayofstring2Length(), 0)
     self.assertTrue(monster2.testarrayofstring2IsNone())
     self.assertTrue(monster2.testarrayofsortedstruct(0) is None)
     self.assertEqual(monster2.testarrayofsortedstructLength(), 0)
     self.assertTrue(monster2.testarrayofsortedstructIsNone())
-    self.assertEqual(monster2.Flex(0), 0)
-    self.assertEqual(monster2.FlexAsNumpy(), 0)
-    self.assertEqual(monster2.FlexLength(), 0)
-    self.assertTrue(monster2.FlexIsNone())
-    self.assertTrue(monster2.Test5(0) is None)
-    self.assertEqual(monster2.Test5Length(), 0)
-    self.assertTrue(monster2.Test5IsNone())
+    self.assertEqual(monster2.flex(0), 0)
+    self.assertEqual(monster2.flexAsNumpy(), 0)
+    self.assertEqual(monster2.flexLength(), 0)
+    self.assertTrue(monster2.flexIsNone())
+    self.assertTrue(monster2.test5(0) is None)
+    self.assertEqual(monster2.test5Length(), 0)
+    self.assertTrue(monster2.test5IsNone())
     self.assertEqual(monster2.vector_of_longs(0), 0)
     self.assertEqual(monster2.vector_of_longsAsNumpy(), 0)
     self.assertEqual(monster2.vector_of_longsLength(), 0)
@@ -258,31 +258,31 @@ class TestObjectBasedAPI(unittest.TestCase):
     self.assertEqual(monster2.vector_of_doublesLength(), 0)
     self.assertTrue(monster2.vector_of_doublesIsNone())
     self.assertTrue(monster2.parent_namespace_test() is None)
-    self.assertTrue(monster2.VectorOfReferrables(0) is None)
-    self.assertEqual(monster2.VectorOfReferrablesLength(), 0)
-    self.assertTrue(monster2.VectorOfReferrablesIsNone())
-    self.assertEqual(monster2.SingleWeakReference(), 0)
-    self.assertEqual(monster2.VectorOfWeakReferences(0), 0)
-    self.assertEqual(monster2.VectorOfWeakReferencesAsNumpy(), 0)
-    self.assertEqual(monster2.VectorOfWeakReferencesLength(), 0)
-    self.assertTrue(monster2.VectorOfWeakReferencesIsNone())
-    self.assertTrue(monster2.VectorOfStrongReferrables(0) is None)
-    self.assertEqual(monster2.VectorOfStrongReferrablesLength(), 0)
-    self.assertTrue(monster2.VectorOfStrongReferrablesIsNone())
-    self.assertEqual(monster2.CoOwningReference(), 0)
-    self.assertEqual(monster2.VectorOfCoOwningReferences(0), 0)
-    self.assertEqual(monster2.VectorOfCoOwningReferencesAsNumpy(), 0)
-    self.assertEqual(monster2.VectorOfCoOwningReferencesLength(), 0)
-    self.assertTrue(monster2.VectorOfCoOwningReferencesIsNone())
-    self.assertEqual(monster2.NonOwningReference(), 0)
-    self.assertEqual(monster2.VectorOfNonOwningReferences(0), 0)
-    self.assertEqual(monster2.VectorOfNonOwningReferencesAsNumpy(), 0)
-    self.assertEqual(monster2.VectorOfNonOwningReferencesLength(), 0)
-    self.assertTrue(monster2.VectorOfNonOwningReferencesIsNone())
-    self.assertEqual(monster2.AnyUniqueType(), 0)
-    self.assertTrue(monster2.AnyUnique() is None)
-    self.assertEqual(monster2.AnyAmbiguousType(), 0)
-    self.assertTrue(monster2.AnyAmbiguous() is None)
+    self.assertTrue(monster2.vector_of_referrables(0) is None)
+    self.assertEqual(monster2.vector_of_referrablesLength(), 0)
+    self.assertTrue(monster2.vector_of_referrablesIsNone())
+    self.assertEqual(monster2.single_weak_reference(), 0)
+    self.assertEqual(monster2.vector_of_weak_references(0), 0)
+    self.assertEqual(monster2.vector_of_weak_referencesAsNumpy(), 0)
+    self.assertEqual(monster2.vector_of_weak_referencesLength(), 0)
+    self.assertTrue(monster2.vector_of_weak_referencesIsNone())
+    self.assertTrue(monster2.vector_of_strong_referrables(0) is None)
+    self.assertEqual(monster2.vector_of_strong_referrablesLength(), 0)
+    self.assertTrue(monster2.vector_of_strong_referrablesIsNone())
+    self.assertEqual(monster2.co_owning_reference(), 0)
+    self.assertEqual(monster2.vector_of_co_owning_references(0), 0)
+    self.assertEqual(monster2.vector_of_co_owning_referencesAsNumpy(), 0)
+    self.assertEqual(monster2.vector_of_co_owning_referencesLength(), 0)
+    self.assertTrue(monster2.vector_of_co_owning_referencesIsNone())
+    self.assertEqual(monster2.non_owning_reference(), 0)
+    self.assertEqual(monster2.vector_of_non_owning_references(0), 0)
+    self.assertEqual(monster2.vector_of_non_owning_referencesAsNumpy(), 0)
+    self.assertEqual(monster2.vector_of_non_owning_referencesLength(), 0)
+    self.assertTrue(monster2.vector_of_non_owning_referencesIsNone())
+    self.assertEqual(monster2.any_unique_type(), 0)
+    self.assertTrue(monster2.any_unique() is None)
+    self.assertEqual(monster2.any_ambiguous_type(), 0)
+    self.assertTrue(monster2.any_ambiguous() is None)
     self.assertEqual(monster2.vector_of_enums(0), 0)
     self.assertEqual(monster2.vector_of_enumsAsNumpy(), 0)
     self.assertEqual(monster2.vector_of_enumsLength(), 0)
@@ -310,7 +310,7 @@ class TestObjectBasedAPI(unittest.TestCase):
     optsT2 = optional_scalars.ScalarStuff.ScalarStuffT.InitFromObj(opts2)
     # Checks the default values.
     self.assertTrue(opts2.JustI8() == 0)
-    self.assertTrue(opts2.Maybef32() is None)
+    self.assertTrue(opts2.MaybeF32() is None)
     self.assertTrue(opts2.DefaultBool() is True)
     self.assertTrue(optsT2.justU16 == 0)
     self.assertTrue(optsT2.maybeEnum is None)
@@ -661,13 +661,13 @@ def CheckReadBuffer(buf, offset, sizePrefix=False, file_identifier=None):
   asserter(vec.test2() == 2)
 
   # initialize a Test from Test3(...)
-  t = _TEST.test()
-  t = vec.Test3(t)
+  t = _TEST.Test()
+  t = vec.test3(t)
   asserter(t is not None)
 
   # verify the properties of the Test
-  asserter(t.A() == 5)
-  asserter(t.B() == 6)
+  asserter(t.a() == 5)
+  asserter(t.b() == 6)
 
   # verify that the enum code matches the enum declaration:
   union_type = _ANY.Any
@@ -679,7 +679,7 @@ def CheckReadBuffer(buf, offset, sizePrefix=False, file_identifier=None):
 
   # initialize a Monster from the Table from the union
   monster2 = _MONSTER.Monster()
-  monster2.Init(table2.Bytes, table2.pos)
+  monster2.Init(table2.Bytes, table2.Pos)
 
   asserter(monster2.name() == b'Fred')
 
@@ -739,10 +739,10 @@ def CheckReadBuffer(buf, offset, sizePrefix=False, file_identifier=None):
 
   # the position of test0 and test1 are swapped in monsterdata_java_wire
   # and monsterdata_test_wire, so ignore ordering
-  v0 = test0.A()
-  v1 = test0.B()
-  v2 = test1.A()
-  v3 = test1.B()
+  v0 = test0.a()
+  v1 = test0.b()
+  v2 = test1.a()
+  v3 = test1.b()
   sumtest12 = int(v0) + int(v1) + int(v2) + int(v3)
 
   asserter(sumtest12 == 100)
@@ -2073,7 +2073,7 @@ def make_monster_from_generated_code(b=None, sizePrefix=False, file_identifier=N
   _MONSTER.MonsterStart(b)
 
   pos = _VEC3.CreateVec3(b, 1.0, 2.0, 3.0, 3.0, 2, 5, 6)
-  _MONSTER.MonsterAddPos(b, pos)
+  _MONSTER.MonsterAddpos(b, pos)
 
   _MONSTER.MonsterAddhp(b, 80)
   _MONSTER.MonsterAddname(b, string)
@@ -2680,7 +2680,7 @@ class TestFixedLengthArrays(unittest.TestCase):
 
     # Create a table with the ArrayStruct.
     MyGame.Example.ArrayTable.Start(builder)
-    MyGame.Example.ArrayTable.AddA(builder, arrayOffset)
+    MyGame.Example.ArrayTable.Adda(builder, arrayOffset)
     tableOffset = MyGame.Example.ArrayTable.End(builder)
 
     builder.Finish(tableOffset)
@@ -2691,30 +2691,30 @@ class TestFixedLengthArrays(unittest.TestCase):
 
     # Verify structure.
     nested = MyGame.Example.NestedStruct.NestedStruct()
-    self.assertEqual(table.A().A(), 0.5)
-    self.assertEqual(table.A().B(), \
+    self.assertEqual(table.a().a(), 0.5)
+    self.assertEqual(table.a().b(), \
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])
-    self.assertEqual(table.A().C(), 1)
-    self.assertEqual(table.A().D(0).A(), [1, 2])
-    self.assertEqual(table.A().D(1).A(), [3, 4])
-    self.assertEqual(table.A().D(0).B(), \
+    self.assertEqual(table.a().c(), 1)
+    self.assertEqual(table.a().d(0).a(), [1, 2])
+    self.assertEqual(table.a().d(1).a(), [3, 4])
+    self.assertEqual(table.a().d(0).b(), \
         MyGame.Example.TestEnum.TestEnum.B)
-    self.assertEqual(table.A().D(1).B(), \
+    self.assertEqual(table.a().d(1).b(), \
         MyGame.Example.TestEnum.TestEnum.C)
-    self.assertEqual(table.A().D(0).C(), \
+    self.assertEqual(table.a().d(0).c(), \
         [MyGame.Example.TestEnum.TestEnum.A, \
          MyGame.Example.TestEnum.TestEnum.B])
-    self.assertEqual(table.A().D(1).C(), \
+    self.assertEqual(table.a().d(1).c(), \
         [MyGame.Example.TestEnum.TestEnum.C, \
          MyGame.Example.TestEnum.TestEnum.B])
-    self.assertEqual(table.A().D(0).D(), [-1, 1])
-    self.assertEqual(table.A().D(1).D(), [-2, 2])
-    self.assertEqual(table.A().E(), 2)
-    self.assertEqual(table.A().F(), [-1, 1])
-    self.assertEqual(table.A().D(0).D(0), -1)
-    self.assertEqual(table.A().D(0).D(1), 1)
-    self.assertEqual(table.A().D(1).D(0), -2)
-    self.assertEqual(table.A().D(1).D(1), 2)
+    self.assertEqual(table.a().d(0).d(), [-1, 1])
+    self.assertEqual(table.a().d(1).d(), [-2, 2])
+    self.assertEqual(table.a().e(), 2)
+    self.assertEqual(table.a().f(), [-1, 1])
+    self.assertEqual(table.a().d(0).d(0), -1)
+    self.assertEqual(table.a().d(0).d(1), 1)
+    self.assertEqual(table.a().d(1).d(0), -2)
+    self.assertEqual(table.a().d(1).d(1), 2)
 
 class TestNestedUnionTables(unittest.TestCase):
 
@@ -2723,7 +2723,7 @@ class TestNestedUnionTables(unittest.TestCase):
     nestUnion.name = b"testUnion1"
     nestUnion.id = 1
     nestUnion.data = MyGame.Example.NestedUnion.Vec3.Vec3T()
-    nestUnion.dataType = MyGame.Example.NestedUnion.Any.Any.Vec3
+    nestUnion.data_type = MyGame.Example.NestedUnion.Any.Any.Vec3
     nestUnion.data.x = 4.278975356
     nestUnion.data.y = 5.32
     nestUnion.data.z = -6.464
@@ -2740,7 +2740,9 @@ class TestNestedUnionTables(unittest.TestCase):
     nestUnionDecodeT = MyGame.Example.NestedUnion.NestedUnionTest.NestedUnionTestT.InitFromObj(nestUnionDecode)
     self.assertEqual(nestUnionDecodeT.name, nestUnion.name)
     self.assertEqual(nestUnionDecodeT.id, nestUnion.id)
-    self.assertEqual(nestUnionDecodeT.dataType, nestUnion.dataType)
+    self.assertEqual(nestUnionDecodeT.data_type, nestUnion.data_type)
+    print(nestUnionDecodeT.data_type)  # This should indicate which type it expects
+
     self.assertEqual(nestUnionDecodeT.data.x, nestUnion.data.x)
     self.assertEqual(nestUnionDecodeT.data.y, nestUnion.data.y)
     self.assertEqual(nestUnionDecodeT.data.z, nestUnion.data.z)
@@ -2752,7 +2754,7 @@ class TestNestedUnionTables(unittest.TestCase):
     nestUnionDecodeTFromBuf = MyGame.Example.NestedUnion.NestedUnionTest.NestedUnionTestT.InitFromPackedBuf(b.Bytes, b.Head())
     self.assertEqual(nestUnionDecodeTFromBuf.name, nestUnion.name)
     self.assertEqual(nestUnionDecodeTFromBuf.id, nestUnion.id)
-    self.assertEqual(nestUnionDecodeTFromBuf.dataType, nestUnion.dataType)
+    self.assertEqual(nestUnionDecodeTFromBuf.data_type, nestUnion.data_type)
     self.assertEqual(nestUnionDecodeTFromBuf.data.x, nestUnion.data.x)
     self.assertEqual(nestUnionDecodeTFromBuf.data.y, nestUnion.data.y)
     self.assertEqual(nestUnionDecodeTFromBuf.data.z, nestUnion.data.z)
@@ -2765,7 +2767,7 @@ class TestNestedUnionTables(unittest.TestCase):
     nestUnionDecodeTFromBuf2 = MyGame.Example.NestedUnion.NestedUnionTest.NestedUnionTestT.InitFromPackedBuf(b.Output())
     self.assertEqual(nestUnionDecodeTFromBuf2.name, nestUnion.name)
     self.assertEqual(nestUnionDecodeTFromBuf2.id, nestUnion.id)
-    self.assertEqual(nestUnionDecodeTFromBuf2.dataType, nestUnion.dataType)
+    self.assertEqual(nestUnionDecodeTFromBuf2.data_type, nestUnion.data_type)
     self.assertEqual(nestUnionDecodeTFromBuf2.data.x, nestUnion.data.x)
     self.assertEqual(nestUnionDecodeTFromBuf2.data.y, nestUnion.data.y)
     self.assertEqual(nestUnionDecodeTFromBuf2.data.z, nestUnion.data.z)

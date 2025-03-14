@@ -781,6 +781,10 @@ struct IDLOptions {
   // make the flatbuffer more compact.
   bool set_empty_vectors_to_null;
 
+  // If set, preserves the case and format of 
+  // names derived from the IDL
+  bool preserve_case;
+
   /*********************************** gRPC ***********************************/
   std::string grpc_filename_suffix;
   bool grpc_use_system_headers;
@@ -862,6 +866,7 @@ struct IDLOptions {
         lang_to_generate(0),
         set_empty_strings_to_null(true),
         set_empty_vectors_to_null(true),
+        preserve_case(false),
         grpc_filename_suffix(".fb"),
         grpc_use_system_headers(true),
         grpc_python_typed_handlers(false) {}

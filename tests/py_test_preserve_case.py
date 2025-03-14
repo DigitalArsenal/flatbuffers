@@ -194,99 +194,99 @@ class TestObjectBasedAPI(unittest.TestCase):
     b2.Finish(monsterT1.Pack(b2))
     monster2 = _MONSTER.Monster.GetRootAs(b2.Bytes, b2.Head())
     # Checks the default values.
-    self.assertTrue(monster2.Pos() is None)
-    self.assertEqual(monster2.Mana(), 150)
-    self.assertEqual(monster2.Hp(), 100)
-    self.assertTrue(monster2.Name() is None)
-    self.assertEqual(monster2.Inventory(0), 0)
-    self.assertEqual(monster2.InventoryAsNumpy(), 0)
-    self.assertEqual(monster2.InventoryLength(), 0)
-    self.assertTrue(monster2.InventoryIsNone())
-    self.assertEqual(monster2.Color(), 8)
-    self.assertEqual(monster2.TestType(), 0)
-    self.assertTrue(monster2.Test() is None)
-    self.assertTrue(monster2.Test4(0) is None)
-    self.assertEqual(monster2.Test4Length(), 0)
-    self.assertTrue(monster2.Test4IsNone())
-    self.assertEqual(monster2.Testarrayofstring(0), '')
-    self.assertEqual(monster2.TestarrayofstringLength(), 0)
-    self.assertTrue(monster2.TestarrayofstringIsNone())
-    self.assertTrue(monster2.Testarrayoftables(0) is None)
-    self.assertEqual(monster2.TestarrayoftablesLength(), 0)
-    self.assertTrue(monster2.TestarrayoftablesIsNone())
-    self.assertTrue(monster2.Enemy() is None)
-    self.assertEqual(monster2.Testnestedflatbuffer(0), 0)
-    self.assertEqual(monster2.TestnestedflatbufferAsNumpy(), 0)
-    self.assertEqual(monster2.TestnestedflatbufferLength(), 0)
-    self.assertTrue(monster2.TestnestedflatbufferIsNone())
-    self.assertTrue(monster2.Testempty() is None)
-    self.assertFalse(monster2.Testbool())
-    self.assertEqual(monster2.Testhashs32Fnv1(), 0)
-    self.assertEqual(monster2.Testhashu32Fnv1(), 0)
-    self.assertEqual(monster2.Testhashs64Fnv1(), 0)
-    self.assertEqual(monster2.Testhashu64Fnv1(), 0)
-    self.assertEqual(monster2.Testhashs32Fnv1a(), 0)
-    self.assertEqual(monster2.Testhashu32Fnv1a(), 0)
-    self.assertEqual(monster2.Testhashs64Fnv1a(), 0)
-    self.assertEqual(monster2.Testhashu64Fnv1a(), 0)
-    self.assertEqual(monster2.Testarrayofbools(0), 0)
-    self.assertEqual(monster2.TestarrayofboolsAsNumpy(), 0)
-    self.assertEqual(monster2.TestarrayofboolsLength(), 0)
-    self.assertTrue(monster2.TestarrayofboolsIsNone())
-    self.assertEqual(monster2.Testf(), 3.14159)
-    self.assertEqual(monster2.Testf2(), 3.0)
-    self.assertEqual(monster2.Testf3(), 0.0)
-    self.assertEqual(monster2.Testarrayofstring2(0), '')
-    self.assertEqual(monster2.Testarrayofstring2Length(), 0)
-    self.assertTrue(monster2.Testarrayofstring2IsNone())
-    self.assertTrue(monster2.Testarrayofsortedstruct(0) is None)
-    self.assertEqual(monster2.TestarrayofsortedstructLength(), 0)
-    self.assertTrue(monster2.TestarrayofsortedstructIsNone())
-    self.assertEqual(monster2.Flex(0), 0)
-    self.assertEqual(monster2.FlexAsNumpy(), 0)
-    self.assertEqual(monster2.FlexLength(), 0)
-    self.assertTrue(monster2.FlexIsNone())
-    self.assertTrue(monster2.Test5(0) is None)
-    self.assertEqual(monster2.Test5Length(), 0)
-    self.assertTrue(monster2.Test5IsNone())
-    self.assertEqual(monster2.VectorOfLongs(0), 0)
-    self.assertEqual(monster2.VectorOfLongsAsNumpy(), 0)
-    self.assertEqual(monster2.VectorOfLongsLength(), 0)
-    self.assertTrue(monster2.VectorOfLongsIsNone())
-    self.assertEqual(monster2.VectorOfDoubles(0), 0)
-    self.assertEqual(monster2.VectorOfDoublesAsNumpy(), 0)
-    self.assertEqual(monster2.VectorOfDoublesLength(), 0)
-    self.assertTrue(monster2.VectorOfDoublesIsNone())
-    self.assertTrue(monster2.ParentNamespaceTest() is None)
-    self.assertTrue(monster2.VectorOfReferrables(0) is None)
-    self.assertEqual(monster2.VectorOfReferrablesLength(), 0)
-    self.assertTrue(monster2.VectorOfReferrablesIsNone())
-    self.assertEqual(monster2.SingleWeakReference(), 0)
-    self.assertEqual(monster2.VectorOfWeakReferences(0), 0)
-    self.assertEqual(monster2.VectorOfWeakReferencesAsNumpy(), 0)
-    self.assertEqual(monster2.VectorOfWeakReferencesLength(), 0)
-    self.assertTrue(monster2.VectorOfWeakReferencesIsNone())
-    self.assertTrue(monster2.VectorOfStrongReferrables(0) is None)
-    self.assertEqual(monster2.VectorOfStrongReferrablesLength(), 0)
-    self.assertTrue(monster2.VectorOfStrongReferrablesIsNone())
-    self.assertEqual(monster2.CoOwningReference(), 0)
-    self.assertEqual(monster2.VectorOfCoOwningReferences(0), 0)
-    self.assertEqual(monster2.VectorOfCoOwningReferencesAsNumpy(), 0)
-    self.assertEqual(monster2.VectorOfCoOwningReferencesLength(), 0)
-    self.assertTrue(monster2.VectorOfCoOwningReferencesIsNone())
-    self.assertEqual(monster2.NonOwningReference(), 0)
-    self.assertEqual(monster2.VectorOfNonOwningReferences(0), 0)
-    self.assertEqual(monster2.VectorOfNonOwningReferencesAsNumpy(), 0)
-    self.assertEqual(monster2.VectorOfNonOwningReferencesLength(), 0)
-    self.assertTrue(monster2.VectorOfNonOwningReferencesIsNone())
-    self.assertEqual(monster2.AnyUniqueType(), 0)
-    self.assertTrue(monster2.AnyUnique() is None)
-    self.assertEqual(monster2.AnyAmbiguousType(), 0)
-    self.assertTrue(monster2.AnyAmbiguous() is None)
-    self.assertEqual(monster2.VectorOfEnums(0), 0)
-    self.assertEqual(monster2.VectorOfEnumsAsNumpy(), 0)
-    self.assertEqual(monster2.VectorOfEnumsLength(), 0)
-    self.assertTrue(monster2.VectorOfEnumsIsNone())
+    self.assertTrue(monster2.pos() is None)
+    self.assertEqual(monster2.mana(), 150)
+    self.assertEqual(monster2.hp(), 100)
+    self.assertTrue(monster2.name() is None)
+    self.assertEqual(monster2.inventory(0), 0)
+    self.assertEqual(monster2.inventoryAsNumpy(), 0)
+    self.assertEqual(monster2.inventoryLength(), 0)
+    self.assertTrue(monster2.inventoryIsNone())
+    self.assertEqual(monster2.color(), 8)
+    self.assertEqual(monster2.test_type(), 0)
+    self.assertTrue(monster2.test() is None)
+    self.assertTrue(monster2.test4(0) is None)
+    self.assertEqual(monster2.test4Length(), 0)
+    self.assertTrue(monster2.test4IsNone())
+    self.assertEqual(monster2.testarrayofstring(0), '')
+    self.assertEqual(monster2.testarrayofstringLength(), 0)
+    self.assertTrue(monster2.testarrayofstringIsNone())
+    self.assertTrue(monster2.testarrayoftables(0) is None)
+    self.assertEqual(monster2.testarrayoftablesLength(), 0)
+    self.assertTrue(monster2.testarrayoftablesIsNone())
+    self.assertTrue(monster2.enemy() is None)
+    self.assertEqual(monster2.testnestedflatbuffer(0), 0)
+    self.assertEqual(monster2.testnestedflatbufferAsNumpy(), 0)
+    self.assertEqual(monster2.testnestedflatbufferLength(), 0)
+    self.assertTrue(monster2.testnestedflatbufferIsNone())
+    self.assertTrue(monster2.testempty() is None)
+    self.assertFalse(monster2.testbool())
+    self.assertEqual(monster2.testhashs32_fnv1(), 0)
+    self.assertEqual(monster2.testhashu32_fnv1(), 0)
+    self.assertEqual(monster2.testhashs64_fnv1(), 0)
+    self.assertEqual(monster2.testhashu64_fnv1(), 0)
+    self.assertEqual(monster2.testhashs32_fnv1a(), 0)
+    self.assertEqual(monster2.testhashu32_fnv1a(), 0)
+    self.assertEqual(monster2.testhashs64_fnv1a(), 0)
+    self.assertEqual(monster2.testhashu64_fnv1a(), 0)
+    self.assertEqual(monster2.testarrayofbools(0), 0)
+    self.assertEqual(monster2.testarrayofboolsAsNumpy(), 0)
+    self.assertEqual(monster2.testarrayofboolsLength(), 0)
+    self.assertTrue(monster2.testarrayofboolsIsNone())
+    self.assertEqual(monster2.testf(), 3.14159)
+    self.assertEqual(monster2.testf2(), 3.0)
+    self.assertEqual(monster2.testf3(), 0.0)
+    self.assertEqual(monster2.testarrayofstring2(0), '')
+    self.assertEqual(monster2.testarrayofstring2Length(), 0)
+    self.assertTrue(monster2.testarrayofstring2IsNone())
+    self.assertTrue(monster2.testarrayofsortedstruct(0) is None)
+    self.assertEqual(monster2.testarrayofsortedstructLength(), 0)
+    self.assertTrue(monster2.testarrayofsortedstructIsNone())
+    self.assertEqual(monster2.flex(0), 0)
+    self.assertEqual(monster2.flexAsNumpy(), 0)
+    self.assertEqual(monster2.flexLength(), 0)
+    self.assertTrue(monster2.flexIsNone())
+    self.assertTrue(monster2.test5(0) is None)
+    self.assertEqual(monster2.test5Length(), 0)
+    self.assertTrue(monster2.test5IsNone())
+    self.assertEqual(monster2.vector_of_longs(0), 0)
+    self.assertEqual(monster2.vector_of_longsAsNumpy(), 0)
+    self.assertEqual(monster2.vector_of_longsLength(), 0)
+    self.assertTrue(monster2.vector_of_longsIsNone())
+    self.assertEqual(monster2.vector_of_doubles(0), 0)
+    self.assertEqual(monster2.vector_of_doublesAsNumpy(), 0)
+    self.assertEqual(monster2.vector_of_doublesLength(), 0)
+    self.assertTrue(monster2.vector_of_doublesIsNone())
+    self.assertTrue(monster2.parent_namespace_test() is None)
+    self.assertTrue(monster2.vector_of_referrables(0) is None)
+    self.assertEqual(monster2.vector_of_referrablesLength(), 0)
+    self.assertTrue(monster2.vector_of_referrablesIsNone())
+    self.assertEqual(monster2.single_weak_reference(), 0)
+    self.assertEqual(monster2.vector_of_weak_references(0), 0)
+    self.assertEqual(monster2.vector_of_weak_referencesAsNumpy(), 0)
+    self.assertEqual(monster2.vector_of_weak_referencesLength(), 0)
+    self.assertTrue(monster2.vector_of_weak_referencesIsNone())
+    self.assertTrue(monster2.vector_of_strong_referrables(0) is None)
+    self.assertEqual(monster2.vector_of_strong_referrablesLength(), 0)
+    self.assertTrue(monster2.vector_of_strong_referrablesIsNone())
+    self.assertEqual(monster2.co_owning_reference(), 0)
+    self.assertEqual(monster2.vector_of_co_owning_references(0), 0)
+    self.assertEqual(monster2.vector_of_co_owning_referencesAsNumpy(), 0)
+    self.assertEqual(monster2.vector_of_co_owning_referencesLength(), 0)
+    self.assertTrue(monster2.vector_of_co_owning_referencesIsNone())
+    self.assertEqual(monster2.non_owning_reference(), 0)
+    self.assertEqual(monster2.vector_of_non_owning_references(0), 0)
+    self.assertEqual(monster2.vector_of_non_owning_referencesAsNumpy(), 0)
+    self.assertEqual(monster2.vector_of_non_owning_referencesLength(), 0)
+    self.assertTrue(monster2.vector_of_non_owning_referencesIsNone())
+    self.assertEqual(monster2.any_unique_type(), 0)
+    self.assertTrue(monster2.any_unique() is None)
+    self.assertEqual(monster2.any_ambiguous_type(), 0)
+    self.assertTrue(monster2.any_ambiguous() is None)
+    self.assertEqual(monster2.vector_of_enums(0), 0)
+    self.assertEqual(monster2.vector_of_enumsAsNumpy(), 0)
+    self.assertEqual(monster2.vector_of_enumsLength(), 0)
+    self.assertTrue(monster2.vector_of_enumsIsNone())
 
   def test_optional_scalars_with_pack_and_unpack(self):
     """ Serializes and deserializes between a buffer with optional values (no
@@ -374,55 +374,55 @@ class TestAllMutableCodePathsOfExampleSchema(unittest.TestCase):
     monster = self._pack_and_load_buf_class(self.monsterT)
 
     # Checks if values are loaded correctly into the object class.
-    pos = monster.Pos()
+    pos = monster.pos()
 
     # Verifies the properties of the Vec3.
-    self.assertEqual(pos.X(), 4.0)
-    self.assertEqual(pos.Y(), 5.0)
-    self.assertEqual(pos.Z(), 6.0)
-    self.assertEqual(pos.Test1(), 6.0)
-    self.assertEqual(pos.Test2(), 7)
+    self.assertEqual(pos.x(), 4.0)
+    self.assertEqual(pos.y(), 5.0)
+    self.assertEqual(pos.z(), 6.0)
+    self.assertEqual(pos.test1(), 6.0)
+    self.assertEqual(pos.test2(), 7)
     t3 = _TEST.Test()
-    t3 = pos.Test3(t3)
-    self.assertEqual(t3.A(), 8)
-    self.assertEqual(t3.B(), 9)
+    t3 = pos.test3(t3)
+    self.assertEqual(t3.a(), 8)
+    self.assertEqual(t3.b(), 9)
 
   def test_mutate_mana(self):
     self.monsterT.mana = 200
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.Mana(), 200)
+    self.assertEqual(monster.mana(), 200)
 
   def test_mutate_hp(self):
     self.monsterT.hp = 200
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.Hp(), 200)
+    self.assertEqual(monster.hp(), 200)
 
   def test_mutate_name(self):
     self.monsterT.name = 'MyMonster'
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.Name(), b'MyMonster')
+    self.assertEqual(monster.name(), b'MyMonster')
 
   def test_mutate_inventory(self):
     self.monsterT.inventory = [1, 7, 8]
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.Inventory(0), 1)
-    self.assertEqual(monster.Inventory(1), 7)
-    self.assertEqual(monster.Inventory(2), 8)
+    self.assertEqual(monster.inventory(0), 1)
+    self.assertEqual(monster.inventory(1), 7)
+    self.assertEqual(monster.inventory(2), 8)
 
   def test_empty_inventory(self):
     self.monsterT.inventory = []
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertFalse(monster.InventoryIsNone())
+    self.assertFalse(monster.inventoryIsNone())
 
   def test_mutate_color(self):
     self.monsterT.color = _COLOR.Color.Red
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.Color(), _COLOR.Color.Red)
+    self.assertEqual(monster.color(), _COLOR.Color.Red)
 
-  def test_mutate_testtype(self):
-    self.monsterT.testType = _ANY.Any.Monster
+  def test_mutate_test_type(self):
+    self.monsterT.test_type = _ANY.Any.Monster
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.TestType(), _ANY.Any.Monster)
+    self.assertEqual(monster.test_type(), _ANY.Any.Monster)
 
   def test_mutate_test(self):
     testT = _MONSTER.MonsterT()
@@ -430,12 +430,12 @@ class TestAllMutableCodePathsOfExampleSchema(unittest.TestCase):
     self.monsterT.test = testT
     monster = self._pack_and_load_buf_class(self.monsterT)
     # Initializes a Table from a union field Test(...).
-    table = monster.Test()
+    table = monster.test()
 
     # Initializes a Monster from the Table from the union.
     test_monster = _MONSTER.Monster()
     test_monster.Init(table.Bytes, table.Pos)
-    self.assertEqual(test_monster.Hp(), 200)
+    self.assertEqual(test_monster.hp(), 200)
 
   def test_mutate_test4(self):
     test0T = _TEST.TestT()
@@ -447,30 +447,30 @@ class TestAllMutableCodePathsOfExampleSchema(unittest.TestCase):
     self.monsterT.test4 = [test0T, test1T]
 
     monster = self._pack_and_load_buf_class(self.monsterT)
-    test0 = monster.Test4(0)
-    self.assertEqual(test0.A(), 10)
-    self.assertEqual(test0.B(), 20)
-    test1 = monster.Test4(1)
-    self.assertEqual(test1.A(), 30)
-    self.assertEqual(test1.B(), 40)
+    test0 = monster.test4(0)
+    self.assertEqual(test0.a(), 10)
+    self.assertEqual(test0.b(), 20)
+    test1 = monster.test4(1)
+    self.assertEqual(test1.a(), 30)
+    self.assertEqual(test1.b(), 40)
 
   def test_empty_test4(self):
     self.monsterT.test4 = []
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertFalse(monster.Test4IsNone())
+    self.assertFalse(monster.test4IsNone())
 
   def test_mutate_testarrayofstring(self):
     self.monsterT.testarrayofstring = []
     self.monsterT.testarrayofstring.append('test1')
     self.monsterT.testarrayofstring.append('test2')
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.Testarrayofstring(0), b'test1')
-    self.assertEqual(monster.Testarrayofstring(1), b'test2')
+    self.assertEqual(monster.testarrayofstring(0), b'test1')
+    self.assertEqual(monster.testarrayofstring(1), b'test2')
 
   def test_empty_testarrayofstring(self):
     self.monsterT.testarrayofstring = []
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertFalse(monster.TestarrayofstringIsNone())
+    self.assertFalse(monster.testarrayofstringIsNone())
 
   def test_mutate_testarrayoftables(self):
     monsterT0 = _MONSTER.MonsterT()
@@ -481,56 +481,56 @@ class TestAllMutableCodePathsOfExampleSchema(unittest.TestCase):
     self.monsterT.testarrayoftables.append(monsterT0)
     self.monsterT.testarrayoftables.append(monsterT1)
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.Testarrayoftables(0).Hp(), 200)
-    self.assertEqual(monster.Testarrayoftables(1).Hp(), 400)
+    self.assertEqual(monster.testarrayoftables(0).hp(), 200)
+    self.assertEqual(monster.testarrayoftables(1).hp(), 400)
 
   def test_empty_testarrayoftables(self):
     self.monsterT.testarrayoftables = []
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertFalse(monster.TestarrayoftablesIsNone())
+    self.assertFalse(monster.testarrayoftablesIsNone())
 
   def test_mutate_enemy(self):
     monsterT = _MONSTER.MonsterT()
     monsterT.hp = 200
     self.monsterT.enemy = monsterT
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.Enemy().Hp(), 200)
+    self.assertEqual(monster.enemy().hp(), 200)
 
   def test_mutate_testnestedflatbuffer(self):
     self.monsterT.testnestedflatbuffer = [8, 2, 4]
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.Testnestedflatbuffer(0), 8)
-    self.assertEqual(monster.Testnestedflatbuffer(1), 2)
-    self.assertEqual(monster.Testnestedflatbuffer(2), 4)
+    self.assertEqual(monster.testnestedflatbuffer(0), 8)
+    self.assertEqual(monster.testnestedflatbuffer(1), 2)
+    self.assertEqual(monster.testnestedflatbuffer(2), 4)
 
   def test_empty_testnestedflatbuffer(self):
     self.monsterT.testnestedflatbuffer = []
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertFalse(monster.TestnestedflatbufferIsNone())
+    self.assertFalse(monster.testnestedflatbufferIsNone())
 
   def test_mutate_testbool(self):
     self.monsterT.testbool = True
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertTrue(monster.Testbool())
+    self.assertTrue(monster.testbool())
 
   def test_mutate_testhashes(self):
-    self.monsterT.testhashs32Fnv1 = 1
-    self.monsterT.testhashu32Fnv1 = 2
-    self.monsterT.testhashs64Fnv1 = 3
-    self.monsterT.testhashu64Fnv1 = 4
-    self.monsterT.testhashs32Fnv1a = 5
-    self.monsterT.testhashu32Fnv1a = 6
-    self.monsterT.testhashs64Fnv1a = 7
-    self.monsterT.testhashu64Fnv1a = 8
+    self.monsterT.testhashs32_fnv1 = 1
+    self.monsterT.testhashu32_fnv1 = 2
+    self.monsterT.testhashs64_fnv1 = 3
+    self.monsterT.testhashu64_fnv1 = 4
+    self.monsterT.testhashs32_fnv1a = 5
+    self.monsterT.testhashu32_fnv1a = 6
+    self.monsterT.testhashs64_fnv1a = 7
+    self.monsterT.testhashu64_fnv1a = 8
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.Testhashs32Fnv1(), 1)
-    self.assertEqual(monster.Testhashu32Fnv1(), 2)
-    self.assertEqual(monster.Testhashs64Fnv1(), 3)
-    self.assertEqual(monster.Testhashu64Fnv1(), 4)
-    self.assertEqual(monster.Testhashs32Fnv1a(), 5)
-    self.assertEqual(monster.Testhashu32Fnv1a(), 6)
-    self.assertEqual(monster.Testhashs64Fnv1a(), 7)
-    self.assertEqual(monster.Testhashu64Fnv1a(), 8)
+    self.assertEqual(monster.testhashs32_fnv1(), 1)
+    self.assertEqual(monster.testhashu32_fnv1(), 2)
+    self.assertEqual(monster.testhashs64_fnv1(), 3)
+    self.assertEqual(monster.testhashu64_fnv1(), 4)
+    self.assertEqual(monster.testhashs32_fnv1a(), 5)
+    self.assertEqual(monster.testhashu32_fnv1a(), 6)
+    self.assertEqual(monster.testhashs64_fnv1a(), 7)
+    self.assertEqual(monster.testhashu64_fnv1a(), 8)
 
   def test_mutate_testarrayofbools(self):
     self.monsterT.testarrayofbools = []
@@ -538,76 +538,76 @@ class TestAllMutableCodePathsOfExampleSchema(unittest.TestCase):
     self.monsterT.testarrayofbools.append(True)
     self.monsterT.testarrayofbools.append(False)
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.Testarrayofbools(0), True)
-    self.assertEqual(monster.Testarrayofbools(1), True)
-    self.assertEqual(monster.Testarrayofbools(2), False)
+    self.assertEqual(monster.testarrayofbools(0), True)
+    self.assertEqual(monster.testarrayofbools(1), True)
+    self.assertEqual(monster.testarrayofbools(2), False)
 
   def test_empty_testarrayofbools(self):
     self.monsterT.testarrayofbools = []
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertFalse(monster.TestarrayofboolsIsNone())
+    self.assertFalse(monster.testarrayofboolsIsNone())
 
   def test_mutate_testf(self):
     self.monsterT.testf = 2.0
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.Testf(), 2.0)
+    self.assertEqual(monster.testf(), 2.0)
 
   def test_mutate_vectoroflongs(self):
-    self.monsterT.vectorOfLongs = []
-    self.monsterT.vectorOfLongs.append(1)
-    self.monsterT.vectorOfLongs.append(100)
-    self.monsterT.vectorOfLongs.append(10000)
-    self.monsterT.vectorOfLongs.append(1000000)
-    self.monsterT.vectorOfLongs.append(100000000)
+    self.monsterT.vector_of_longs = []
+    self.monsterT.vector_of_longs.append(1)
+    self.monsterT.vector_of_longs.append(100)
+    self.monsterT.vector_of_longs.append(10000)
+    self.monsterT.vector_of_longs.append(1000000)
+    self.monsterT.vector_of_longs.append(100000000)
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.VectorOfLongs(0), 1)
-    self.assertEqual(monster.VectorOfLongs(1), 100)
-    self.assertEqual(monster.VectorOfLongs(2), 10000)
-    self.assertEqual(monster.VectorOfLongs(3), 1000000)
-    self.assertEqual(monster.VectorOfLongs(4), 100000000)
+    self.assertEqual(monster.vector_of_longs(0), 1)
+    self.assertEqual(monster.vector_of_longs(1), 100)
+    self.assertEqual(monster.vector_of_longs(2), 10000)
+    self.assertEqual(monster.vector_of_longs(3), 1000000)
+    self.assertEqual(monster.vector_of_longs(4), 100000000)
 
   def test_empty_vectoroflongs(self):
-    self.monsterT.vectorOfLongs = []
+    self.monsterT.vector_of_longs = []
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertFalse(monster.VectorOfLongsIsNone())
+    self.assertFalse(monster.vector_of_longsIsNone())
 
   def test_mutate_vectorofdoubles(self):
-    self.monsterT.vectorOfDoubles = []
-    self.monsterT.vectorOfDoubles.append(-1.7976931348623157e+308)
-    self.monsterT.vectorOfDoubles.append(0)
-    self.monsterT.vectorOfDoubles.append(1.7976931348623157e+308)
+    self.monsterT.vector_of_doubles = []
+    self.monsterT.vector_of_doubles.append(-1.7976931348623157e+308)
+    self.monsterT.vector_of_doubles.append(0)
+    self.monsterT.vector_of_doubles.append(1.7976931348623157e+308)
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.VectorOfDoubles(0), -1.7976931348623157e+308)
-    self.assertEqual(monster.VectorOfDoubles(1), 0)
-    self.assertEqual(monster.VectorOfDoubles(2), 1.7976931348623157e+308)
+    self.assertEqual(monster.vector_of_doubles(0), -1.7976931348623157e+308)
+    self.assertEqual(monster.vector_of_doubles(1), 0)
+    self.assertEqual(monster.vector_of_doubles(2), 1.7976931348623157e+308)
 
   def test_empty_vectorofdoubles(self):
-    self.monsterT.vectorOfDoubles = []
+    self.monsterT.vector_of_doubles = []
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertFalse(monster.VectorOfDoublesIsNone())
+    self.assertFalse(monster.vector_of_doublesIsNone())
 
   def test_mutate_parentnamespacetest(self):
-    self.monsterT.parentNamespaceTest = _IN_PARENT_NAMESPACE.InParentNamespaceT(
+    self.monsterT.parent_namespace_test = _IN_PARENT_NAMESPACE.InParentNamespaceT(
     )
     monster = self._pack_and_load_buf_class(self.monsterT)
     self.assertTrue(
-        isinstance(monster.ParentNamespaceTest(),
+        isinstance(monster.parent_namespace_test(),
                    _IN_PARENT_NAMESPACE.InParentNamespace))
 
   def test_mutate_vectorofEnums(self):
-    self.monsterT.vectorOfEnums = []
-    self.monsterT.vectorOfEnums.append(_COLOR.Color.Red)
-    self.monsterT.vectorOfEnums.append(_COLOR.Color.Blue)
-    self.monsterT.vectorOfEnums.append(_COLOR.Color.Red)
+    self.monsterT.vector_of_enums = []
+    self.monsterT.vector_of_enums.append(_COLOR.Color.Red)
+    self.monsterT.vector_of_enums.append(_COLOR.Color.Blue)
+    self.monsterT.vector_of_enums.append(_COLOR.Color.Red)
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertEqual(monster.VectorOfEnums(0), _COLOR.Color.Red)
-    self.assertEqual(monster.VectorOfEnums(1), _COLOR.Color.Blue)
-    self.assertEqual(monster.VectorOfEnums(2), _COLOR.Color.Red)
+    self.assertEqual(monster.vector_of_enums(0), _COLOR.Color.Red)
+    self.assertEqual(monster.vector_of_enums(1), _COLOR.Color.Blue)
+    self.assertEqual(monster.vector_of_enums(2), _COLOR.Color.Red)
 
   def test_empty_vectorofEnums(self):
-    self.monsterT.vectorOfEnums = []
+    self.monsterT.vector_of_enums = []
     monster = self._pack_and_load_buf_class(self.monsterT)
-    self.assertFalse(monster.VectorOfEnumsIsNone())
+    self.assertFalse(monster.vector_of_enumsIsNone())
 
 
 def CheckReadBuffer(buf, offset, sizePrefix=False, file_identifier=None):
@@ -645,60 +645,60 @@ def CheckReadBuffer(buf, offset, sizePrefix=False, file_identifier=None):
     asserter(not _MONSTER.Monster.MonsterBufferHasIdentifier(buf, offset))
   monster = _MONSTER.Monster.GetRootAs(buf, offset)
 
-  asserter(monster.Hp() == 80)
-  asserter(monster.Mana() == 150)
-  asserter(monster.Name() == b'MyMonster')
+  asserter(monster.hp() == 80)
+  asserter(monster.mana() == 150)
+  asserter(monster.name() == b'MyMonster')
 
   # initialize a Vec3 from Pos()
-  vec = monster.Pos()
+  vec = monster.pos()
   asserter(vec is not None)
 
   # verify the properties of the Vec3
-  asserter(vec.X() == 1.0)
-  asserter(vec.Y() == 2.0)
-  asserter(vec.Z() == 3.0)
-  asserter(vec.Test1() == 3.0)
-  asserter(vec.Test2() == 2)
+  asserter(vec.x() == 1.0)
+  asserter(vec.y() == 2.0)
+  asserter(vec.z() == 3.0)
+  asserter(vec.test1() == 3.0)
+  asserter(vec.test2() == 2)
 
   # initialize a Test from Test3(...)
   t = _TEST.Test()
-  t = vec.Test3(t)
+  t = vec.test3(t)
   asserter(t is not None)
 
   # verify the properties of the Test
-  asserter(t.A() == 5)
-  asserter(t.B() == 6)
+  asserter(t.a() == 5)
+  asserter(t.b() == 6)
 
   # verify that the enum code matches the enum declaration:
   union_type = _ANY.Any
-  asserter(monster.TestType() == union_type.Monster)
+  asserter(monster.test_type() == union_type.Monster)
 
   # initialize a Table from a union field Test(...)
-  table2 = monster.Test()
+  table2 = monster.test()
   asserter(type(table2) is flatbuffers.table.Table)
 
   # initialize a Monster from the Table from the union
   monster2 = _MONSTER.Monster()
   monster2.Init(table2.Bytes, table2.Pos)
 
-  asserter(monster2.Name() == b'Fred')
+  asserter(monster2.name() == b'Fred')
 
   # iterate through the first monster's inventory:
-  asserter(monster.InventoryLength() == 5)
-  asserter(not monster.InventoryIsNone())
+  asserter(monster.inventoryLength() == 5)
+  asserter(not monster.inventoryIsNone())
 
   invsum = 0
-  for i in compat_range(monster.InventoryLength()):
-    v = monster.Inventory(i)
+  for i in compat_range(monster.inventoryLength()):
+    v = monster.inventory(i)
     invsum += int(v)
   asserter(invsum == 10)
 
   for i in range(5):
-    asserter(monster.VectorOfLongs(i) == 10**(i * 2))
+    asserter(monster.vector_of_longs(i) == 10**(i * 2))
 
-  asserter(not monster.VectorOfDoublesIsNone())
+  asserter(not monster.vector_of_doublesIsNone())
   asserter(([-1.7976931348623157e+308, 0, 1.7976931348623157e+308] == [
-      monster.VectorOfDoubles(i) for i in range(monster.VectorOfDoublesLength())
+      monster.vector_of_doubles(i) for i in range(monster.vector_of_doublesLength())
   ]))
 
   try:
@@ -706,19 +706,19 @@ def CheckReadBuffer(buf, offset, sizePrefix=False, file_identifier=None):
     # vector as a numpy array
     import numpy as np
 
-    asserter(monster.InventoryAsNumpy().sum() == 10)
-    asserter(monster.InventoryAsNumpy().dtype == np.dtype('<u1'))
+    asserter(monster.inventoryAsNumpy().sum() == 10)
+    asserter(monster.inventoryAsNumpy().dtype == np.dtype('<u1'))
 
-    VectorOfLongs = monster.VectorOfLongsAsNumpy()
-    asserter(VectorOfLongs.dtype == np.dtype('<i8'))
+    vector_of_longs = monster.vector_of_longsAsNumpy()
+    asserter(vector_of_longs.dtype == np.dtype('<i8'))
     for i in range(5):
-      asserter(VectorOfLongs[i] == 10**(i * 2))
+      asserter(vector_of_longs[i] == 10**(i * 2))
 
-    VectorOfDoubles = monster.VectorOfDoublesAsNumpy()
-    asserter(VectorOfDoubles.dtype == np.dtype('<f8'))
-    asserter(VectorOfDoubles[0] == np.finfo('<f8').min)
-    asserter(VectorOfDoubles[1] == 0.0)
-    asserter(VectorOfDoubles[2] == np.finfo('<f8').max)
+    vector_of_doubles = monster.vector_of_doublesAsNumpy()
+    asserter(vector_of_doubles.dtype == np.dtype('<f8'))
+    asserter(vector_of_doubles[0] == np.finfo('<f8').min)
+    asserter(vector_of_doubles[1] == 0.0)
+    asserter(vector_of_doubles[2] == np.finfo('<f8').max)
 
   except ImportError:
     # If numpy does not exist, trying to get vector as numpy
@@ -727,36 +727,36 @@ def CheckReadBuffer(buf, offset, sizePrefix=False, file_identifier=None):
     # asserting this error is raised outside of a test case.
     pass
 
-  asserter(monster.Test4Length() == 2)
-  asserter(not monster.Test4IsNone())
+  asserter(monster.test4Length() == 2)
+  asserter(not monster.test4IsNone())
 
   # create a 'Test' object and populate it:
-  test0 = monster.Test4(0)
+  test0 = monster.test4(0)
   asserter(type(test0) is _TEST.Test)
 
-  test1 = monster.Test4(1)
+  test1 = monster.test4(1)
   asserter(type(test1) is _TEST.Test)
 
   # the position of test0 and test1 are swapped in monsterdata_java_wire
   # and monsterdata_test_wire, so ignore ordering
-  v0 = test0.A()
-  v1 = test0.B()
-  v2 = test1.A()
-  v3 = test1.B()
+  v0 = test0.a()
+  v1 = test0.b()
+  v2 = test1.a()
+  v3 = test1.b()
   sumtest12 = int(v0) + int(v1) + int(v2) + int(v3)
 
   asserter(sumtest12 == 100)
 
-  asserter(not monster.TestarrayofstringIsNone())
-  asserter(monster.TestarrayofstringLength() == 2)
-  asserter(monster.Testarrayofstring(0) == b'test1')
-  asserter(monster.Testarrayofstring(1) == b'test2')
+  asserter(not monster.testarrayofstringIsNone())
+  asserter(monster.testarrayofstringLength() == 2)
+  asserter(monster.testarrayofstring(0) == b'test1')
+  asserter(monster.testarrayofstring(1) == b'test2')
 
-  asserter(monster.TestarrayoftablesIsNone())
-  asserter(monster.TestarrayoftablesLength() == 0)
-  asserter(monster.TestnestedflatbufferIsNone())
-  asserter(monster.TestnestedflatbufferLength() == 0)
-  asserter(monster.Testempty() is None)
+  asserter(monster.testarrayoftablesIsNone())
+  asserter(monster.testarrayoftablesLength() == 0)
+  asserter(monster.testnestedflatbufferIsNone())
+  asserter(monster.testnestedflatbufferLength() == 0)
+  asserter(monster.testempty() is None)
 
 
 class TestFuzz(unittest.TestCase):
@@ -2034,7 +2034,7 @@ def make_monster_from_generated_code(b=None, sizePrefix=False, file_identifier=N
   test2 = b.CreateString('test2')
   fred = b.CreateString('Fred')
 
-  _MONSTER.MonsterStartInventoryVector(b, 5)
+  _MONSTER.MonsterStartinventoryVector(b, 5)
   b.PrependByte(4)
   b.PrependByte(3)
   b.PrependByte(2)
@@ -2043,47 +2043,47 @@ def make_monster_from_generated_code(b=None, sizePrefix=False, file_identifier=N
   inv = b.EndVector()
 
   _MONSTER.MonsterStart(b)
-  _MONSTER.MonsterAddName(b, fred)
+  _MONSTER.MonsterAddname(b, fred)
   mon2 = _MONSTER.MonsterEnd(b)
 
-  _MONSTER.MonsterStartTest4Vector(b, 2)
+  _MONSTER.MonsterStarttest4Vector(b, 2)
   _TEST.CreateTest(b, 10, 20)
   _TEST.CreateTest(b, 30, 40)
   test4 = b.EndVector()
 
-  _MONSTER.MonsterStartTestarrayofstringVector(b, 2)
+  _MONSTER.MonsterStarttestarrayofstringVector(b, 2)
   b.PrependUOffsetTRelative(test2)
   b.PrependUOffsetTRelative(test1)
   testArrayOfString = b.EndVector()
 
-  _MONSTER.MonsterStartVectorOfLongsVector(b, 5)
+  _MONSTER.MonsterStartvector_of_longsVector(b, 5)
   b.PrependInt64(100000000)
   b.PrependInt64(1000000)
   b.PrependInt64(10000)
   b.PrependInt64(100)
   b.PrependInt64(1)
-  VectorOfLongs = b.EndVector()
+  vector_of_longs = b.EndVector()
 
-  _MONSTER.MonsterStartVectorOfDoublesVector(b, 3)
+  _MONSTER.MonsterStartvector_of_doublesVector(b, 3)
   b.PrependFloat64(1.7976931348623157e+308)
   b.PrependFloat64(0)
   b.PrependFloat64(-1.7976931348623157e+308)
-  VectorOfDoubles = b.EndVector()
+  vector_of_doubles = b.EndVector()
 
   _MONSTER.MonsterStart(b)
 
   pos = _VEC3.CreateVec3(b, 1.0, 2.0, 3.0, 3.0, 2, 5, 6)
-  _MONSTER.MonsterAddPos(b, pos)
+  _MONSTER.MonsterAddpos(b, pos)
 
-  _MONSTER.MonsterAddHp(b, 80)
-  _MONSTER.MonsterAddName(b, string)
-  _MONSTER.MonsterAddInventory(b, inv)
-  _MONSTER.MonsterAddTestType(b, 1)
-  _MONSTER.MonsterAddTest(b, mon2)
-  _MONSTER.MonsterAddTest4(b, test4)
-  _MONSTER.MonsterAddTestarrayofstring(b, testArrayOfString)
-  _MONSTER.MonsterAddVectorOfLongs(b, VectorOfLongs)
-  _MONSTER.MonsterAddVectorOfDoubles(b, VectorOfDoubles)
+  _MONSTER.MonsterAddhp(b, 80)
+  _MONSTER.MonsterAddname(b, string)
+  _MONSTER.MonsterAddinventory(b, inv)
+  _MONSTER.MonsterAddtest_type(b, 1)
+  _MONSTER.MonsterAddtest(b, mon2)
+  _MONSTER.MonsterAddtest4(b, test4)
+  _MONSTER.MonsterAddtestarrayofstring(b, testArrayOfString)
+  _MONSTER.MonsterAddvector_of_longs(b, vector_of_longs)
+  _MONSTER.MonsterAddvector_of_doubles(b, vector_of_doubles)
   mon = _MONSTER.MonsterEnd(b)
 
   if sizePrefix:
@@ -2143,185 +2143,185 @@ class TestAllCodePathsOfExampleSchema(unittest.TestCase):
     self.mon = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
 
   def test_default_monster_pos(self):
-    self.assertTrue(self.mon.Pos() is None)
+    self.assertTrue(self.mon.pos() is None)
 
   def test_nondefault_monster_mana(self):
     b = flatbuffers.Builder(0)
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddMana(b, 50)
+    _MONSTER.MonsterAddmana(b, 50)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
 
     got_mon = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
-    self.assertEqual(50, got_mon.Mana())
+    self.assertEqual(50, got_mon.mana())
 
   def test_default_monster_hp(self):
-    self.assertEqual(100, self.mon.Hp())
+    self.assertEqual(100, self.mon.hp())
 
   def test_default_monster_name(self):
-    self.assertEqual(None, self.mon.Name())
+    self.assertEqual(None, self.mon.name())
 
   def test_default_monster_inventory_item(self):
-    self.assertEqual(0, self.mon.Inventory(0))
+    self.assertEqual(0, self.mon.inventory(0))
 
   def test_default_monster_inventory_length(self):
-    self.assertEqual(0, self.mon.InventoryLength())
-    self.assertTrue(self.mon.InventoryIsNone())
+    self.assertEqual(0, self.mon.inventoryLength())
+    self.assertTrue(self.mon.inventoryIsNone())
 
   def test_empty_monster_inventory_vector(self):
     b = flatbuffers.Builder(0)
-    _MONSTER.MonsterStartInventoryVector(b, 0)
+    _MONSTER.MonsterStartinventoryVector(b, 0)
     inv = b.EndVector()
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddInventory(b, inv)
+    _MONSTER.MonsterAddinventory(b, inv)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
     mon2 = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
-    self.assertFalse(mon2.InventoryIsNone())
+    self.assertFalse(mon2.inventoryIsNone())
 
   def test_default_monster_color(self):
-    self.assertEqual(_COLOR.Color.Blue, self.mon.Color())
+    self.assertEqual(_COLOR.Color.Blue, self.mon.color())
 
   def test_nondefault_monster_color(self):
     b = flatbuffers.Builder(0)
     color = _COLOR.Color.Red
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddColor(b, color)
+    _MONSTER.MonsterAddcolor(b, color)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
 
     mon2 = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
-    self.assertEqual(_COLOR.Color.Red, mon2.Color())
+    self.assertEqual(_COLOR.Color.Red, mon2.color())
 
-  def test_default_monster_testtype(self):
-    self.assertEqual(0, self.mon.TestType())
+  def test_default_monster_test_type(self):
+    self.assertEqual(0, self.mon.test_type())
 
   def test_default_monster_test_field(self):
-    self.assertEqual(None, self.mon.Test())
+    self.assertEqual(None, self.mon.test())
 
   def test_default_monster_test4_item(self):
-    self.assertEqual(None, self.mon.Test4(0))
+    self.assertEqual(None, self.mon.test4(0))
 
   def test_default_monster_test4_length(self):
-    self.assertEqual(0, self.mon.Test4Length())
-    self.assertTrue(self.mon.Test4IsNone())
+    self.assertEqual(0, self.mon.test4Length())
+    self.assertTrue(self.mon.test4IsNone())
 
   def test_empty_monster_test4_vector(self):
     b = flatbuffers.Builder(0)
-    _MONSTER.MonsterStartTest4Vector(b, 0)
+    _MONSTER.MonsterStarttest4Vector(b, 0)
     test4 = b.EndVector()
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddTest4(b, test4)
+    _MONSTER.MonsterAddtest4(b, test4)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
     mon2 = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
-    self.assertFalse(mon2.Test4IsNone())
+    self.assertFalse(mon2.test4IsNone())
 
   def test_default_monster_testarrayofstring(self):
-    self.assertEqual('', self.mon.Testarrayofstring(0))
+    self.assertEqual('', self.mon.testarrayofstring(0))
 
   def test_default_monster_testarrayofstring_length(self):
-    self.assertEqual(0, self.mon.TestarrayofstringLength())
-    self.assertTrue(self.mon.TestarrayofstringIsNone())
+    self.assertEqual(0, self.mon.testarrayofstringLength())
+    self.assertTrue(self.mon.testarrayofstringIsNone())
 
   def test_empty_monster_testarrayofstring_vector(self):
     b = flatbuffers.Builder(0)
-    _MONSTER.MonsterStartTestarrayofstringVector(b, 0)
+    _MONSTER.MonsterStarttestarrayofstringVector(b, 0)
     testarrayofstring = b.EndVector()
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddTestarrayofstring(b, testarrayofstring)
+    _MONSTER.MonsterAddtestarrayofstring(b, testarrayofstring)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
     mon2 = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
-    self.assertFalse(mon2.TestarrayofstringIsNone())
+    self.assertFalse(mon2.testarrayofstringIsNone())
 
   def test_default_monster_testarrayoftables(self):
-    self.assertEqual(None, self.mon.Testarrayoftables(0))
+    self.assertEqual(None, self.mon.testarrayoftables(0))
 
   def test_nondefault_monster_testarrayoftables(self):
     b = flatbuffers.Builder(0)
 
     # make a child Monster within a vector of Monsters:
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddHp(b, 99)
+    _MONSTER.MonsterAddhp(b, 99)
     sub_monster = _MONSTER.MonsterEnd(b)
 
     # build the vector:
-    _MONSTER.MonsterStartTestarrayoftablesVector(b, 1)
+    _MONSTER.MonsterStarttestarrayoftablesVector(b, 1)
     b.PrependUOffsetTRelative(sub_monster)
     vec = b.EndVector()
 
     # make the parent monster and include the vector of Monster:
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddTestarrayoftables(b, vec)
+    _MONSTER.MonsterAddtestarrayoftables(b, vec)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
 
     # inspect the resulting data:
     mon2 = _MONSTER.Monster.GetRootAs(b.Output(), 0)
-    self.assertEqual(99, mon2.Testarrayoftables(0).Hp())
-    self.assertEqual(1, mon2.TestarrayoftablesLength())
-    self.assertFalse(mon2.TestarrayoftablesIsNone())
+    self.assertEqual(99, mon2.testarrayoftables(0).hp())
+    self.assertEqual(1, mon2.testarrayoftablesLength())
+    self.assertFalse(mon2.testarrayoftablesIsNone())
 
   def test_default_monster_testarrayoftables_length(self):
-    self.assertEqual(0, self.mon.TestarrayoftablesLength())
-    self.assertTrue(self.mon.TestarrayoftablesIsNone())
+    self.assertEqual(0, self.mon.testarrayoftablesLength())
+    self.assertTrue(self.mon.testarrayoftablesIsNone())
 
   def test_empty_monster_testarrayoftables_vector(self):
     b = flatbuffers.Builder(0)
-    _MONSTER.MonsterStartTestarrayoftablesVector(b, 0)
+    _MONSTER.MonsterStarttestarrayoftablesVector(b, 0)
     testarrayoftables = b.EndVector()
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddTestarrayoftables(b, testarrayoftables)
+    _MONSTER.MonsterAddtestarrayoftables(b, testarrayoftables)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
     mon2 = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
-    self.assertFalse(mon2.TestarrayoftablesIsNone())
+    self.assertFalse(mon2.testarrayoftablesIsNone())
 
   def test_default_monster_testarrayoftables_length(self):
-    self.assertEqual(0, self.mon.TestarrayoftablesLength())
+    self.assertEqual(0, self.mon.testarrayoftablesLength())
 
   def test_nondefault_monster_enemy(self):
     b = flatbuffers.Builder(0)
 
     # make an Enemy object:
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddHp(b, 88)
+    _MONSTER.MonsterAddhp(b, 88)
     enemy = _MONSTER.MonsterEnd(b)
     b.Finish(enemy)
 
     # make the parent monster and include the vector of Monster:
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddEnemy(b, enemy)
+    _MONSTER.MonsterAddenemy(b, enemy)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
 
     # inspect the resulting data:
     mon2 = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
-    self.assertEqual(88, mon2.Enemy().Hp())
+    self.assertEqual(88, mon2.enemy().hp())
 
   def test_default_monster_testnestedflatbuffer(self):
-    self.assertEqual(0, self.mon.Testnestedflatbuffer(0))
+    self.assertEqual(0, self.mon.testnestedflatbuffer(0))
 
   def test_default_monster_testnestedflatbuffer_length(self):
-    self.assertEqual(0, self.mon.TestnestedflatbufferLength())
-    self.assertTrue(self.mon.TestnestedflatbufferIsNone())
+    self.assertEqual(0, self.mon.testnestedflatbufferLength())
+    self.assertTrue(self.mon.testnestedflatbufferIsNone())
 
   def test_empty_monster_testnestedflatbuffer_vector(self):
     b = flatbuffers.Builder(0)
-    _MONSTER.MonsterStartTestnestedflatbufferVector(b, 0)
+    _MONSTER.MonsterStarttestnestedflatbufferVector(b, 0)
     testnestedflatbuffer = b.EndVector()
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddTestnestedflatbuffer(b, testnestedflatbuffer)
+    _MONSTER.MonsterAddtestnestedflatbuffer(b, testnestedflatbuffer)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
     mon2 = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
-    self.assertFalse(mon2.TestnestedflatbufferIsNone())
+    self.assertFalse(mon2.testnestedflatbufferIsNone())
 
   def test_nondefault_monster_testnestedflatbuffer(self):
     b = flatbuffers.Builder(0)
 
-    _MONSTER.MonsterStartTestnestedflatbufferVector(b, 3)
+    _MONSTER.MonsterStarttestnestedflatbufferVector(b, 3)
     b.PrependByte(4)
     b.PrependByte(2)
     b.PrependByte(0)
@@ -2329,25 +2329,25 @@ class TestAllCodePathsOfExampleSchema(unittest.TestCase):
 
     # make the parent monster and include the vector of Monster:
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddTestnestedflatbuffer(b, sub_buf)
+    _MONSTER.MonsterAddtestnestedflatbuffer(b, sub_buf)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
 
     # inspect the resulting data:
     mon2 = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
-    self.assertEqual(3, mon2.TestnestedflatbufferLength())
-    self.assertFalse(mon2.TestnestedflatbufferIsNone())
-    self.assertEqual(0, mon2.Testnestedflatbuffer(0))
-    self.assertEqual(2, mon2.Testnestedflatbuffer(1))
-    self.assertEqual(4, mon2.Testnestedflatbuffer(2))
+    self.assertEqual(3, mon2.testnestedflatbufferLength())
+    self.assertFalse(mon2.testnestedflatbufferIsNone())
+    self.assertEqual(0, mon2.testnestedflatbuffer(0))
+    self.assertEqual(2, mon2.testnestedflatbuffer(1))
+    self.assertEqual(4, mon2.testnestedflatbuffer(2))
     try:
       # if numpy exists, then we should be able to get the
       # vector as a numpy array
       import numpy as np
 
-      self.assertEqual([0, 2, 4], mon2.TestnestedflatbufferAsNumpy().tolist())
+      self.assertEqual([0, 2, 4], mon2.testnestedflatbufferAsNumpy().tolist())
     except ImportError:
-      assertRaises(self, lambda: mon2.TestnestedflatbufferAsNumpy(),
+      assertRaises(self, lambda: mon2.testnestedflatbufferAsNumpy(),
                    NumpyRequiredForThisFeature)
 
   def test_nested_monster_testnestedflatbuffer(self):
@@ -2357,111 +2357,111 @@ class TestAllCodePathsOfExampleSchema(unittest.TestCase):
     nestedB = flatbuffers.Builder(0)
     nameStr = nestedB.CreateString('Nested Monster')
     _MONSTER.MonsterStart(nestedB)
-    _MONSTER.MonsterAddHp(nestedB, 30)
-    _MONSTER.MonsterAddName(nestedB, nameStr)
+    _MONSTER.MonsterAddhp(nestedB, 30)
+    _MONSTER.MonsterAddname(nestedB, nameStr)
     nestedMon = _MONSTER.MonsterEnd(nestedB)
     nestedB.Finish(nestedMon)
 
     # write the nested FB bytes
-    sub_buf = _MONSTER.MonsterMakeTestnestedflatbufferVectorFromBytes(
+    sub_buf = _MONSTER.MonsterMaketestnestedflatbufferVectorFromBytes(
         b, nestedB.Output())
 
     # make the parent monster and include the bytes of the nested monster
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddTestnestedflatbuffer(b, sub_buf)
+    _MONSTER.MonsterAddtestnestedflatbuffer(b, sub_buf)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
 
     # inspect the resulting data:
     mon2 = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
-    nestedMon2 = mon2.TestnestedflatbufferNestedRoot()
-    self.assertEqual(b'Nested Monster', nestedMon2.Name())
-    self.assertEqual(30, nestedMon2.Hp())
+    nestedMon2 = mon2.testnestedflatbufferNestedRoot()
+    self.assertEqual(b'Nested Monster', nestedMon2.name())
+    self.assertEqual(30, nestedMon2.hp())
 
   def test_nondefault_monster_testempty(self):
     b = flatbuffers.Builder(0)
 
     # make a Stat object:
     _STAT.StatStart(b)
-    _STAT.StatAddVal(b, 123)
+    _STAT.StatAddval(b, 123)
     my_stat = _STAT.StatEnd(b)
     b.Finish(my_stat)
 
     # include the stat object in a monster:
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddTestempty(b, my_stat)
+    _MONSTER.MonsterAddtestempty(b, my_stat)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
 
     # inspect the resulting data:
     mon2 = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
-    self.assertEqual(123, mon2.Testempty().Val())
+    self.assertEqual(123, mon2.testempty().val())
 
   def test_default_monster_testbool(self):
-    self.assertFalse(self.mon.Testbool())
+    self.assertFalse(self.mon.testbool())
 
   def test_nondefault_monster_testbool(self):
     b = flatbuffers.Builder(0)
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddTestbool(b, True)
+    _MONSTER.MonsterAddtestbool(b, True)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
 
     # inspect the resulting data:
     mon2 = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
-    self.assertTrue(mon2.Testbool())
+    self.assertTrue(mon2.testbool())
 
   def test_default_monster_testhashes(self):
-    self.assertEqual(0, self.mon.Testhashs32Fnv1())
-    self.assertEqual(0, self.mon.Testhashu32Fnv1())
-    self.assertEqual(0, self.mon.Testhashs64Fnv1())
-    self.assertEqual(0, self.mon.Testhashu64Fnv1())
-    self.assertEqual(0, self.mon.Testhashs32Fnv1a())
-    self.assertEqual(0, self.mon.Testhashu32Fnv1a())
-    self.assertEqual(0, self.mon.Testhashs64Fnv1a())
-    self.assertEqual(0, self.mon.Testhashu64Fnv1a())
+    self.assertEqual(0, self.mon.testhashs32_fnv1())
+    self.assertEqual(0, self.mon.testhashu32_fnv1())
+    self.assertEqual(0, self.mon.testhashs64_fnv1())
+    self.assertEqual(0, self.mon.testhashu64_fnv1())
+    self.assertEqual(0, self.mon.testhashs32_fnv1a())
+    self.assertEqual(0, self.mon.testhashu32_fnv1a())
+    self.assertEqual(0, self.mon.testhashs64_fnv1a())
+    self.assertEqual(0, self.mon.testhashu64_fnv1a())
 
   def test_nondefault_monster_testhashes(self):
     b = flatbuffers.Builder(0)
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddTesthashs32Fnv1(b, 1)
-    _MONSTER.MonsterAddTesthashu32Fnv1(b, 2)
-    _MONSTER.MonsterAddTesthashs64Fnv1(b, 3)
-    _MONSTER.MonsterAddTesthashu64Fnv1(b, 4)
-    _MONSTER.MonsterAddTesthashs32Fnv1a(b, 5)
-    _MONSTER.MonsterAddTesthashu32Fnv1a(b, 6)
-    _MONSTER.MonsterAddTesthashs64Fnv1a(b, 7)
-    _MONSTER.MonsterAddTesthashu64Fnv1a(b, 8)
+    _MONSTER.MonsterAddtesthashs32_fnv1(b, 1)
+    _MONSTER.MonsterAddtesthashu32_fnv1(b, 2)
+    _MONSTER.MonsterAddtesthashs64_fnv1(b, 3)
+    _MONSTER.MonsterAddtesthashu64_fnv1(b, 4)
+    _MONSTER.MonsterAddtesthashs32_fnv1a(b, 5)
+    _MONSTER.MonsterAddtesthashu32_fnv1a(b, 6)
+    _MONSTER.MonsterAddtesthashs64_fnv1a(b, 7)
+    _MONSTER.MonsterAddtesthashu64_fnv1a(b, 8)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
 
     # inspect the resulting data:
     mon2 = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
-    self.assertEqual(1, mon2.Testhashs32Fnv1())
-    self.assertEqual(2, mon2.Testhashu32Fnv1())
-    self.assertEqual(3, mon2.Testhashs64Fnv1())
-    self.assertEqual(4, mon2.Testhashu64Fnv1())
-    self.assertEqual(5, mon2.Testhashs32Fnv1a())
-    self.assertEqual(6, mon2.Testhashu32Fnv1a())
-    self.assertEqual(7, mon2.Testhashs64Fnv1a())
-    self.assertEqual(8, mon2.Testhashu64Fnv1a())
+    self.assertEqual(1, mon2.testhashs32_fnv1())
+    self.assertEqual(2, mon2.testhashu32_fnv1())
+    self.assertEqual(3, mon2.testhashs64_fnv1())
+    self.assertEqual(4, mon2.testhashu64_fnv1())
+    self.assertEqual(5, mon2.testhashs32_fnv1a())
+    self.assertEqual(6, mon2.testhashu32_fnv1a())
+    self.assertEqual(7, mon2.testhashs64_fnv1a())
+    self.assertEqual(8, mon2.testhashu64_fnv1a())
 
   def test_default_monster_parent_namespace_test(self):
-    self.assertEqual(None, self.mon.ParentNamespaceTest())
+    self.assertEqual(None, self.mon.parent_namespace_test())
 
   def test_nondefault_monster_parent_namespace_test(self):
     b = flatbuffers.Builder(0)
     _IN_PARENT_NAMESPACE.InParentNamespaceStart(b)
     parent = _IN_PARENT_NAMESPACE.InParentNamespaceEnd(b)
     _MONSTER.MonsterStart(b)
-    _MONSTER.MonsterAddParentNamespaceTest(b, parent)
+    _MONSTER.MonsterAddparent_namespace_test(b, parent)
     mon = _MONSTER.MonsterEnd(b)
     b.Finish(mon)
 
     # Inspect the resulting data.
     monster = _MONSTER.Monster.GetRootAs(b.Bytes, b.Head())
     self.assertTrue(
-        isinstance(monster.ParentNamespaceTest(),
+        isinstance(monster.parent_namespace_test(),
                    _IN_PARENT_NAMESPACE.InParentNamespace))
 
   def test_getrootas_for_nonroot_table(self):
@@ -2469,17 +2469,17 @@ class TestAllCodePathsOfExampleSchema(unittest.TestCase):
     string = b.CreateString('MyStat')
 
     _STAT.StatStart(b)
-    _STAT.StatAddId(b, string)
-    _STAT.StatAddVal(b, 12345678)
-    _STAT.StatAddCount(b, 12345)
+    _STAT.StatAddid(b, string)
+    _STAT.StatAddval(b, 12345678)
+    _STAT.StatAddcount(b, 12345)
     stat = _STAT.StatEnd(b)
     b.Finish(stat)
 
     stat2 = _STAT.Stat.GetRootAs(b.Bytes, b.Head())
 
-    self.assertEqual(b'MyStat', stat2.Id())
-    self.assertEqual(12345678, stat2.Val())
-    self.assertEqual(12345, stat2.Count())
+    self.assertEqual(b'MyStat', stat2.id())
+    self.assertEqual(12345678, stat2.val())
+    self.assertEqual(12345, stat2.count())
 
 
 class TestAllCodePathsOfMonsterExtraSchema(unittest.TestCase):
@@ -2495,13 +2495,13 @@ class TestAllCodePathsOfMonsterExtraSchema(unittest.TestCase):
     self.mon = MyGame.MonsterExtra.MonsterExtra.GetRootAs(b.Bytes, b.Head())
 
   def test_default_nan_inf(self):
-    self.assertTrue(math.isnan(self.mon.F1()))
-    self.assertEqual(self.mon.F2(), float('inf'))
-    self.assertEqual(self.mon.F3(), float('-inf'))
+    self.assertTrue(math.isnan(self.mon.f1()))
+    self.assertEqual(self.mon.f2(), float('inf'))
+    self.assertEqual(self.mon.f3(), float('-inf'))
 
-    self.assertTrue(math.isnan(self.mon.D1()))
-    self.assertEqual(self.mon.D2(), float('inf'))
-    self.assertEqual(self.mon.D3(), float('-inf'))
+    self.assertTrue(math.isnan(self.mon.d1()))
+    self.assertEqual(self.mon.d2(), float('inf'))
+    self.assertEqual(self.mon.d3(), float('-inf'))
 
 
 class TestVtableDeduplication(unittest.TestCase):
@@ -2680,7 +2680,7 @@ class TestFixedLengthArrays(unittest.TestCase):
 
     # Create a table with the ArrayStruct.
     MyGame.Example.ArrayTable.Start(builder)
-    MyGame.Example.ArrayTable.AddA(builder, arrayOffset)
+    MyGame.Example.ArrayTable.Adda(builder, arrayOffset)
     tableOffset = MyGame.Example.ArrayTable.End(builder)
 
     builder.Finish(tableOffset)
@@ -2691,30 +2691,30 @@ class TestFixedLengthArrays(unittest.TestCase):
 
     # Verify structure.
     nested = MyGame.Example.NestedStruct.NestedStruct()
-    self.assertEqual(table.A().A(), 0.5)
-    self.assertEqual(table.A().B(), \
+    self.assertEqual(table.a().a(), 0.5)
+    self.assertEqual(table.a().b(), \
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])
-    self.assertEqual(table.A().C(), 1)
-    self.assertEqual(table.A().D(0).A(), [1, 2])
-    self.assertEqual(table.A().D(1).A(), [3, 4])
-    self.assertEqual(table.A().D(0).B(), \
+    self.assertEqual(table.a().c(), 1)
+    self.assertEqual(table.a().d(0).a(), [1, 2])
+    self.assertEqual(table.a().d(1).a(), [3, 4])
+    self.assertEqual(table.a().d(0).b(), \
         MyGame.Example.TestEnum.TestEnum.B)
-    self.assertEqual(table.A().D(1).B(), \
+    self.assertEqual(table.a().d(1).b(), \
         MyGame.Example.TestEnum.TestEnum.C)
-    self.assertEqual(table.A().D(0).C(), \
+    self.assertEqual(table.a().d(0).c(), \
         [MyGame.Example.TestEnum.TestEnum.A, \
          MyGame.Example.TestEnum.TestEnum.B])
-    self.assertEqual(table.A().D(1).C(), \
+    self.assertEqual(table.a().d(1).c(), \
         [MyGame.Example.TestEnum.TestEnum.C, \
          MyGame.Example.TestEnum.TestEnum.B])
-    self.assertEqual(table.A().D(0).D(), [-1, 1])
-    self.assertEqual(table.A().D(1).D(), [-2, 2])
-    self.assertEqual(table.A().E(), 2)
-    self.assertEqual(table.A().F(), [-1, 1])
-    self.assertEqual(table.A().D(0).D(0), -1)
-    self.assertEqual(table.A().D(0).D(1), 1)
-    self.assertEqual(table.A().D(1).D(0), -2)
-    self.assertEqual(table.A().D(1).D(1), 2)
+    self.assertEqual(table.a().d(0).d(), [-1, 1])
+    self.assertEqual(table.a().d(1).d(), [-2, 2])
+    self.assertEqual(table.a().e(), 2)
+    self.assertEqual(table.a().f(), [-1, 1])
+    self.assertEqual(table.a().d(0).d(0), -1)
+    self.assertEqual(table.a().d(0).d(1), 1)
+    self.assertEqual(table.a().d(1).d(0), -2)
+    self.assertEqual(table.a().d(1).d(1), 2)
 
 class TestNestedUnionTables(unittest.TestCase):
 
@@ -2723,7 +2723,7 @@ class TestNestedUnionTables(unittest.TestCase):
     nestUnion.name = b"testUnion1"
     nestUnion.id = 1
     nestUnion.data = MyGame.Example.NestedUnion.Vec3.Vec3T()
-    nestUnion.dataType = MyGame.Example.NestedUnion.Any.Any.Vec3
+    nestUnion.data_type = MyGame.Example.NestedUnion.Any.Any.Vec3
     nestUnion.data.x = 4.278975356
     nestUnion.data.y = 5.32
     nestUnion.data.z = -6.464
@@ -2740,7 +2740,9 @@ class TestNestedUnionTables(unittest.TestCase):
     nestUnionDecodeT = MyGame.Example.NestedUnion.NestedUnionTest.NestedUnionTestT.InitFromObj(nestUnionDecode)
     self.assertEqual(nestUnionDecodeT.name, nestUnion.name)
     self.assertEqual(nestUnionDecodeT.id, nestUnion.id)
-    self.assertEqual(nestUnionDecodeT.dataType, nestUnion.dataType)
+    self.assertEqual(nestUnionDecodeT.data_type, nestUnion.data_type)
+    print(nestUnionDecodeT.data_type)  # This should indicate which type it expects
+
     self.assertEqual(nestUnionDecodeT.data.x, nestUnion.data.x)
     self.assertEqual(nestUnionDecodeT.data.y, nestUnion.data.y)
     self.assertEqual(nestUnionDecodeT.data.z, nestUnion.data.z)
@@ -2752,7 +2754,7 @@ class TestNestedUnionTables(unittest.TestCase):
     nestUnionDecodeTFromBuf = MyGame.Example.NestedUnion.NestedUnionTest.NestedUnionTestT.InitFromPackedBuf(b.Bytes, b.Head())
     self.assertEqual(nestUnionDecodeTFromBuf.name, nestUnion.name)
     self.assertEqual(nestUnionDecodeTFromBuf.id, nestUnion.id)
-    self.assertEqual(nestUnionDecodeTFromBuf.dataType, nestUnion.dataType)
+    self.assertEqual(nestUnionDecodeTFromBuf.data_type, nestUnion.data_type)
     self.assertEqual(nestUnionDecodeTFromBuf.data.x, nestUnion.data.x)
     self.assertEqual(nestUnionDecodeTFromBuf.data.y, nestUnion.data.y)
     self.assertEqual(nestUnionDecodeTFromBuf.data.z, nestUnion.data.z)
@@ -2765,7 +2767,7 @@ class TestNestedUnionTables(unittest.TestCase):
     nestUnionDecodeTFromBuf2 = MyGame.Example.NestedUnion.NestedUnionTest.NestedUnionTestT.InitFromPackedBuf(b.Output())
     self.assertEqual(nestUnionDecodeTFromBuf2.name, nestUnion.name)
     self.assertEqual(nestUnionDecodeTFromBuf2.id, nestUnion.id)
-    self.assertEqual(nestUnionDecodeTFromBuf2.dataType, nestUnion.dataType)
+    self.assertEqual(nestUnionDecodeTFromBuf2.data_type, nestUnion.data_type)
     self.assertEqual(nestUnionDecodeTFromBuf2.data.x, nestUnion.data.x)
     self.assertEqual(nestUnionDecodeTFromBuf2.data.y, nestUnion.data.y)
     self.assertEqual(nestUnionDecodeTFromBuf2.data.z, nestUnion.data.z)

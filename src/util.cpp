@@ -53,6 +53,7 @@
 #include <functional>
 
 #include "flatbuffers/base.h"
+#include "flatbuffers/options.h"
 
 namespace flatbuffers {
 
@@ -326,7 +327,7 @@ std::string PosixPath(const std::string &path) {
 void EnsureDirExists(const std::string &filepath) {
   auto parent = StripFileName(filepath);
   if (parent.length()) EnsureDirExists(parent);
-    // clang-format off
+  // clang-format off
 
   #ifdef _WIN32
     (void)_mkdir(filepath.c_str());
@@ -336,8 +337,10 @@ void EnsureDirExists(const std::string &filepath) {
   // clang-format on
 }
 
-std::string FilePath(const std::string& project, const std::string& filePath, bool absolute) {
-    return (absolute) ? AbsolutePath(filePath) : RelativeToRootPath(project, filePath);
+std::string FilePath(const std::string &project, const std::string &filePath,
+                     bool absolute) {
+  return (absolute) ? AbsolutePath(filePath)
+                    : RelativeToRootPath(project, filePath);
 }
 
 std::string AbsolutePath(const std::string &filepath) {
@@ -442,7 +445,10 @@ bool ReadEnvironmentVariable(const char *var_name, std::string *_value) {
 
 std::string ConvertCase(const std::string &input, Case output_case,
                         Case input_case, bool from_idl) {
-  if (output_case == Case::kKeep || from_idl) return input;
+  if (output_case == Case::kKeep ||
+      (from_idl && global_options.preserve_case)) {
+    return input;
+  }
   // The output cases expect snake_case inputs, so if we don't have that input
   // format, try to convert to snake_case.
   switch (input_case) {

@@ -18,9 +18,9 @@ class Ability(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Ability
-    def id(self): return self._tab.Get(flatbuffers.number_types.Uint32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
+    def Id(self): return self._tab.Get(flatbuffers.number_types.Uint32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
     # Ability
-    def distance(self): return self._tab.Get(flatbuffers.number_types.Uint32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(4))
+    def Distance(self): return self._tab.Get(flatbuffers.number_types.Uint32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(4))
 
 def CreateAbility(builder, id, distance):
     builder.Prep(4, 8)
@@ -57,8 +57,8 @@ class AbilityT(object):
     def _UnPack(self, ability):
         if ability is None:
             return
-        self.id = ability.id()
-        self.distance = ability.distance()
+        self.id = ability.Id()
+        self.distance = ability.Distance()
 
     # AbilityT
     def Pack(self, builder):

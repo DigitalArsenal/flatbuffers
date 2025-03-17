@@ -1,11 +1,18 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-      {
-        "label": "Build",
-        "type": "shell",
-        "command": "make -j${nproc}",
-        "problemMatcher": []
-      }
-    ]
-  }
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Configure",
+      "type": "shell",
+      "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DENABLE_DEBUG_SYMBOLS=ON",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build",
+      "type": "shell",
+      "command": "make -j$(nproc)",
+      "problemMatcher": [],
+      "dependsOn": ["Configure"]
+    }
+  ]
+}

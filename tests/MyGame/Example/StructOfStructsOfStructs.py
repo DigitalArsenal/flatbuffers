@@ -18,7 +18,7 @@ class StructOfStructsOfStructs(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # StructOfStructsOfStructs
-    def a(self, obj):
+    def A(self, obj):
         obj.Init(self._tab.Bytes, self._tab.Pos + 0)
         return obj
 
@@ -71,8 +71,8 @@ class StructOfStructsOfStructsT(object):
     def _UnPack(self, structOfStructsOfStructs):
         if structOfStructsOfStructs is None:
             return
-        if structOfStructsOfStructs.a(MyGame.Example.StructOfStructs.StructOfStructs()) is not None:
-            self.a = MyGame.Example.StructOfStructs.StructOfStructsT.InitFromObj(structOfStructsOfStructs.a(MyGame.Example.StructOfStructs.StructOfStructs()))
+        if structOfStructsOfStructs.A(MyGame.Example.StructOfStructs.StructOfStructs()) is not None:
+            self.a = MyGame.Example.StructOfStructs.StructOfStructsT.InitFromObj(structOfStructsOfStructs.A(MyGame.Example.StructOfStructs.StructOfStructs()))
 
     # StructOfStructsOfStructsT
     def Pack(self, builder):

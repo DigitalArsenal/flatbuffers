@@ -79,12 +79,12 @@ v8(index: number):number|null {
   return offset ? this.bb!.readInt8(this.bb!.__vector(this.bb_pos + offset) + index) : 0;
 }
 
-v8():number {
+v8Length():number {
   const offset = this.bb!.__offset(this.bb_pos, 24);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
-v8():Int8Array|null {
+v8Array():Int8Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 24);
   return offset ? new Int8Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
 }
@@ -94,12 +94,12 @@ vf64(index: number):number|null {
   return offset ? this.bb!.readFloat64(this.bb!.__vector(this.bb_pos + offset) + index * 8) : 0;
 }
 
-vf64():number {
+vf64Length():number {
   const offset = this.bb!.__offset(this.bb_pos, 26);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
-vf64():Float64Array|null {
+vf64Array():Float64Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 26);
   return offset ? new Float64Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
 }

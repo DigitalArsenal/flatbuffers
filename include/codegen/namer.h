@@ -3,8 +3,8 @@
 
 #include <iostream>
 
-#include "flatbuffers/util.h"
 #include "flatbuffers/idl.h"
+#include "flatbuffers/util.h"
 
 namespace flatbuffers {
 
@@ -113,8 +113,7 @@ class Namer {
 
   virtual ~Namer() {}
 
-  template<typename T>
-  std::string Method(const T &s) const {
+  template<typename T> std::string Method(const T &s) const {
     bool use_idl = false;
     if constexpr (std::is_base_of<Definition, T>::value) {
       use_idl = s.declared_in_idl;
@@ -138,6 +137,20 @@ class Namer {
   virtual std::string Method(const std::string &s,
                              bool from_idl = false) const {
     return Format(s, config_.methods, from_idl);
+  }
+
+  virtual std::string Method(const char *s, bool from_idl = false) const {
+    return Method(std::string(s), from_idl);
+  }
+
+  virtual std::string Method(const std::string &pre, const char *suf,
+                             bool from_idl = false) const {
+    return Method(pre, std::string(suf), from_idl);
+  }
+
+  virtual std::string Method(const std::string &pre, const std::string &mid,
+                             const char *suf, bool from_idl = false) const {
+    return Method(pre, mid, std::string(suf), from_idl);
   }
 
   virtual std::string Constant(const std::string &s,

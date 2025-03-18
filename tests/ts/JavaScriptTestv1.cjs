@@ -1,4 +1,8 @@
 // Run this using JavaScriptTest.sh
+
+/* global console */
+/* global Buffer */
+
 var assert = require('assert');
 var fs = require('fs');
 
@@ -85,7 +89,7 @@ function serializeAndTest(fbb) {
   // parser may serialize in a slightly different order than the above
   // JavaScript code. They are functionally equivalent though.
 
-  fs.writeFileSync('monsterdata_javascript_wire.mon', new Buffer(fbb.asUint8Array()));
+  fs.writeFileSync('monsterdata_javascript_wire.mon', Buffer.from(fbb.asUint8Array()));
 
   // Tests mutation first.  This will verify that we did not trample any other
   // part of the byte buffer.
@@ -212,17 +216,17 @@ function testUnicode() {
   function testReadingUnicode(bb) {
     var monster = MyGame.Example.Monster.getRootAsMonster(bb);
     assert.strictEqual(monster.name(), json.name);
-    assert.deepEqual(new Buffer(monster.name(flatbuffers.Encoding.UTF8_BYTES)), new Buffer(json.name));
+    assert.deepEqual(Buffer.from(monster.name(flatbuffers.Encoding.UTF8_BYTES)), Buffer.from(json.name));
     assert.strictEqual(monster.testarrayoftablesLength(), json.testarrayoftables.length);
     json.testarrayoftables.forEach(function(table, i) {
       var value = monster.testarrayoftables(i);
       assert.strictEqual(value.name(), table.name);
-      assert.deepEqual(new Buffer(value.name(flatbuffers.Encoding.UTF8_BYTES)), new Buffer(table.name));
+      assert.deepEqual(Buffer.from(value.name(flatbuffers.Encoding.UTF8_BYTES)), Buffer.from(table.name));
     });
     assert.strictEqual(monster.testarrayofstringLength(), json.testarrayofstring.length);
     json.testarrayofstring.forEach(function(string, i) {
       assert.strictEqual(monster.testarrayofstring(i), string);
-      assert.deepEqual(new Buffer(monster.testarrayofstring(i, flatbuffers.Encoding.UTF8_BYTES)), new Buffer(string));
+      assert.deepEqual(Buffer.from(monster.testarrayofstring(i, flatbuffers.Encoding.UTF8_BYTES)), Buffer.from(string));
     });
   }
   testReadingUnicode(new flatbuffers.ByteBuffer(new Uint8Array(correct)));
@@ -231,7 +235,7 @@ function testUnicode() {
   var fbb = new flatbuffers.Builder();
   var name = fbb.createString(json.name);
   var testarrayoftablesOffsets = json.testarrayoftables.map(function(table) {
-    var name = fbb.createString(new Uint8Array(new Buffer(table.name)));
+    var name = fbb.createString(new Uint8Array(Buffer.from(table.name)));
     MyGame.Example.Monster.startMonster(fbb);
     MyGame.Example.Monster.addName(fbb, name);
     return MyGame.Example.Monster.endMonster(fbb);

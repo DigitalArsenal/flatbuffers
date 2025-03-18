@@ -1,4 +1,7 @@
 // Run this using JavaScriptTest.sh
+/* global console */
+/* global Buffer */
+
 import assert from 'assert'
 import fs from 'fs'
 import * as flatbuffers from 'flatbuffers'

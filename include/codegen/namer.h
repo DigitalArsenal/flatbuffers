@@ -114,8 +114,8 @@ class Namer {
   virtual ~Namer() {}
 
   template<typename T>
-  std::string Method(const T &s, bool from_idl = false) const {
-    bool use_idl = from_idl;
+  std::string Method(const T &s) const {
+    bool use_idl = false;
     if constexpr (std::is_base_of<Definition, T>::value) {
       use_idl = s.declared_in_idl;
     }

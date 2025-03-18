@@ -18,17 +18,17 @@ class Vec3(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Vec3
-    def X(self): return self._tab.Get(flatbuffers.number_types.Float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
+    def x(self): return self._tab.Get(flatbuffers.number_types.Float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
     # Vec3
-    def Y(self): return self._tab.Get(flatbuffers.number_types.Float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(4))
+    def y(self): return self._tab.Get(flatbuffers.number_types.Float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(4))
     # Vec3
-    def Z(self): return self._tab.Get(flatbuffers.number_types.Float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(8))
+    def z(self): return self._tab.Get(flatbuffers.number_types.Float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(8))
     # Vec3
-    def Test1(self): return self._tab.Get(flatbuffers.number_types.Float64Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(16))
+    def test1(self): return self._tab.Get(flatbuffers.number_types.Float64Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(16))
     # Vec3
-    def Test2(self): return self._tab.Get(flatbuffers.number_types.Uint8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(24))
+    def test2(self): return self._tab.Get(flatbuffers.number_types.Uint8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(24))
     # Vec3
-    def Test3(self, obj):
+    def test3(self, obj):
         obj.Init(self._tab.Bytes, self._tab.Pos + 26)
         return obj
 
@@ -87,13 +87,13 @@ class Vec3T(object):
     def _UnPack(self, vec3):
         if vec3 is None:
             return
-        self.x = vec3.X()
-        self.y = vec3.Y()
-        self.z = vec3.Z()
-        self.test1 = vec3.Test1()
-        self.test2 = vec3.Test2()
-        if vec3.Test3(MyGame.Example.Test.Test()) is not None:
-            self.test3 = MyGame.Example.Test.TestT.InitFromObj(vec3.Test3(MyGame.Example.Test.Test()))
+        self.x = vec3.x()
+        self.y = vec3.y()
+        self.z = vec3.z()
+        self.test1 = vec3.test1()
+        self.test2 = vec3.test2()
+        if vec3.test3(MyGame.Example.Test.Test()) is not None:
+            self.test3 = MyGame.Example.Test.TestT.InitFromObj(vec3.test3(MyGame.Example.Test.Test()))
 
     # Vec3T
     def Pack(self, builder):

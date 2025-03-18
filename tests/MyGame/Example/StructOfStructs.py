@@ -18,17 +18,17 @@ class StructOfStructs(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # StructOfStructs
-    def A(self, obj):
+    def a(self, obj):
         obj.Init(self._tab.Bytes, self._tab.Pos + 0)
         return obj
 
     # StructOfStructs
-    def B(self, obj):
+    def b(self, obj):
         obj.Init(self._tab.Bytes, self._tab.Pos + 8)
         return obj
 
     # StructOfStructs
-    def C(self, obj):
+    def c(self, obj):
         obj.Init(self._tab.Bytes, self._tab.Pos + 12)
         return obj
 
@@ -83,12 +83,12 @@ class StructOfStructsT(object):
     def _UnPack(self, structOfStructs):
         if structOfStructs is None:
             return
-        if structOfStructs.A(MyGame.Example.Ability.Ability()) is not None:
-            self.a = MyGame.Example.Ability.AbilityT.InitFromObj(structOfStructs.A(MyGame.Example.Ability.Ability()))
-        if structOfStructs.B(MyGame.Example.Test.Test()) is not None:
-            self.b = MyGame.Example.Test.TestT.InitFromObj(structOfStructs.B(MyGame.Example.Test.Test()))
-        if structOfStructs.C(MyGame.Example.Ability.Ability()) is not None:
-            self.c = MyGame.Example.Ability.AbilityT.InitFromObj(structOfStructs.C(MyGame.Example.Ability.Ability()))
+        if structOfStructs.a(MyGame.Example.Ability.Ability()) is not None:
+            self.a = MyGame.Example.Ability.AbilityT.InitFromObj(structOfStructs.a(MyGame.Example.Ability.Ability()))
+        if structOfStructs.b(MyGame.Example.Test.Test()) is not None:
+            self.b = MyGame.Example.Test.TestT.InitFromObj(structOfStructs.b(MyGame.Example.Test.Test()))
+        if structOfStructs.c(MyGame.Example.Ability.Ability()) is not None:
+            self.c = MyGame.Example.Ability.AbilityT.InitFromObj(structOfStructs.c(MyGame.Example.Ability.Ability()))
 
     # StructOfStructsT
     def Pack(self, builder):

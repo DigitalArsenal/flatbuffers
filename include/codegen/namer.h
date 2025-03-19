@@ -1,9 +1,6 @@
 #ifndef FLATBUFFERS_INCLUDE_CODEGEN_NAMER_H_
 #define FLATBUFFERS_INCLUDE_CODEGEN_NAMER_H_
 
-#include <iostream>
-
-#include "flatbuffers/idl.h"
 #include "flatbuffers/util.h"
 
 namespace flatbuffers {
@@ -114,53 +111,28 @@ class Namer {
   virtual ~Namer() {}
 
   template<typename T> std::string Method(const T &s) const {
-    bool use_idl = false;
-    if constexpr (std::is_base_of<Definition, T>::value) {
-      use_idl = s.declared_in_idl;
-    }
-    return Method(s.name, use_idl);
+    return Method(s.name);
   }
 
-  virtual std::string Method(const std::string &pre, const std::string &mid,
-                             const std::string &suf,
-                             bool from_idl = false) const {
-    std::string methodName = pre + "_" + mid + "_" + suf;
-    return Format(methodName, config_.methods, from_idl);
+  virtual std::string Method(const std::string &pre,
+                             const std::string &mid,
+                             const std::string &suf) const {
+    return Format(pre + "_" +  mid + "_" + suf, config_.methods);
+  }
+  virtual std::string Method(const std::string &pre,
+                             const std::string &suf) const {
+    return Format(pre + "_" + suf, config_.methods);
+  }
+  virtual std::string Method(const std::string &s) const {
+    return Format(s, config_.methods);
   }
 
-  virtual std::string Method(const std::string &pre, const std::string &suf,
-                             bool from_idl = false) const {
-    std::string methodName = pre + "_" + suf;
-    return Format(methodName, config_.methods, from_idl);
+  virtual std::string Constant(const std::string &s) const {
+    return Format(s, config_.constants);
   }
 
-  virtual std::string Method(const std::string &s,
-                             bool from_idl = false) const {
-    return Format(s, config_.methods, from_idl);
-  }
-
-  virtual std::string Method(const char *s, bool from_idl = false) const {
-    return Method(std::string(s), from_idl);
-  }
-
-  virtual std::string Method(const std::string &pre, const char *suf,
-                             bool from_idl = false) const {
-    return Method(pre, std::string(suf), from_idl);
-  }
-
-  virtual std::string Method(const std::string &pre, const std::string &mid,
-                             const char *suf, bool from_idl = false) const {
-    return Method(pre, mid, std::string(suf), from_idl);
-  }
-
-  virtual std::string Constant(const std::string &s,
-                               bool from_idl = false) const {
-    return Format(s, config_.constants, from_idl);
-  }
-
-  virtual std::string Function(const std::string &s,
-                               bool from_idl = false) const {
-    return Format(s, config_.functions, from_idl);
+  virtual std::string Function(const std::string &s) const {
+    return Format(s, config_.functions);
   }
 
   virtual std::string Variable(const std::string &s) const {
@@ -171,7 +143,6 @@ class Namer {
   std::string Variable(const std::string &p, const T &s) const {
     return Format(p + "_" + s.name, config_.variables);
   }
-
   virtual std::string Variable(const std::string &p,
                                const std::string &s) const {
     return Format(p + "_" + s, config_.variables);
@@ -241,40 +212,31 @@ class Namer {
     }
   }
 
-  virtual std::string Type(const std::string &s, bool from_idl = false) const {
-    return Format(s, config_.types, from_idl);
+  virtual std::string Type(const std::string &s) const {
+    return Format(s, config_.types);
   }
-  virtual std::string Type(const std::string &t, const std::string &s,
-                           bool from_idl = false) const {
-    return Format(t + "_" + s, config_.types, from_idl);
-  }
-
-  virtual std::string ObjectType(const std::string &s,
-                                 bool from_idl = false) const {
-    return config_.object_prefix + Type(s, from_idl) + config_.object_suffix;
+  virtual std::string Type(const std::string &t, const std::string &s) const {
+    return Format(t + "_" + s, config_.types);
   }
 
-  virtual std::string Field(const std::string &s, bool from_idl = false) const {
-    return Format(s, config_.fields, from_idl);
+  virtual std::string ObjectType(const std::string &s) const {
+    return config_.object_prefix + Type(s) + config_.object_suffix;
   }
 
-  virtual std::string Variant(const std::string &s,
-                              bool from_idl = false) const {
-    return Format(s, config_.variants, from_idl);
+  virtual std::string Field(const std::string &s) const {
+    return Format(s, config_.fields);
   }
 
-  virtual std::string Format(const std::string &s, Case casing,
-                             bool from_idl = false) const {
-    std::string result;
+  virtual std::string Variant(const std::string &s) const {
+    return Format(s, config_.variants);
+  }
+
+  virtual std::string Format(const std::string &s, Case casing) const {
     if (config_.escape_keywords == Config::Escape::BeforeConvertingCase) {
-      result =
-          ConvertCase(EscapeKeyword(s), casing, Case::kLowerCamel, from_idl);
+      return ConvertCase(EscapeKeyword(s), casing, Case::kLowerCamel);
     } else {
-      result =
-          EscapeKeyword(ConvertCase(s, casing, Case::kLowerCamel, from_idl));
+      return EscapeKeyword(ConvertCase(s, casing, Case::kLowerCamel));
     }
-
-    return result;
   }
 
   // Denamespaces a string (e.g. The.Quick.Brown.Fox) by returning the last part

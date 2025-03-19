@@ -1,8 +1,17 @@
 #ifndef FLATBUFFERS_INCLUDE_CODEGEN_IDL_NAMER_H_
 #define FLATBUFFERS_INCLUDE_CODEGEN_IDL_NAMER_H_
 
+#include <iostream>
+
 #include "codegen/namer.h"
+#include "flatbuffers/base.h"
 #include "flatbuffers/idl.h"
+#include "flatbuffers/options.h"
+
+inline flatbuffers::Case EffectiveCase(flatbuffers::Case c) {
+  const bool preserve = flatbuffers::global_options.preserve_case;
+  return preserve ? flatbuffers::Case::kKeep : c;
+}
 
 namespace flatbuffers {
 
@@ -26,81 +35,104 @@ class IdlNamer : public Namer {
   using Namer::Variant;
 
   std::string Constant(const FieldDef &d) const {
-    return Constant(d.name, d.declared_in_idl);
+    return Format(d.name, EffectiveCase(config_.constants));
   }
 
   // Types are always structs or enums so we can only expose these two
   // overloads.
   std::string Type(const StructDef &d) const {
-    return Type(d.name, d.declared_in_idl);
+    return Format(d.name, EffectiveCase(config_.types));
   }
   std::string Type(const EnumDef &d) const {
-    return Type(d.name, d.declared_in_idl);
+    return Format(d.name, EffectiveCase(config_.types));
   }
 
-  std::string Function(const Definition &s) const {
-    return Function(s.name, s.declared_in_idl);
+  std::string Function(const Definition &d) const {
+    return Format(d.name, EffectiveCase(config_.functions));
   }
-  std::string Function(const std::string &prefix, const Definition &s) const {
-    return Function(prefix + s.name, s.declared_in_idl);
+  std::string Function(const std::string &prefix, const Definition &d) const {
+    return Format(prefix + d.name, EffectiveCase(config_.functions));
   }
 
-  std::string Field(const FieldDef &s) const {
-    return Field(s.name, s.declared_in_idl);
+  std::string Field(const FieldDef &d) const {
+    return Format(d.name, EffectiveCase(config_.fields));
   }
-  std::string Field(const FieldDef &d, const std::string &s) const {
-    return Field(d.name + "_" + s, d.declared_in_idl);
+  std::string Field(const FieldDef &d, const std::string &suffix) const {
+    return Format(d.name + "_" + suffix, EffectiveCase(config_.fields));
   }
 
   std::string Variable(const FieldDef &s) const { return Variable(s.name); }
 
   std::string Variable(const StructDef &s) const { return Variable(s.name); }
 
-  std::string Variant(const EnumVal &s) const {
-    return Variant(s.name, s.declared_in_idl);
+  std::string Variant(const EnumVal &v) const {
+    return Format(v.name, EffectiveCase(config_.variants));
   }
   std::string EnumVariant(const EnumDef &e, const EnumVal &v) const {
-    return Type(e) + config_.enum_variant_seperator + Variant(v);
+    return Format(e.name, EffectiveCase(config_.types)) +
+           config_.enum_variant_seperator +
+           Format(v.name, EffectiveCase(config_.variants));
   }
 
-  std::string ObjectType(const StructDef &d ) const {
-    return ObjectType(d.name, d.declared_in_idl);
+  std::string ObjectType(const StructDef &d) const {
+    return config_.object_prefix +
+           Format(d.name, EffectiveCase(config_.types)) + config_.object_suffix;
   }
-  std::string ObjectType(const EnumDef &d ) const {
-    return ObjectType(d.name, d.declared_in_idl);
-  }
-
-  std::string Method(const FieldDef &d, const std::string &suffix ) const {
-    return Method(d.name, suffix, d.declared_in_idl);
+  std::string ObjectType(const EnumDef &d) const {
+    return config_.object_prefix +
+           Format(d.name, EffectiveCase(config_.types)) + config_.object_suffix;
   }
 
-  std::string Method(const std::string &prefix, const StructDef &d ) const {
-    return Method(prefix, d.name, d.declared_in_idl);
+  std::string Method(const FieldDef &d) const {
+    return Format(d.name, EffectiveCase(config_.methods));
   }
-  std::string Method(const std::string &prefix, const FieldDef &d ) const {
-    return Method(prefix, d.name, d.declared_in_idl);
+  std::string Method(const FieldDef &d, const std::string &suffix) const {
+    return Format(d.name + "_" + suffix, EffectiveCase(config_.methods));
+  }
+  std::string Method(const std::string &prefix, const StructDef &d) const {
+    return Format(prefix + "_" + d.name, EffectiveCase(config_.methods));
+  }
+  std::string Method(const std::string &prefix, const FieldDef &d) const {
+    return Format(prefix + "_" + d.name, EffectiveCase(config_.methods));
   }
   std::string Method(const std::string &prefix, const FieldDef &d,
-                     const std::string &suffix ) const {
-    return Method(prefix, d.name, suffix, d.declared_in_idl);
+                     const std::string &suffix) const {
+    return Format(prefix + "_" + d.name + "_" + suffix,
+                  EffectiveCase(config_.methods));
+  }
+  std::string Method(const std::string &pre, const std::string &mid,
+                     const std::string &suf) const {
+    return Format(pre + "_" + mid + "_" + suf, EffectiveCase(config_.methods));
   }
 
+  std::string Method(const std::string &pre,
+    const std::string &suf) const {
+return Format(pre + "_" + suf, config_.methods);
+}
+
   std::string Namespace(const struct Namespace &ns) const {
-    return Namespace(ns.components);
+    std::string result;
+    for (auto &comp : ns.components) {
+      if (!result.empty()) result += config_.namespace_seperator;
+      result += Format(comp, EffectiveCase(config_.namespaces));
+    }
+    return result;
   }
 
   std::string NamespacedEnumVariant(const EnumDef &e, const EnumVal &v) const {
     return NamespacedString(e.defined_namespace, EnumVariant(e, v));
   }
 
-  std::string NamespacedType(const Definition &def) const {
-    return NamespacedString(def.defined_namespace,
-                            Type(def.name, def.declared_in_idl));
+  std::string NamespacedType(const Definition &d) const {
+    return NamespacedString(d.defined_namespace,
+                            Format(d.name, EffectiveCase(config_.types)));
   }
 
-  std::string NamespacedObjectType(const Definition &def) const {
-    return NamespacedString(def.defined_namespace,
-                            ObjectType(def.name, def.declared_in_idl));
+  std::string NamespacedObjectType(const Definition &d) const {
+    return NamespacedString(d.defined_namespace,
+                            config_.object_prefix +
+                                Format(d.name, EffectiveCase(config_.types)) +
+                                config_.object_suffix);
   }
 
   std::string Directories(const struct Namespace &ns,

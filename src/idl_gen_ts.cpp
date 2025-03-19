@@ -1069,7 +1069,7 @@ class TsGenerator : public BaseGenerator {
 
         ret = "(() => {\n";
         ret += "      const temp = " + conversion_function + "(this." +
-               namer_.Method(field_name, "Type") + "(), " +
+               namer_.Method(field_name, "type") + "(), " +
                field_binded_method + ");\n";
         ret += "      if(temp === null) { return null; }\n";
         ret += union_has_string
@@ -1086,11 +1086,11 @@ class TsGenerator : public BaseGenerator {
                                     parser_.opts, *union_type.enum_def) +
                ")[] = [];\n";
         ret += "    for(let targetEnumIndex = 0; targetEnumIndex < this." +
-               namer_.Method(field_name, "TypeLength") + "()" +
+               namer_.Method(field_name, "typeLength") + "()" +
                "; "
                "++targetEnumIndex) {\n";
         ret += "      const targetEnum = this." +
-               namer_.Method(field_name, "Type") + "(targetEnumIndex);\n";
+               namer_.Method(field_name, "type") + "(targetEnumIndex);\n";
         ret += "      if(targetEnum === null || " + enum_type +
                "[targetEnum!] === 'NONE') { "
                "continue; }\n\n";

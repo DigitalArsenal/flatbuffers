@@ -49,7 +49,7 @@ static startTestSimpleTableWithEnum(builder:flatbuffers.Builder) {
   builder.startObject(1);
 }
 
-static addColor(builder:flatbuffers.Builder, color:Color) {
+static add_color(builder:flatbuffers.Builder, color:Color) {
   builder.addFieldInt8(0, color, Color.Green);
 }
 
@@ -60,7 +60,7 @@ static endTestSimpleTableWithEnum(builder:flatbuffers.Builder):flatbuffers.Offse
 
 static createTestSimpleTableWithEnum(builder:flatbuffers.Builder, color:Color):flatbuffers.Offset {
   TestSimpleTableWithEnum.startTestSimpleTableWithEnum(builder);
-  TestSimpleTableWithEnum.addColor(builder, color);
+  TestSimpleTableWithEnum.add_color(builder, color);
   return TestSimpleTableWithEnum.endTestSimpleTableWithEnum(builder);
 }
 

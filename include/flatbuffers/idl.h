@@ -301,8 +301,7 @@ struct Definition {
         serialized_location(0),
         index(-1),
         refcount(1),
-        declaration_file(nullptr),
-        declared_in_idl(true) {}
+        declaration_file(nullptr) {}
 
   flatbuffers::Offset<
       flatbuffers::Vector<flatbuffers::Offset<reflection::KeyValue>>>
@@ -323,7 +322,6 @@ struct Definition {
   int index;  // Inside the vector it is stored.
   int refcount;
   const std::string *declaration_file;
-  bool declared_in_idl;
 };
 
 struct FieldDef : public Definition {
@@ -450,7 +448,6 @@ struct EnumVal {
   std::vector<std::string> doc_comment;
   Type union_type;
   SymbolTable<Value> attributes;
-  bool declared_in_idl;
 
  private:
   friend EnumDef;
@@ -458,9 +455,9 @@ struct EnumVal {
   friend bool operator==(const EnumVal &lhs, const EnumVal &rhs);
 
   EnumVal(const std::string &_name, int64_t _val)
-      : name(_name), declared_in_idl(false), value(_val) {}
+      : name(_name), value(_val) {}
 
-  EnumVal() : name(), declared_in_idl(false), value(0) {}
+  EnumVal() : name(), value(0) {}
 
   int64_t value;
 };

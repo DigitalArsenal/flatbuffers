@@ -189,12 +189,12 @@ v8(index: number):number|null {
   return offset ? this.bb!.readInt8(this.bb!.__vector(this.bb_pos + offset) + index) : 0;
 }
 
-v8Length():number {
+v8_Length():number {
   const offset = this.bb!.__offset(this.bb_pos, 24);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
-v8Array():Int8Array|null {
+v8_Array():Int8Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 24);
   return offset ? new Int8Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
 }
@@ -204,12 +204,12 @@ vf64(index: number):number|null {
   return offset ? this.bb!.readFloat64(this.bb!.__vector(this.bb_pos + offset) + index * 8) : 0;
 }
 
-vf64Length():number {
+vf64_Length():number {
   const offset = this.bb!.__offset(this.bb_pos, 26);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
-vf64Array():Float64Array|null {
+vf64_Array():Float64Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 26);
   return offset ? new Float64Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
 }
@@ -222,56 +222,56 @@ static startTypeAliases(builder:flatbuffers.Builder) {
   builder.startObject(12);
 }
 
-static addI8(builder:flatbuffers.Builder, i8:number) {
+static add_i8(builder:flatbuffers.Builder, i8:number) {
   builder.addFieldInt8(0, i8, 0);
 }
 
-static addU8(builder:flatbuffers.Builder, u8:number) {
+static add_u8(builder:flatbuffers.Builder, u8:number) {
   builder.addFieldInt8(1, u8, 0);
 }
 
-static addI16(builder:flatbuffers.Builder, i16:number) {
+static add_i16(builder:flatbuffers.Builder, i16:number) {
   builder.addFieldInt16(2, i16, 0);
 }
 
-static addU16(builder:flatbuffers.Builder, u16:number) {
+static add_u16(builder:flatbuffers.Builder, u16:number) {
   builder.addFieldInt16(3, u16, 0);
 }
 
-static addI32(builder:flatbuffers.Builder, i32:number) {
+static add_i32(builder:flatbuffers.Builder, i32:number) {
   builder.addFieldInt32(4, i32, 0);
 }
 
-static addU32(builder:flatbuffers.Builder, u32:number) {
+static add_u32(builder:flatbuffers.Builder, u32:number) {
   builder.addFieldInt32(5, u32, 0);
 }
 
-static addI64(builder:flatbuffers.Builder, i64:bigint) {
+static add_i64(builder:flatbuffers.Builder, i64:bigint) {
   builder.addFieldInt64(6, i64, BigInt('0'));
 }
 
-static addU64(builder:flatbuffers.Builder, u64:bigint) {
+static add_u64(builder:flatbuffers.Builder, u64:bigint) {
   builder.addFieldInt64(7, u64, BigInt('0'));
 }
 
-static addF32(builder:flatbuffers.Builder, f32:number) {
+static add_f32(builder:flatbuffers.Builder, f32:number) {
   builder.addFieldFloat32(8, f32, 0.0);
 }
 
-static addF64(builder:flatbuffers.Builder, f64:number) {
+static add_f64(builder:flatbuffers.Builder, f64:number) {
   builder.addFieldFloat64(9, f64, 0.0);
 }
 
-static addV8(builder:flatbuffers.Builder, v8Offset:flatbuffers.Offset) {
+static add_v8(builder:flatbuffers.Builder, v8Offset:flatbuffers.Offset) {
   builder.addFieldOffset(10, v8Offset, 0);
 }
 
-static createV8Vector(builder:flatbuffers.Builder, data:number[]|Int8Array):flatbuffers.Offset;
+static create_v8_Vector(builder:flatbuffers.Builder, data:number[]|Int8Array):flatbuffers.Offset;
 /**
  * @deprecated This Uint8Array overload will be removed in the future.
  */
-static createV8Vector(builder:flatbuffers.Builder, data:number[]|Uint8Array):flatbuffers.Offset;
-static createV8Vector(builder:flatbuffers.Builder, data:number[]|Int8Array|Uint8Array):flatbuffers.Offset {
+static create_v8_Vector(builder:flatbuffers.Builder, data:number[]|Uint8Array):flatbuffers.Offset;
+static create_v8_Vector(builder:flatbuffers.Builder, data:number[]|Int8Array|Uint8Array):flatbuffers.Offset {
   builder.startVector(1, data.length, 1);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addInt8(data[i]!);
@@ -279,20 +279,20 @@ static createV8Vector(builder:flatbuffers.Builder, data:number[]|Int8Array|Uint8
   return builder.endVector();
 }
 
-static startV8Vector(builder:flatbuffers.Builder, numElems:number) {
+static start_v8_Vector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(1, numElems, 1);
 }
 
-static addVf64(builder:flatbuffers.Builder, vf64Offset:flatbuffers.Offset) {
+static add_vf64(builder:flatbuffers.Builder, vf64Offset:flatbuffers.Offset) {
   builder.addFieldOffset(11, vf64Offset, 0);
 }
 
-static createVf64Vector(builder:flatbuffers.Builder, data:number[]|Float64Array):flatbuffers.Offset;
+static create_vf64_Vector(builder:flatbuffers.Builder, data:number[]|Float64Array):flatbuffers.Offset;
 /**
  * @deprecated This Uint8Array overload will be removed in the future.
  */
-static createVf64Vector(builder:flatbuffers.Builder, data:number[]|Uint8Array):flatbuffers.Offset;
-static createVf64Vector(builder:flatbuffers.Builder, data:number[]|Float64Array|Uint8Array):flatbuffers.Offset {
+static create_vf64_Vector(builder:flatbuffers.Builder, data:number[]|Uint8Array):flatbuffers.Offset;
+static create_vf64_Vector(builder:flatbuffers.Builder, data:number[]|Float64Array|Uint8Array):flatbuffers.Offset {
   builder.startVector(8, data.length, 8);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addFloat64(data[i]!);
@@ -300,7 +300,7 @@ static createVf64Vector(builder:flatbuffers.Builder, data:number[]|Float64Array|
   return builder.endVector();
 }
 
-static startVf64Vector(builder:flatbuffers.Builder, numElems:number) {
+static start_vf64_Vector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(8, numElems, 8);
 }
 
@@ -311,18 +311,18 @@ static endTypeAliases(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createTypeAliases(builder:flatbuffers.Builder, i8:number, u8:number, i16:number, u16:number, i32:number, u32:number, i64:bigint, u64:bigint, f32:number, f64:number, v8Offset:flatbuffers.Offset, vf64Offset:flatbuffers.Offset):flatbuffers.Offset {
   TypeAliases.startTypeAliases(builder);
-  TypeAliases.addI8(builder, i8);
-  TypeAliases.addU8(builder, u8);
-  TypeAliases.addI16(builder, i16);
-  TypeAliases.addU16(builder, u16);
-  TypeAliases.addI32(builder, i32);
-  TypeAliases.addU32(builder, u32);
-  TypeAliases.addI64(builder, i64);
-  TypeAliases.addU64(builder, u64);
-  TypeAliases.addF32(builder, f32);
-  TypeAliases.addF64(builder, f64);
-  TypeAliases.addV8(builder, v8Offset);
-  TypeAliases.addVf64(builder, vf64Offset);
+  TypeAliases.add_i8(builder, i8);
+  TypeAliases.add_u8(builder, u8);
+  TypeAliases.add_i16(builder, i16);
+  TypeAliases.add_u16(builder, u16);
+  TypeAliases.add_i32(builder, i32);
+  TypeAliases.add_u32(builder, u32);
+  TypeAliases.add_i64(builder, i64);
+  TypeAliases.add_u64(builder, u64);
+  TypeAliases.add_f32(builder, f32);
+  TypeAliases.add_f64(builder, f64);
+  TypeAliases.add_v8(builder, v8Offset);
+  TypeAliases.add_vf64(builder, vf64Offset);
   return TypeAliases.endTypeAliases(builder);
 }
 
@@ -346,8 +346,8 @@ unpack(): TypeAliasesT {
     this.u64(),
     this.f32(),
     this.f64(),
-    this.bb!.createScalarList<number>(this.v8.bind(this), this.v8Length()),
-    this.bb!.createScalarList<number>(this.vf64.bind(this), this.vf64Length())
+    this.bb!.createScalarList<number>(this.v8.bind(this), this.v8_Length()),
+    this.bb!.createScalarList<number>(this.vf64.bind(this), this.vf64_Length())
   );
 }
 
@@ -363,8 +363,8 @@ unpackTo(_o: TypeAliasesT): void {
   _o.u64 = this.u64();
   _o.f32 = this.f32();
   _o.f64 = this.f64();
-  _o.v8 = this.bb!.createScalarList<number>(this.v8.bind(this), this.v8Length());
-  _o.vf64 = this.bb!.createScalarList<number>(this.vf64.bind(this), this.vf64Length());
+  _o.v8 = this.bb!.createScalarList<number>(this.v8.bind(this), this.v8_Length());
+  _o.vf64 = this.bb!.createScalarList<number>(this.vf64.bind(this), this.vf64_Length());
 }
 }
 
@@ -386,8 +386,8 @@ constructor(
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
-  const v8 = TypeAliases.createV8Vector(builder, this.v8);
-  const vf64 = TypeAliases.createVf64Vector(builder, this.vf64);
+  const v8 = TypeAliases.create_v8_Vector(builder, this.v8);
+  const vf64 = TypeAliases.create_vf64_Vector(builder, this.vf64);
 
   return TypeAliases.createTypeAliases(builder,
     this.i8,

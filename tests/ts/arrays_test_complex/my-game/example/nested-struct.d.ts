@@ -7,8 +7,8 @@ export declare class NestedStruct implements flatbuffers.IUnpackableObject<Neste
     __init(i: number, bb: flatbuffers.ByteBuffer): NestedStruct;
     a(index: number): number | null;
     b(): TestEnum;
-    cUnderscore(index: number): TestEnum | null;
-    dOuter(index: number, obj?: OuterStruct): OuterStruct | null;
+    c_underscore(index: number): TestEnum | null;
+    d_outer(index: number, obj?: OuterStruct): OuterStruct | null;
     e(index: number): bigint | null;
     static getFullyQualifiedName(): string;
     static sizeOf(): number;
@@ -19,9 +19,9 @@ export declare class NestedStruct implements flatbuffers.IUnpackableObject<Neste
 export declare class NestedStructT implements flatbuffers.IGeneratedObject {
     a: (number)[];
     b: TestEnum;
-    cUnderscore: (TestEnum)[];
-    dOuter: (OuterStructT)[];
+    c_underscore: (TestEnum)[];
+    d_outer: (OuterStructT)[];
     e: (bigint)[];
-    constructor(a?: (number)[], b?: TestEnum, cUnderscore?: (TestEnum)[], dOuter?: (OuterStructT)[], e?: (bigint)[]);
+    constructor(a?: (number)[], b?: TestEnum, c_underscore?: (TestEnum)[], d_outer?: (OuterStructT)[], e?: (bigint)[]);
     pack(builder: flatbuffers.Builder): flatbuffers.Offset;
 }

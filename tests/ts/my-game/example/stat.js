@@ -52,13 +52,13 @@ export class Stat {
     static startStat(builder) {
         builder.startObject(3);
     }
-    static addId(builder, idOffset) {
+    static add_id(builder, idOffset) {
         builder.addFieldOffset(0, idOffset, 0);
     }
-    static addVal(builder, val) {
+    static add_val(builder, val) {
         builder.addFieldInt64(1, val, BigInt('0'));
     }
-    static addCount(builder, count) {
+    static add_count(builder, count) {
         builder.addFieldInt16(2, count, 0);
     }
     static endStat(builder) {
@@ -67,9 +67,9 @@ export class Stat {
     }
     static createStat(builder, idOffset, val, count) {
         Stat.startStat(builder);
-        Stat.addId(builder, idOffset);
-        Stat.addVal(builder, val);
-        Stat.addCount(builder, count);
+        Stat.add_id(builder, idOffset);
+        Stat.add_val(builder, val);
+        Stat.add_count(builder, count);
         return Stat.endStat(builder);
     }
     serialize() {

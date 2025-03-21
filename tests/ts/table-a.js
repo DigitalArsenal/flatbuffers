@@ -29,7 +29,7 @@ export class TableA {
     static startTableA(builder) {
         builder.startObject(1);
     }
-    static addB(builder, bOffset) {
+    static add_b(builder, bOffset) {
         builder.addFieldOffset(0, bOffset, 0);
     }
     static endTableA(builder) {
@@ -38,7 +38,7 @@ export class TableA {
     }
     static createTableA(builder, bOffset) {
         TableA.startTableA(builder);
-        TableA.addB(builder, bOffset);
+        TableA.add_b(builder, bOffset);
         return TableA.endTableA(builder);
     }
     serialize() {

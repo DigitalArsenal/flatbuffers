@@ -36,7 +36,7 @@ export class C {
     static startC(builder) {
         builder.startObject(1);
     }
-    static addC(builder, c) {
+    static add_c(builder, c) {
         builder.addFieldInt8(0, +c, +false);
     }
     static endC(builder) {
@@ -45,7 +45,7 @@ export class C {
     }
     static createC(builder, c) {
         C.startC(builder);
-        C.addC(builder, c);
+        C.add_c(builder, c);
         return C.endC(builder);
     }
     unpack() {

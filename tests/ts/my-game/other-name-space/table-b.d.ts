@@ -9,7 +9,7 @@ export declare class TableB implements flatbuffers.IUnpackableObject<TableBT> {
     a(obj?: TableA): TableA | null;
     static getFullyQualifiedName(): string;
     static startTableB(builder: flatbuffers.Builder): void;
-    static addA(builder: flatbuffers.Builder, aOffset: flatbuffers.Offset): void;
+    static add_a(builder: flatbuffers.Builder, aOffset: flatbuffers.Offset): void;
     static endTableB(builder: flatbuffers.Builder): flatbuffers.Offset;
     static createTableB(builder: flatbuffers.Builder, aOffset: flatbuffers.Offset): flatbuffers.Offset;
     serialize(): Uint8Array;

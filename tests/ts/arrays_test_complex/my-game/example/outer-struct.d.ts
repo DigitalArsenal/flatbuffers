@@ -6,7 +6,7 @@ export declare class OuterStruct implements flatbuffers.IUnpackableObject<OuterS
     __init(i: number, bb: flatbuffers.ByteBuffer): OuterStruct;
     a(): boolean;
     b(): number;
-    cUnderscore(obj?: InnerStruct): InnerStruct | null;
+    c_underscore(obj?: InnerStruct): InnerStruct | null;
     d(index: number, obj?: InnerStruct): InnerStruct | null;
     e(obj?: InnerStruct): InnerStruct | null;
     f(index: number): number | null;
@@ -19,10 +19,10 @@ export declare class OuterStruct implements flatbuffers.IUnpackableObject<OuterS
 export declare class OuterStructT implements flatbuffers.IGeneratedObject {
     a: boolean;
     b: number;
-    cUnderscore: InnerStructT | null;
+    c_underscore: InnerStructT | null;
     d: (InnerStructT)[];
     e: InnerStructT | null;
     f: (number)[];
-    constructor(a?: boolean, b?: number, cUnderscore?: InnerStructT | null, d?: (InnerStructT)[], e?: InnerStructT | null, f?: (number)[]);
+    constructor(a?: boolean, b?: number, c_underscore?: InnerStructT | null, d?: (InnerStructT)[], e?: InnerStructT | null, f?: (number)[]);
     pack(builder: flatbuffers.Builder): flatbuffers.Offset;
 }

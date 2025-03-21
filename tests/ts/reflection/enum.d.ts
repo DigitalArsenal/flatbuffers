@@ -11,35 +11,35 @@ export declare class Enum implements flatbuffers.IUnpackableObject<EnumT> {
     name(): string | null;
     name(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
     values(index: number, obj?: EnumVal): EnumVal | null;
-    valuesLength(): number;
-    isUnion(): boolean;
+    values_Length(): number;
+    is_union(): boolean;
     mutate_is_union(value: boolean): boolean;
-    underlyingType(obj?: Type): Type | null;
+    underlying_type(obj?: Type): Type | null;
     attributes(index: number, obj?: KeyValue): KeyValue | null;
-    attributesLength(): number;
+    attributes_Length(): number;
     documentation(index: number): string;
     documentation(index: number, optionalEncoding: flatbuffers.Encoding): string | Uint8Array;
-    documentationLength(): number;
+    documentation_Length(): number;
     /**
      * File that this Enum is declared in.
      */
-    declarationFile(): string | null;
-    declarationFile(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
+    declaration_file(): string | null;
+    declaration_file(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
     static getFullyQualifiedName(): string;
     static startEnum(builder: flatbuffers.Builder): void;
-    static addName(builder: flatbuffers.Builder, nameOffset: flatbuffers.Offset): void;
-    static addValues(builder: flatbuffers.Builder, valuesOffset: flatbuffers.Offset): void;
-    static createValuesVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static startValuesVector(builder: flatbuffers.Builder, numElems: number): void;
-    static addIsUnion(builder: flatbuffers.Builder, isUnion: boolean): void;
-    static addUnderlyingType(builder: flatbuffers.Builder, underlyingTypeOffset: flatbuffers.Offset): void;
-    static addAttributes(builder: flatbuffers.Builder, attributesOffset: flatbuffers.Offset): void;
-    static createAttributesVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static startAttributesVector(builder: flatbuffers.Builder, numElems: number): void;
-    static addDocumentation(builder: flatbuffers.Builder, documentationOffset: flatbuffers.Offset): void;
-    static createDocumentationVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static startDocumentationVector(builder: flatbuffers.Builder, numElems: number): void;
-    static addDeclarationFile(builder: flatbuffers.Builder, declarationFileOffset: flatbuffers.Offset): void;
+    static add_name(builder: flatbuffers.Builder, nameOffset: flatbuffers.Offset): void;
+    static add_values(builder: flatbuffers.Builder, valuesOffset: flatbuffers.Offset): void;
+    static create_values_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static start_values_Vector(builder: flatbuffers.Builder, numElems: number): void;
+    static add_is_union(builder: flatbuffers.Builder, isUnion: boolean): void;
+    static add_underlying_type(builder: flatbuffers.Builder, underlyingTypeOffset: flatbuffers.Offset): void;
+    static add_attributes(builder: flatbuffers.Builder, attributesOffset: flatbuffers.Offset): void;
+    static create_attributes_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static start_attributes_Vector(builder: flatbuffers.Builder, numElems: number): void;
+    static add_documentation(builder: flatbuffers.Builder, documentationOffset: flatbuffers.Offset): void;
+    static create_documentation_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static start_documentation_Vector(builder: flatbuffers.Builder, numElems: number): void;
+    static add_declaration_file(builder: flatbuffers.Builder, declarationFileOffset: flatbuffers.Offset): void;
     static endEnum(builder: flatbuffers.Builder): flatbuffers.Offset;
     unpack(): EnumT;
     unpackTo(_o: EnumT): void;
@@ -47,11 +47,11 @@ export declare class Enum implements flatbuffers.IUnpackableObject<EnumT> {
 export declare class EnumT implements flatbuffers.IGeneratedObject {
     name: string | Uint8Array | null;
     values: (EnumValT)[];
-    isUnion: boolean;
-    underlyingType: TypeT | null;
+    is_union: boolean;
+    underlying_type: TypeT | null;
     attributes: (KeyValueT)[];
     documentation: (string)[];
-    declarationFile: string | Uint8Array | null;
-    constructor(name?: string | Uint8Array | null, values?: (EnumValT)[], isUnion?: boolean, underlyingType?: TypeT | null, attributes?: (KeyValueT)[], documentation?: (string)[], declarationFile?: string | Uint8Array | null);
+    declaration_file: string | Uint8Array | null;
+    constructor(name?: string | Uint8Array | null, values?: (EnumValT)[], is_union?: boolean, underlying_type?: TypeT | null, attributes?: (KeyValueT)[], documentation?: (string)[], declaration_file?: string | Uint8Array | null);
     pack(builder: flatbuffers.Builder): flatbuffers.Offset;
 }

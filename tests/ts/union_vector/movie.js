@@ -22,23 +22,23 @@ export class Movie {
     static bufferHasIdentifier(bb) {
         return bb.__has_identifier('MOVI');
     }
-    mainCharacterType() {
+    main_character_type() {
         const offset = this.bb.__offset(this.bb_pos, 4);
         return offset ? this.bb.readUint8(this.bb_pos + offset) : Character.NONE;
     }
-    mainCharacter(obj) {
+    main_character(obj) {
         const offset = this.bb.__offset(this.bb_pos, 6);
         return offset ? this.bb.__union_with_string(obj, this.bb_pos + offset) : null;
     }
-    charactersType(index) {
+    characters_type(index) {
         const offset = this.bb.__offset(this.bb_pos, 8);
         return offset ? this.bb.readUint8(this.bb.__vector(this.bb_pos + offset) + index) : 0;
     }
-    charactersTypeLength() {
+    characters_type_Length() {
         const offset = this.bb.__offset(this.bb_pos, 8);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
-    charactersTypeArray() {
+    characters_type_Array() {
         const offset = this.bb.__offset(this.bb_pos, 8);
         return offset ? new Uint8Array(this.bb.bytes().buffer, this.bb.bytes().byteOffset + this.bb.__vector(this.bb_pos + offset), this.bb.__vector_len(this.bb_pos + offset)) : null;
     }
@@ -46,7 +46,7 @@ export class Movie {
         const offset = this.bb.__offset(this.bb_pos, 10);
         return offset ? this.bb.__union_with_string(obj, this.bb.__vector(this.bb_pos + offset) + index * 4) : null;
     }
-    charactersLength() {
+    characters_Length() {
         const offset = this.bb.__offset(this.bb_pos, 10);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
@@ -56,36 +56,36 @@ export class Movie {
     static startMovie(builder) {
         builder.startObject(4);
     }
-    static addMainCharacterType(builder, mainCharacterType) {
+    static add_main_character_type(builder, mainCharacterType) {
         builder.addFieldInt8(0, mainCharacterType, Character.NONE);
     }
-    static addMainCharacter(builder, mainCharacterOffset) {
+    static add_main_character(builder, mainCharacterOffset) {
         builder.addFieldOffset(1, mainCharacterOffset, 0);
     }
-    static addCharactersType(builder, charactersTypeOffset) {
+    static add_characters_type(builder, charactersTypeOffset) {
         builder.addFieldOffset(2, charactersTypeOffset, 0);
     }
-    static createCharactersTypeVector(builder, data) {
+    static create_characters_type_Vector(builder, data) {
         builder.startVector(1, data.length, 1);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addInt8(data[i]);
         }
         return builder.endVector();
     }
-    static startCharactersTypeVector(builder, numElems) {
+    static start_characters_type_Vector(builder, numElems) {
         builder.startVector(1, numElems, 1);
     }
-    static addCharacters(builder, charactersOffset) {
+    static add_characters(builder, charactersOffset) {
         builder.addFieldOffset(3, charactersOffset, 0);
     }
-    static createCharactersVector(builder, data) {
+    static create_characters_Vector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static startCharactersVector(builder, numElems) {
+    static start_characters_Vector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
     static endMovie(builder) {
@@ -100,15 +100,15 @@ export class Movie {
     }
     static createMovie(builder, mainCharacterType, mainCharacterOffset, charactersTypeOffset, charactersOffset) {
         Movie.startMovie(builder);
-        Movie.addMainCharacterType(builder, mainCharacterType);
-        Movie.addMainCharacter(builder, mainCharacterOffset);
-        Movie.addCharactersType(builder, charactersTypeOffset);
-        Movie.addCharacters(builder, charactersOffset);
+        Movie.add_main_character_type(builder, mainCharacterType);
+        Movie.add_main_character(builder, mainCharacterOffset);
+        Movie.add_characters_type(builder, charactersTypeOffset);
+        Movie.add_characters(builder, charactersOffset);
         return Movie.endMovie(builder);
     }
     unpack() {
-        return new MovieT(this.mainCharacterType(), (() => {
-            const temp = unionToCharacter(this.mainCharacterType(), this.mainCharacter.bind(this));
+        return new MovieT(this.main_character_type(), (() => {
+            const temp = unionToCharacter(this.main_character_type(), this.main_character.bind(this));
             if (temp === null) {
                 return null;
             }
@@ -116,10 +116,10 @@ export class Movie {
                 return temp;
             }
             return temp.unpack();
-        })(), this.bb.createScalarList(this.charactersType.bind(this), this.charactersTypeLength()), (() => {
+        })(), this.bb.createScalarList(this.characters_type.bind(this), this.characters_type_Length()), (() => {
             const ret = [];
-            for (let targetEnumIndex = 0; targetEnumIndex < this.charactersTypeLength(); ++targetEnumIndex) {
-                const targetEnum = this.charactersType(targetEnumIndex);
+            for (let targetEnumIndex = 0; targetEnumIndex < this.characters_type_Length(); ++targetEnumIndex) {
+                const targetEnum = this.characters_type(targetEnumIndex);
                 if (targetEnum === null || Character[targetEnum] === 'NONE') {
                     continue;
                 }
@@ -137,9 +137,9 @@ export class Movie {
         })());
     }
     unpackTo(_o) {
-        _o.mainCharacterType = this.mainCharacterType();
-        _o.mainCharacter = (() => {
-            const temp = unionToCharacter(this.mainCharacterType(), this.mainCharacter.bind(this));
+        _o.main_character_type = this.main_character_type();
+        _o.main_character = (() => {
+            const temp = unionToCharacter(this.main_character_type(), this.main_character.bind(this));
             if (temp === null) {
                 return null;
             }
@@ -148,11 +148,11 @@ export class Movie {
             }
             return temp.unpack();
         })();
-        _o.charactersType = this.bb.createScalarList(this.charactersType.bind(this), this.charactersTypeLength());
+        _o.characters_type = this.bb.createScalarList(this.characters_type.bind(this), this.characters_type_Length());
         _o.characters = (() => {
             const ret = [];
-            for (let targetEnumIndex = 0; targetEnumIndex < this.charactersTypeLength(); ++targetEnumIndex) {
-                const targetEnum = this.charactersType(targetEnumIndex);
+            for (let targetEnumIndex = 0; targetEnumIndex < this.characters_type_Length(); ++targetEnumIndex) {
+                const targetEnum = this.characters_type(targetEnumIndex);
                 if (targetEnum === null || Character[targetEnum] === 'NONE') {
                     continue;
                 }
@@ -171,16 +171,16 @@ export class Movie {
     }
 }
 export class MovieT {
-    constructor(mainCharacterType = Character.NONE, mainCharacter = null, charactersType = [], characters = []) {
-        this.mainCharacterType = mainCharacterType;
-        this.mainCharacter = mainCharacter;
-        this.charactersType = charactersType;
+    constructor(main_character_type = Character.NONE, main_character = null, characters_type = [], characters = []) {
+        this.main_character_type = main_character_type;
+        this.main_character = main_character;
+        this.characters_type = characters_type;
         this.characters = characters;
     }
     pack(builder) {
-        const mainCharacter = builder.createObjectOffset(this.mainCharacter);
-        const charactersType = Movie.createCharactersTypeVector(builder, this.charactersType);
-        const characters = Movie.createCharactersVector(builder, builder.createObjectOffsetList(this.characters));
-        return Movie.createMovie(builder, this.mainCharacterType, mainCharacter, charactersType, characters);
+        const main_character = builder.createObjectOffset(this.main_character);
+        const characters_type = Movie.create_characters_type_Vector(builder, this.characters_type);
+        const characters = Movie.create_characters_Vector(builder, builder.createObjectOffsetList(this.characters));
+        return Movie.createMovie(builder, this.main_character_type, main_character, characters_type, characters);
     }
 }

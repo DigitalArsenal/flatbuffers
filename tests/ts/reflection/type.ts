@@ -25,7 +25,7 @@ static getSizePrefixedRootAsType(bb:flatbuffers.ByteBuffer, obj?:Type):Type {
   return (obj || new Type()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-baseType():BaseType {
+base_type():BaseType {
   const offset = this.bb!.__offset(this.bb_pos, 4);
   return offset ? this.bb!.readInt8(this.bb_pos + offset) : BaseType.None;
 }
@@ -73,7 +73,7 @@ mutate_index(value:number):boolean {
   return true;
 }
 
-fixedLength():number {
+fixed_length():number {
   const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.readUint16(this.bb_pos + offset) : 0;
 }
@@ -92,7 +92,7 @@ mutate_fixed_length(value:number):boolean {
 /**
  * The size (octets) of the `base_type` field.
  */
-baseSize():number {
+base_size():number {
   const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 4;
 }
@@ -111,7 +111,7 @@ mutate_base_size(value:number):boolean {
 /**
  * The size (octets) of the `element` field, if present.
  */
-elementSize():number {
+element_size():number {
   const offset = this.bb!.__offset(this.bb_pos, 14);
   return offset ? this.bb!.readUint32(this.bb_pos + offset) : 0;
 }
@@ -135,27 +135,27 @@ static startType(builder:flatbuffers.Builder) {
   builder.startObject(6);
 }
 
-static addBaseType(builder:flatbuffers.Builder, baseType:BaseType) {
+static add_base_type(builder:flatbuffers.Builder, baseType:BaseType) {
   builder.addFieldInt8(0, baseType, BaseType.None);
 }
 
-static addElement(builder:flatbuffers.Builder, element:BaseType) {
+static add_element(builder:flatbuffers.Builder, element:BaseType) {
   builder.addFieldInt8(1, element, BaseType.None);
 }
 
-static addIndex(builder:flatbuffers.Builder, index:number) {
+static add_index(builder:flatbuffers.Builder, index:number) {
   builder.addFieldInt32(2, index, -1);
 }
 
-static addFixedLength(builder:flatbuffers.Builder, fixedLength:number) {
+static add_fixed_length(builder:flatbuffers.Builder, fixedLength:number) {
   builder.addFieldInt16(3, fixedLength, 0);
 }
 
-static addBaseSize(builder:flatbuffers.Builder, baseSize:number) {
+static add_base_size(builder:flatbuffers.Builder, baseSize:number) {
   builder.addFieldInt32(4, baseSize, 4);
 }
 
-static addElementSize(builder:flatbuffers.Builder, elementSize:number) {
+static add_element_size(builder:flatbuffers.Builder, elementSize:number) {
   builder.addFieldInt32(5, elementSize, 0);
 }
 
@@ -166,56 +166,56 @@ static endType(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createType(builder:flatbuffers.Builder, baseType:BaseType, element:BaseType, index:number, fixedLength:number, baseSize:number, elementSize:number):flatbuffers.Offset {
   Type.startType(builder);
-  Type.addBaseType(builder, baseType);
-  Type.addElement(builder, element);
-  Type.addIndex(builder, index);
-  Type.addFixedLength(builder, fixedLength);
-  Type.addBaseSize(builder, baseSize);
-  Type.addElementSize(builder, elementSize);
+  Type.add_base_type(builder, baseType);
+  Type.add_element(builder, element);
+  Type.add_index(builder, index);
+  Type.add_fixed_length(builder, fixedLength);
+  Type.add_base_size(builder, baseSize);
+  Type.add_element_size(builder, elementSize);
   return Type.endType(builder);
 }
 
 unpack(): TypeT {
   return new TypeT(
-    this.baseType(),
+    this.base_type(),
     this.element(),
     this.index(),
-    this.fixedLength(),
-    this.baseSize(),
-    this.elementSize()
+    this.fixed_length(),
+    this.base_size(),
+    this.element_size()
   );
 }
 
 
 unpackTo(_o: TypeT): void {
-  _o.baseType = this.baseType();
+  _o.base_type = this.base_type();
   _o.element = this.element();
   _o.index = this.index();
-  _o.fixedLength = this.fixedLength();
-  _o.baseSize = this.baseSize();
-  _o.elementSize = this.elementSize();
+  _o.fixed_length = this.fixed_length();
+  _o.base_size = this.base_size();
+  _o.element_size = this.element_size();
 }
 }
 
 export class TypeT implements flatbuffers.IGeneratedObject {
 constructor(
-  public baseType: BaseType = BaseType.None,
+  public base_type: BaseType = BaseType.None,
   public element: BaseType = BaseType.None,
   public index: number = -1,
-  public fixedLength: number = 0,
-  public baseSize: number = 4,
-  public elementSize: number = 0
+  public fixed_length: number = 0,
+  public base_size: number = 4,
+  public element_size: number = 0
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   return Type.createType(builder,
-    this.baseType,
+    this.base_type,
     this.element,
     this.index,
-    this.fixedLength,
-    this.baseSize,
-    this.elementSize
+    this.fixed_length,
+    this.base_size,
+    this.element_size
   );
 }
 }

@@ -9,7 +9,7 @@ export declare class B implements flatbuffers.IUnpackableObject<BT> {
     b(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
     static getFullyQualifiedName(): string;
     static startB(builder: flatbuffers.Builder): void;
-    static addB(builder: flatbuffers.Builder, bOffset: flatbuffers.Offset): void;
+    static add_b(builder: flatbuffers.Builder, bOffset: flatbuffers.Offset): void;
     static endB(builder: flatbuffers.Builder): flatbuffers.Offset;
     static createB(builder: flatbuffers.Builder, bOffset: flatbuffers.Offset): flatbuffers.Offset;
     unpack(): BT;

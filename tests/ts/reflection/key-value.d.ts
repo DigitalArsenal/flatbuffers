@@ -11,8 +11,8 @@ export declare class KeyValue implements flatbuffers.IUnpackableObject<KeyValueT
     value(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
     static getFullyQualifiedName(): string;
     static startKeyValue(builder: flatbuffers.Builder): void;
-    static addKey(builder: flatbuffers.Builder, keyOffset: flatbuffers.Offset): void;
-    static addValue(builder: flatbuffers.Builder, valueOffset: flatbuffers.Offset): void;
+    static add_key(builder: flatbuffers.Builder, keyOffset: flatbuffers.Offset): void;
+    static add_value(builder: flatbuffers.Builder, valueOffset: flatbuffers.Offset): void;
     static endKeyValue(builder: flatbuffers.Builder): flatbuffers.Offset;
     static createKeyValue(builder: flatbuffers.Builder, keyOffset: flatbuffers.Offset, valueOffset: flatbuffers.Offset): flatbuffers.Offset;
     unpack(): KeyValueT;

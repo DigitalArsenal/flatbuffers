@@ -133,7 +133,7 @@ function testBuffer(bb) {
   assert.strictEqual(t.a(), 5);
   assert.strictEqual(t.b(), 6);
 
-  assert.strictEqual(monster.testType(), MyGame.Example.Any.Monster);
+  assert.strictEqual(monster.test_type(), MyGame.Example.Any.Monster);
   var monster2 = new MyGame.Example.Monster();
   assert.strictEqual(monster.test(monster2) != null, true);
   assert.strictEqual(monster2.name(), 'Fred');

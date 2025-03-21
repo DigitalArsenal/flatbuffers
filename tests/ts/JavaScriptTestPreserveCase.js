@@ -88,7 +88,7 @@ function createMonster(fbb) {
   Monster.addHp(fbb, 80);
   Monster.addName(fbb, str);
   Monster.addInventory(fbb, inv);
-  Monster.addTestType(fbb, Any.Monster);
+  Monster.addtest_type(fbb, Any.Monster);
   Monster.addTest(fbb, mon2);
   Monster.addTest4(fbb, test4);
   Monster.addTestarrayofstring(fbb, testArrayOfString);
@@ -154,7 +154,7 @@ function testObjApiUnpack(monster) {
   assert.strictEqual(test3.a, 5);
   assert.strictEqual(test3.b, 6);
 
-  assert.strictEqual(monster.testType, Any.Monster);
+  assert.strictEqual(monster.test_type, Any.Monster);
   let monster2 = monster.test;
   assert.strictEqual(monster2 != null, true);
   assert.strictEqual(monster2 instanceof MonsterT, true);
@@ -199,7 +199,7 @@ function testBuffer(bb) {
   assert.strictEqual(t.a(), 5);
   assert.strictEqual(t.b(), 6);
 
-  assert.strictEqual(monster.testType(), Any.Monster);
+  assert.strictEqual(monster.test_type(), Any.Monster);
   var monster2 = new Monster();
   assert.strictEqual(monster.test(monster2) != null, true);
   assert.strictEqual(monster2.name(), 'Fred');

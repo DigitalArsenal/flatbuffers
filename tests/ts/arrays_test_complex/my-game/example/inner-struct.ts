@@ -27,7 +27,7 @@ c():number {
   return this.bb!.readInt8(this.bb_pos + 21);
 }
 
-dUnderscore():bigint {
+d_underscore():bigint {
   return this.bb!.readInt64(this.bb_pos + 24);
 }
 
@@ -60,7 +60,7 @@ unpack(): InnerStructT {
     this.a(),
     this.bb!.createScalarList<number>(this.b.bind(this), 13),
     this.c(),
-    this.dUnderscore()
+    this.d_underscore()
   );
 }
 
@@ -69,7 +69,7 @@ unpackTo(_o: InnerStructT): void {
   _o.a = this.a();
   _o.b = this.bb!.createScalarList<number>(this.b.bind(this), 13);
   _o.c = this.c();
-  _o.dUnderscore = this.dUnderscore();
+  _o.d_underscore = this.d_underscore();
 }
 }
 
@@ -78,7 +78,7 @@ constructor(
   public a: number = 0.0,
   public b: (number)[] = [],
   public c: number = 0,
-  public dUnderscore: bigint = BigInt('0')
+  public d_underscore: bigint = BigInt('0')
 ){}
 
 
@@ -87,7 +87,7 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
     this.a,
     this.b,
     this.c,
-    this.dUnderscore
+    this.d_underscore
   );
 }
 }

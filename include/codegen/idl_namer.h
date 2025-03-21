@@ -50,6 +50,9 @@ class IdlNamer : public Namer {
   std::string Function(const Definition &d) const {
     return Format(d.name, EffectiveCase(config_.functions));
   }
+  std::string Function(const std::string &name) const override {
+    return Format(name, EffectiveCase(config_.functions));
+  }
   std::string Function(const std::string &prefix, const Definition &d) const {
     return Format(prefix + d.name, EffectiveCase(config_.functions));
   }
@@ -101,14 +104,17 @@ class IdlNamer : public Namer {
                   EffectiveCase(config_.methods));
   }
   std::string Method(const std::string &pre, const std::string &mid,
-                     const std::string &suf) const {
+                     const std::string &suf) const override {
     return Format(pre + "_" + mid + "_" + suf, EffectiveCase(config_.methods));
   }
 
   std::string Method(const std::string &pre,
-    const std::string &suf) const {
-return Format(pre + "_" + suf, config_.methods);
-}
+                     const std::string &suf) const override {
+    return Format(pre + "_" + suf, EffectiveCase(config_.methods));
+  }
+  std::string Method(const std::string &pre, const char *suf) const {
+    return Format(pre + "_" + suf, EffectiveCase(config_.methods));
+  }
 
   std::string Namespace(const struct Namespace &ns) const {
     std::string result;

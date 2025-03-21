@@ -18,7 +18,7 @@ export class InnerStruct {
     c() {
         return this.bb.readInt8(this.bb_pos + 21);
     }
-    dUnderscore() {
+    d_underscore() {
         return this.bb.readInt64(this.bb_pos + 24);
     }
     static getFullyQualifiedName() {
@@ -39,23 +39,23 @@ export class InnerStruct {
         return builder.offset();
     }
     unpack() {
-        return new InnerStructT(this.a(), this.bb.createScalarList(this.b.bind(this), 13), this.c(), this.dUnderscore());
+        return new InnerStructT(this.a(), this.bb.createScalarList(this.b.bind(this), 13), this.c(), this.d_underscore());
     }
     unpackTo(_o) {
         _o.a = this.a();
         _o.b = this.bb.createScalarList(this.b.bind(this), 13);
         _o.c = this.c();
-        _o.dUnderscore = this.dUnderscore();
+        _o.d_underscore = this.d_underscore();
     }
 }
 export class InnerStructT {
-    constructor(a = 0.0, b = [], c = 0, dUnderscore = BigInt('0')) {
+    constructor(a = 0.0, b = [], c = 0, d_underscore = BigInt('0')) {
         this.a = a;
         this.b = b;
         this.c = c;
-        this.dUnderscore = dUnderscore;
+        this.d_underscore = d_underscore;
     }
     pack(builder) {
-        return InnerStruct.createInnerStruct(builder, this.a, this.b, this.c, this.dUnderscore);
+        return InnerStruct.createInnerStruct(builder, this.a, this.b, this.c, this.d_underscore);
     }
 }

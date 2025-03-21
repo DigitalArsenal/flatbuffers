@@ -36,7 +36,7 @@ export class RPCCall {
         const offset = this.bb.__offset(this.bb_pos, 10);
         return offset ? (obj || new KeyValue()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
     }
-    attributesLength() {
+    attributes_Length() {
         const offset = this.bb.__offset(this.bb_pos, 10);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
@@ -44,7 +44,7 @@ export class RPCCall {
         const offset = this.bb.__offset(this.bb_pos, 12);
         return offset ? this.bb.__string(this.bb.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
     }
-    documentationLength() {
+    documentation_Length() {
         const offset = this.bb.__offset(this.bb_pos, 12);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
@@ -54,39 +54,39 @@ export class RPCCall {
     static startRPCCall(builder) {
         builder.startObject(5);
     }
-    static addName(builder, nameOffset) {
+    static add_name(builder, nameOffset) {
         builder.addFieldOffset(0, nameOffset, 0);
     }
-    static addRequest(builder, requestOffset) {
+    static add_request(builder, requestOffset) {
         builder.addFieldOffset(1, requestOffset, 0);
     }
-    static addResponse(builder, responseOffset) {
+    static add_response(builder, responseOffset) {
         builder.addFieldOffset(2, responseOffset, 0);
     }
-    static addAttributes(builder, attributesOffset) {
+    static add_attributes(builder, attributesOffset) {
         builder.addFieldOffset(3, attributesOffset, 0);
     }
-    static createAttributesVector(builder, data) {
+    static create_attributes_Vector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static startAttributesVector(builder, numElems) {
+    static start_attributes_Vector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
-    static addDocumentation(builder, documentationOffset) {
+    static add_documentation(builder, documentationOffset) {
         builder.addFieldOffset(4, documentationOffset, 0);
     }
-    static createDocumentationVector(builder, data) {
+    static create_documentation_Vector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static startDocumentationVector(builder, numElems) {
+    static start_documentation_Vector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
     static endRPCCall(builder) {
@@ -97,14 +97,14 @@ export class RPCCall {
         return offset;
     }
     unpack() {
-        return new RPCCallT(this.name(), (this.request() !== null ? this.request().unpack() : null), (this.response() !== null ? this.response().unpack() : null), this.bb.createObjList(this.attributes.bind(this), this.attributesLength()), this.bb.createScalarList(this.documentation.bind(this), this.documentationLength()));
+        return new RPCCallT(this.name(), (this.request() !== null ? this.request().unpack() : null), (this.response() !== null ? this.response().unpack() : null), this.bb.createObjList(this.attributes.bind(this), this.attributes_Length()), this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length()));
     }
     unpackTo(_o) {
         _o.name = this.name();
         _o.request = (this.request() !== null ? this.request().unpack() : null);
         _o.response = (this.response() !== null ? this.response().unpack() : null);
-        _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributesLength());
-        _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentationLength());
+        _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributes_Length());
+        _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length());
     }
 }
 export class RPCCallT {
@@ -119,14 +119,14 @@ export class RPCCallT {
         const name = (this.name !== null ? builder.createString(this.name) : 0);
         const request = (this.request !== null ? this.request.pack(builder) : 0);
         const response = (this.response !== null ? this.response.pack(builder) : 0);
-        const attributes = RPCCall.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
-        const documentation = RPCCall.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
+        const attributes = RPCCall.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
+        const documentation = RPCCall.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
         RPCCall.startRPCCall(builder);
-        RPCCall.addName(builder, name);
-        RPCCall.addRequest(builder, request);
-        RPCCall.addResponse(builder, response);
-        RPCCall.addAttributes(builder, attributes);
-        RPCCall.addDocumentation(builder, documentation);
+        RPCCall.add_name(builder, name);
+        RPCCall.add_request(builder, request);
+        RPCCall.add_response(builder, response);
+        RPCCall.add_attributes(builder, attributes);
+        RPCCall.add_documentation(builder, documentation);
         return RPCCall.endRPCCall(builder);
     }
 }

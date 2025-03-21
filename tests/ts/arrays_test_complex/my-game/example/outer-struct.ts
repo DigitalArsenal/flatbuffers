@@ -24,7 +24,7 @@ b():number {
   return this.bb!.readFloat64(this.bb_pos + 8);
 }
 
-cUnderscore(obj?:InnerStruct):InnerStruct|null {
+c_underscore(obj?:InnerStruct):InnerStruct|null {
   return (obj || new InnerStruct()).__init(this.bb_pos + 16, this.bb!);
 }
 
@@ -80,7 +80,7 @@ static createOuterStruct(builder:flatbuffers.Builder, a: boolean, b: number, c_u
     item?.a,
     item?.b,
     item?.c,
-    item?.dUnderscore
+    item?.d_underscore
     );
   }
 
@@ -106,7 +106,7 @@ unpack(): OuterStructT {
   return new OuterStructT(
     this.a(),
     this.b(),
-    (this.cUnderscore() !== null ? this.cUnderscore()!.unpack() : null),
+    (this.c_underscore() !== null ? this.c_underscore()!.unpack() : null),
     this.bb!.createObjList<InnerStruct, InnerStructT>(this.d.bind(this), 3),
     (this.e() !== null ? this.e()!.unpack() : null),
     this.bb!.createScalarList<number>(this.f.bind(this), 4)
@@ -117,7 +117,7 @@ unpack(): OuterStructT {
 unpackTo(_o: OuterStructT): void {
   _o.a = this.a();
   _o.b = this.b();
-  _o.cUnderscore = (this.cUnderscore() !== null ? this.cUnderscore()!.unpack() : null);
+  _o.c_underscore = (this.c_underscore() !== null ? this.c_underscore()!.unpack() : null);
   _o.d = this.bb!.createObjList<InnerStruct, InnerStructT>(this.d.bind(this), 3);
   _o.e = (this.e() !== null ? this.e()!.unpack() : null);
   _o.f = this.bb!.createScalarList<number>(this.f.bind(this), 4);
@@ -128,7 +128,7 @@ export class OuterStructT implements flatbuffers.IGeneratedObject {
 constructor(
   public a: boolean = false,
   public b: number = 0.0,
-  public cUnderscore: InnerStructT|null = null,
+  public c_underscore: InnerStructT|null = null,
   public d: (InnerStructT)[] = [],
   public e: InnerStructT|null = null,
   public f: (number)[] = []
@@ -139,15 +139,15 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   return OuterStruct.createOuterStruct(builder,
     this.a,
     this.b,
-    (this.cUnderscore?.a ?? 0),
-    (this.cUnderscore?.b ?? []),
-    (this.cUnderscore?.c ?? 0),
-    (this.cUnderscore?.dUnderscore ?? BigInt(0)),
+    (this.c_underscore?.a ?? 0),
+    (this.c_underscore?.b ?? []),
+    (this.c_underscore?.c ?? 0),
+    (this.c_underscore?.d_underscore ?? BigInt(0)),
     this.d,
     (this.e?.a ?? 0),
     (this.e?.b ?? []),
     (this.e?.c ?? 0),
-    (this.e?.dUnderscore ?? BigInt(0)),
+    (this.e?.d_underscore ?? BigInt(0)),
     this.f
   );
 }

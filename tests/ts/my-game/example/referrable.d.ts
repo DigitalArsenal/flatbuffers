@@ -9,7 +9,7 @@ export declare class Referrable implements flatbuffers.IUnpackableObject<Referra
     mutate_id(value: bigint): boolean;
     static getFullyQualifiedName(): string;
     static startReferrable(builder: flatbuffers.Builder): void;
-    static addId(builder: flatbuffers.Builder, id: bigint): void;
+    static add_id(builder: flatbuffers.Builder, id: bigint): void;
     static endReferrable(builder: flatbuffers.Builder): flatbuffers.Offset;
     static createReferrable(builder: flatbuffers.Builder, id: bigint): flatbuffers.Offset;
     serialize(): Uint8Array;

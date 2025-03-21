@@ -25,11 +25,11 @@ b():TestEnum {
   return this.bb!.readInt8(this.bb_pos + 8);
 }
 
-cUnderscore(index: number):TestEnum|null {
+c_underscore(index: number):TestEnum|null {
     return this.bb!.readInt8(this.bb_pos + 9 + index);
 }
 
-dOuter(index: number, obj?:OuterStruct):OuterStruct|null {
+d_outer(index: number, obj?:OuterStruct):OuterStruct|null {
     return (obj || new OuterStruct()).__init(this.bb_pos + 16 + index * 208, this.bb!);
 }
 
@@ -64,15 +64,15 @@ static createNestedStruct(builder:flatbuffers.Builder, a: number[]|null, b: Test
     OuterStruct.createOuterStruct(builder,
     item?.a,
     item?.b,
-    (item?.cUnderscore?.a ?? 0),
-    (item?.cUnderscore?.b ?? []),
-    (item?.cUnderscore?.c ?? 0),
-    (item?.cUnderscore?.dUnderscore ?? BigInt(0)),
+    (item?.c_underscore?.a ?? 0),
+    (item?.c_underscore?.b ?? []),
+    (item?.c_underscore?.c ?? 0),
+    (item?.c_underscore?.d_underscore ?? BigInt(0)),
     item?.d,
     (item?.e?.a ?? 0),
     (item?.e?.b ?? []),
     (item?.e?.c ?? 0),
-    (item?.e?.dUnderscore ?? BigInt(0)),
+    (item?.e?.d_underscore ?? BigInt(0)),
     item?.f
     );
   }
@@ -99,8 +99,8 @@ unpack(): NestedStructT {
   return new NestedStructT(
     this.bb!.createScalarList<number>(this.a.bind(this), 2),
     this.b(),
-    this.bb!.createScalarList<TestEnum>(this.cUnderscore.bind(this), 2),
-    this.bb!.createObjList<OuterStruct, OuterStructT>(this.dOuter.bind(this), 5),
+    this.bb!.createScalarList<TestEnum>(this.c_underscore.bind(this), 2),
+    this.bb!.createObjList<OuterStruct, OuterStructT>(this.d_outer.bind(this), 5),
     this.bb!.createScalarList<bigint>(this.e.bind(this), 2)
   );
 }
@@ -109,8 +109,8 @@ unpack(): NestedStructT {
 unpackTo(_o: NestedStructT): void {
   _o.a = this.bb!.createScalarList<number>(this.a.bind(this), 2);
   _o.b = this.b();
-  _o.cUnderscore = this.bb!.createScalarList<TestEnum>(this.cUnderscore.bind(this), 2);
-  _o.dOuter = this.bb!.createObjList<OuterStruct, OuterStructT>(this.dOuter.bind(this), 5);
+  _o.c_underscore = this.bb!.createScalarList<TestEnum>(this.c_underscore.bind(this), 2);
+  _o.d_outer = this.bb!.createObjList<OuterStruct, OuterStructT>(this.d_outer.bind(this), 5);
   _o.e = this.bb!.createScalarList<bigint>(this.e.bind(this), 2);
 }
 }
@@ -119,8 +119,8 @@ export class NestedStructT implements flatbuffers.IGeneratedObject {
 constructor(
   public a: (number)[] = [],
   public b: TestEnum = TestEnum.A,
-  public cUnderscore: (TestEnum)[] = [TestEnum.A, TestEnum.A],
-  public dOuter: (OuterStructT)[] = [],
+  public c_underscore: (TestEnum)[] = [TestEnum.A, TestEnum.A],
+  public d_outer: (OuterStructT)[] = [],
   public e: (bigint)[] = []
 ){}
 
@@ -129,8 +129,8 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   return NestedStruct.createNestedStruct(builder,
     this.a,
     this.b,
-    this.cUnderscore,
-    this.dOuter,
+    this.c_underscore,
+    this.d_outer,
     this.e
   );
 }

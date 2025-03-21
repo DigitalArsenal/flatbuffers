@@ -9,7 +9,7 @@ export class BookReader {
         this.bb = bb;
         return this;
     }
-    booksRead() {
+    books_read() {
         return this.bb.readInt32(this.bb_pos);
     }
     mutate_books_read(value) {
@@ -28,17 +28,17 @@ export class BookReader {
         return builder.offset();
     }
     unpack() {
-        return new BookReaderT(this.booksRead());
+        return new BookReaderT(this.books_read());
     }
     unpackTo(_o) {
-        _o.booksRead = this.booksRead();
+        _o.books_read = this.books_read();
     }
 }
 export class BookReaderT {
-    constructor(booksRead = 0) {
-        this.booksRead = booksRead;
+    constructor(books_read = 0) {
+        this.books_read = books_read;
     }
     pack(builder) {
-        return BookReader.createBookReader(builder, this.booksRead);
+        return BookReader.createBookReader(builder, this.books_read);
     }
 }

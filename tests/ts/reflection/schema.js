@@ -29,7 +29,7 @@ export class Schema {
         const offset = this.bb.__offset(this.bb_pos, 4);
         return offset ? (obj || new Object_()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
     }
-    objectsLength() {
+    objects_Length() {
         const offset = this.bb.__offset(this.bb_pos, 4);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
@@ -37,19 +37,19 @@ export class Schema {
         const offset = this.bb.__offset(this.bb_pos, 6);
         return offset ? (obj || new Enum()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
     }
-    enumsLength() {
+    enums_Length() {
         const offset = this.bb.__offset(this.bb_pos, 6);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
-    fileIdent(optionalEncoding) {
+    file_ident(optionalEncoding) {
         const offset = this.bb.__offset(this.bb_pos, 8);
         return offset ? this.bb.__string(this.bb_pos + offset, optionalEncoding) : null;
     }
-    fileExt(optionalEncoding) {
+    file_ext(optionalEncoding) {
         const offset = this.bb.__offset(this.bb_pos, 10);
         return offset ? this.bb.__string(this.bb_pos + offset, optionalEncoding) : null;
     }
-    rootTable(obj) {
+    root_table(obj) {
         const offset = this.bb.__offset(this.bb_pos, 12);
         return offset ? (obj || new Object_()).__init(this.bb.__indirect(this.bb_pos + offset), this.bb) : null;
     }
@@ -57,11 +57,11 @@ export class Schema {
         const offset = this.bb.__offset(this.bb_pos, 14);
         return offset ? (obj || new Service()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
     }
-    servicesLength() {
+    services_Length() {
         const offset = this.bb.__offset(this.bb_pos, 14);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
-    advancedFeatures() {
+    advanced_features() {
         const offset = this.bb.__offset(this.bb_pos, 16);
         return offset ? this.bb.readUint64(this.bb_pos + offset) : BigInt('0');
     }
@@ -77,11 +77,11 @@ export class Schema {
      * All the files used in this compilation. Files are relative to where
      * flatc was invoked.
      */
-    fbsFiles(index, obj) {
+    fbs_files(index, obj) {
         const offset = this.bb.__offset(this.bb_pos, 18);
         return offset ? (obj || new SchemaFile()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
     }
-    fbsFilesLength() {
+    fbs_files_Length() {
         const offset = this.bb.__offset(this.bb_pos, 18);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
@@ -91,68 +91,68 @@ export class Schema {
     static startSchema(builder) {
         builder.startObject(8);
     }
-    static addObjects(builder, objectsOffset) {
+    static add_objects(builder, objectsOffset) {
         builder.addFieldOffset(0, objectsOffset, 0);
     }
-    static createObjectsVector(builder, data) {
+    static create_objects_Vector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static startObjectsVector(builder, numElems) {
+    static start_objects_Vector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
-    static addEnums(builder, enumsOffset) {
+    static add_enums(builder, enumsOffset) {
         builder.addFieldOffset(1, enumsOffset, 0);
     }
-    static createEnumsVector(builder, data) {
+    static create_enums_Vector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static startEnumsVector(builder, numElems) {
+    static start_enums_Vector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
-    static addFileIdent(builder, fileIdentOffset) {
+    static add_file_ident(builder, fileIdentOffset) {
         builder.addFieldOffset(2, fileIdentOffset, 0);
     }
-    static addFileExt(builder, fileExtOffset) {
+    static add_file_ext(builder, fileExtOffset) {
         builder.addFieldOffset(3, fileExtOffset, 0);
     }
-    static addRootTable(builder, rootTableOffset) {
+    static add_root_table(builder, rootTableOffset) {
         builder.addFieldOffset(4, rootTableOffset, 0);
     }
-    static addServices(builder, servicesOffset) {
+    static add_services(builder, servicesOffset) {
         builder.addFieldOffset(5, servicesOffset, 0);
     }
-    static createServicesVector(builder, data) {
+    static create_services_Vector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static startServicesVector(builder, numElems) {
+    static start_services_Vector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
-    static addAdvancedFeatures(builder, advancedFeatures) {
+    static add_advanced_features(builder, advancedFeatures) {
         builder.addFieldInt64(6, advancedFeatures, BigInt('0'));
     }
-    static addFbsFiles(builder, fbsFilesOffset) {
+    static add_fbs_files(builder, fbsFilesOffset) {
         builder.addFieldOffset(7, fbsFilesOffset, 0);
     }
-    static createFbsFilesVector(builder, data) {
+    static create_fbs_files_Vector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static startFbsFilesVector(builder, numElems) {
+    static start_fbs_files_Vector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
     static endSchema(builder) {
@@ -168,47 +168,47 @@ export class Schema {
         builder.finish(offset, 'BFBS', true);
     }
     unpack() {
-        return new SchemaT(this.bb.createObjList(this.objects.bind(this), this.objectsLength()), this.bb.createObjList(this.enums.bind(this), this.enumsLength()), this.fileIdent(), this.fileExt(), (this.rootTable() !== null ? this.rootTable().unpack() : null), this.bb.createObjList(this.services.bind(this), this.servicesLength()), this.advancedFeatures(), this.bb.createObjList(this.fbsFiles.bind(this), this.fbsFilesLength()));
+        return new SchemaT(this.bb.createObjList(this.objects.bind(this), this.objects_Length()), this.bb.createObjList(this.enums.bind(this), this.enums_Length()), this.file_ident(), this.file_ext(), (this.root_table() !== null ? this.root_table().unpack() : null), this.bb.createObjList(this.services.bind(this), this.services_Length()), this.advanced_features(), this.bb.createObjList(this.fbs_files.bind(this), this.fbs_files_Length()));
     }
     unpackTo(_o) {
-        _o.objects = this.bb.createObjList(this.objects.bind(this), this.objectsLength());
-        _o.enums = this.bb.createObjList(this.enums.bind(this), this.enumsLength());
-        _o.fileIdent = this.fileIdent();
-        _o.fileExt = this.fileExt();
-        _o.rootTable = (this.rootTable() !== null ? this.rootTable().unpack() : null);
-        _o.services = this.bb.createObjList(this.services.bind(this), this.servicesLength());
-        _o.advancedFeatures = this.advancedFeatures();
-        _o.fbsFiles = this.bb.createObjList(this.fbsFiles.bind(this), this.fbsFilesLength());
+        _o.objects = this.bb.createObjList(this.objects.bind(this), this.objects_Length());
+        _o.enums = this.bb.createObjList(this.enums.bind(this), this.enums_Length());
+        _o.file_ident = this.file_ident();
+        _o.file_ext = this.file_ext();
+        _o.root_table = (this.root_table() !== null ? this.root_table().unpack() : null);
+        _o.services = this.bb.createObjList(this.services.bind(this), this.services_Length());
+        _o.advanced_features = this.advanced_features();
+        _o.fbs_files = this.bb.createObjList(this.fbs_files.bind(this), this.fbs_files_Length());
     }
 }
 export class SchemaT {
-    constructor(objects = [], enums = [], fileIdent = null, fileExt = null, rootTable = null, services = [], advancedFeatures = BigInt('0'), fbsFiles = []) {
+    constructor(objects = [], enums = [], file_ident = null, file_ext = null, root_table = null, services = [], advanced_features = BigInt('0'), fbs_files = []) {
         this.objects = objects;
         this.enums = enums;
-        this.fileIdent = fileIdent;
-        this.fileExt = fileExt;
-        this.rootTable = rootTable;
+        this.file_ident = file_ident;
+        this.file_ext = file_ext;
+        this.root_table = root_table;
         this.services = services;
-        this.advancedFeatures = advancedFeatures;
-        this.fbsFiles = fbsFiles;
+        this.advanced_features = advanced_features;
+        this.fbs_files = fbs_files;
     }
     pack(builder) {
-        const objects = Schema.createObjectsVector(builder, builder.createObjectOffsetList(this.objects));
-        const enums = Schema.createEnumsVector(builder, builder.createObjectOffsetList(this.enums));
-        const fileIdent = (this.fileIdent !== null ? builder.createString(this.fileIdent) : 0);
-        const fileExt = (this.fileExt !== null ? builder.createString(this.fileExt) : 0);
-        const rootTable = (this.rootTable !== null ? this.rootTable.pack(builder) : 0);
-        const services = Schema.createServicesVector(builder, builder.createObjectOffsetList(this.services));
-        const fbsFiles = Schema.createFbsFilesVector(builder, builder.createObjectOffsetList(this.fbsFiles));
+        const objects = Schema.create_objects_Vector(builder, builder.createObjectOffsetList(this.objects));
+        const enums = Schema.create_enums_Vector(builder, builder.createObjectOffsetList(this.enums));
+        const file_ident = (this.file_ident !== null ? builder.createString(this.file_ident) : 0);
+        const file_ext = (this.file_ext !== null ? builder.createString(this.file_ext) : 0);
+        const root_table = (this.root_table !== null ? this.root_table.pack(builder) : 0);
+        const services = Schema.create_services_Vector(builder, builder.createObjectOffsetList(this.services));
+        const fbs_files = Schema.create_fbs_files_Vector(builder, builder.createObjectOffsetList(this.fbs_files));
         Schema.startSchema(builder);
-        Schema.addObjects(builder, objects);
-        Schema.addEnums(builder, enums);
-        Schema.addFileIdent(builder, fileIdent);
-        Schema.addFileExt(builder, fileExt);
-        Schema.addRootTable(builder, rootTable);
-        Schema.addServices(builder, services);
-        Schema.addAdvancedFeatures(builder, this.advancedFeatures);
-        Schema.addFbsFiles(builder, fbsFiles);
+        Schema.add_objects(builder, objects);
+        Schema.add_enums(builder, enums);
+        Schema.add_file_ident(builder, file_ident);
+        Schema.add_file_ext(builder, file_ext);
+        Schema.add_root_table(builder, root_table);
+        Schema.add_services(builder, services);
+        Schema.add_advanced_features(builder, this.advanced_features);
+        Schema.add_fbs_files(builder, fbs_files);
         return Schema.endSchema(builder);
     }
 }

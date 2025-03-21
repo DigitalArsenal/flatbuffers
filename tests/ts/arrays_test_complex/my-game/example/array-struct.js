@@ -11,10 +11,10 @@ export class ArrayStruct {
         this.bb = bb;
         return this;
     }
-    aUnderscore() {
+    a_underscore() {
         return this.bb.readFloat32(this.bb_pos);
     }
-    bUnderscore(index) {
+    b_underscore(index) {
         return this.bb.readInt32(this.bb_pos + 4 + index * 4);
     }
     c() {
@@ -49,7 +49,7 @@ export class ArrayStruct {
                 item.pack(builder);
                 continue;
             }
-            OuterStruct.createOuterStruct(builder, item?.a, item?.b, (item?.cUnderscore?.a ?? 0), (item?.cUnderscore?.b ?? []), (item?.cUnderscore?.c ?? 0), (item?.cUnderscore?.dUnderscore ?? BigInt(0)), item?.d, (item?.e?.a ?? 0), (item?.e?.b ?? []), (item?.e?.c ?? 0), (item?.e?.dUnderscore ?? BigInt(0)), item?.f);
+            OuterStruct.createOuterStruct(builder, item?.a, item?.b, (item?.c_underscore?.a ?? 0), (item?.c_underscore?.b ?? []), (item?.c_underscore?.c ?? 0), (item?.c_underscore?.d_underscore ?? BigInt(0)), item?.d, (item?.e?.a ?? 0), (item?.e?.b ?? []), (item?.e?.c ?? 0), (item?.e?.d_underscore ?? BigInt(0)), item?.f);
         }
         builder.pad(4);
         builder.writeInt32(e);
@@ -59,7 +59,7 @@ export class ArrayStruct {
                 item.pack(builder);
                 continue;
             }
-            NestedStruct.createNestedStruct(builder, item?.a, item?.b, item?.cUnderscore, item?.dOuter, item?.e);
+            NestedStruct.createNestedStruct(builder, item?.a, item?.b, item?.c_underscore, item?.d_outer, item?.e);
         }
         builder.pad(7);
         builder.writeInt8(c);
@@ -70,11 +70,11 @@ export class ArrayStruct {
         return builder.offset();
     }
     unpack() {
-        return new ArrayStructT(this.aUnderscore(), this.bb.createScalarList(this.bUnderscore.bind(this), 15), this.c(), this.bb.createObjList(this.d.bind(this), 2), this.e(), this.bb.createObjList(this.f.bind(this), 2), this.bb.createScalarList(this.g.bind(this), 2));
+        return new ArrayStructT(this.a_underscore(), this.bb.createScalarList(this.b_underscore.bind(this), 15), this.c(), this.bb.createObjList(this.d.bind(this), 2), this.e(), this.bb.createObjList(this.f.bind(this), 2), this.bb.createScalarList(this.g.bind(this), 2));
     }
     unpackTo(_o) {
-        _o.aUnderscore = this.aUnderscore();
-        _o.bUnderscore = this.bb.createScalarList(this.bUnderscore.bind(this), 15);
+        _o.a_underscore = this.a_underscore();
+        _o.b_underscore = this.bb.createScalarList(this.b_underscore.bind(this), 15);
         _o.c = this.c();
         _o.d = this.bb.createObjList(this.d.bind(this), 2);
         _o.e = this.e();
@@ -83,9 +83,9 @@ export class ArrayStruct {
     }
 }
 export class ArrayStructT {
-    constructor(aUnderscore = 0.0, bUnderscore = [], c = 0, d = [], e = 0, f = [], g = []) {
-        this.aUnderscore = aUnderscore;
-        this.bUnderscore = bUnderscore;
+    constructor(a_underscore = 0.0, b_underscore = [], c = 0, d = [], e = 0, f = [], g = []) {
+        this.a_underscore = a_underscore;
+        this.b_underscore = b_underscore;
         this.c = c;
         this.d = d;
         this.e = e;
@@ -93,6 +93,6 @@ export class ArrayStructT {
         this.g = g;
     }
     pack(builder) {
-        return ArrayStruct.createArrayStruct(builder, this.aUnderscore, this.bUnderscore, this.c, this.d, this.e, this.f, this.g);
+        return ArrayStruct.createArrayStruct(builder, this.a_underscore, this.b_underscore, this.c, this.d, this.e, this.f, this.g);
     }
 }

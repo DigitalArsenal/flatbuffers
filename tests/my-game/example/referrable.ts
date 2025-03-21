@@ -33,7 +33,7 @@ static startReferrable(builder:flatbuffers.Builder) {
   builder.startObject(1);
 }
 
-static addId(builder:flatbuffers.Builder, id:bigint) {
+static add_id(builder:flatbuffers.Builder, id:bigint) {
   builder.addFieldInt64(0, id, BigInt('0'));
 }
 
@@ -44,7 +44,7 @@ static endReferrable(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createReferrable(builder:flatbuffers.Builder, id:bigint):flatbuffers.Offset {
   Referrable.startReferrable(builder);
-  Referrable.addId(builder, id);
+  Referrable.add_id(builder, id);
   return Referrable.endReferrable(builder);
 }
 

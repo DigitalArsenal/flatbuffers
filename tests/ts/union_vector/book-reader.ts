@@ -15,7 +15,7 @@ export class BookReader implements flatbuffers.IUnpackableObject<BookReaderT> {
   return this;
 }
 
-booksRead():number {
+books_read():number {
   return this.bb!.readInt32(this.bb_pos);
 }
 
@@ -41,25 +41,25 @@ static createBookReader(builder:flatbuffers.Builder, books_read: number):flatbuf
 
 unpack(): BookReaderT {
   return new BookReaderT(
-    this.booksRead()
+    this.books_read()
   );
 }
 
 
 unpackTo(_o: BookReaderT): void {
-  _o.booksRead = this.booksRead();
+  _o.books_read = this.books_read();
 }
 }
 
 export class BookReaderT implements flatbuffers.IGeneratedObject {
 constructor(
-  public booksRead: number = 0
+  public books_read: number = 0
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   return BookReader.createBookReader(builder,
-    this.booksRead
+    this.books_read
   );
 }
 }

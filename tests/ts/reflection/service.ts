@@ -38,7 +38,7 @@ calls(index: number, obj?:RPCCall):RPCCall|null {
   return offset ? (obj || new RPCCall()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
-callsLength():number {
+calls_Length():number {
   const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
@@ -48,7 +48,7 @@ attributes(index: number, obj?:KeyValue):KeyValue|null {
   return offset ? (obj || new KeyValue()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
-attributesLength():number {
+attributes_Length():number {
   const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
@@ -60,7 +60,7 @@ documentation(index: number,optionalEncoding?:any):string|Uint8Array|null {
   return offset ? this.bb!.__string(this.bb!.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
 }
 
-documentationLength():number {
+documentation_Length():number {
   const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
@@ -68,9 +68,9 @@ documentationLength():number {
 /**
  * File that this Service is declared in.
  */
-declarationFile():string|null
-declarationFile(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
-declarationFile(optionalEncoding?:any):string|Uint8Array|null {
+declaration_file():string|null
+declaration_file(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+declaration_file(optionalEncoding?:any):string|Uint8Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
@@ -83,15 +83,15 @@ static startService(builder:flatbuffers.Builder) {
   builder.startObject(5);
 }
 
-static addName(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
+static add_name(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
   builder.addFieldOffset(0, nameOffset, 0);
 }
 
-static addCalls(builder:flatbuffers.Builder, callsOffset:flatbuffers.Offset) {
+static add_calls(builder:flatbuffers.Builder, callsOffset:flatbuffers.Offset) {
   builder.addFieldOffset(1, callsOffset, 0);
 }
 
-static createCallsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static create_calls_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -99,15 +99,15 @@ static createCallsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[])
   return builder.endVector();
 }
 
-static startCallsVector(builder:flatbuffers.Builder, numElems:number) {
+static start_calls_Vector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static addAttributes(builder:flatbuffers.Builder, attributesOffset:flatbuffers.Offset) {
+static add_attributes(builder:flatbuffers.Builder, attributesOffset:flatbuffers.Offset) {
   builder.addFieldOffset(2, attributesOffset, 0);
 }
 
-static createAttributesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static create_attributes_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -115,15 +115,15 @@ static createAttributesVector(builder:flatbuffers.Builder, data:flatbuffers.Offs
   return builder.endVector();
 }
 
-static startAttributesVector(builder:flatbuffers.Builder, numElems:number) {
+static start_attributes_Vector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static addDocumentation(builder:flatbuffers.Builder, documentationOffset:flatbuffers.Offset) {
+static add_documentation(builder:flatbuffers.Builder, documentationOffset:flatbuffers.Offset) {
   builder.addFieldOffset(3, documentationOffset, 0);
 }
 
-static createDocumentationVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static create_documentation_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -131,11 +131,11 @@ static createDocumentationVector(builder:flatbuffers.Builder, data:flatbuffers.O
   return builder.endVector();
 }
 
-static startDocumentationVector(builder:flatbuffers.Builder, numElems:number) {
+static start_documentation_Vector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static addDeclarationFile(builder:flatbuffers.Builder, declarationFileOffset:flatbuffers.Offset) {
+static add_declaration_file(builder:flatbuffers.Builder, declarationFileOffset:flatbuffers.Offset) {
   builder.addFieldOffset(4, declarationFileOffset, 0);
 }
 
@@ -147,31 +147,31 @@ static endService(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createService(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset, callsOffset:flatbuffers.Offset, attributesOffset:flatbuffers.Offset, documentationOffset:flatbuffers.Offset, declarationFileOffset:flatbuffers.Offset):flatbuffers.Offset {
   Service.startService(builder);
-  Service.addName(builder, nameOffset);
-  Service.addCalls(builder, callsOffset);
-  Service.addAttributes(builder, attributesOffset);
-  Service.addDocumentation(builder, documentationOffset);
-  Service.addDeclarationFile(builder, declarationFileOffset);
+  Service.add_name(builder, nameOffset);
+  Service.add_calls(builder, callsOffset);
+  Service.add_attributes(builder, attributesOffset);
+  Service.add_documentation(builder, documentationOffset);
+  Service.add_declaration_file(builder, declarationFileOffset);
   return Service.endService(builder);
 }
 
 unpack(): ServiceT {
   return new ServiceT(
     this.name(),
-    this.bb!.createObjList<RPCCall, RPCCallT>(this.calls.bind(this), this.callsLength()),
-    this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributesLength()),
-    this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentationLength()),
-    this.declarationFile()
+    this.bb!.createObjList<RPCCall, RPCCallT>(this.calls.bind(this), this.calls_Length()),
+    this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributes_Length()),
+    this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentation_Length()),
+    this.declaration_file()
   );
 }
 
 
 unpackTo(_o: ServiceT): void {
   _o.name = this.name();
-  _o.calls = this.bb!.createObjList<RPCCall, RPCCallT>(this.calls.bind(this), this.callsLength());
-  _o.attributes = this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributesLength());
-  _o.documentation = this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentationLength());
-  _o.declarationFile = this.declarationFile();
+  _o.calls = this.bb!.createObjList<RPCCall, RPCCallT>(this.calls.bind(this), this.calls_Length());
+  _o.attributes = this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributes_Length());
+  _o.documentation = this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentation_Length());
+  _o.declaration_file = this.declaration_file();
 }
 }
 
@@ -181,23 +181,23 @@ constructor(
   public calls: (RPCCallT)[] = [],
   public attributes: (KeyValueT)[] = [],
   public documentation: (string)[] = [],
-  public declarationFile: string|Uint8Array|null = null
+  public declaration_file: string|Uint8Array|null = null
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const name = (this.name !== null ? builder.createString(this.name!) : 0);
-  const calls = Service.createCallsVector(builder, builder.createObjectOffsetList(this.calls));
-  const attributes = Service.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
-  const documentation = Service.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
-  const declarationFile = (this.declarationFile !== null ? builder.createString(this.declarationFile!) : 0);
+  const calls = Service.create_calls_Vector(builder, builder.createObjectOffsetList(this.calls));
+  const attributes = Service.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
+  const documentation = Service.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
+  const declaration_file = (this.declaration_file !== null ? builder.createString(this.declaration_file!) : 0);
 
   return Service.createService(builder,
     name,
     calls,
     attributes,
     documentation,
-    declarationFile
+    declaration_file
   );
 }
 }

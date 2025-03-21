@@ -9,11 +9,11 @@ export declare class ArrayTable implements flatbuffers.IUnpackableObject<ArrayTa
     static bufferHasIdentifier(bb: flatbuffers.ByteBuffer): boolean;
     a(): string | null;
     a(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
-    cUnderscore(obj?: ArrayStruct): ArrayStruct | null;
+    c_underscore(obj?: ArrayStruct): ArrayStruct | null;
     static getFullyQualifiedName(): string;
     static startArrayTable(builder: flatbuffers.Builder): void;
-    static addA(builder: flatbuffers.Builder, aOffset: flatbuffers.Offset): void;
-    static addCUnderscore(builder: flatbuffers.Builder, cUnderscoreOffset: flatbuffers.Offset): void;
+    static add_a(builder: flatbuffers.Builder, aOffset: flatbuffers.Offset): void;
+    static add_c_underscore(builder: flatbuffers.Builder, cUnderscoreOffset: flatbuffers.Offset): void;
     static endArrayTable(builder: flatbuffers.Builder): flatbuffers.Offset;
     static finishArrayTableBuffer(builder: flatbuffers.Builder, offset: flatbuffers.Offset): void;
     static finishSizePrefixedArrayTableBuffer(builder: flatbuffers.Builder, offset: flatbuffers.Offset): void;
@@ -22,7 +22,7 @@ export declare class ArrayTable implements flatbuffers.IUnpackableObject<ArrayTa
 }
 export declare class ArrayTableT implements flatbuffers.IGeneratedObject {
     a: string | Uint8Array | null;
-    cUnderscore: ArrayStructT | null;
-    constructor(a?: string | Uint8Array | null, cUnderscore?: ArrayStructT | null);
+    c_underscore: ArrayStructT | null;
+    constructor(a?: string | Uint8Array | null, c_underscore?: ArrayStructT | null);
     pack(builder: flatbuffers.Builder): flatbuffers.Offset;
 }

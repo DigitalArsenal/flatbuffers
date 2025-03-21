@@ -48,7 +48,7 @@ attributes(index: number, obj?:KeyValue):KeyValue|null {
   return offset ? (obj || new KeyValue()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
-attributesLength():number {
+attributes_Length():number {
   const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
@@ -60,7 +60,7 @@ documentation(index: number,optionalEncoding?:any):string|Uint8Array|null {
   return offset ? this.bb!.__string(this.bb!.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
 }
 
-documentationLength():number {
+documentation_Length():number {
   const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
@@ -73,23 +73,23 @@ static startRPCCall(builder:flatbuffers.Builder) {
   builder.startObject(5);
 }
 
-static addName(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
+static add_name(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
   builder.addFieldOffset(0, nameOffset, 0);
 }
 
-static addRequest(builder:flatbuffers.Builder, requestOffset:flatbuffers.Offset) {
+static add_request(builder:flatbuffers.Builder, requestOffset:flatbuffers.Offset) {
   builder.addFieldOffset(1, requestOffset, 0);
 }
 
-static addResponse(builder:flatbuffers.Builder, responseOffset:flatbuffers.Offset) {
+static add_response(builder:flatbuffers.Builder, responseOffset:flatbuffers.Offset) {
   builder.addFieldOffset(2, responseOffset, 0);
 }
 
-static addAttributes(builder:flatbuffers.Builder, attributesOffset:flatbuffers.Offset) {
+static add_attributes(builder:flatbuffers.Builder, attributesOffset:flatbuffers.Offset) {
   builder.addFieldOffset(3, attributesOffset, 0);
 }
 
-static createAttributesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static create_attributes_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -97,15 +97,15 @@ static createAttributesVector(builder:flatbuffers.Builder, data:flatbuffers.Offs
   return builder.endVector();
 }
 
-static startAttributesVector(builder:flatbuffers.Builder, numElems:number) {
+static start_attributes_Vector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static addDocumentation(builder:flatbuffers.Builder, documentationOffset:flatbuffers.Offset) {
+static add_documentation(builder:flatbuffers.Builder, documentationOffset:flatbuffers.Offset) {
   builder.addFieldOffset(4, documentationOffset, 0);
 }
 
-static createDocumentationVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static create_documentation_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -113,7 +113,7 @@ static createDocumentationVector(builder:flatbuffers.Builder, data:flatbuffers.O
   return builder.endVector();
 }
 
-static startDocumentationVector(builder:flatbuffers.Builder, numElems:number) {
+static start_documentation_Vector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
@@ -131,8 +131,8 @@ unpack(): RPCCallT {
     this.name(),
     (this.request() !== null ? this.request()!.unpack() : null),
     (this.response() !== null ? this.response()!.unpack() : null),
-    this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributesLength()),
-    this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentationLength())
+    this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributes_Length()),
+    this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentation_Length())
   );
 }
 
@@ -141,8 +141,8 @@ unpackTo(_o: RPCCallT): void {
   _o.name = this.name();
   _o.request = (this.request() !== null ? this.request()!.unpack() : null);
   _o.response = (this.response() !== null ? this.response()!.unpack() : null);
-  _o.attributes = this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributesLength());
-  _o.documentation = this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentationLength());
+  _o.attributes = this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributes_Length());
+  _o.documentation = this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentation_Length());
 }
 }
 
@@ -160,15 +160,15 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const name = (this.name !== null ? builder.createString(this.name!) : 0);
   const request = (this.request !== null ? this.request!.pack(builder) : 0);
   const response = (this.response !== null ? this.response!.pack(builder) : 0);
-  const attributes = RPCCall.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
-  const documentation = RPCCall.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
+  const attributes = RPCCall.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
+  const documentation = RPCCall.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
 
   RPCCall.startRPCCall(builder);
-  RPCCall.addName(builder, name);
-  RPCCall.addRequest(builder, request);
-  RPCCall.addResponse(builder, response);
-  RPCCall.addAttributes(builder, attributes);
-  RPCCall.addDocumentation(builder, documentation);
+  RPCCall.add_name(builder, name);
+  RPCCall.add_request(builder, request);
+  RPCCall.add_response(builder, response);
+  RPCCall.add_attributes(builder, attributes);
+  RPCCall.add_documentation(builder, documentation);
 
   return RPCCall.endRPCCall(builder);
 }

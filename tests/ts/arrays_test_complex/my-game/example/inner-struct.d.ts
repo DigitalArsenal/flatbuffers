@@ -6,7 +6,7 @@ export declare class InnerStruct implements flatbuffers.IUnpackableObject<InnerS
     a(): number;
     b(index: number): number | null;
     c(): number;
-    dUnderscore(): bigint;
+    d_underscore(): bigint;
     static getFullyQualifiedName(): string;
     static sizeOf(): number;
     static createInnerStruct(builder: flatbuffers.Builder, a: number, b: number[] | null, c: number, d_underscore: bigint): flatbuffers.Offset;
@@ -17,7 +17,7 @@ export declare class InnerStructT implements flatbuffers.IGeneratedObject {
     a: number;
     b: (number)[];
     c: number;
-    dUnderscore: bigint;
-    constructor(a?: number, b?: (number)[], c?: number, dUnderscore?: bigint);
+    d_underscore: bigint;
+    constructor(a?: number, b?: (number)[], c?: number, d_underscore?: bigint);
     pack(builder: flatbuffers.Builder): flatbuffers.Offset;
 }

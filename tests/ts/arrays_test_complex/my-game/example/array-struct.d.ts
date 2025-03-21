@@ -5,8 +5,8 @@ export declare class ArrayStruct implements flatbuffers.IUnpackableObject<ArrayS
     bb: flatbuffers.ByteBuffer | null;
     bb_pos: number;
     __init(i: number, bb: flatbuffers.ByteBuffer): ArrayStruct;
-    aUnderscore(): number;
-    bUnderscore(index: number): number | null;
+    a_underscore(): number;
+    b_underscore(index: number): number | null;
     c(): number;
     d(index: number, obj?: NestedStruct): NestedStruct | null;
     e(): number;
@@ -19,13 +19,13 @@ export declare class ArrayStruct implements flatbuffers.IUnpackableObject<ArrayS
     unpackTo(_o: ArrayStructT): void;
 }
 export declare class ArrayStructT implements flatbuffers.IGeneratedObject {
-    aUnderscore: number;
-    bUnderscore: (number)[];
+    a_underscore: number;
+    b_underscore: (number)[];
     c: number;
     d: (NestedStructT)[];
     e: number;
     f: (OuterStructT)[];
     g: (bigint)[];
-    constructor(aUnderscore?: number, bUnderscore?: (number)[], c?: number, d?: (NestedStructT)[], e?: number, f?: (OuterStructT)[], g?: (bigint)[]);
+    constructor(a_underscore?: number, b_underscore?: (number)[], c?: number, d?: (NestedStructT)[], e?: number, f?: (OuterStructT)[], g?: (bigint)[]);
     pack(builder: flatbuffers.Builder): flatbuffers.Offset;
 }

@@ -137,31 +137,31 @@ static startObject(builder:flatbuffers.Builder) {
   builder.startObject(7);
 }
 
-static addReturn(builder:flatbuffers.Builder, return_:number) {
+static add_return(builder:flatbuffers.Builder, return_:number) {
   builder.addFieldInt32(0, return_, 0);
 }
 
-static addIf(builder:flatbuffers.Builder, if_:number) {
+static add_if(builder:flatbuffers.Builder, if_:number) {
   builder.addFieldInt32(1, if_, 0);
 }
 
-static addSwitch(builder:flatbuffers.Builder, switch_:number) {
+static add_switch(builder:flatbuffers.Builder, switch_:number) {
   builder.addFieldInt32(2, switch_, 0);
 }
 
-static addEnum(builder:flatbuffers.Builder, enum_:class_) {
+static add_enum(builder:flatbuffers.Builder, enum_:class_) {
   builder.addFieldInt32(3, enum_, class_.new_);
 }
 
-static addEnum2(builder:flatbuffers.Builder, enum2:foobar_class_) {
+static add_enum2(builder:flatbuffers.Builder, enum2:foobar_class_) {
   builder.addFieldInt32(4, enum2, foobar_class_.arguments_);
 }
 
-static addEnum3(builder:flatbuffers.Builder, enum3:Abc) {
+static add_enum3(builder:flatbuffers.Builder, enum3:Abc) {
   builder.addFieldInt32(5, enum3, Abc.a);
 }
 
-static addReflect(builder:flatbuffers.Builder, reflectOffset:flatbuffers.Offset) {
+static add_reflect(builder:flatbuffers.Builder, reflectOffset:flatbuffers.Offset) {
   builder.addFieldOffset(6, reflectOffset, 0);
 }
 
@@ -211,13 +211,13 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const reflect = (this.reflect !== null ? this.reflect!.pack(builder) : 0);
 
   Object_.startObject(builder);
-  Object_.addReturn(builder, this.return_);
-  Object_.addIf(builder, this.if_);
-  Object_.addSwitch(builder, this.switch_);
-  Object_.addEnum(builder, this.enum_);
-  Object_.addEnum2(builder, this.enum2);
-  Object_.addEnum3(builder, this.enum3);
-  Object_.addReflect(builder, reflect);
+  Object_.add_return(builder, this.return_);
+  Object_.add_if(builder, this.if_);
+  Object_.add_switch(builder, this.switch_);
+  Object_.add_enum(builder, this.enum_);
+  Object_.add_enum2(builder, this.enum2);
+  Object_.add_enum3(builder, this.enum3);
+  Object_.add_reflect(builder, reflect);
 
   return Object_.endObject(builder);
 }

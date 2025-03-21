@@ -27,11 +27,11 @@ export class SchemaFile {
         const offset = this.bb.__offset(this.bb_pos, 4);
         return offset ? this.bb.__string(this.bb_pos + offset, optionalEncoding) : null;
     }
-    includedFilenames(index, optionalEncoding) {
+    included_filenames(index, optionalEncoding) {
         const offset = this.bb.__offset(this.bb_pos, 6);
         return offset ? this.bb.__string(this.bb.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
     }
-    includedFilenamesLength() {
+    included_filenames_Length() {
         const offset = this.bb.__offset(this.bb_pos, 6);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
@@ -41,20 +41,20 @@ export class SchemaFile {
     static startSchemaFile(builder) {
         builder.startObject(2);
     }
-    static addFilename(builder, filenameOffset) {
+    static add_filename(builder, filenameOffset) {
         builder.addFieldOffset(0, filenameOffset, 0);
     }
-    static addIncludedFilenames(builder, includedFilenamesOffset) {
+    static add_included_filenames(builder, includedFilenamesOffset) {
         builder.addFieldOffset(1, includedFilenamesOffset, 0);
     }
-    static createIncludedFilenamesVector(builder, data) {
+    static create_included_filenames_Vector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static startIncludedFilenamesVector(builder, numElems) {
+    static start_included_filenames_Vector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
     static endSchemaFile(builder) {
@@ -64,26 +64,26 @@ export class SchemaFile {
     }
     static createSchemaFile(builder, filenameOffset, includedFilenamesOffset) {
         SchemaFile.startSchemaFile(builder);
-        SchemaFile.addFilename(builder, filenameOffset);
-        SchemaFile.addIncludedFilenames(builder, includedFilenamesOffset);
+        SchemaFile.add_filename(builder, filenameOffset);
+        SchemaFile.add_included_filenames(builder, includedFilenamesOffset);
         return SchemaFile.endSchemaFile(builder);
     }
     unpack() {
-        return new SchemaFileT(this.filename(), this.bb.createScalarList(this.includedFilenames.bind(this), this.includedFilenamesLength()));
+        return new SchemaFileT(this.filename(), this.bb.createScalarList(this.included_filenames.bind(this), this.included_filenames_Length()));
     }
     unpackTo(_o) {
         _o.filename = this.filename();
-        _o.includedFilenames = this.bb.createScalarList(this.includedFilenames.bind(this), this.includedFilenamesLength());
+        _o.included_filenames = this.bb.createScalarList(this.included_filenames.bind(this), this.included_filenames_Length());
     }
 }
 export class SchemaFileT {
-    constructor(filename = null, includedFilenames = []) {
+    constructor(filename = null, included_filenames = []) {
         this.filename = filename;
-        this.includedFilenames = includedFilenames;
+        this.included_filenames = included_filenames;
     }
     pack(builder) {
         const filename = (this.filename !== null ? builder.createString(this.filename) : 0);
-        const includedFilenames = SchemaFile.createIncludedFilenamesVector(builder, builder.createObjectOffsetList(this.includedFilenames));
-        return SchemaFile.createSchemaFile(builder, filename, includedFilenames);
+        const included_filenames = SchemaFile.create_included_filenames_Vector(builder, builder.createObjectOffsetList(this.included_filenames));
+        return SchemaFile.createSchemaFile(builder, filename, included_filenames);
     }
 }

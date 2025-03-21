@@ -16,7 +16,7 @@ export class OuterStruct {
     b() {
         return this.bb.readFloat64(this.bb_pos + 8);
     }
-    cUnderscore(obj) {
+    c_underscore(obj) {
         return (obj || new InnerStruct()).__init(this.bb_pos + 16, this.bb);
     }
     d(index, obj) {
@@ -53,7 +53,7 @@ export class OuterStruct {
                 item.pack(builder);
                 continue;
             }
-            InnerStruct.createInnerStruct(builder, item?.a, item?.b, item?.c, item?.dUnderscore);
+            InnerStruct.createInnerStruct(builder, item?.a, item?.b, item?.c, item?.d_underscore);
         }
         builder.prep(8, 32);
         builder.writeInt64(BigInt(c_underscore_d_underscore ?? 0));
@@ -69,27 +69,27 @@ export class OuterStruct {
         return builder.offset();
     }
     unpack() {
-        return new OuterStructT(this.a(), this.b(), (this.cUnderscore() !== null ? this.cUnderscore().unpack() : null), this.bb.createObjList(this.d.bind(this), 3), (this.e() !== null ? this.e().unpack() : null), this.bb.createScalarList(this.f.bind(this), 4));
+        return new OuterStructT(this.a(), this.b(), (this.c_underscore() !== null ? this.c_underscore().unpack() : null), this.bb.createObjList(this.d.bind(this), 3), (this.e() !== null ? this.e().unpack() : null), this.bb.createScalarList(this.f.bind(this), 4));
     }
     unpackTo(_o) {
         _o.a = this.a();
         _o.b = this.b();
-        _o.cUnderscore = (this.cUnderscore() !== null ? this.cUnderscore().unpack() : null);
+        _o.c_underscore = (this.c_underscore() !== null ? this.c_underscore().unpack() : null);
         _o.d = this.bb.createObjList(this.d.bind(this), 3);
         _o.e = (this.e() !== null ? this.e().unpack() : null);
         _o.f = this.bb.createScalarList(this.f.bind(this), 4);
     }
 }
 export class OuterStructT {
-    constructor(a = false, b = 0.0, cUnderscore = null, d = [], e = null, f = []) {
+    constructor(a = false, b = 0.0, c_underscore = null, d = [], e = null, f = []) {
         this.a = a;
         this.b = b;
-        this.cUnderscore = cUnderscore;
+        this.c_underscore = c_underscore;
         this.d = d;
         this.e = e;
         this.f = f;
     }
     pack(builder) {
-        return OuterStruct.createOuterStruct(builder, this.a, this.b, (this.cUnderscore?.a ?? 0), (this.cUnderscore?.b ?? []), (this.cUnderscore?.c ?? 0), (this.cUnderscore?.dUnderscore ?? BigInt(0)), this.d, (this.e?.a ?? 0), (this.e?.b ?? []), (this.e?.c ?? 0), (this.e?.dUnderscore ?? BigInt(0)), this.f);
+        return OuterStruct.createOuterStruct(builder, this.a, this.b, (this.c_underscore?.a ?? 0), (this.c_underscore?.b ?? []), (this.c_underscore?.c ?? 0), (this.c_underscore?.d_underscore ?? BigInt(0)), this.d, (this.e?.a ?? 0), (this.e?.b ?? []), (this.e?.c ?? 0), (this.e?.d_underscore ?? BigInt(0)), this.f);
     }
 }

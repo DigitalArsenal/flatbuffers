@@ -10,39 +10,39 @@ export declare class Object_ implements flatbuffers.IUnpackableObject<Object_T> 
     name(): string | null;
     name(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
     fields(index: number, obj?: Field): Field | null;
-    fieldsLength(): number;
-    isStruct(): boolean;
+    fields_Length(): number;
+    is_struct(): boolean;
     mutate_is_struct(value: boolean): boolean;
     minalign(): number;
     mutate_minalign(value: number): boolean;
     bytesize(): number;
     mutate_bytesize(value: number): boolean;
     attributes(index: number, obj?: KeyValue): KeyValue | null;
-    attributesLength(): number;
+    attributes_Length(): number;
     documentation(index: number): string;
     documentation(index: number, optionalEncoding: flatbuffers.Encoding): string | Uint8Array;
-    documentationLength(): number;
+    documentation_Length(): number;
     /**
      * File that this Object is declared in.
      */
-    declarationFile(): string | null;
-    declarationFile(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
+    declaration_file(): string | null;
+    declaration_file(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
     static getFullyQualifiedName(): string;
     static startObject(builder: flatbuffers.Builder): void;
-    static addName(builder: flatbuffers.Builder, nameOffset: flatbuffers.Offset): void;
-    static addFields(builder: flatbuffers.Builder, fieldsOffset: flatbuffers.Offset): void;
-    static createFieldsVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static startFieldsVector(builder: flatbuffers.Builder, numElems: number): void;
-    static addIsStruct(builder: flatbuffers.Builder, isStruct: boolean): void;
-    static addMinalign(builder: flatbuffers.Builder, minalign: number): void;
-    static addBytesize(builder: flatbuffers.Builder, bytesize: number): void;
-    static addAttributes(builder: flatbuffers.Builder, attributesOffset: flatbuffers.Offset): void;
-    static createAttributesVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static startAttributesVector(builder: flatbuffers.Builder, numElems: number): void;
-    static addDocumentation(builder: flatbuffers.Builder, documentationOffset: flatbuffers.Offset): void;
-    static createDocumentationVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static startDocumentationVector(builder: flatbuffers.Builder, numElems: number): void;
-    static addDeclarationFile(builder: flatbuffers.Builder, declarationFileOffset: flatbuffers.Offset): void;
+    static add_name(builder: flatbuffers.Builder, nameOffset: flatbuffers.Offset): void;
+    static add_fields(builder: flatbuffers.Builder, fieldsOffset: flatbuffers.Offset): void;
+    static create_fields_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static start_fields_Vector(builder: flatbuffers.Builder, numElems: number): void;
+    static add_is_struct(builder: flatbuffers.Builder, isStruct: boolean): void;
+    static add_minalign(builder: flatbuffers.Builder, minalign: number): void;
+    static add_bytesize(builder: flatbuffers.Builder, bytesize: number): void;
+    static add_attributes(builder: flatbuffers.Builder, attributesOffset: flatbuffers.Offset): void;
+    static create_attributes_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static start_attributes_Vector(builder: flatbuffers.Builder, numElems: number): void;
+    static add_documentation(builder: flatbuffers.Builder, documentationOffset: flatbuffers.Offset): void;
+    static create_documentation_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static start_documentation_Vector(builder: flatbuffers.Builder, numElems: number): void;
+    static add_declaration_file(builder: flatbuffers.Builder, declarationFileOffset: flatbuffers.Offset): void;
     static endObject(builder: flatbuffers.Builder): flatbuffers.Offset;
     static createObject(builder: flatbuffers.Builder, nameOffset: flatbuffers.Offset, fieldsOffset: flatbuffers.Offset, isStruct: boolean, minalign: number, bytesize: number, attributesOffset: flatbuffers.Offset, documentationOffset: flatbuffers.Offset, declarationFileOffset: flatbuffers.Offset): flatbuffers.Offset;
     unpack(): Object_T;
@@ -51,12 +51,12 @@ export declare class Object_ implements flatbuffers.IUnpackableObject<Object_T> 
 export declare class Object_T implements flatbuffers.IGeneratedObject {
     name: string | Uint8Array | null;
     fields: (FieldT)[];
-    isStruct: boolean;
+    is_struct: boolean;
     minalign: number;
     bytesize: number;
     attributes: (KeyValueT)[];
     documentation: (string)[];
-    declarationFile: string | Uint8Array | null;
-    constructor(name?: string | Uint8Array | null, fields?: (FieldT)[], isStruct?: boolean, minalign?: number, bytesize?: number, attributes?: (KeyValueT)[], documentation?: (string)[], declarationFile?: string | Uint8Array | null);
+    declaration_file: string | Uint8Array | null;
+    constructor(name?: string | Uint8Array | null, fields?: (FieldT)[], is_struct?: boolean, minalign?: number, bytesize?: number, attributes?: (KeyValueT)[], documentation?: (string)[], declaration_file?: string | Uint8Array | null);
     pack(builder: flatbuffers.Builder): flatbuffers.Offset;
 }

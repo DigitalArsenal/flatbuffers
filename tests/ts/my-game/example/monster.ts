@@ -1319,7 +1319,7 @@ unpack(): MonsterT {
     this.color(),
     this.test_type(),
     (() => {
-      const temp = unionToAny(this.testType(), this.test.bind(this));
+      const temp = unionToAny(this.test_type(), this.test.bind(this));
       if(temp === null) { return null; }
       return temp.unpack()
   })(),
@@ -1359,13 +1359,13 @@ unpack(): MonsterT {
     this.bb!.createScalarList<bigint>(this.vector_of_non_owning_references.bind(this), this.vector_of_non_owning_references_Length()),
     this.any_unique_type(),
     (() => {
-      const temp = unionToAnyUniqueAliases(this.anyUniqueType(), this.any_unique.bind(this));
+      const temp = unionToAnyUniqueAliases(this.any_unique_type(), this.any_unique.bind(this));
       if(temp === null) { return null; }
       return temp.unpack()
   })(),
     this.any_ambiguous_type(),
     (() => {
-      const temp = unionToAnyAmbiguousAliases(this.anyAmbiguousType(), this.any_ambiguous.bind(this));
+      const temp = unionToAnyAmbiguousAliases(this.any_ambiguous_type(), this.any_ambiguous.bind(this));
       if(temp === null) { return null; }
       return temp.unpack()
   })(),
@@ -1397,7 +1397,7 @@ unpackTo(_o: MonsterT): void {
   _o.color = this.color();
   _o.test_type = this.test_type();
   _o.test = (() => {
-      const temp = unionToAny(this.testType(), this.test.bind(this));
+      const temp = unionToAny(this.test_type(), this.test.bind(this));
       if(temp === null) { return null; }
       return temp.unpack()
   })();
@@ -1437,13 +1437,13 @@ unpackTo(_o: MonsterT): void {
   _o.vector_of_non_owning_references = this.bb!.createScalarList<bigint>(this.vector_of_non_owning_references.bind(this), this.vector_of_non_owning_references_Length());
   _o.any_unique_type = this.any_unique_type();
   _o.any_unique = (() => {
-      const temp = unionToAnyUniqueAliases(this.anyUniqueType(), this.any_unique.bind(this));
+      const temp = unionToAnyUniqueAliases(this.any_unique_type(), this.any_unique.bind(this));
       if(temp === null) { return null; }
       return temp.unpack()
   })();
   _o.any_ambiguous_type = this.any_ambiguous_type();
   _o.any_ambiguous = (() => {
-      const temp = unionToAnyAmbiguousAliases(this.anyAmbiguousType(), this.any_ambiguous.bind(this));
+      const temp = unionToAnyAmbiguousAliases(this.any_ambiguous_type(), this.any_ambiguous.bind(this));
       if(temp === null) { return null; }
       return temp.unpack()
   })();

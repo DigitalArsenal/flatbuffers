@@ -10,30 +10,30 @@ export declare class Service implements flatbuffers.IUnpackableObject<ServiceT> 
     name(): string | null;
     name(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
     calls(index: number, obj?: RPCCall): RPCCall | null;
-    callsLength(): number;
+    calls_Length(): number;
     attributes(index: number, obj?: KeyValue): KeyValue | null;
-    attributesLength(): number;
+    attributes_Length(): number;
     documentation(index: number): string;
     documentation(index: number, optionalEncoding: flatbuffers.Encoding): string | Uint8Array;
-    documentationLength(): number;
+    documentation_Length(): number;
     /**
      * File that this Service is declared in.
      */
-    declarationFile(): string | null;
-    declarationFile(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
+    declaration_file(): string | null;
+    declaration_file(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
     static getFullyQualifiedName(): string;
     static startService(builder: flatbuffers.Builder): void;
-    static addName(builder: flatbuffers.Builder, nameOffset: flatbuffers.Offset): void;
-    static addCalls(builder: flatbuffers.Builder, callsOffset: flatbuffers.Offset): void;
-    static createCallsVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static startCallsVector(builder: flatbuffers.Builder, numElems: number): void;
-    static addAttributes(builder: flatbuffers.Builder, attributesOffset: flatbuffers.Offset): void;
-    static createAttributesVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static startAttributesVector(builder: flatbuffers.Builder, numElems: number): void;
-    static addDocumentation(builder: flatbuffers.Builder, documentationOffset: flatbuffers.Offset): void;
-    static createDocumentationVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static startDocumentationVector(builder: flatbuffers.Builder, numElems: number): void;
-    static addDeclarationFile(builder: flatbuffers.Builder, declarationFileOffset: flatbuffers.Offset): void;
+    static add_name(builder: flatbuffers.Builder, nameOffset: flatbuffers.Offset): void;
+    static add_calls(builder: flatbuffers.Builder, callsOffset: flatbuffers.Offset): void;
+    static create_calls_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static start_calls_Vector(builder: flatbuffers.Builder, numElems: number): void;
+    static add_attributes(builder: flatbuffers.Builder, attributesOffset: flatbuffers.Offset): void;
+    static create_attributes_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static start_attributes_Vector(builder: flatbuffers.Builder, numElems: number): void;
+    static add_documentation(builder: flatbuffers.Builder, documentationOffset: flatbuffers.Offset): void;
+    static create_documentation_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static start_documentation_Vector(builder: flatbuffers.Builder, numElems: number): void;
+    static add_declaration_file(builder: flatbuffers.Builder, declarationFileOffset: flatbuffers.Offset): void;
     static endService(builder: flatbuffers.Builder): flatbuffers.Offset;
     static createService(builder: flatbuffers.Builder, nameOffset: flatbuffers.Offset, callsOffset: flatbuffers.Offset, attributesOffset: flatbuffers.Offset, documentationOffset: flatbuffers.Offset, declarationFileOffset: flatbuffers.Offset): flatbuffers.Offset;
     unpack(): ServiceT;
@@ -44,7 +44,7 @@ export declare class ServiceT implements flatbuffers.IGeneratedObject {
     calls: (RPCCallT)[];
     attributes: (KeyValueT)[];
     documentation: (string)[];
-    declarationFile: string | Uint8Array | null;
-    constructor(name?: string | Uint8Array | null, calls?: (RPCCallT)[], attributes?: (KeyValueT)[], documentation?: (string)[], declarationFile?: string | Uint8Array | null);
+    declaration_file: string | Uint8Array | null;
+    constructor(name?: string | Uint8Array | null, calls?: (RPCCallT)[], attributes?: (KeyValueT)[], documentation?: (string)[], declaration_file?: string | Uint8Array | null);
     pack(builder: flatbuffers.Builder): flatbuffers.Offset;
 }

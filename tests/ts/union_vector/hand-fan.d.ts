@@ -9,7 +9,7 @@ export declare class HandFan implements flatbuffers.IUnpackableObject<HandFanT> 
     mutate_length(value: number): boolean;
     static getFullyQualifiedName(): string;
     static startHandFan(builder: flatbuffers.Builder): void;
-    static addLength(builder: flatbuffers.Builder, length: number): void;
+    static add_length(builder: flatbuffers.Builder, length: number): void;
     static endHandFan(builder: flatbuffers.Builder): flatbuffers.Offset;
     static createHandFan(builder: flatbuffers.Builder, length: number): flatbuffers.Offset;
     unpack(): HandFanT;

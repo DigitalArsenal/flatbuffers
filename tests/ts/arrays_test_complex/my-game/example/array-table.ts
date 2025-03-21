@@ -36,7 +36,7 @@ a(optionalEncoding?:any):string|Uint8Array|null {
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
 
-cUnderscore(obj?:ArrayStruct):ArrayStruct|null {
+c_underscore(obj?:ArrayStruct):ArrayStruct|null {
   const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? (obj || new ArrayStruct()).__init(this.bb_pos + offset, this.bb!) : null;
 }
@@ -49,11 +49,11 @@ static startArrayTable(builder:flatbuffers.Builder) {
   builder.startObject(2);
 }
 
-static addA(builder:flatbuffers.Builder, aOffset:flatbuffers.Offset) {
+static add_a(builder:flatbuffers.Builder, aOffset:flatbuffers.Offset) {
   builder.addFieldOffset(0, aOffset, 0);
 }
 
-static addCUnderscore(builder:flatbuffers.Builder, cUnderscoreOffset:flatbuffers.Offset) {
+static add_c_underscore(builder:flatbuffers.Builder, cUnderscoreOffset:flatbuffers.Offset) {
   builder.addFieldStruct(1, cUnderscoreOffset, 0);
 }
 
@@ -74,21 +74,21 @@ static finishSizePrefixedArrayTableBuffer(builder:flatbuffers.Builder, offset:fl
 unpack(): ArrayTableT {
   return new ArrayTableT(
     this.a(),
-    (this.cUnderscore() !== null ? this.cUnderscore()!.unpack() : null)
+    (this.c_underscore() !== null ? this.c_underscore()!.unpack() : null)
   );
 }
 
 
 unpackTo(_o: ArrayTableT): void {
   _o.a = this.a();
-  _o.cUnderscore = (this.cUnderscore() !== null ? this.cUnderscore()!.unpack() : null);
+  _o.c_underscore = (this.c_underscore() !== null ? this.c_underscore()!.unpack() : null);
 }
 }
 
 export class ArrayTableT implements flatbuffers.IGeneratedObject {
 constructor(
   public a: string|Uint8Array|null = null,
-  public cUnderscore: ArrayStructT|null = null
+  public c_underscore: ArrayStructT|null = null
 ){}
 
 
@@ -96,8 +96,8 @@ pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const a = (this.a !== null ? builder.createString(this.a!) : 0);
 
   ArrayTable.startArrayTable(builder);
-  ArrayTable.addA(builder, a);
-  ArrayTable.addCUnderscore(builder, (this.cUnderscore !== null ? this.cUnderscore!.pack(builder) : 0));
+  ArrayTable.add_a(builder, a);
+  ArrayTable.add_c_underscore(builder, (this.c_underscore !== null ? this.c_underscore!.pack(builder) : 0));
 
   return ArrayTable.endArrayTable(builder);
 }

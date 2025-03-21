@@ -17,10 +17,10 @@ export class NestedStruct {
     b() {
         return this.bb.readInt8(this.bb_pos + 8);
     }
-    cUnderscore(index) {
+    c_underscore(index) {
         return this.bb.readInt8(this.bb_pos + 9 + index);
     }
-    dOuter(index, obj) {
+    d_outer(index, obj) {
         return (obj || new OuterStruct()).__init(this.bb_pos + 16 + index * 208, this.bb);
     }
     e(index) {
@@ -43,7 +43,7 @@ export class NestedStruct {
                 item.pack(builder);
                 continue;
             }
-            OuterStruct.createOuterStruct(builder, item?.a, item?.b, (item?.cUnderscore?.a ?? 0), (item?.cUnderscore?.b ?? []), (item?.cUnderscore?.c ?? 0), (item?.cUnderscore?.dUnderscore ?? BigInt(0)), item?.d, (item?.e?.a ?? 0), (item?.e?.b ?? []), (item?.e?.c ?? 0), (item?.e?.dUnderscore ?? BigInt(0)), item?.f);
+            OuterStruct.createOuterStruct(builder, item?.a, item?.b, (item?.c_underscore?.a ?? 0), (item?.c_underscore?.b ?? []), (item?.c_underscore?.c ?? 0), (item?.c_underscore?.d_underscore ?? BigInt(0)), item?.d, (item?.e?.a ?? 0), (item?.e?.b ?? []), (item?.e?.c ?? 0), (item?.e?.d_underscore ?? BigInt(0)), item?.f);
         }
         builder.pad(5);
         for (let i = 1; i >= 0; --i) {
@@ -56,25 +56,25 @@ export class NestedStruct {
         return builder.offset();
     }
     unpack() {
-        return new NestedStructT(this.bb.createScalarList(this.a.bind(this), 2), this.b(), this.bb.createScalarList(this.cUnderscore.bind(this), 2), this.bb.createObjList(this.dOuter.bind(this), 5), this.bb.createScalarList(this.e.bind(this), 2));
+        return new NestedStructT(this.bb.createScalarList(this.a.bind(this), 2), this.b(), this.bb.createScalarList(this.c_underscore.bind(this), 2), this.bb.createObjList(this.d_outer.bind(this), 5), this.bb.createScalarList(this.e.bind(this), 2));
     }
     unpackTo(_o) {
         _o.a = this.bb.createScalarList(this.a.bind(this), 2);
         _o.b = this.b();
-        _o.cUnderscore = this.bb.createScalarList(this.cUnderscore.bind(this), 2);
-        _o.dOuter = this.bb.createObjList(this.dOuter.bind(this), 5);
+        _o.c_underscore = this.bb.createScalarList(this.c_underscore.bind(this), 2);
+        _o.d_outer = this.bb.createObjList(this.d_outer.bind(this), 5);
         _o.e = this.bb.createScalarList(this.e.bind(this), 2);
     }
 }
 export class NestedStructT {
-    constructor(a = [], b = TestEnum.A, cUnderscore = [TestEnum.A, TestEnum.A], dOuter = [], e = []) {
+    constructor(a = [], b = TestEnum.A, c_underscore = [TestEnum.A, TestEnum.A], d_outer = [], e = []) {
         this.a = a;
         this.b = b;
-        this.cUnderscore = cUnderscore;
-        this.dOuter = dOuter;
+        this.c_underscore = c_underscore;
+        this.d_outer = d_outer;
         this.e = e;
     }
     pack(builder) {
-        return NestedStruct.createNestedStruct(builder, this.a, this.b, this.cUnderscore, this.dOuter, this.e);
+        return NestedStruct.createNestedStruct(builder, this.a, this.b, this.c_underscore, this.d_outer, this.e);
     }
 }

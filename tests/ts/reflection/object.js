@@ -28,11 +28,11 @@ export class Object_ {
         const offset = this.bb.__offset(this.bb_pos, 6);
         return offset ? (obj || new Field()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
     }
-    fieldsLength() {
+    fields_Length() {
         const offset = this.bb.__offset(this.bb_pos, 6);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
-    isStruct() {
+    is_struct() {
         const offset = this.bb.__offset(this.bb_pos, 8);
         return offset ? !!this.bb.readInt8(this.bb_pos + offset) : false;
     }
@@ -72,7 +72,7 @@ export class Object_ {
         const offset = this.bb.__offset(this.bb_pos, 14);
         return offset ? (obj || new KeyValue()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
     }
-    attributesLength() {
+    attributes_Length() {
         const offset = this.bb.__offset(this.bb_pos, 14);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
@@ -80,11 +80,11 @@ export class Object_ {
         const offset = this.bb.__offset(this.bb_pos, 16);
         return offset ? this.bb.__string(this.bb.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
     }
-    documentationLength() {
+    documentation_Length() {
         const offset = this.bb.__offset(this.bb_pos, 16);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
-    declarationFile(optionalEncoding) {
+    declaration_file(optionalEncoding) {
         const offset = this.bb.__offset(this.bb_pos, 18);
         return offset ? this.bb.__string(this.bb_pos + offset, optionalEncoding) : null;
     }
@@ -94,58 +94,58 @@ export class Object_ {
     static startObject(builder) {
         builder.startObject(8);
     }
-    static addName(builder, nameOffset) {
+    static add_name(builder, nameOffset) {
         builder.addFieldOffset(0, nameOffset, 0);
     }
-    static addFields(builder, fieldsOffset) {
+    static add_fields(builder, fieldsOffset) {
         builder.addFieldOffset(1, fieldsOffset, 0);
     }
-    static createFieldsVector(builder, data) {
+    static create_fields_Vector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static startFieldsVector(builder, numElems) {
+    static start_fields_Vector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
-    static addIsStruct(builder, isStruct) {
+    static add_is_struct(builder, isStruct) {
         builder.addFieldInt8(2, +isStruct, +false);
     }
-    static addMinalign(builder, minalign) {
+    static add_minalign(builder, minalign) {
         builder.addFieldInt32(3, minalign, 0);
     }
-    static addBytesize(builder, bytesize) {
+    static add_bytesize(builder, bytesize) {
         builder.addFieldInt32(4, bytesize, 0);
     }
-    static addAttributes(builder, attributesOffset) {
+    static add_attributes(builder, attributesOffset) {
         builder.addFieldOffset(5, attributesOffset, 0);
     }
-    static createAttributesVector(builder, data) {
+    static create_attributes_Vector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static startAttributesVector(builder, numElems) {
+    static start_attributes_Vector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
-    static addDocumentation(builder, documentationOffset) {
+    static add_documentation(builder, documentationOffset) {
         builder.addFieldOffset(6, documentationOffset, 0);
     }
-    static createDocumentationVector(builder, data) {
+    static create_documentation_Vector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static startDocumentationVector(builder, numElems) {
+    static start_documentation_Vector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
-    static addDeclarationFile(builder, declarationFileOffset) {
+    static add_declaration_file(builder, declarationFileOffset) {
         builder.addFieldOffset(7, declarationFileOffset, 0);
     }
     static endObject(builder) {
@@ -156,47 +156,47 @@ export class Object_ {
     }
     static createObject(builder, nameOffset, fieldsOffset, isStruct, minalign, bytesize, attributesOffset, documentationOffset, declarationFileOffset) {
         Object_.startObject(builder);
-        Object_.addName(builder, nameOffset);
-        Object_.addFields(builder, fieldsOffset);
-        Object_.addIsStruct(builder, isStruct);
-        Object_.addMinalign(builder, minalign);
-        Object_.addBytesize(builder, bytesize);
-        Object_.addAttributes(builder, attributesOffset);
-        Object_.addDocumentation(builder, documentationOffset);
-        Object_.addDeclarationFile(builder, declarationFileOffset);
+        Object_.add_name(builder, nameOffset);
+        Object_.add_fields(builder, fieldsOffset);
+        Object_.add_is_struct(builder, isStruct);
+        Object_.add_minalign(builder, minalign);
+        Object_.add_bytesize(builder, bytesize);
+        Object_.add_attributes(builder, attributesOffset);
+        Object_.add_documentation(builder, documentationOffset);
+        Object_.add_declaration_file(builder, declarationFileOffset);
         return Object_.endObject(builder);
     }
     unpack() {
-        return new Object_T(this.name(), this.bb.createObjList(this.fields.bind(this), this.fieldsLength()), this.isStruct(), this.minalign(), this.bytesize(), this.bb.createObjList(this.attributes.bind(this), this.attributesLength()), this.bb.createScalarList(this.documentation.bind(this), this.documentationLength()), this.declarationFile());
+        return new Object_T(this.name(), this.bb.createObjList(this.fields.bind(this), this.fields_Length()), this.is_struct(), this.minalign(), this.bytesize(), this.bb.createObjList(this.attributes.bind(this), this.attributes_Length()), this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length()), this.declaration_file());
     }
     unpackTo(_o) {
         _o.name = this.name();
-        _o.fields = this.bb.createObjList(this.fields.bind(this), this.fieldsLength());
-        _o.isStruct = this.isStruct();
+        _o.fields = this.bb.createObjList(this.fields.bind(this), this.fields_Length());
+        _o.is_struct = this.is_struct();
         _o.minalign = this.minalign();
         _o.bytesize = this.bytesize();
-        _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributesLength());
-        _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentationLength());
-        _o.declarationFile = this.declarationFile();
+        _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributes_Length());
+        _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length());
+        _o.declaration_file = this.declaration_file();
     }
 }
 export class Object_T {
-    constructor(name = null, fields = [], isStruct = false, minalign = 0, bytesize = 0, attributes = [], documentation = [], declarationFile = null) {
+    constructor(name = null, fields = [], is_struct = false, minalign = 0, bytesize = 0, attributes = [], documentation = [], declaration_file = null) {
         this.name = name;
         this.fields = fields;
-        this.isStruct = isStruct;
+        this.is_struct = is_struct;
         this.minalign = minalign;
         this.bytesize = bytesize;
         this.attributes = attributes;
         this.documentation = documentation;
-        this.declarationFile = declarationFile;
+        this.declaration_file = declaration_file;
     }
     pack(builder) {
         const name = (this.name !== null ? builder.createString(this.name) : 0);
-        const fields = Object_.createFieldsVector(builder, builder.createObjectOffsetList(this.fields));
-        const attributes = Object_.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
-        const documentation = Object_.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
-        const declarationFile = (this.declarationFile !== null ? builder.createString(this.declarationFile) : 0);
-        return Object_.createObject(builder, name, fields, this.isStruct, this.minalign, this.bytesize, attributes, documentation, declarationFile);
+        const fields = Object_.create_fields_Vector(builder, builder.createObjectOffsetList(this.fields));
+        const attributes = Object_.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
+        const documentation = Object_.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
+        const declaration_file = (this.declaration_file !== null ? builder.createString(this.declaration_file) : 0);
+        return Object_.createObject(builder, name, fields, this.is_struct, this.minalign, this.bytesize, attributes, documentation, declaration_file);
     }
 }

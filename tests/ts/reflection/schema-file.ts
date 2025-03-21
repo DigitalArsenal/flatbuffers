@@ -42,14 +42,14 @@ filename(optionalEncoding?:any):string|Uint8Array|null {
 /**
  * Names of included files, relative to project root.
  */
-includedFilenames(index: number):string
-includedFilenames(index: number,optionalEncoding:flatbuffers.Encoding):string|Uint8Array
-includedFilenames(index: number,optionalEncoding?:any):string|Uint8Array|null {
+included_filenames(index: number):string
+included_filenames(index: number,optionalEncoding:flatbuffers.Encoding):string|Uint8Array
+included_filenames(index: number,optionalEncoding?:any):string|Uint8Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? this.bb!.__string(this.bb!.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
 }
 
-includedFilenamesLength():number {
+included_filenames_Length():number {
   const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
@@ -62,15 +62,15 @@ static startSchemaFile(builder:flatbuffers.Builder) {
   builder.startObject(2);
 }
 
-static addFilename(builder:flatbuffers.Builder, filenameOffset:flatbuffers.Offset) {
+static add_filename(builder:flatbuffers.Builder, filenameOffset:flatbuffers.Offset) {
   builder.addFieldOffset(0, filenameOffset, 0);
 }
 
-static addIncludedFilenames(builder:flatbuffers.Builder, includedFilenamesOffset:flatbuffers.Offset) {
+static add_included_filenames(builder:flatbuffers.Builder, includedFilenamesOffset:flatbuffers.Offset) {
   builder.addFieldOffset(1, includedFilenamesOffset, 0);
 }
 
-static createIncludedFilenamesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static create_included_filenames_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -78,7 +78,7 @@ static createIncludedFilenamesVector(builder:flatbuffers.Builder, data:flatbuffe
   return builder.endVector();
 }
 
-static startIncludedFilenamesVector(builder:flatbuffers.Builder, numElems:number) {
+static start_included_filenames_Vector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
@@ -90,39 +90,39 @@ static endSchemaFile(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createSchemaFile(builder:flatbuffers.Builder, filenameOffset:flatbuffers.Offset, includedFilenamesOffset:flatbuffers.Offset):flatbuffers.Offset {
   SchemaFile.startSchemaFile(builder);
-  SchemaFile.addFilename(builder, filenameOffset);
-  SchemaFile.addIncludedFilenames(builder, includedFilenamesOffset);
+  SchemaFile.add_filename(builder, filenameOffset);
+  SchemaFile.add_included_filenames(builder, includedFilenamesOffset);
   return SchemaFile.endSchemaFile(builder);
 }
 
 unpack(): SchemaFileT {
   return new SchemaFileT(
     this.filename(),
-    this.bb!.createScalarList<string>(this.includedFilenames.bind(this), this.includedFilenamesLength())
+    this.bb!.createScalarList<string>(this.included_filenames.bind(this), this.included_filenames_Length())
   );
 }
 
 
 unpackTo(_o: SchemaFileT): void {
   _o.filename = this.filename();
-  _o.includedFilenames = this.bb!.createScalarList<string>(this.includedFilenames.bind(this), this.includedFilenamesLength());
+  _o.included_filenames = this.bb!.createScalarList<string>(this.included_filenames.bind(this), this.included_filenames_Length());
 }
 }
 
 export class SchemaFileT implements flatbuffers.IGeneratedObject {
 constructor(
   public filename: string|Uint8Array|null = null,
-  public includedFilenames: (string)[] = []
+  public included_filenames: (string)[] = []
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const filename = (this.filename !== null ? builder.createString(this.filename!) : 0);
-  const includedFilenames = SchemaFile.createIncludedFilenamesVector(builder, builder.createObjectOffsetList(this.includedFilenames));
+  const included_filenames = SchemaFile.create_included_filenames_Vector(builder, builder.createObjectOffsetList(this.included_filenames));
 
   return SchemaFile.createSchemaFile(builder,
     filename,
-    includedFilenames
+    included_filenames
   );
 }
 }

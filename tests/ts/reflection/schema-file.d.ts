@@ -18,15 +18,15 @@ export declare class SchemaFile implements flatbuffers.IUnpackableObject<SchemaF
     /**
      * Names of included files, relative to project root.
      */
-    includedFilenames(index: number): string;
-    includedFilenames(index: number, optionalEncoding: flatbuffers.Encoding): string | Uint8Array;
-    includedFilenamesLength(): number;
+    included_filenames(index: number): string;
+    included_filenames(index: number, optionalEncoding: flatbuffers.Encoding): string | Uint8Array;
+    included_filenames_Length(): number;
     static getFullyQualifiedName(): string;
     static startSchemaFile(builder: flatbuffers.Builder): void;
-    static addFilename(builder: flatbuffers.Builder, filenameOffset: flatbuffers.Offset): void;
-    static addIncludedFilenames(builder: flatbuffers.Builder, includedFilenamesOffset: flatbuffers.Offset): void;
-    static createIncludedFilenamesVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static startIncludedFilenamesVector(builder: flatbuffers.Builder, numElems: number): void;
+    static add_filename(builder: flatbuffers.Builder, filenameOffset: flatbuffers.Offset): void;
+    static add_included_filenames(builder: flatbuffers.Builder, includedFilenamesOffset: flatbuffers.Offset): void;
+    static create_included_filenames_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static start_included_filenames_Vector(builder: flatbuffers.Builder, numElems: number): void;
     static endSchemaFile(builder: flatbuffers.Builder): flatbuffers.Offset;
     static createSchemaFile(builder: flatbuffers.Builder, filenameOffset: flatbuffers.Offset, includedFilenamesOffset: flatbuffers.Offset): flatbuffers.Offset;
     unpack(): SchemaFileT;
@@ -34,7 +34,7 @@ export declare class SchemaFile implements flatbuffers.IUnpackableObject<SchemaF
 }
 export declare class SchemaFileT implements flatbuffers.IGeneratedObject {
     filename: string | Uint8Array | null;
-    includedFilenames: (string)[];
-    constructor(filename?: string | Uint8Array | null, includedFilenames?: (string)[]);
+    included_filenames: (string)[];
+    constructor(filename?: string | Uint8Array | null, included_filenames?: (string)[]);
     pack(builder: flatbuffers.Builder): flatbuffers.Offset;
 }

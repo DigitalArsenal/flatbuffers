@@ -5,7 +5,7 @@
 import * as flatbuffers from 'flatbuffers';
 
 import { A, AT } from '../union-underlying-type/a.js';
-import { ABC, unionToAbc, unionListToAbc } from '../union-underlying-type/abc.js';
+import { ABC, unionToABC, unionListToABC } from '../union-underlying-type/abc.js';
 import { B, BT } from '../union-underlying-type/b.js';
 import { C, CT } from '../union-underlying-type/c.js';
 
@@ -28,37 +28,37 @@ static getSizePrefixedRootAsD(bb:flatbuffers.ByteBuffer, obj?:D):D {
   return (obj || new D()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-testUnionType():ABC {
+test_union_type():ABC {
   const offset = this.bb!.__offset(this.bb_pos, 4);
   return offset ? this.bb!.readInt32(this.bb_pos + offset) : ABC.NONE;
 }
 
-testUnion<T extends flatbuffers.Table>(obj:any):any|null {
+test_union<T extends flatbuffers.Table>(obj:any):any|null {
   const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? this.bb!.__union(obj, this.bb_pos + offset) : null;
 }
 
-testVectorOfUnionType(index: number):ABC|null {
+test_vector_of_union_type(index: number):ABC|null {
   const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? this.bb!.readInt32(this.bb!.__vector(this.bb_pos + offset) + index * 4) : 0;
 }
 
-testVectorOfUnionTypeLength():number {
+test_vector_of_union_type_Length():number {
   const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
-testVectorOfUnionTypeArray():Int32Array|null {
+test_vector_of_union_type_Array():Int32Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? new Int32Array(this.bb!.bytes().buffer, this.bb!.bytes().byteOffset + this.bb!.__vector(this.bb_pos + offset), this.bb!.__vector_len(this.bb_pos + offset)) : null;
 }
 
-testVectorOfUnion(index: number, obj:any):any|null {
+test_vector_of_union(index: number, obj:any):any|null {
   const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.__union(obj, this.bb!.__vector(this.bb_pos + offset) + index * 4) : null;
 }
 
-testVectorOfUnionLength():number {
+test_vector_of_union_Length():number {
   const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
@@ -71,19 +71,19 @@ static startD(builder:flatbuffers.Builder) {
   builder.startObject(4);
 }
 
-static addTestUnionType(builder:flatbuffers.Builder, testUnionType:ABC) {
+static add_test_union_type(builder:flatbuffers.Builder, testUnionType:ABC) {
   builder.addFieldInt32(0, testUnionType, ABC.NONE);
 }
 
-static addTestUnion(builder:flatbuffers.Builder, testUnionOffset:flatbuffers.Offset) {
+static add_test_union(builder:flatbuffers.Builder, testUnionOffset:flatbuffers.Offset) {
   builder.addFieldOffset(1, testUnionOffset, 0);
 }
 
-static addTestVectorOfUnionType(builder:flatbuffers.Builder, testVectorOfUnionTypeOffset:flatbuffers.Offset) {
+static add_test_vector_of_union_type(builder:flatbuffers.Builder, testVectorOfUnionTypeOffset:flatbuffers.Offset) {
   builder.addFieldOffset(2, testVectorOfUnionTypeOffset, 0);
 }
 
-static createTestVectorOfUnionTypeVector(builder:flatbuffers.Builder, data:ABC[]):flatbuffers.Offset {
+static create_test_vector_of_union_type_Vector(builder:flatbuffers.Builder, data:ABC[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addInt32(data[i]!);
@@ -91,15 +91,15 @@ static createTestVectorOfUnionTypeVector(builder:flatbuffers.Builder, data:ABC[]
   return builder.endVector();
 }
 
-static startTestVectorOfUnionTypeVector(builder:flatbuffers.Builder, numElems:number) {
+static start_test_vector_of_union_type_Vector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static addTestVectorOfUnion(builder:flatbuffers.Builder, testVectorOfUnionOffset:flatbuffers.Offset) {
+static add_test_vector_of_union(builder:flatbuffers.Builder, testVectorOfUnionOffset:flatbuffers.Offset) {
   builder.addFieldOffset(3, testVectorOfUnionOffset, 0);
 }
 
-static createTestVectorOfUnionVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static create_test_vector_of_union_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -107,7 +107,7 @@ static createTestVectorOfUnionVector(builder:flatbuffers.Builder, data:flatbuffe
   return builder.endVector();
 }
 
-static startTestVectorOfUnionVector(builder:flatbuffers.Builder, numElems:number) {
+static start_test_vector_of_union_Vector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
@@ -118,29 +118,29 @@ static endD(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createD(builder:flatbuffers.Builder, testUnionType:ABC, testUnionOffset:flatbuffers.Offset, testVectorOfUnionTypeOffset:flatbuffers.Offset, testVectorOfUnionOffset:flatbuffers.Offset):flatbuffers.Offset {
   D.startD(builder);
-  D.addTestUnionType(builder, testUnionType);
-  D.addTestUnion(builder, testUnionOffset);
-  D.addTestVectorOfUnionType(builder, testVectorOfUnionTypeOffset);
-  D.addTestVectorOfUnion(builder, testVectorOfUnionOffset);
+  D.add_test_union_type(builder, testUnionType);
+  D.add_test_union(builder, testUnionOffset);
+  D.add_test_vector_of_union_type(builder, testVectorOfUnionTypeOffset);
+  D.add_test_vector_of_union(builder, testVectorOfUnionOffset);
   return D.endD(builder);
 }
 
 unpack(): DT {
   return new DT(
-    this.testUnionType(),
+    this.test_union_type(),
     (() => {
-      const temp = unionToAbc(this.testUnionType(), this.testUnion.bind(this));
+      const temp = unionToABC(this.test_union_type(), this.test_union.bind(this));
       if(temp === null) { return null; }
       return temp.unpack()
   })(),
-    this.bb!.createScalarList<ABC>(this.testVectorOfUnionType.bind(this), this.testVectorOfUnionTypeLength()),
+    this.bb!.createScalarList<ABC>(this.test_vector_of_union_type.bind(this), this.test_vector_of_union_type_Length()),
     (() => {
     const ret: (AT|BT|CT)[] = [];
-    for(let targetEnumIndex = 0; targetEnumIndex < this.testVectorOfUnionTypeLength(); ++targetEnumIndex) {
-      const targetEnum = this.testVectorOfUnionType(targetEnumIndex);
+    for(let targetEnumIndex = 0; targetEnumIndex < this.test_vector_of_union_type_Length(); ++targetEnumIndex) {
+      const targetEnum = this.test_vector_of_union_type(targetEnumIndex);
       if(targetEnum === null || ABC[targetEnum!] === 'NONE') { continue; }
 
-      const temp = unionListToAbc(targetEnum, this.testVectorOfUnion.bind(this), targetEnumIndex);
+      const temp = unionListToABC(targetEnum, this.test_vector_of_union.bind(this), targetEnumIndex);
       if(temp === null) { continue; }
       ret.push(temp.unpack());
     }
@@ -151,20 +151,20 @@ unpack(): DT {
 
 
 unpackTo(_o: DT): void {
-  _o.testUnionType = this.testUnionType();
-  _o.testUnion = (() => {
-      const temp = unionToAbc(this.testUnionType(), this.testUnion.bind(this));
+  _o.test_union_type = this.test_union_type();
+  _o.test_union = (() => {
+      const temp = unionToABC(this.test_union_type(), this.test_union.bind(this));
       if(temp === null) { return null; }
       return temp.unpack()
   })();
-  _o.testVectorOfUnionType = this.bb!.createScalarList<ABC>(this.testVectorOfUnionType.bind(this), this.testVectorOfUnionTypeLength());
-  _o.testVectorOfUnion = (() => {
+  _o.test_vector_of_union_type = this.bb!.createScalarList<ABC>(this.test_vector_of_union_type.bind(this), this.test_vector_of_union_type_Length());
+  _o.test_vector_of_union = (() => {
     const ret: (AT|BT|CT)[] = [];
-    for(let targetEnumIndex = 0; targetEnumIndex < this.testVectorOfUnionTypeLength(); ++targetEnumIndex) {
-      const targetEnum = this.testVectorOfUnionType(targetEnumIndex);
+    for(let targetEnumIndex = 0; targetEnumIndex < this.test_vector_of_union_type_Length(); ++targetEnumIndex) {
+      const targetEnum = this.test_vector_of_union_type(targetEnumIndex);
       if(targetEnum === null || ABC[targetEnum!] === 'NONE') { continue; }
 
-      const temp = unionListToAbc(targetEnum, this.testVectorOfUnion.bind(this), targetEnumIndex);
+      const temp = unionListToABC(targetEnum, this.test_vector_of_union.bind(this), targetEnumIndex);
       if(temp === null) { continue; }
       ret.push(temp.unpack());
     }
@@ -175,23 +175,23 @@ unpackTo(_o: DT): void {
 
 export class DT implements flatbuffers.IGeneratedObject {
 constructor(
-  public testUnionType: ABC = ABC.NONE,
-  public testUnion: AT|BT|CT|null = null,
-  public testVectorOfUnionType: (ABC)[] = [],
-  public testVectorOfUnion: (AT|BT|CT)[] = []
+  public test_union_type: ABC = ABC.NONE,
+  public test_union: AT|BT|CT|null = null,
+  public test_vector_of_union_type: (ABC)[] = [],
+  public test_vector_of_union: (AT|BT|CT)[] = []
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
-  const testUnion = builder.createObjectOffset(this.testUnion);
-  const testVectorOfUnionType = D.createTestVectorOfUnionTypeVector(builder, this.testVectorOfUnionType);
-  const testVectorOfUnion = D.createTestVectorOfUnionVector(builder, builder.createObjectOffsetList(this.testVectorOfUnion));
+  const test_union = builder.createObjectOffset(this.test_union);
+  const test_vector_of_union_type = D.create_test_vector_of_union_type_Vector(builder, this.test_vector_of_union_type);
+  const test_vector_of_union = D.create_test_vector_of_union_Vector(builder, builder.createObjectOffsetList(this.test_vector_of_union));
 
   return D.createD(builder,
-    this.testUnionType,
-    testUnion,
-    testVectorOfUnionType,
-    testVectorOfUnion
+    this.test_union_type,
+    test_union,
+    test_vector_of_union_type,
+    test_vector_of_union
   );
 }
 }

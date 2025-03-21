@@ -13,9 +13,9 @@ export declare class Stat implements flatbuffers.IUnpackableObject<StatT> {
     mutate_count(value: number): boolean;
     static getFullyQualifiedName(): string;
     static startStat(builder: flatbuffers.Builder): void;
-    static addId(builder: flatbuffers.Builder, idOffset: flatbuffers.Offset): void;
-    static addVal(builder: flatbuffers.Builder, val: bigint): void;
-    static addCount(builder: flatbuffers.Builder, count: number): void;
+    static add_id(builder: flatbuffers.Builder, idOffset: flatbuffers.Offset): void;
+    static add_val(builder: flatbuffers.Builder, val: bigint): void;
+    static add_count(builder: flatbuffers.Builder, count: number): void;
     static endStat(builder: flatbuffers.Builder): flatbuffers.Offset;
     static createStat(builder: flatbuffers.Builder, idOffset: flatbuffers.Offset, val: bigint, count: number): flatbuffers.Offset;
     serialize(): Uint8Array;

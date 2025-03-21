@@ -17,11 +17,11 @@ export class ArrayStruct implements flatbuffers.IUnpackableObject<ArrayStructT> 
   return this;
 }
 
-a_underscore():number {
+aUnderscore():number {
   return this.bb!.readFloat32(this.bb_pos);
 }
 
-b_underscore(index: number):number|null {
+bUnderscore(index: number):number|null {
     return this.bb!.readInt32(this.bb_pos + 4 + index * 4);
 }
 
@@ -72,15 +72,15 @@ static createArrayStruct(builder:flatbuffers.Builder, a_underscore: number, b_un
     OuterStruct.createOuterStruct(builder,
     item?.a,
     item?.b,
-    (item?.c_underscore?.a ?? 0),
-    (item?.c_underscore?.b ?? []),
-    (item?.c_underscore?.c ?? 0),
-    (item?.c_underscore?.d_underscore ?? BigInt(0)),
+    (item?.cUnderscore?.a ?? 0),
+    (item?.cUnderscore?.b ?? []),
+    (item?.cUnderscore?.c ?? 0),
+    (item?.cUnderscore?.dUnderscore ?? BigInt(0)),
     item?.d,
     (item?.e?.a ?? 0),
     (item?.e?.b ?? []),
     (item?.e?.c ?? 0),
-    (item?.e?.d_underscore ?? BigInt(0)),
+    (item?.e?.dUnderscore ?? BigInt(0)),
     item?.f
     );
   }
@@ -99,8 +99,8 @@ static createArrayStruct(builder:flatbuffers.Builder, a_underscore: number, b_un
     NestedStruct.createNestedStruct(builder,
     item?.a,
     item?.b,
-    item?.c_underscore,
-    item?.d_outer,
+    item?.cUnderscore,
+    item?.dOuter,
     item?.e
     );
   }
@@ -120,8 +120,8 @@ static createArrayStruct(builder:flatbuffers.Builder, a_underscore: number, b_un
 
 unpack(): ArrayStructT {
   return new ArrayStructT(
-    this.a_underscore(),
-    this.bb!.createScalarList<number>(this.b_underscore.bind(this), 15),
+    this.aUnderscore(),
+    this.bb!.createScalarList<number>(this.bUnderscore.bind(this), 15),
     this.c(),
     this.bb!.createObjList<NestedStruct, NestedStructT>(this.d.bind(this), 2),
     this.e(),
@@ -132,8 +132,8 @@ unpack(): ArrayStructT {
 
 
 unpackTo(_o: ArrayStructT): void {
-  _o.a_underscore = this.a_underscore();
-  _o.b_underscore = this.bb!.createScalarList<number>(this.b_underscore.bind(this), 15);
+  _o.aUnderscore = this.aUnderscore();
+  _o.bUnderscore = this.bb!.createScalarList<number>(this.bUnderscore.bind(this), 15);
   _o.c = this.c();
   _o.d = this.bb!.createObjList<NestedStruct, NestedStructT>(this.d.bind(this), 2);
   _o.e = this.e();
@@ -144,8 +144,8 @@ unpackTo(_o: ArrayStructT): void {
 
 export class ArrayStructT implements flatbuffers.IGeneratedObject {
 constructor(
-  public a_underscore: number = 0.0,
-  public b_underscore: (number)[] = [],
+  public aUnderscore: number = 0.0,
+  public bUnderscore: (number)[] = [],
   public c: number = 0,
   public d: (NestedStructT)[] = [],
   public e: number = 0,
@@ -156,8 +156,8 @@ constructor(
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   return ArrayStruct.createArrayStruct(builder,
-    this.a_underscore,
-    this.b_underscore,
+    this.aUnderscore,
+    this.bUnderscore,
     this.c,
     this.d,
     this.e,

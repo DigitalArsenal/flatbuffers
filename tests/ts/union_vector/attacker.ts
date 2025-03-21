@@ -24,7 +24,7 @@ static getSizePrefixedRootAsAttacker(bb:flatbuffers.ByteBuffer, obj?:Attacker):A
   return (obj || new Attacker()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
 }
 
-sword_attack_damage():number {
+swordAttackDamage():number {
   const offset = this.bb!.__offset(this.bb_pos, 4);
   return offset ? this.bb!.readInt32(this.bb_pos + offset) : 0;
 }
@@ -48,7 +48,7 @@ static startAttacker(builder:flatbuffers.Builder) {
   builder.startObject(1);
 }
 
-static add_sword_attack_damage(builder:flatbuffers.Builder, swordAttackDamage:number) {
+static addSwordAttackDamage(builder:flatbuffers.Builder, swordAttackDamage:number) {
   builder.addFieldInt32(0, swordAttackDamage, 0);
 }
 
@@ -59,31 +59,31 @@ static endAttacker(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createAttacker(builder:flatbuffers.Builder, swordAttackDamage:number):flatbuffers.Offset {
   Attacker.startAttacker(builder);
-  Attacker.add_sword_attack_damage(builder, swordAttackDamage);
+  Attacker.addSwordAttackDamage(builder, swordAttackDamage);
   return Attacker.endAttacker(builder);
 }
 
 unpack(): AttackerT {
   return new AttackerT(
-    this.sword_attack_damage()
+    this.swordAttackDamage()
   );
 }
 
 
 unpackTo(_o: AttackerT): void {
-  _o.sword_attack_damage = this.sword_attack_damage();
+  _o.swordAttackDamage = this.swordAttackDamage();
 }
 }
 
 export class AttackerT implements flatbuffers.IGeneratedObject {
 constructor(
-  public sword_attack_damage: number = 0
+  public swordAttackDamage: number = 0
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   return Attacker.createAttacker(builder,
-    this.sword_attack_damage
+    this.swordAttackDamage
   );
 }
 }

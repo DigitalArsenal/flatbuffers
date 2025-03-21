@@ -64,7 +64,7 @@ var InnerStruct = class {
   c() {
     return this.bb.readInt8(this.bb_pos + 21);
   }
-  dUnderscore() {
+  d_underscore() {
     return this.bb.readInt64(this.bb_pos + 24);
   }
   static getFullyQualifiedName() {
@@ -85,24 +85,24 @@ var InnerStruct = class {
     return builder.offset();
   }
   unpack() {
-    return new InnerStructT(this.a(), this.bb.createScalarList(this.b.bind(this), 13), this.c(), this.dUnderscore());
+    return new InnerStructT(this.a(), this.bb.createScalarList(this.b.bind(this), 13), this.c(), this.d_underscore());
   }
   unpackTo(_o) {
     _o.a = this.a();
     _o.b = this.bb.createScalarList(this.b.bind(this), 13);
     _o.c = this.c();
-    _o.dUnderscore = this.dUnderscore();
+    _o.d_underscore = this.d_underscore();
   }
 };
 var InnerStructT = class {
-  constructor(a = 0, b = [], c = 0, dUnderscore = BigInt("0")) {
+  constructor(a = 0, b = [], c = 0, d_underscore = BigInt("0")) {
     this.a = a;
     this.b = b;
     this.c = c;
-    this.dUnderscore = dUnderscore;
+    this.d_underscore = d_underscore;
   }
   pack(builder) {
-    return InnerStruct.createInnerStruct(builder, this.a, this.b, this.c, this.dUnderscore);
+    return InnerStruct.createInnerStruct(builder, this.a, this.b, this.c, this.d_underscore);
   }
 };
 
@@ -123,7 +123,7 @@ var OuterStruct = class {
   b() {
     return this.bb.readFloat64(this.bb_pos + 8);
   }
-  cUnderscore(obj) {
+  c_underscore(obj) {
     return (obj || new InnerStruct()).__init(this.bb_pos + 16, this.bb);
   }
   d(index, obj) {
@@ -160,7 +160,7 @@ var OuterStruct = class {
         item.pack(builder);
         continue;
       }
-      InnerStruct.createInnerStruct(builder, item?.a, item?.b, item?.c, item?.dUnderscore);
+      InnerStruct.createInnerStruct(builder, item?.a, item?.b, item?.c, item?.d_underscore);
     }
     builder.prep(8, 32);
     builder.writeInt64(BigInt(c_underscore_d_underscore ?? 0));
@@ -176,28 +176,28 @@ var OuterStruct = class {
     return builder.offset();
   }
   unpack() {
-    return new OuterStructT(this.a(), this.b(), this.cUnderscore() !== null ? this.cUnderscore().unpack() : null, this.bb.createObjList(this.d.bind(this), 3), this.e() !== null ? this.e().unpack() : null, this.bb.createScalarList(this.f.bind(this), 4));
+    return new OuterStructT(this.a(), this.b(), this.c_underscore() !== null ? this.c_underscore().unpack() : null, this.bb.createObjList(this.d.bind(this), 3), this.e() !== null ? this.e().unpack() : null, this.bb.createScalarList(this.f.bind(this), 4));
   }
   unpackTo(_o) {
     _o.a = this.a();
     _o.b = this.b();
-    _o.cUnderscore = this.cUnderscore() !== null ? this.cUnderscore().unpack() : null;
+    _o.c_underscore = this.c_underscore() !== null ? this.c_underscore().unpack() : null;
     _o.d = this.bb.createObjList(this.d.bind(this), 3);
     _o.e = this.e() !== null ? this.e().unpack() : null;
     _o.f = this.bb.createScalarList(this.f.bind(this), 4);
   }
 };
 var OuterStructT = class {
-  constructor(a = false, b = 0, cUnderscore = null, d = [], e = null, f = []) {
+  constructor(a = false, b = 0, c_underscore = null, d = [], e = null, f = []) {
     this.a = a;
     this.b = b;
-    this.cUnderscore = cUnderscore;
+    this.c_underscore = c_underscore;
     this.d = d;
     this.e = e;
     this.f = f;
   }
   pack(builder) {
-    return OuterStruct.createOuterStruct(builder, this.a, this.b, this.cUnderscore?.a ?? 0, this.cUnderscore?.b ?? [], this.cUnderscore?.c ?? 0, this.cUnderscore?.dUnderscore ?? BigInt(0), this.d, this.e?.a ?? 0, this.e?.b ?? [], this.e?.c ?? 0, this.e?.dUnderscore ?? BigInt(0), this.f);
+    return OuterStruct.createOuterStruct(builder, this.a, this.b, this.c_underscore?.a ?? 0, this.c_underscore?.b ?? [], this.c_underscore?.c ?? 0, this.c_underscore?.d_underscore ?? BigInt(0), this.d, this.e?.a ?? 0, this.e?.b ?? [], this.e?.c ?? 0, this.e?.d_underscore ?? BigInt(0), this.f);
   }
 };
 
@@ -226,10 +226,10 @@ var NestedStruct = class {
   b() {
     return this.bb.readInt8(this.bb_pos + 8);
   }
-  cUnderscore(index) {
+  c_underscore(index) {
     return this.bb.readInt8(this.bb_pos + 9 + index);
   }
-  dOuter(index, obj) {
+  d_outer(index, obj) {
     return (obj || new OuterStruct()).__init(this.bb_pos + 16 + index * 208, this.bb);
   }
   e(index) {
@@ -252,7 +252,7 @@ var NestedStruct = class {
         item.pack(builder);
         continue;
       }
-      OuterStruct.createOuterStruct(builder, item?.a, item?.b, item?.cUnderscore?.a ?? 0, item?.cUnderscore?.b ?? [], item?.cUnderscore?.c ?? 0, item?.cUnderscore?.dUnderscore ?? BigInt(0), item?.d, item?.e?.a ?? 0, item?.e?.b ?? [], item?.e?.c ?? 0, item?.e?.dUnderscore ?? BigInt(0), item?.f);
+      OuterStruct.createOuterStruct(builder, item?.a, item?.b, item?.c_underscore?.a ?? 0, item?.c_underscore?.b ?? [], item?.c_underscore?.c ?? 0, item?.c_underscore?.d_underscore ?? BigInt(0), item?.d, item?.e?.a ?? 0, item?.e?.b ?? [], item?.e?.c ?? 0, item?.e?.d_underscore ?? BigInt(0), item?.f);
     }
     builder.pad(5);
     for (let i = 1; i >= 0; --i) {
@@ -265,26 +265,26 @@ var NestedStruct = class {
     return builder.offset();
   }
   unpack() {
-    return new NestedStructT(this.bb.createScalarList(this.a.bind(this), 2), this.b(), this.bb.createScalarList(this.cUnderscore.bind(this), 2), this.bb.createObjList(this.dOuter.bind(this), 5), this.bb.createScalarList(this.e.bind(this), 2));
+    return new NestedStructT(this.bb.createScalarList(this.a.bind(this), 2), this.b(), this.bb.createScalarList(this.c_underscore.bind(this), 2), this.bb.createObjList(this.d_outer.bind(this), 5), this.bb.createScalarList(this.e.bind(this), 2));
   }
   unpackTo(_o) {
     _o.a = this.bb.createScalarList(this.a.bind(this), 2);
     _o.b = this.b();
-    _o.cUnderscore = this.bb.createScalarList(this.cUnderscore.bind(this), 2);
-    _o.dOuter = this.bb.createObjList(this.dOuter.bind(this), 5);
+    _o.c_underscore = this.bb.createScalarList(this.c_underscore.bind(this), 2);
+    _o.d_outer = this.bb.createObjList(this.d_outer.bind(this), 5);
     _o.e = this.bb.createScalarList(this.e.bind(this), 2);
   }
 };
 var NestedStructT = class {
-  constructor(a = [], b = TestEnum.A, cUnderscore = [TestEnum.A, TestEnum.A], dOuter = [], e = []) {
+  constructor(a = [], b = TestEnum.A, c_underscore = [TestEnum.A, TestEnum.A], d_outer = [], e = []) {
     this.a = a;
     this.b = b;
-    this.cUnderscore = cUnderscore;
-    this.dOuter = dOuter;
+    this.c_underscore = c_underscore;
+    this.d_outer = d_outer;
     this.e = e;
   }
   pack(builder) {
-    return NestedStruct.createNestedStruct(builder, this.a, this.b, this.cUnderscore, this.dOuter, this.e);
+    return NestedStruct.createNestedStruct(builder, this.a, this.b, this.c_underscore, this.d_outer, this.e);
   }
 };
 
@@ -299,10 +299,10 @@ var ArrayStruct = class {
     this.bb = bb;
     return this;
   }
-  aUnderscore() {
+  a_underscore() {
     return this.bb.readFloat32(this.bb_pos);
   }
-  bUnderscore(index) {
+  b_underscore(index) {
     return this.bb.readInt32(this.bb_pos + 4 + index * 4);
   }
   c() {
@@ -337,7 +337,7 @@ var ArrayStruct = class {
         item.pack(builder);
         continue;
       }
-      OuterStruct.createOuterStruct(builder, item?.a, item?.b, item?.cUnderscore?.a ?? 0, item?.cUnderscore?.b ?? [], item?.cUnderscore?.c ?? 0, item?.cUnderscore?.dUnderscore ?? BigInt(0), item?.d, item?.e?.a ?? 0, item?.e?.b ?? [], item?.e?.c ?? 0, item?.e?.dUnderscore ?? BigInt(0), item?.f);
+      OuterStruct.createOuterStruct(builder, item?.a, item?.b, item?.c_underscore?.a ?? 0, item?.c_underscore?.b ?? [], item?.c_underscore?.c ?? 0, item?.c_underscore?.d_underscore ?? BigInt(0), item?.d, item?.e?.a ?? 0, item?.e?.b ?? [], item?.e?.c ?? 0, item?.e?.d_underscore ?? BigInt(0), item?.f);
     }
     builder.pad(4);
     builder.writeInt32(e);
@@ -347,7 +347,7 @@ var ArrayStruct = class {
         item.pack(builder);
         continue;
       }
-      NestedStruct.createNestedStruct(builder, item?.a, item?.b, item?.cUnderscore, item?.dOuter, item?.e);
+      NestedStruct.createNestedStruct(builder, item?.a, item?.b, item?.c_underscore, item?.d_outer, item?.e);
     }
     builder.pad(7);
     builder.writeInt8(c);
@@ -358,11 +358,11 @@ var ArrayStruct = class {
     return builder.offset();
   }
   unpack() {
-    return new ArrayStructT(this.aUnderscore(), this.bb.createScalarList(this.bUnderscore.bind(this), 15), this.c(), this.bb.createObjList(this.d.bind(this), 2), this.e(), this.bb.createObjList(this.f.bind(this), 2), this.bb.createScalarList(this.g.bind(this), 2));
+    return new ArrayStructT(this.a_underscore(), this.bb.createScalarList(this.b_underscore.bind(this), 15), this.c(), this.bb.createObjList(this.d.bind(this), 2), this.e(), this.bb.createObjList(this.f.bind(this), 2), this.bb.createScalarList(this.g.bind(this), 2));
   }
   unpackTo(_o) {
-    _o.aUnderscore = this.aUnderscore();
-    _o.bUnderscore = this.bb.createScalarList(this.bUnderscore.bind(this), 15);
+    _o.a_underscore = this.a_underscore();
+    _o.b_underscore = this.bb.createScalarList(this.b_underscore.bind(this), 15);
     _o.c = this.c();
     _o.d = this.bb.createObjList(this.d.bind(this), 2);
     _o.e = this.e();
@@ -371,9 +371,9 @@ var ArrayStruct = class {
   }
 };
 var ArrayStructT = class {
-  constructor(aUnderscore = 0, bUnderscore = [], c = 0, d = [], e = 0, f = [], g = []) {
-    this.aUnderscore = aUnderscore;
-    this.bUnderscore = bUnderscore;
+  constructor(a_underscore = 0, b_underscore = [], c = 0, d = [], e = 0, f = [], g = []) {
+    this.a_underscore = a_underscore;
+    this.b_underscore = b_underscore;
     this.c = c;
     this.d = d;
     this.e = e;
@@ -381,7 +381,7 @@ var ArrayStructT = class {
     this.g = g;
   }
   pack(builder) {
-    return ArrayStruct.createArrayStruct(builder, this.aUnderscore, this.bUnderscore, this.c, this.d, this.e, this.f, this.g);
+    return ArrayStruct.createArrayStruct(builder, this.a_underscore, this.b_underscore, this.c, this.d, this.e, this.f, this.g);
   }
 };
 
@@ -411,7 +411,7 @@ var ArrayTable = class _ArrayTable {
     const offset = this.bb.__offset(this.bb_pos, 4);
     return offset ? this.bb.__string(this.bb_pos + offset, optionalEncoding) : null;
   }
-  cUnderscore(obj) {
+  c_underscore(obj) {
     const offset = this.bb.__offset(this.bb_pos, 6);
     return offset ? (obj || new ArrayStruct()).__init(this.bb_pos + offset, this.bb) : null;
   }
@@ -421,10 +421,10 @@ var ArrayTable = class _ArrayTable {
   static startArrayTable(builder) {
     builder.startObject(2);
   }
-  static addA(builder, aOffset) {
+  static add_a(builder, aOffset) {
     builder.addFieldOffset(0, aOffset, 0);
   }
-  static addCUnderscore(builder, cUnderscoreOffset) {
+  static add_c_underscore(builder, cUnderscoreOffset) {
     builder.addFieldStruct(1, cUnderscoreOffset, 0);
   }
   static endArrayTable(builder) {
@@ -438,23 +438,23 @@ var ArrayTable = class _ArrayTable {
     builder.finish(offset, "RHUB", true);
   }
   unpack() {
-    return new ArrayTableT(this.a(), this.cUnderscore() !== null ? this.cUnderscore().unpack() : null);
+    return new ArrayTableT(this.a(), this.c_underscore() !== null ? this.c_underscore().unpack() : null);
   }
   unpackTo(_o) {
     _o.a = this.a();
-    _o.cUnderscore = this.cUnderscore() !== null ? this.cUnderscore().unpack() : null;
+    _o.c_underscore = this.c_underscore() !== null ? this.c_underscore().unpack() : null;
   }
 };
 var ArrayTableT = class {
-  constructor(a = null, cUnderscore = null) {
+  constructor(a = null, c_underscore = null) {
     this.a = a;
-    this.cUnderscore = cUnderscore;
+    this.c_underscore = c_underscore;
   }
   pack(builder) {
     const a = this.a !== null ? builder.createString(this.a) : 0;
     ArrayTable.startArrayTable(builder);
-    ArrayTable.addA(builder, a);
-    ArrayTable.addCUnderscore(builder, this.cUnderscore !== null ? this.cUnderscore.pack(builder) : 0);
+    ArrayTable.add_a(builder, a);
+    ArrayTable.add_c_underscore(builder, this.c_underscore !== null ? this.c_underscore.pack(builder) : 0);
     return ArrayTable.endArrayTable(builder);
   }
 };

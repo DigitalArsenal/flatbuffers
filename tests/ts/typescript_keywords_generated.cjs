@@ -147,10 +147,10 @@ var KeyValue = class _KeyValue {
   static startKeyValue(builder) {
     builder.startObject(2);
   }
-  static addKey(builder, keyOffset) {
+  static add_key(builder, keyOffset) {
     builder.addFieldOffset(0, keyOffset, 0);
   }
-  static addValue(builder, valueOffset) {
+  static add_value(builder, valueOffset) {
     builder.addFieldOffset(1, valueOffset, 0);
   }
   static endKeyValue(builder) {
@@ -160,8 +160,8 @@ var KeyValue = class _KeyValue {
   }
   static createKeyValue(builder, keyOffset, valueOffset) {
     _KeyValue.startKeyValue(builder);
-    _KeyValue.addKey(builder, keyOffset);
-    _KeyValue.addValue(builder, valueOffset);
+    _KeyValue.add_key(builder, keyOffset);
+    _KeyValue.add_value(builder, valueOffset);
     return _KeyValue.endKeyValue(builder);
   }
   unpack() {
@@ -203,7 +203,7 @@ var Type = class _Type {
     bb.setPosition(bb.position() + flatbuffers2.SIZE_PREFIX_LENGTH);
     return (obj || new _Type()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
   }
-  baseType() {
+  base_type() {
     const offset = this.bb.__offset(this.bb_pos, 4);
     return offset ? this.bb.readInt8(this.bb_pos + offset) : BaseType.None;
   }
@@ -239,7 +239,7 @@ var Type = class _Type {
     this.bb.writeInt32(this.bb_pos + offset, value);
     return true;
   }
-  fixedLength() {
+  fixed_length() {
     const offset = this.bb.__offset(this.bb_pos, 10);
     return offset ? this.bb.readUint16(this.bb_pos + offset) : 0;
   }
@@ -254,7 +254,7 @@ var Type = class _Type {
   /**
    * The size (octets) of the `base_type` field.
    */
-  baseSize() {
+  base_size() {
     const offset = this.bb.__offset(this.bb_pos, 12);
     return offset ? this.bb.readUint32(this.bb_pos + offset) : 4;
   }
@@ -269,7 +269,7 @@ var Type = class _Type {
   /**
    * The size (octets) of the `element` field, if present.
    */
-  elementSize() {
+  element_size() {
     const offset = this.bb.__offset(this.bb_pos, 14);
     return offset ? this.bb.readUint32(this.bb_pos + offset) : 0;
   }
@@ -287,22 +287,22 @@ var Type = class _Type {
   static startType(builder) {
     builder.startObject(6);
   }
-  static addBaseType(builder, baseType) {
+  static add_base_type(builder, baseType) {
     builder.addFieldInt8(0, baseType, BaseType.None);
   }
-  static addElement(builder, element) {
+  static add_element(builder, element) {
     builder.addFieldInt8(1, element, BaseType.None);
   }
-  static addIndex(builder, index) {
+  static add_index(builder, index) {
     builder.addFieldInt32(2, index, -1);
   }
-  static addFixedLength(builder, fixedLength) {
+  static add_fixed_length(builder, fixedLength) {
     builder.addFieldInt16(3, fixedLength, 0);
   }
-  static addBaseSize(builder, baseSize) {
+  static add_base_size(builder, baseSize) {
     builder.addFieldInt32(4, baseSize, 4);
   }
-  static addElementSize(builder, elementSize) {
+  static add_element_size(builder, elementSize) {
     builder.addFieldInt32(5, elementSize, 0);
   }
   static endType(builder) {
@@ -311,37 +311,37 @@ var Type = class _Type {
   }
   static createType(builder, baseType, element, index, fixedLength, baseSize, elementSize) {
     _Type.startType(builder);
-    _Type.addBaseType(builder, baseType);
-    _Type.addElement(builder, element);
-    _Type.addIndex(builder, index);
-    _Type.addFixedLength(builder, fixedLength);
-    _Type.addBaseSize(builder, baseSize);
-    _Type.addElementSize(builder, elementSize);
+    _Type.add_base_type(builder, baseType);
+    _Type.add_element(builder, element);
+    _Type.add_index(builder, index);
+    _Type.add_fixed_length(builder, fixedLength);
+    _Type.add_base_size(builder, baseSize);
+    _Type.add_element_size(builder, elementSize);
     return _Type.endType(builder);
   }
   unpack() {
-    return new TypeT(this.baseType(), this.element(), this.index(), this.fixedLength(), this.baseSize(), this.elementSize());
+    return new TypeT(this.base_type(), this.element(), this.index(), this.fixed_length(), this.base_size(), this.element_size());
   }
   unpackTo(_o) {
-    _o.baseType = this.baseType();
+    _o.base_type = this.base_type();
     _o.element = this.element();
     _o.index = this.index();
-    _o.fixedLength = this.fixedLength();
-    _o.baseSize = this.baseSize();
-    _o.elementSize = this.elementSize();
+    _o.fixed_length = this.fixed_length();
+    _o.base_size = this.base_size();
+    _o.element_size = this.element_size();
   }
 };
 var TypeT = class {
-  constructor(baseType = BaseType.None, element = BaseType.None, index = -1, fixedLength = 0, baseSize = 4, elementSize = 0) {
-    this.baseType = baseType;
+  constructor(base_type = BaseType.None, element = BaseType.None, index = -1, fixed_length = 0, base_size = 4, element_size = 0) {
+    this.base_type = base_type;
     this.element = element;
     this.index = index;
-    this.fixedLength = fixedLength;
-    this.baseSize = baseSize;
-    this.elementSize = elementSize;
+    this.fixed_length = fixed_length;
+    this.base_size = base_size;
+    this.element_size = element_size;
   }
   pack(builder) {
-    return Type.createType(builder, this.baseType, this.element, this.index, this.fixedLength, this.baseSize, this.elementSize);
+    return Type.createType(builder, this.base_type, this.element, this.index, this.fixed_length, this.base_size, this.element_size);
   }
 };
 
@@ -379,7 +379,7 @@ var EnumVal = class _EnumVal {
     this.bb.writeInt64(this.bb_pos + offset, value);
     return true;
   }
-  unionType(obj) {
+  union_type(obj) {
     const offset = this.bb.__offset(this.bb_pos, 10);
     return offset ? (obj || new Type()).__init(this.bb.__indirect(this.bb_pos + offset), this.bb) : null;
   }
@@ -387,7 +387,7 @@ var EnumVal = class _EnumVal {
     const offset = this.bb.__offset(this.bb_pos, 12);
     return offset ? this.bb.__string(this.bb.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
   }
-  documentationLength() {
+  documentation_Length() {
     const offset = this.bb.__offset(this.bb_pos, 12);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
@@ -395,7 +395,7 @@ var EnumVal = class _EnumVal {
     const offset = this.bb.__offset(this.bb_pos, 14);
     return offset ? (obj || new KeyValue()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
   }
-  attributesLength() {
+  attributes_Length() {
     const offset = this.bb.__offset(this.bb_pos, 14);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
@@ -405,39 +405,39 @@ var EnumVal = class _EnumVal {
   static startEnumVal(builder) {
     builder.startObject(6);
   }
-  static addName(builder, nameOffset) {
+  static add_name(builder, nameOffset) {
     builder.addFieldOffset(0, nameOffset, 0);
   }
-  static addValue(builder, value) {
+  static add_value(builder, value) {
     builder.addFieldInt64(1, value, BigInt("0"));
   }
-  static addUnionType(builder, unionTypeOffset) {
+  static add_union_type(builder, unionTypeOffset) {
     builder.addFieldOffset(3, unionTypeOffset, 0);
   }
-  static addDocumentation(builder, documentationOffset) {
+  static add_documentation(builder, documentationOffset) {
     builder.addFieldOffset(4, documentationOffset, 0);
   }
-  static createDocumentationVector(builder, data) {
+  static create_documentation_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startDocumentationVector(builder, numElems) {
+  static start_documentation_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addAttributes(builder, attributesOffset) {
+  static add_attributes(builder, attributesOffset) {
     builder.addFieldOffset(5, attributesOffset, 0);
   }
-  static createAttributesVector(builder, data) {
+  static create_attributes_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startAttributesVector(builder, numElems) {
+  static start_attributes_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
   static endEnumVal(builder) {
@@ -446,35 +446,35 @@ var EnumVal = class _EnumVal {
     return offset;
   }
   unpack() {
-    return new EnumValT(this.name(), this.value(), this.unionType() !== null ? this.unionType().unpack() : null, this.bb.createScalarList(this.documentation.bind(this), this.documentationLength()), this.bb.createObjList(this.attributes.bind(this), this.attributesLength()));
+    return new EnumValT(this.name(), this.value(), this.union_type() !== null ? this.union_type().unpack() : null, this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length()), this.bb.createObjList(this.attributes.bind(this), this.attributes_Length()));
   }
   unpackTo(_o) {
     _o.name = this.name();
     _o.value = this.value();
-    _o.unionType = this.unionType() !== null ? this.unionType().unpack() : null;
-    _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentationLength());
-    _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributesLength());
+    _o.union_type = this.union_type() !== null ? this.union_type().unpack() : null;
+    _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length());
+    _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributes_Length());
   }
 };
 var EnumValT = class {
-  constructor(name = null, value = BigInt("0"), unionType = null, documentation = [], attributes = []) {
+  constructor(name = null, value = BigInt("0"), union_type = null, documentation = [], attributes = []) {
     this.name = name;
     this.value = value;
-    this.unionType = unionType;
+    this.union_type = union_type;
     this.documentation = documentation;
     this.attributes = attributes;
   }
   pack(builder) {
     const name = this.name !== null ? builder.createString(this.name) : 0;
-    const unionType = this.unionType !== null ? this.unionType.pack(builder) : 0;
-    const documentation = EnumVal.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
-    const attributes = EnumVal.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
+    const union_type = this.union_type !== null ? this.union_type.pack(builder) : 0;
+    const documentation = EnumVal.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
+    const attributes = EnumVal.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
     EnumVal.startEnumVal(builder);
-    EnumVal.addName(builder, name);
-    EnumVal.addValue(builder, this.value);
-    EnumVal.addUnionType(builder, unionType);
-    EnumVal.addDocumentation(builder, documentation);
-    EnumVal.addAttributes(builder, attributes);
+    EnumVal.add_name(builder, name);
+    EnumVal.add_value(builder, this.value);
+    EnumVal.add_union_type(builder, union_type);
+    EnumVal.add_documentation(builder, documentation);
+    EnumVal.add_attributes(builder, attributes);
     return EnumVal.endEnumVal(builder);
   }
 };
@@ -505,11 +505,11 @@ var Enum = class _Enum {
     const offset = this.bb.__offset(this.bb_pos, 6);
     return offset ? (obj || new EnumVal()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
   }
-  valuesLength() {
+  values_Length() {
     const offset = this.bb.__offset(this.bb_pos, 6);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
-  isUnion() {
+  is_union() {
     const offset = this.bb.__offset(this.bb_pos, 8);
     return offset ? !!this.bb.readInt8(this.bb_pos + offset) : false;
   }
@@ -521,7 +521,7 @@ var Enum = class _Enum {
     this.bb.writeInt8(this.bb_pos + offset, +value);
     return true;
   }
-  underlyingType(obj) {
+  underlying_type(obj) {
     const offset = this.bb.__offset(this.bb_pos, 10);
     return offset ? (obj || new Type()).__init(this.bb.__indirect(this.bb_pos + offset), this.bb) : null;
   }
@@ -529,7 +529,7 @@ var Enum = class _Enum {
     const offset = this.bb.__offset(this.bb_pos, 12);
     return offset ? (obj || new KeyValue()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
   }
-  attributesLength() {
+  attributes_Length() {
     const offset = this.bb.__offset(this.bb_pos, 12);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
@@ -537,11 +537,11 @@ var Enum = class _Enum {
     const offset = this.bb.__offset(this.bb_pos, 14);
     return offset ? this.bb.__string(this.bb.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
   }
-  documentationLength() {
+  documentation_Length() {
     const offset = this.bb.__offset(this.bb_pos, 14);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
-  declarationFile(optionalEncoding) {
+  declaration_file(optionalEncoding) {
     const offset = this.bb.__offset(this.bb_pos, 16);
     return offset ? this.bb.__string(this.bb_pos + offset, optionalEncoding) : null;
   }
@@ -551,55 +551,55 @@ var Enum = class _Enum {
   static startEnum(builder) {
     builder.startObject(7);
   }
-  static addName(builder, nameOffset) {
+  static add_name(builder, nameOffset) {
     builder.addFieldOffset(0, nameOffset, 0);
   }
-  static addValues(builder, valuesOffset) {
+  static add_values(builder, valuesOffset) {
     builder.addFieldOffset(1, valuesOffset, 0);
   }
-  static createValuesVector(builder, data) {
+  static create_values_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startValuesVector(builder, numElems) {
+  static start_values_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addIsUnion(builder, isUnion) {
+  static add_is_union(builder, isUnion) {
     builder.addFieldInt8(2, +isUnion, 0);
   }
-  static addUnderlyingType(builder, underlyingTypeOffset) {
+  static add_underlying_type(builder, underlyingTypeOffset) {
     builder.addFieldOffset(3, underlyingTypeOffset, 0);
   }
-  static addAttributes(builder, attributesOffset) {
+  static add_attributes(builder, attributesOffset) {
     builder.addFieldOffset(4, attributesOffset, 0);
   }
-  static createAttributesVector(builder, data) {
+  static create_attributes_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startAttributesVector(builder, numElems) {
+  static start_attributes_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addDocumentation(builder, documentationOffset) {
+  static add_documentation(builder, documentationOffset) {
     builder.addFieldOffset(5, documentationOffset, 0);
   }
-  static createDocumentationVector(builder, data) {
+  static create_documentation_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startDocumentationVector(builder, numElems) {
+  static start_documentation_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addDeclarationFile(builder, declarationFileOffset) {
+  static add_declaration_file(builder, declarationFileOffset) {
     builder.addFieldOffset(6, declarationFileOffset, 0);
   }
   static endEnum(builder) {
@@ -610,43 +610,43 @@ var Enum = class _Enum {
     return offset;
   }
   unpack() {
-    return new EnumT(this.name(), this.bb.createObjList(this.values.bind(this), this.valuesLength()), this.isUnion(), this.underlyingType() !== null ? this.underlyingType().unpack() : null, this.bb.createObjList(this.attributes.bind(this), this.attributesLength()), this.bb.createScalarList(this.documentation.bind(this), this.documentationLength()), this.declarationFile());
+    return new EnumT(this.name(), this.bb.createObjList(this.values.bind(this), this.values_Length()), this.is_union(), this.underlying_type() !== null ? this.underlying_type().unpack() : null, this.bb.createObjList(this.attributes.bind(this), this.attributes_Length()), this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length()), this.declaration_file());
   }
   unpackTo(_o) {
     _o.name = this.name();
-    _o.values = this.bb.createObjList(this.values.bind(this), this.valuesLength());
-    _o.isUnion = this.isUnion();
-    _o.underlyingType = this.underlyingType() !== null ? this.underlyingType().unpack() : null;
-    _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributesLength());
-    _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentationLength());
-    _o.declarationFile = this.declarationFile();
+    _o.values = this.bb.createObjList(this.values.bind(this), this.values_Length());
+    _o.is_union = this.is_union();
+    _o.underlying_type = this.underlying_type() !== null ? this.underlying_type().unpack() : null;
+    _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributes_Length());
+    _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length());
+    _o.declaration_file = this.declaration_file();
   }
 };
 var EnumT = class {
-  constructor(name = null, values = [], isUnion = false, underlyingType = null, attributes = [], documentation = [], declarationFile = null) {
+  constructor(name = null, values = [], is_union = false, underlying_type = null, attributes = [], documentation = [], declaration_file = null) {
     this.name = name;
     this.values = values;
-    this.isUnion = isUnion;
-    this.underlyingType = underlyingType;
+    this.is_union = is_union;
+    this.underlying_type = underlying_type;
     this.attributes = attributes;
     this.documentation = documentation;
-    this.declarationFile = declarationFile;
+    this.declaration_file = declaration_file;
   }
   pack(builder) {
     const name = this.name !== null ? builder.createString(this.name) : 0;
-    const values = Enum.createValuesVector(builder, builder.createObjectOffsetList(this.values));
-    const underlyingType = this.underlyingType !== null ? this.underlyingType.pack(builder) : 0;
-    const attributes = Enum.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
-    const documentation = Enum.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
-    const declarationFile = this.declarationFile !== null ? builder.createString(this.declarationFile) : 0;
+    const values = Enum.create_values_Vector(builder, builder.createObjectOffsetList(this.values));
+    const underlying_type = this.underlying_type !== null ? this.underlying_type.pack(builder) : 0;
+    const attributes = Enum.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
+    const documentation = Enum.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
+    const declaration_file = this.declaration_file !== null ? builder.createString(this.declaration_file) : 0;
     Enum.startEnum(builder);
-    Enum.addName(builder, name);
-    Enum.addValues(builder, values);
-    Enum.addIsUnion(builder, this.isUnion);
-    Enum.addUnderlyingType(builder, underlyingType);
-    Enum.addAttributes(builder, attributes);
-    Enum.addDocumentation(builder, documentation);
-    Enum.addDeclarationFile(builder, declarationFile);
+    Enum.add_name(builder, name);
+    Enum.add_values(builder, values);
+    Enum.add_is_union(builder, this.is_union);
+    Enum.add_underlying_type(builder, underlying_type);
+    Enum.add_attributes(builder, attributes);
+    Enum.add_documentation(builder, documentation);
+    Enum.add_declaration_file(builder, declaration_file);
     return Enum.endEnum(builder);
   }
 };
@@ -702,7 +702,7 @@ var Field = class _Field {
     this.bb.writeUint16(this.bb_pos + offset, value);
     return true;
   }
-  defaultInteger() {
+  default_integer() {
     const offset = this.bb.__offset(this.bb_pos, 12);
     return offset ? this.bb.readInt64(this.bb_pos + offset) : BigInt("0");
   }
@@ -714,7 +714,7 @@ var Field = class _Field {
     this.bb.writeInt64(this.bb_pos + offset, value);
     return true;
   }
-  defaultReal() {
+  default_real() {
     const offset = this.bb.__offset(this.bb_pos, 14);
     return offset ? this.bb.readFloat64(this.bb_pos + offset) : 0;
   }
@@ -766,7 +766,7 @@ var Field = class _Field {
     const offset = this.bb.__offset(this.bb_pos, 22);
     return offset ? (obj || new KeyValue()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
   }
-  attributesLength() {
+  attributes_Length() {
     const offset = this.bb.__offset(this.bb_pos, 22);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
@@ -774,7 +774,7 @@ var Field = class _Field {
     const offset = this.bb.__offset(this.bb_pos, 24);
     return offset ? this.bb.__string(this.bb.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
   }
-  documentationLength() {
+  documentation_Length() {
     const offset = this.bb.__offset(this.bb_pos, 24);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
@@ -826,66 +826,66 @@ var Field = class _Field {
   static startField(builder) {
     builder.startObject(14);
   }
-  static addName(builder, nameOffset) {
+  static add_name(builder, nameOffset) {
     builder.addFieldOffset(0, nameOffset, 0);
   }
-  static addType(builder, typeOffset) {
+  static add_type(builder, typeOffset) {
     builder.addFieldOffset(1, typeOffset, 0);
   }
-  static addId(builder, id) {
+  static add_id(builder, id) {
     builder.addFieldInt16(2, id, 0);
   }
-  static addOffset(builder, offset) {
+  static add_offset(builder, offset) {
     builder.addFieldInt16(3, offset, 0);
   }
-  static addDefaultInteger(builder, defaultInteger) {
+  static add_default_integer(builder, defaultInteger) {
     builder.addFieldInt64(4, defaultInteger, BigInt("0"));
   }
-  static addDefaultReal(builder, defaultReal) {
+  static add_default_real(builder, defaultReal) {
     builder.addFieldFloat64(5, defaultReal, 0);
   }
-  static addDeprecated(builder, deprecated) {
+  static add_deprecated(builder, deprecated) {
     builder.addFieldInt8(6, +deprecated, 0);
   }
-  static addRequired(builder, required) {
+  static add_required(builder, required) {
     builder.addFieldInt8(7, +required, 0);
   }
-  static addKey(builder, key) {
+  static add_key(builder, key) {
     builder.addFieldInt8(8, +key, 0);
   }
-  static addAttributes(builder, attributesOffset) {
+  static add_attributes(builder, attributesOffset) {
     builder.addFieldOffset(9, attributesOffset, 0);
   }
-  static createAttributesVector(builder, data) {
+  static create_attributes_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startAttributesVector(builder, numElems) {
+  static start_attributes_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addDocumentation(builder, documentationOffset) {
+  static add_documentation(builder, documentationOffset) {
     builder.addFieldOffset(10, documentationOffset, 0);
   }
-  static createDocumentationVector(builder, data) {
+  static create_documentation_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startDocumentationVector(builder, numElems) {
+  static start_documentation_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addOptional(builder, optional) {
+  static add_optional(builder, optional) {
     builder.addFieldInt8(11, +optional, 0);
   }
-  static addPadding(builder, padding) {
+  static add_padding(builder, padding) {
     builder.addFieldInt16(12, padding, 0);
   }
-  static addOffset64(builder, offset64) {
+  static add_offset64(builder, offset64) {
     builder.addFieldInt8(13, +offset64, 0);
   }
   static endField(builder) {
@@ -895,33 +895,33 @@ var Field = class _Field {
     return offset;
   }
   unpack() {
-    return new FieldT(this.name(), this.type() !== null ? this.type().unpack() : null, this.id(), this.offset(), this.defaultInteger(), this.defaultReal(), this.deprecated(), this.required(), this.key(), this.bb.createObjList(this.attributes.bind(this), this.attributesLength()), this.bb.createScalarList(this.documentation.bind(this), this.documentationLength()), this.optional(), this.padding(), this.offset64());
+    return new FieldT(this.name(), this.type() !== null ? this.type().unpack() : null, this.id(), this.offset(), this.default_integer(), this.default_real(), this.deprecated(), this.required(), this.key(), this.bb.createObjList(this.attributes.bind(this), this.attributes_Length()), this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length()), this.optional(), this.padding(), this.offset64());
   }
   unpackTo(_o) {
     _o.name = this.name();
     _o.type = this.type() !== null ? this.type().unpack() : null;
     _o.id = this.id();
     _o.offset = this.offset();
-    _o.defaultInteger = this.defaultInteger();
-    _o.defaultReal = this.defaultReal();
+    _o.default_integer = this.default_integer();
+    _o.default_real = this.default_real();
     _o.deprecated = this.deprecated();
     _o.required = this.required();
     _o.key = this.key();
-    _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributesLength());
-    _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentationLength());
+    _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributes_Length());
+    _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length());
     _o.optional = this.optional();
     _o.padding = this.padding();
     _o.offset64 = this.offset64();
   }
 };
 var FieldT = class {
-  constructor(name = null, type = null, id = 0, offset = 0, defaultInteger = BigInt("0"), defaultReal = 0, deprecated = false, required = false, key = false, attributes = [], documentation = [], optional = false, padding = 0, offset64 = false) {
+  constructor(name = null, type = null, id = 0, offset = 0, default_integer = BigInt("0"), default_real = 0, deprecated = false, required = false, key = false, attributes = [], documentation = [], optional = false, padding = 0, offset64 = false) {
     this.name = name;
     this.type = type;
     this.id = id;
     this.offset = offset;
-    this.defaultInteger = defaultInteger;
-    this.defaultReal = defaultReal;
+    this.default_integer = default_integer;
+    this.default_real = default_real;
     this.deprecated = deprecated;
     this.required = required;
     this.key = key;
@@ -934,23 +934,23 @@ var FieldT = class {
   pack(builder) {
     const name = this.name !== null ? builder.createString(this.name) : 0;
     const type = this.type !== null ? this.type.pack(builder) : 0;
-    const attributes = Field.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
-    const documentation = Field.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
+    const attributes = Field.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
+    const documentation = Field.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
     Field.startField(builder);
-    Field.addName(builder, name);
-    Field.addType(builder, type);
-    Field.addId(builder, this.id);
-    Field.addOffset(builder, this.offset);
-    Field.addDefaultInteger(builder, this.defaultInteger);
-    Field.addDefaultReal(builder, this.defaultReal);
-    Field.addDeprecated(builder, this.deprecated);
-    Field.addRequired(builder, this.required);
-    Field.addKey(builder, this.key);
-    Field.addAttributes(builder, attributes);
-    Field.addDocumentation(builder, documentation);
-    Field.addOptional(builder, this.optional);
-    Field.addPadding(builder, this.padding);
-    Field.addOffset64(builder, this.offset64);
+    Field.add_name(builder, name);
+    Field.add_type(builder, type);
+    Field.add_id(builder, this.id);
+    Field.add_offset(builder, this.offset);
+    Field.add_default_integer(builder, this.default_integer);
+    Field.add_default_real(builder, this.default_real);
+    Field.add_deprecated(builder, this.deprecated);
+    Field.add_required(builder, this.required);
+    Field.add_key(builder, this.key);
+    Field.add_attributes(builder, attributes);
+    Field.add_documentation(builder, documentation);
+    Field.add_optional(builder, this.optional);
+    Field.add_padding(builder, this.padding);
+    Field.add_offset64(builder, this.offset64);
     return Field.endField(builder);
   }
 };
@@ -982,11 +982,11 @@ var Object_ = class _Object_ {
     const offset = this.bb.__offset(this.bb_pos, 6);
     return offset ? (obj || new Field()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
   }
-  fieldsLength() {
+  fields_Length() {
     const offset = this.bb.__offset(this.bb_pos, 6);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
-  isStruct() {
+  is_struct() {
     const offset = this.bb.__offset(this.bb_pos, 8);
     return offset ? !!this.bb.readInt8(this.bb_pos + offset) : false;
   }
@@ -1026,7 +1026,7 @@ var Object_ = class _Object_ {
     const offset = this.bb.__offset(this.bb_pos, 14);
     return offset ? (obj || new KeyValue()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
   }
-  attributesLength() {
+  attributes_Length() {
     const offset = this.bb.__offset(this.bb_pos, 14);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
@@ -1034,11 +1034,11 @@ var Object_ = class _Object_ {
     const offset = this.bb.__offset(this.bb_pos, 16);
     return offset ? this.bb.__string(this.bb.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
   }
-  documentationLength() {
+  documentation_Length() {
     const offset = this.bb.__offset(this.bb_pos, 16);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
-  declarationFile(optionalEncoding) {
+  declaration_file(optionalEncoding) {
     const offset = this.bb.__offset(this.bb_pos, 18);
     return offset ? this.bb.__string(this.bb_pos + offset, optionalEncoding) : null;
   }
@@ -1048,58 +1048,58 @@ var Object_ = class _Object_ {
   static startObject(builder) {
     builder.startObject(8);
   }
-  static addName(builder, nameOffset) {
+  static add_name(builder, nameOffset) {
     builder.addFieldOffset(0, nameOffset, 0);
   }
-  static addFields(builder, fieldsOffset) {
+  static add_fields(builder, fieldsOffset) {
     builder.addFieldOffset(1, fieldsOffset, 0);
   }
-  static createFieldsVector(builder, data) {
+  static create_fields_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startFieldsVector(builder, numElems) {
+  static start_fields_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addIsStruct(builder, isStruct) {
+  static add_is_struct(builder, isStruct) {
     builder.addFieldInt8(2, +isStruct, 0);
   }
-  static addMinalign(builder, minalign) {
+  static add_minalign(builder, minalign) {
     builder.addFieldInt32(3, minalign, 0);
   }
-  static addBytesize(builder, bytesize) {
+  static add_bytesize(builder, bytesize) {
     builder.addFieldInt32(4, bytesize, 0);
   }
-  static addAttributes(builder, attributesOffset) {
+  static add_attributes(builder, attributesOffset) {
     builder.addFieldOffset(5, attributesOffset, 0);
   }
-  static createAttributesVector(builder, data) {
+  static create_attributes_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startAttributesVector(builder, numElems) {
+  static start_attributes_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addDocumentation(builder, documentationOffset) {
+  static add_documentation(builder, documentationOffset) {
     builder.addFieldOffset(6, documentationOffset, 0);
   }
-  static createDocumentationVector(builder, data) {
+  static create_documentation_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startDocumentationVector(builder, numElems) {
+  static start_documentation_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addDeclarationFile(builder, declarationFileOffset) {
+  static add_declaration_file(builder, declarationFileOffset) {
     builder.addFieldOffset(7, declarationFileOffset, 0);
   }
   static endObject(builder) {
@@ -1110,48 +1110,48 @@ var Object_ = class _Object_ {
   }
   static createObject(builder, nameOffset, fieldsOffset, isStruct, minalign, bytesize, attributesOffset, documentationOffset, declarationFileOffset) {
     _Object_.startObject(builder);
-    _Object_.addName(builder, nameOffset);
-    _Object_.addFields(builder, fieldsOffset);
-    _Object_.addIsStruct(builder, isStruct);
-    _Object_.addMinalign(builder, minalign);
-    _Object_.addBytesize(builder, bytesize);
-    _Object_.addAttributes(builder, attributesOffset);
-    _Object_.addDocumentation(builder, documentationOffset);
-    _Object_.addDeclarationFile(builder, declarationFileOffset);
+    _Object_.add_name(builder, nameOffset);
+    _Object_.add_fields(builder, fieldsOffset);
+    _Object_.add_is_struct(builder, isStruct);
+    _Object_.add_minalign(builder, minalign);
+    _Object_.add_bytesize(builder, bytesize);
+    _Object_.add_attributes(builder, attributesOffset);
+    _Object_.add_documentation(builder, documentationOffset);
+    _Object_.add_declaration_file(builder, declarationFileOffset);
     return _Object_.endObject(builder);
   }
   unpack() {
-    return new Object_T(this.name(), this.bb.createObjList(this.fields.bind(this), this.fieldsLength()), this.isStruct(), this.minalign(), this.bytesize(), this.bb.createObjList(this.attributes.bind(this), this.attributesLength()), this.bb.createScalarList(this.documentation.bind(this), this.documentationLength()), this.declarationFile());
+    return new Object_T(this.name(), this.bb.createObjList(this.fields.bind(this), this.fields_Length()), this.is_struct(), this.minalign(), this.bytesize(), this.bb.createObjList(this.attributes.bind(this), this.attributes_Length()), this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length()), this.declaration_file());
   }
   unpackTo(_o) {
     _o.name = this.name();
-    _o.fields = this.bb.createObjList(this.fields.bind(this), this.fieldsLength());
-    _o.isStruct = this.isStruct();
+    _o.fields = this.bb.createObjList(this.fields.bind(this), this.fields_Length());
+    _o.is_struct = this.is_struct();
     _o.minalign = this.minalign();
     _o.bytesize = this.bytesize();
-    _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributesLength());
-    _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentationLength());
-    _o.declarationFile = this.declarationFile();
+    _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributes_Length());
+    _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length());
+    _o.declaration_file = this.declaration_file();
   }
 };
 var Object_T = class {
-  constructor(name = null, fields = [], isStruct = false, minalign = 0, bytesize = 0, attributes = [], documentation = [], declarationFile = null) {
+  constructor(name = null, fields = [], is_struct = false, minalign = 0, bytesize = 0, attributes = [], documentation = [], declaration_file = null) {
     this.name = name;
     this.fields = fields;
-    this.isStruct = isStruct;
+    this.is_struct = is_struct;
     this.minalign = minalign;
     this.bytesize = bytesize;
     this.attributes = attributes;
     this.documentation = documentation;
-    this.declarationFile = declarationFile;
+    this.declaration_file = declaration_file;
   }
   pack(builder) {
     const name = this.name !== null ? builder.createString(this.name) : 0;
-    const fields = Object_.createFieldsVector(builder, builder.createObjectOffsetList(this.fields));
-    const attributes = Object_.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
-    const documentation = Object_.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
-    const declarationFile = this.declarationFile !== null ? builder.createString(this.declarationFile) : 0;
-    return Object_.createObject(builder, name, fields, this.isStruct, this.minalign, this.bytesize, attributes, documentation, declarationFile);
+    const fields = Object_.create_fields_Vector(builder, builder.createObjectOffsetList(this.fields));
+    const attributes = Object_.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
+    const documentation = Object_.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
+    const declaration_file = this.declaration_file !== null ? builder.createString(this.declaration_file) : 0;
+    return Object_.createObject(builder, name, fields, this.is_struct, this.minalign, this.bytesize, attributes, documentation, declaration_file);
   }
 };
 
@@ -1190,7 +1190,7 @@ var RPCCall = class _RPCCall {
     const offset = this.bb.__offset(this.bb_pos, 10);
     return offset ? (obj || new KeyValue()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
   }
-  attributesLength() {
+  attributes_Length() {
     const offset = this.bb.__offset(this.bb_pos, 10);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
@@ -1198,7 +1198,7 @@ var RPCCall = class _RPCCall {
     const offset = this.bb.__offset(this.bb_pos, 12);
     return offset ? this.bb.__string(this.bb.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
   }
-  documentationLength() {
+  documentation_Length() {
     const offset = this.bb.__offset(this.bb_pos, 12);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
@@ -1208,39 +1208,39 @@ var RPCCall = class _RPCCall {
   static startRPCCall(builder) {
     builder.startObject(5);
   }
-  static addName(builder, nameOffset) {
+  static add_name(builder, nameOffset) {
     builder.addFieldOffset(0, nameOffset, 0);
   }
-  static addRequest(builder, requestOffset) {
+  static add_request(builder, requestOffset) {
     builder.addFieldOffset(1, requestOffset, 0);
   }
-  static addResponse(builder, responseOffset) {
+  static add_response(builder, responseOffset) {
     builder.addFieldOffset(2, responseOffset, 0);
   }
-  static addAttributes(builder, attributesOffset) {
+  static add_attributes(builder, attributesOffset) {
     builder.addFieldOffset(3, attributesOffset, 0);
   }
-  static createAttributesVector(builder, data) {
+  static create_attributes_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startAttributesVector(builder, numElems) {
+  static start_attributes_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addDocumentation(builder, documentationOffset) {
+  static add_documentation(builder, documentationOffset) {
     builder.addFieldOffset(4, documentationOffset, 0);
   }
-  static createDocumentationVector(builder, data) {
+  static create_documentation_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startDocumentationVector(builder, numElems) {
+  static start_documentation_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
   static endRPCCall(builder) {
@@ -1251,14 +1251,14 @@ var RPCCall = class _RPCCall {
     return offset;
   }
   unpack() {
-    return new RPCCallT(this.name(), this.request() !== null ? this.request().unpack() : null, this.response() !== null ? this.response().unpack() : null, this.bb.createObjList(this.attributes.bind(this), this.attributesLength()), this.bb.createScalarList(this.documentation.bind(this), this.documentationLength()));
+    return new RPCCallT(this.name(), this.request() !== null ? this.request().unpack() : null, this.response() !== null ? this.response().unpack() : null, this.bb.createObjList(this.attributes.bind(this), this.attributes_Length()), this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length()));
   }
   unpackTo(_o) {
     _o.name = this.name();
     _o.request = this.request() !== null ? this.request().unpack() : null;
     _o.response = this.response() !== null ? this.response().unpack() : null;
-    _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributesLength());
-    _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentationLength());
+    _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributes_Length());
+    _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length());
   }
 };
 var RPCCallT = class {
@@ -1273,14 +1273,14 @@ var RPCCallT = class {
     const name = this.name !== null ? builder.createString(this.name) : 0;
     const request = this.request !== null ? this.request.pack(builder) : 0;
     const response = this.response !== null ? this.response.pack(builder) : 0;
-    const attributes = RPCCall.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
-    const documentation = RPCCall.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
+    const attributes = RPCCall.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
+    const documentation = RPCCall.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
     RPCCall.startRPCCall(builder);
-    RPCCall.addName(builder, name);
-    RPCCall.addRequest(builder, request);
-    RPCCall.addResponse(builder, response);
-    RPCCall.addAttributes(builder, attributes);
-    RPCCall.addDocumentation(builder, documentation);
+    RPCCall.add_name(builder, name);
+    RPCCall.add_request(builder, request);
+    RPCCall.add_response(builder, response);
+    RPCCall.add_attributes(builder, attributes);
+    RPCCall.add_documentation(builder, documentation);
     return RPCCall.endRPCCall(builder);
   }
 };
@@ -1311,11 +1311,11 @@ var SchemaFile = class _SchemaFile {
     const offset = this.bb.__offset(this.bb_pos, 4);
     return offset ? this.bb.__string(this.bb_pos + offset, optionalEncoding) : null;
   }
-  includedFilenames(index, optionalEncoding) {
+  included_filenames(index, optionalEncoding) {
     const offset = this.bb.__offset(this.bb_pos, 6);
     return offset ? this.bb.__string(this.bb.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
   }
-  includedFilenamesLength() {
+  included_filenames_Length() {
     const offset = this.bb.__offset(this.bb_pos, 6);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
@@ -1325,20 +1325,20 @@ var SchemaFile = class _SchemaFile {
   static startSchemaFile(builder) {
     builder.startObject(2);
   }
-  static addFilename(builder, filenameOffset) {
+  static add_filename(builder, filenameOffset) {
     builder.addFieldOffset(0, filenameOffset, 0);
   }
-  static addIncludedFilenames(builder, includedFilenamesOffset) {
+  static add_included_filenames(builder, includedFilenamesOffset) {
     builder.addFieldOffset(1, includedFilenamesOffset, 0);
   }
-  static createIncludedFilenamesVector(builder, data) {
+  static create_included_filenames_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startIncludedFilenamesVector(builder, numElems) {
+  static start_included_filenames_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
   static endSchemaFile(builder) {
@@ -1348,27 +1348,27 @@ var SchemaFile = class _SchemaFile {
   }
   static createSchemaFile(builder, filenameOffset, includedFilenamesOffset) {
     _SchemaFile.startSchemaFile(builder);
-    _SchemaFile.addFilename(builder, filenameOffset);
-    _SchemaFile.addIncludedFilenames(builder, includedFilenamesOffset);
+    _SchemaFile.add_filename(builder, filenameOffset);
+    _SchemaFile.add_included_filenames(builder, includedFilenamesOffset);
     return _SchemaFile.endSchemaFile(builder);
   }
   unpack() {
-    return new SchemaFileT(this.filename(), this.bb.createScalarList(this.includedFilenames.bind(this), this.includedFilenamesLength()));
+    return new SchemaFileT(this.filename(), this.bb.createScalarList(this.included_filenames.bind(this), this.included_filenames_Length()));
   }
   unpackTo(_o) {
     _o.filename = this.filename();
-    _o.includedFilenames = this.bb.createScalarList(this.includedFilenames.bind(this), this.includedFilenamesLength());
+    _o.included_filenames = this.bb.createScalarList(this.included_filenames.bind(this), this.included_filenames_Length());
   }
 };
 var SchemaFileT = class {
-  constructor(filename = null, includedFilenames = []) {
+  constructor(filename = null, included_filenames = []) {
     this.filename = filename;
-    this.includedFilenames = includedFilenames;
+    this.included_filenames = included_filenames;
   }
   pack(builder) {
     const filename = this.filename !== null ? builder.createString(this.filename) : 0;
-    const includedFilenames = SchemaFile.createIncludedFilenamesVector(builder, builder.createObjectOffsetList(this.includedFilenames));
-    return SchemaFile.createSchemaFile(builder, filename, includedFilenames);
+    const included_filenames = SchemaFile.create_included_filenames_Vector(builder, builder.createObjectOffsetList(this.included_filenames));
+    return SchemaFile.createSchemaFile(builder, filename, included_filenames);
   }
 };
 
@@ -1399,7 +1399,7 @@ var Service = class _Service {
     const offset = this.bb.__offset(this.bb_pos, 6);
     return offset ? (obj || new RPCCall()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
   }
-  callsLength() {
+  calls_Length() {
     const offset = this.bb.__offset(this.bb_pos, 6);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
@@ -1407,7 +1407,7 @@ var Service = class _Service {
     const offset = this.bb.__offset(this.bb_pos, 8);
     return offset ? (obj || new KeyValue()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
   }
-  attributesLength() {
+  attributes_Length() {
     const offset = this.bb.__offset(this.bb_pos, 8);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
@@ -1415,11 +1415,11 @@ var Service = class _Service {
     const offset = this.bb.__offset(this.bb_pos, 10);
     return offset ? this.bb.__string(this.bb.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
   }
-  documentationLength() {
+  documentation_Length() {
     const offset = this.bb.__offset(this.bb_pos, 10);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
-  declarationFile(optionalEncoding) {
+  declaration_file(optionalEncoding) {
     const offset = this.bb.__offset(this.bb_pos, 12);
     return offset ? this.bb.__string(this.bb_pos + offset, optionalEncoding) : null;
   }
@@ -1429,49 +1429,49 @@ var Service = class _Service {
   static startService(builder) {
     builder.startObject(5);
   }
-  static addName(builder, nameOffset) {
+  static add_name(builder, nameOffset) {
     builder.addFieldOffset(0, nameOffset, 0);
   }
-  static addCalls(builder, callsOffset) {
+  static add_calls(builder, callsOffset) {
     builder.addFieldOffset(1, callsOffset, 0);
   }
-  static createCallsVector(builder, data) {
+  static create_calls_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startCallsVector(builder, numElems) {
+  static start_calls_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addAttributes(builder, attributesOffset) {
+  static add_attributes(builder, attributesOffset) {
     builder.addFieldOffset(2, attributesOffset, 0);
   }
-  static createAttributesVector(builder, data) {
+  static create_attributes_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startAttributesVector(builder, numElems) {
+  static start_attributes_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addDocumentation(builder, documentationOffset) {
+  static add_documentation(builder, documentationOffset) {
     builder.addFieldOffset(3, documentationOffset, 0);
   }
-  static createDocumentationVector(builder, data) {
+  static create_documentation_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startDocumentationVector(builder, numElems) {
+  static start_documentation_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addDeclarationFile(builder, declarationFileOffset) {
+  static add_declaration_file(builder, declarationFileOffset) {
     builder.addFieldOffset(4, declarationFileOffset, 0);
   }
   static endService(builder) {
@@ -1481,39 +1481,39 @@ var Service = class _Service {
   }
   static createService(builder, nameOffset, callsOffset, attributesOffset, documentationOffset, declarationFileOffset) {
     _Service.startService(builder);
-    _Service.addName(builder, nameOffset);
-    _Service.addCalls(builder, callsOffset);
-    _Service.addAttributes(builder, attributesOffset);
-    _Service.addDocumentation(builder, documentationOffset);
-    _Service.addDeclarationFile(builder, declarationFileOffset);
+    _Service.add_name(builder, nameOffset);
+    _Service.add_calls(builder, callsOffset);
+    _Service.add_attributes(builder, attributesOffset);
+    _Service.add_documentation(builder, documentationOffset);
+    _Service.add_declaration_file(builder, declarationFileOffset);
     return _Service.endService(builder);
   }
   unpack() {
-    return new ServiceT(this.name(), this.bb.createObjList(this.calls.bind(this), this.callsLength()), this.bb.createObjList(this.attributes.bind(this), this.attributesLength()), this.bb.createScalarList(this.documentation.bind(this), this.documentationLength()), this.declarationFile());
+    return new ServiceT(this.name(), this.bb.createObjList(this.calls.bind(this), this.calls_Length()), this.bb.createObjList(this.attributes.bind(this), this.attributes_Length()), this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length()), this.declaration_file());
   }
   unpackTo(_o) {
     _o.name = this.name();
-    _o.calls = this.bb.createObjList(this.calls.bind(this), this.callsLength());
-    _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributesLength());
-    _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentationLength());
-    _o.declarationFile = this.declarationFile();
+    _o.calls = this.bb.createObjList(this.calls.bind(this), this.calls_Length());
+    _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributes_Length());
+    _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length());
+    _o.declaration_file = this.declaration_file();
   }
 };
 var ServiceT = class {
-  constructor(name = null, calls = [], attributes = [], documentation = [], declarationFile = null) {
+  constructor(name = null, calls = [], attributes = [], documentation = [], declaration_file = null) {
     this.name = name;
     this.calls = calls;
     this.attributes = attributes;
     this.documentation = documentation;
-    this.declarationFile = declarationFile;
+    this.declaration_file = declaration_file;
   }
   pack(builder) {
     const name = this.name !== null ? builder.createString(this.name) : 0;
-    const calls = Service.createCallsVector(builder, builder.createObjectOffsetList(this.calls));
-    const attributes = Service.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
-    const documentation = Service.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
-    const declarationFile = this.declarationFile !== null ? builder.createString(this.declarationFile) : 0;
-    return Service.createService(builder, name, calls, attributes, documentation, declarationFile);
+    const calls = Service.create_calls_Vector(builder, builder.createObjectOffsetList(this.calls));
+    const attributes = Service.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
+    const documentation = Service.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
+    const declaration_file = this.declaration_file !== null ? builder.createString(this.declaration_file) : 0;
+    return Service.createService(builder, name, calls, attributes, documentation, declaration_file);
   }
 };
 
@@ -1542,7 +1542,7 @@ var Schema = class _Schema {
     const offset = this.bb.__offset(this.bb_pos, 4);
     return offset ? (obj || new Object_()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
   }
-  objectsLength() {
+  objects_Length() {
     const offset = this.bb.__offset(this.bb_pos, 4);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
@@ -1550,19 +1550,19 @@ var Schema = class _Schema {
     const offset = this.bb.__offset(this.bb_pos, 6);
     return offset ? (obj || new Enum()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
   }
-  enumsLength() {
+  enums_Length() {
     const offset = this.bb.__offset(this.bb_pos, 6);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
-  fileIdent(optionalEncoding) {
+  file_ident(optionalEncoding) {
     const offset = this.bb.__offset(this.bb_pos, 8);
     return offset ? this.bb.__string(this.bb_pos + offset, optionalEncoding) : null;
   }
-  fileExt(optionalEncoding) {
+  file_ext(optionalEncoding) {
     const offset = this.bb.__offset(this.bb_pos, 10);
     return offset ? this.bb.__string(this.bb_pos + offset, optionalEncoding) : null;
   }
-  rootTable(obj) {
+  root_table(obj) {
     const offset = this.bb.__offset(this.bb_pos, 12);
     return offset ? (obj || new Object_()).__init(this.bb.__indirect(this.bb_pos + offset), this.bb) : null;
   }
@@ -1570,11 +1570,11 @@ var Schema = class _Schema {
     const offset = this.bb.__offset(this.bb_pos, 14);
     return offset ? (obj || new Service()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
   }
-  servicesLength() {
+  services_Length() {
     const offset = this.bb.__offset(this.bb_pos, 14);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
-  advancedFeatures() {
+  advanced_features() {
     const offset = this.bb.__offset(this.bb_pos, 16);
     return offset ? this.bb.readUint64(this.bb_pos + offset) : BigInt("0");
   }
@@ -1590,11 +1590,11 @@ var Schema = class _Schema {
    * All the files used in this compilation. Files are relative to where
    * flatc was invoked.
    */
-  fbsFiles(index, obj) {
+  fbs_files(index, obj) {
     const offset = this.bb.__offset(this.bb_pos, 18);
     return offset ? (obj || new SchemaFile()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
   }
-  fbsFilesLength() {
+  fbs_files_Length() {
     const offset = this.bb.__offset(this.bb_pos, 18);
     return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
   }
@@ -1604,68 +1604,68 @@ var Schema = class _Schema {
   static startSchema(builder) {
     builder.startObject(8);
   }
-  static addObjects(builder, objectsOffset) {
+  static add_objects(builder, objectsOffset) {
     builder.addFieldOffset(0, objectsOffset, 0);
   }
-  static createObjectsVector(builder, data) {
+  static create_objects_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startObjectsVector(builder, numElems) {
+  static start_objects_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addEnums(builder, enumsOffset) {
+  static add_enums(builder, enumsOffset) {
     builder.addFieldOffset(1, enumsOffset, 0);
   }
-  static createEnumsVector(builder, data) {
+  static create_enums_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startEnumsVector(builder, numElems) {
+  static start_enums_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addFileIdent(builder, fileIdentOffset) {
+  static add_file_ident(builder, fileIdentOffset) {
     builder.addFieldOffset(2, fileIdentOffset, 0);
   }
-  static addFileExt(builder, fileExtOffset) {
+  static add_file_ext(builder, fileExtOffset) {
     builder.addFieldOffset(3, fileExtOffset, 0);
   }
-  static addRootTable(builder, rootTableOffset) {
+  static add_root_table(builder, rootTableOffset) {
     builder.addFieldOffset(4, rootTableOffset, 0);
   }
-  static addServices(builder, servicesOffset) {
+  static add_services(builder, servicesOffset) {
     builder.addFieldOffset(5, servicesOffset, 0);
   }
-  static createServicesVector(builder, data) {
+  static create_services_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startServicesVector(builder, numElems) {
+  static start_services_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
-  static addAdvancedFeatures(builder, advancedFeatures) {
+  static add_advanced_features(builder, advancedFeatures) {
     builder.addFieldInt64(6, advancedFeatures, BigInt("0"));
   }
-  static addFbsFiles(builder, fbsFilesOffset) {
+  static add_fbs_files(builder, fbsFilesOffset) {
     builder.addFieldOffset(7, fbsFilesOffset, 0);
   }
-  static createFbsFilesVector(builder, data) {
+  static create_fbs_files_Vector(builder, data) {
     builder.startVector(4, data.length, 4);
     for (let i = data.length - 1; i >= 0; i--) {
       builder.addOffset(data[i]);
     }
     return builder.endVector();
   }
-  static startFbsFilesVector(builder, numElems) {
+  static start_fbs_files_Vector(builder, numElems) {
     builder.startVector(4, numElems, 4);
   }
   static endSchema(builder) {
@@ -1681,47 +1681,47 @@ var Schema = class _Schema {
     builder.finish(offset, "BFBS", true);
   }
   unpack() {
-    return new SchemaT(this.bb.createObjList(this.objects.bind(this), this.objectsLength()), this.bb.createObjList(this.enums.bind(this), this.enumsLength()), this.fileIdent(), this.fileExt(), this.rootTable() !== null ? this.rootTable().unpack() : null, this.bb.createObjList(this.services.bind(this), this.servicesLength()), this.advancedFeatures(), this.bb.createObjList(this.fbsFiles.bind(this), this.fbsFilesLength()));
+    return new SchemaT(this.bb.createObjList(this.objects.bind(this), this.objects_Length()), this.bb.createObjList(this.enums.bind(this), this.enums_Length()), this.file_ident(), this.file_ext(), this.root_table() !== null ? this.root_table().unpack() : null, this.bb.createObjList(this.services.bind(this), this.services_Length()), this.advanced_features(), this.bb.createObjList(this.fbs_files.bind(this), this.fbs_files_Length()));
   }
   unpackTo(_o) {
-    _o.objects = this.bb.createObjList(this.objects.bind(this), this.objectsLength());
-    _o.enums = this.bb.createObjList(this.enums.bind(this), this.enumsLength());
-    _o.fileIdent = this.fileIdent();
-    _o.fileExt = this.fileExt();
-    _o.rootTable = this.rootTable() !== null ? this.rootTable().unpack() : null;
-    _o.services = this.bb.createObjList(this.services.bind(this), this.servicesLength());
-    _o.advancedFeatures = this.advancedFeatures();
-    _o.fbsFiles = this.bb.createObjList(this.fbsFiles.bind(this), this.fbsFilesLength());
+    _o.objects = this.bb.createObjList(this.objects.bind(this), this.objects_Length());
+    _o.enums = this.bb.createObjList(this.enums.bind(this), this.enums_Length());
+    _o.file_ident = this.file_ident();
+    _o.file_ext = this.file_ext();
+    _o.root_table = this.root_table() !== null ? this.root_table().unpack() : null;
+    _o.services = this.bb.createObjList(this.services.bind(this), this.services_Length());
+    _o.advanced_features = this.advanced_features();
+    _o.fbs_files = this.bb.createObjList(this.fbs_files.bind(this), this.fbs_files_Length());
   }
 };
 var SchemaT = class {
-  constructor(objects = [], enums = [], fileIdent = null, fileExt = null, rootTable = null, services = [], advancedFeatures = BigInt("0"), fbsFiles = []) {
+  constructor(objects = [], enums = [], file_ident = null, file_ext = null, root_table = null, services = [], advanced_features = BigInt("0"), fbs_files = []) {
     this.objects = objects;
     this.enums = enums;
-    this.fileIdent = fileIdent;
-    this.fileExt = fileExt;
-    this.rootTable = rootTable;
+    this.file_ident = file_ident;
+    this.file_ext = file_ext;
+    this.root_table = root_table;
     this.services = services;
-    this.advancedFeatures = advancedFeatures;
-    this.fbsFiles = fbsFiles;
+    this.advanced_features = advanced_features;
+    this.fbs_files = fbs_files;
   }
   pack(builder) {
-    const objects = Schema.createObjectsVector(builder, builder.createObjectOffsetList(this.objects));
-    const enums = Schema.createEnumsVector(builder, builder.createObjectOffsetList(this.enums));
-    const fileIdent = this.fileIdent !== null ? builder.createString(this.fileIdent) : 0;
-    const fileExt = this.fileExt !== null ? builder.createString(this.fileExt) : 0;
-    const rootTable = this.rootTable !== null ? this.rootTable.pack(builder) : 0;
-    const services = Schema.createServicesVector(builder, builder.createObjectOffsetList(this.services));
-    const fbsFiles = Schema.createFbsFilesVector(builder, builder.createObjectOffsetList(this.fbsFiles));
+    const objects = Schema.create_objects_Vector(builder, builder.createObjectOffsetList(this.objects));
+    const enums = Schema.create_enums_Vector(builder, builder.createObjectOffsetList(this.enums));
+    const file_ident = this.file_ident !== null ? builder.createString(this.file_ident) : 0;
+    const file_ext = this.file_ext !== null ? builder.createString(this.file_ext) : 0;
+    const root_table = this.root_table !== null ? this.root_table.pack(builder) : 0;
+    const services = Schema.create_services_Vector(builder, builder.createObjectOffsetList(this.services));
+    const fbs_files = Schema.create_fbs_files_Vector(builder, builder.createObjectOffsetList(this.fbs_files));
     Schema.startSchema(builder);
-    Schema.addObjects(builder, objects);
-    Schema.addEnums(builder, enums);
-    Schema.addFileIdent(builder, fileIdent);
-    Schema.addFileExt(builder, fileExt);
-    Schema.addRootTable(builder, rootTable);
-    Schema.addServices(builder, services);
-    Schema.addAdvancedFeatures(builder, this.advancedFeatures);
-    Schema.addFbsFiles(builder, fbsFiles);
+    Schema.add_objects(builder, objects);
+    Schema.add_enums(builder, enums);
+    Schema.add_file_ident(builder, file_ident);
+    Schema.add_file_ext(builder, file_ext);
+    Schema.add_root_table(builder, root_table);
+    Schema.add_services(builder, services);
+    Schema.add_advanced_features(builder, this.advanced_features);
+    Schema.add_fbs_files(builder, fbs_files);
     return Schema.endSchema(builder);
   }
 };
@@ -1849,25 +1849,25 @@ var Object_2 = class _Object_ {
   static startObject(builder) {
     builder.startObject(7);
   }
-  static addReturn(builder, return_) {
+  static add_return(builder, return_) {
     builder.addFieldInt32(0, return_, 0);
   }
-  static addIf(builder, if_) {
+  static add_if(builder, if_) {
     builder.addFieldInt32(1, if_, 0);
   }
-  static addSwitch(builder, switch_) {
+  static add_switch(builder, switch_) {
     builder.addFieldInt32(2, switch_, 0);
   }
-  static addEnum(builder, enum_) {
+  static add_enum(builder, enum_) {
     builder.addFieldInt32(3, enum_, class_2.new_);
   }
-  static addEnum2(builder, enum2) {
+  static add_enum2(builder, enum2) {
     builder.addFieldInt32(4, enum2, class_.arguments_);
   }
-  static addEnum3(builder, enum3) {
+  static add_enum3(builder, enum3) {
     builder.addFieldInt32(5, enum3, Abc.a);
   }
-  static addReflect(builder, reflectOffset) {
+  static add_reflect(builder, reflectOffset) {
     builder.addFieldOffset(6, reflectOffset, 0);
   }
   static endObject(builder) {
@@ -1900,13 +1900,13 @@ var Object_T2 = class {
   pack(builder) {
     const reflect = this.reflect !== null ? this.reflect.pack(builder) : 0;
     Object_2.startObject(builder);
-    Object_2.addReturn(builder, this.return_);
-    Object_2.addIf(builder, this.if_);
-    Object_2.addSwitch(builder, this.switch_);
-    Object_2.addEnum(builder, this.enum_);
-    Object_2.addEnum2(builder, this.enum2);
-    Object_2.addEnum3(builder, this.enum3);
-    Object_2.addReflect(builder, reflect);
+    Object_2.add_return(builder, this.return_);
+    Object_2.add_if(builder, this.if_);
+    Object_2.add_switch(builder, this.switch_);
+    Object_2.add_enum(builder, this.enum_);
+    Object_2.add_enum2(builder, this.enum2);
+    Object_2.add_enum3(builder, this.enum3);
+    Object_2.add_reflect(builder, reflect);
     return Object_2.endObject(builder);
   }
 };

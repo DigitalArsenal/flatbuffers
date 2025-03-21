@@ -46,11 +46,11 @@ static startKeyValue(builder:flatbuffers.Builder) {
   builder.startObject(2);
 }
 
-static add_key(builder:flatbuffers.Builder, keyOffset:flatbuffers.Offset) {
+static addKey(builder:flatbuffers.Builder, keyOffset:flatbuffers.Offset) {
   builder.addFieldOffset(0, keyOffset, 0);
 }
 
-static add_value(builder:flatbuffers.Builder, valueOffset:flatbuffers.Offset) {
+static addValue(builder:flatbuffers.Builder, valueOffset:flatbuffers.Offset) {
   builder.addFieldOffset(1, valueOffset, 0);
 }
 
@@ -62,8 +62,8 @@ static endKeyValue(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createKeyValue(builder:flatbuffers.Builder, keyOffset:flatbuffers.Offset, valueOffset:flatbuffers.Offset):flatbuffers.Offset {
   KeyValue.startKeyValue(builder);
-  KeyValue.add_key(builder, keyOffset);
-  KeyValue.add_value(builder, valueOffset);
+  KeyValue.addKey(builder, keyOffset);
+  KeyValue.addValue(builder, valueOffset);
   return KeyValue.endKeyValue(builder);
 }
 

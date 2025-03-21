@@ -248,7 +248,6 @@
       "program": "${workspaceFolder}/flatc",
       "args": [
         "-t",
-        "-p",
         "-o",
         "${workspaceFolder}/tests",
         "-I",
@@ -268,7 +267,6 @@
       "args": [
         "--preserve-case",
         "-t",
-        "-p",
         "-o",
         "${workspaceFolder}/tests",
         "-I",

@@ -71,15 +71,15 @@ static startStat(builder:flatbuffers.Builder) {
   builder.startObject(3);
 }
 
-static add_id(builder:flatbuffers.Builder, idOffset:flatbuffers.Offset) {
+static addId(builder:flatbuffers.Builder, idOffset:flatbuffers.Offset) {
   builder.addFieldOffset(0, idOffset, 0);
 }
 
-static add_val(builder:flatbuffers.Builder, val:bigint) {
+static addVal(builder:flatbuffers.Builder, val:bigint) {
   builder.addFieldInt64(1, val, BigInt('0'));
 }
 
-static add_count(builder:flatbuffers.Builder, count:number) {
+static addCount(builder:flatbuffers.Builder, count:number) {
   builder.addFieldInt16(2, count, 0);
 }
 
@@ -90,9 +90,9 @@ static endStat(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createStat(builder:flatbuffers.Builder, idOffset:flatbuffers.Offset, val:bigint, count:number):flatbuffers.Offset {
   Stat.startStat(builder);
-  Stat.add_id(builder, idOffset);
-  Stat.add_val(builder, val);
-  Stat.add_count(builder, count);
+  Stat.addId(builder, idOffset);
+  Stat.addVal(builder, val);
+  Stat.addCount(builder, count);
   return Stat.endStat(builder);
 }
 

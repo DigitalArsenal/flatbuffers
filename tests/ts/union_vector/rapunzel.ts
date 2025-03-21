@@ -15,7 +15,7 @@ export class Rapunzel implements flatbuffers.IUnpackableObject<RapunzelT> {
   return this;
 }
 
-hair_length():number {
+hairLength():number {
   return this.bb!.readInt32(this.bb_pos);
 }
 
@@ -41,25 +41,25 @@ static createRapunzel(builder:flatbuffers.Builder, hair_length: number):flatbuff
 
 unpack(): RapunzelT {
   return new RapunzelT(
-    this.hair_length()
+    this.hairLength()
   );
 }
 
 
 unpackTo(_o: RapunzelT): void {
-  _o.hair_length = this.hair_length();
+  _o.hairLength = this.hairLength();
 }
 }
 
 export class RapunzelT implements flatbuffers.IGeneratedObject {
 constructor(
-  public hair_length: number = 0
+  public hairLength: number = 0
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   return Rapunzel.createRapunzel(builder,
-    this.hair_length
+    this.hairLength
   );
 }
 }

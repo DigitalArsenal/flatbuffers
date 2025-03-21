@@ -38,12 +38,12 @@ fields(index: number, obj?:Field):Field|null {
   return offset ? (obj || new Field()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
-fields_Length():number {
+fieldsLength():number {
   const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
-is_struct():boolean {
+isStruct():boolean {
   const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
 }
@@ -96,7 +96,7 @@ attributes(index: number, obj?:KeyValue):KeyValue|null {
   return offset ? (obj || new KeyValue()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
-attributes_Length():number {
+attributesLength():number {
   const offset = this.bb!.__offset(this.bb_pos, 14);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
@@ -108,7 +108,7 @@ documentation(index: number,optionalEncoding?:any):string|Uint8Array|null {
   return offset ? this.bb!.__string(this.bb!.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
 }
 
-documentation_Length():number {
+documentationLength():number {
   const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
@@ -116,9 +116,9 @@ documentation_Length():number {
 /**
  * File that this Object is declared in.
  */
-declaration_file():string|null
-declaration_file(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
-declaration_file(optionalEncoding?:any):string|Uint8Array|null {
+declarationFile():string|null
+declarationFile(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+declarationFile(optionalEncoding?:any):string|Uint8Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 18);
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
@@ -131,15 +131,15 @@ static startObject(builder:flatbuffers.Builder) {
   builder.startObject(8);
 }
 
-static add_name(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
+static addName(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
   builder.addFieldOffset(0, nameOffset, 0);
 }
 
-static add_fields(builder:flatbuffers.Builder, fieldsOffset:flatbuffers.Offset) {
+static addFields(builder:flatbuffers.Builder, fieldsOffset:flatbuffers.Offset) {
   builder.addFieldOffset(1, fieldsOffset, 0);
 }
 
-static create_fields_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static createFieldsVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -147,27 +147,27 @@ static create_fields_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset
   return builder.endVector();
 }
 
-static start_fields_Vector(builder:flatbuffers.Builder, numElems:number) {
+static startFieldsVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static add_is_struct(builder:flatbuffers.Builder, isStruct:boolean) {
+static addIsStruct(builder:flatbuffers.Builder, isStruct:boolean) {
   builder.addFieldInt8(2, +isStruct, +false);
 }
 
-static add_minalign(builder:flatbuffers.Builder, minalign:number) {
+static addMinalign(builder:flatbuffers.Builder, minalign:number) {
   builder.addFieldInt32(3, minalign, 0);
 }
 
-static add_bytesize(builder:flatbuffers.Builder, bytesize:number) {
+static addBytesize(builder:flatbuffers.Builder, bytesize:number) {
   builder.addFieldInt32(4, bytesize, 0);
 }
 
-static add_attributes(builder:flatbuffers.Builder, attributesOffset:flatbuffers.Offset) {
+static addAttributes(builder:flatbuffers.Builder, attributesOffset:flatbuffers.Offset) {
   builder.addFieldOffset(5, attributesOffset, 0);
 }
 
-static create_attributes_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static createAttributesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -175,15 +175,15 @@ static create_attributes_Vector(builder:flatbuffers.Builder, data:flatbuffers.Of
   return builder.endVector();
 }
 
-static start_attributes_Vector(builder:flatbuffers.Builder, numElems:number) {
+static startAttributesVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static add_documentation(builder:flatbuffers.Builder, documentationOffset:flatbuffers.Offset) {
+static addDocumentation(builder:flatbuffers.Builder, documentationOffset:flatbuffers.Offset) {
   builder.addFieldOffset(6, documentationOffset, 0);
 }
 
-static create_documentation_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static createDocumentationVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -191,11 +191,11 @@ static create_documentation_Vector(builder:flatbuffers.Builder, data:flatbuffers
   return builder.endVector();
 }
 
-static start_documentation_Vector(builder:flatbuffers.Builder, numElems:number) {
+static startDocumentationVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static add_declaration_file(builder:flatbuffers.Builder, declarationFileOffset:flatbuffers.Offset) {
+static addDeclarationFile(builder:flatbuffers.Builder, declarationFileOffset:flatbuffers.Offset) {
   builder.addFieldOffset(7, declarationFileOffset, 0);
 }
 
@@ -208,40 +208,40 @@ static endObject(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createObject(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset, fieldsOffset:flatbuffers.Offset, isStruct:boolean, minalign:number, bytesize:number, attributesOffset:flatbuffers.Offset, documentationOffset:flatbuffers.Offset, declarationFileOffset:flatbuffers.Offset):flatbuffers.Offset {
   Object_.startObject(builder);
-  Object_.add_name(builder, nameOffset);
-  Object_.add_fields(builder, fieldsOffset);
-  Object_.add_is_struct(builder, isStruct);
-  Object_.add_minalign(builder, minalign);
-  Object_.add_bytesize(builder, bytesize);
-  Object_.add_attributes(builder, attributesOffset);
-  Object_.add_documentation(builder, documentationOffset);
-  Object_.add_declaration_file(builder, declarationFileOffset);
+  Object_.addName(builder, nameOffset);
+  Object_.addFields(builder, fieldsOffset);
+  Object_.addIsStruct(builder, isStruct);
+  Object_.addMinalign(builder, minalign);
+  Object_.addBytesize(builder, bytesize);
+  Object_.addAttributes(builder, attributesOffset);
+  Object_.addDocumentation(builder, documentationOffset);
+  Object_.addDeclarationFile(builder, declarationFileOffset);
   return Object_.endObject(builder);
 }
 
 unpack(): Object_T {
   return new Object_T(
     this.name(),
-    this.bb!.createObjList<Field, FieldT>(this.fields.bind(this), this.fields_Length()),
-    this.is_struct(),
+    this.bb!.createObjList<Field, FieldT>(this.fields.bind(this), this.fieldsLength()),
+    this.isStruct(),
     this.minalign(),
     this.bytesize(),
-    this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributes_Length()),
-    this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentation_Length()),
-    this.declaration_file()
+    this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributesLength()),
+    this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentationLength()),
+    this.declarationFile()
   );
 }
 
 
 unpackTo(_o: Object_T): void {
   _o.name = this.name();
-  _o.fields = this.bb!.createObjList<Field, FieldT>(this.fields.bind(this), this.fields_Length());
-  _o.is_struct = this.is_struct();
+  _o.fields = this.bb!.createObjList<Field, FieldT>(this.fields.bind(this), this.fieldsLength());
+  _o.isStruct = this.isStruct();
   _o.minalign = this.minalign();
   _o.bytesize = this.bytesize();
-  _o.attributes = this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributes_Length());
-  _o.documentation = this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentation_Length());
-  _o.declaration_file = this.declaration_file();
+  _o.attributes = this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributesLength());
+  _o.documentation = this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentationLength());
+  _o.declarationFile = this.declarationFile();
 }
 }
 
@@ -249,31 +249,31 @@ export class Object_T implements flatbuffers.IGeneratedObject {
 constructor(
   public name: string|Uint8Array|null = null,
   public fields: (FieldT)[] = [],
-  public is_struct: boolean = false,
+  public isStruct: boolean = false,
   public minalign: number = 0,
   public bytesize: number = 0,
   public attributes: (KeyValueT)[] = [],
   public documentation: (string)[] = [],
-  public declaration_file: string|Uint8Array|null = null
+  public declarationFile: string|Uint8Array|null = null
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const name = (this.name !== null ? builder.createString(this.name!) : 0);
-  const fields = Object_.create_fields_Vector(builder, builder.createObjectOffsetList(this.fields));
-  const attributes = Object_.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
-  const documentation = Object_.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
-  const declaration_file = (this.declaration_file !== null ? builder.createString(this.declaration_file!) : 0);
+  const fields = Object_.createFieldsVector(builder, builder.createObjectOffsetList(this.fields));
+  const attributes = Object_.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
+  const documentation = Object_.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
+  const declarationFile = (this.declarationFile !== null ? builder.createString(this.declarationFile!) : 0);
 
   return Object_.createObject(builder,
     name,
     fields,
-    this.is_struct,
+    this.isStruct,
     this.minalign,
     this.bytesize,
     attributes,
     documentation,
-    declaration_file
+    declarationFile
   );
 }
 }

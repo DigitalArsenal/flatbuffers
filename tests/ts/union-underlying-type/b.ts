@@ -39,7 +39,7 @@ static startB(builder:flatbuffers.Builder) {
   builder.startObject(1);
 }
 
-static add_b(builder:flatbuffers.Builder, bOffset:flatbuffers.Offset) {
+static addB(builder:flatbuffers.Builder, bOffset:flatbuffers.Offset) {
   builder.addFieldOffset(0, bOffset, 0);
 }
 
@@ -50,7 +50,7 @@ static endB(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createB(builder:flatbuffers.Builder, bOffset:flatbuffers.Offset):flatbuffers.Offset {
   B.startB(builder);
-  B.add_b(builder, bOffset);
+  B.addB(builder, bOffset);
   return B.endB(builder);
 }
 

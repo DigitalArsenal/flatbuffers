@@ -70,7 +70,7 @@ mutate_offset(value:number):boolean {
   return true;
 }
 
-default_integer():bigint {
+defaultInteger():bigint {
   const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? this.bb!.readInt64(this.bb_pos + offset) : BigInt('0');
 }
@@ -86,7 +86,7 @@ mutate_default_integer(value:bigint):boolean {
   return true;
 }
 
-default_real():number {
+defaultReal():number {
   const offset = this.bb!.__offset(this.bb_pos, 14);
   return offset ? this.bb!.readFloat64(this.bb_pos + offset) : 0.0;
 }
@@ -155,7 +155,7 @@ attributes(index: number, obj?:KeyValue):KeyValue|null {
   return offset ? (obj || new KeyValue()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
-attributes_Length():number {
+attributesLength():number {
   const offset = this.bb!.__offset(this.bb_pos, 22);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
@@ -167,7 +167,7 @@ documentation(index: number,optionalEncoding?:any):string|Uint8Array|null {
   return offset ? this.bb!.__string(this.bb!.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
 }
 
-documentation_Length():number {
+documentationLength():number {
   const offset = this.bb!.__offset(this.bb_pos, 24);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
@@ -234,47 +234,47 @@ static startField(builder:flatbuffers.Builder) {
   builder.startObject(14);
 }
 
-static add_name(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
+static addName(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
   builder.addFieldOffset(0, nameOffset, 0);
 }
 
-static add_type(builder:flatbuffers.Builder, typeOffset:flatbuffers.Offset) {
+static addType(builder:flatbuffers.Builder, typeOffset:flatbuffers.Offset) {
   builder.addFieldOffset(1, typeOffset, 0);
 }
 
-static add_id(builder:flatbuffers.Builder, id:number) {
+static addId(builder:flatbuffers.Builder, id:number) {
   builder.addFieldInt16(2, id, 0);
 }
 
-static add_offset(builder:flatbuffers.Builder, offset:number) {
+static addOffset(builder:flatbuffers.Builder, offset:number) {
   builder.addFieldInt16(3, offset, 0);
 }
 
-static add_default_integer(builder:flatbuffers.Builder, defaultInteger:bigint) {
+static addDefaultInteger(builder:flatbuffers.Builder, defaultInteger:bigint) {
   builder.addFieldInt64(4, defaultInteger, BigInt('0'));
 }
 
-static add_default_real(builder:flatbuffers.Builder, defaultReal:number) {
+static addDefaultReal(builder:flatbuffers.Builder, defaultReal:number) {
   builder.addFieldFloat64(5, defaultReal, 0.0);
 }
 
-static add_deprecated(builder:flatbuffers.Builder, deprecated:boolean) {
+static addDeprecated(builder:flatbuffers.Builder, deprecated:boolean) {
   builder.addFieldInt8(6, +deprecated, +false);
 }
 
-static add_required(builder:flatbuffers.Builder, required:boolean) {
+static addRequired(builder:flatbuffers.Builder, required:boolean) {
   builder.addFieldInt8(7, +required, +false);
 }
 
-static add_key(builder:flatbuffers.Builder, key:boolean) {
+static addKey(builder:flatbuffers.Builder, key:boolean) {
   builder.addFieldInt8(8, +key, +false);
 }
 
-static add_attributes(builder:flatbuffers.Builder, attributesOffset:flatbuffers.Offset) {
+static addAttributes(builder:flatbuffers.Builder, attributesOffset:flatbuffers.Offset) {
   builder.addFieldOffset(9, attributesOffset, 0);
 }
 
-static create_attributes_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static createAttributesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -282,15 +282,15 @@ static create_attributes_Vector(builder:flatbuffers.Builder, data:flatbuffers.Of
   return builder.endVector();
 }
 
-static start_attributes_Vector(builder:flatbuffers.Builder, numElems:number) {
+static startAttributesVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static add_documentation(builder:flatbuffers.Builder, documentationOffset:flatbuffers.Offset) {
+static addDocumentation(builder:flatbuffers.Builder, documentationOffset:flatbuffers.Offset) {
   builder.addFieldOffset(10, documentationOffset, 0);
 }
 
-static create_documentation_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static createDocumentationVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -298,19 +298,19 @@ static create_documentation_Vector(builder:flatbuffers.Builder, data:flatbuffers
   return builder.endVector();
 }
 
-static start_documentation_Vector(builder:flatbuffers.Builder, numElems:number) {
+static startDocumentationVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static add_optional(builder:flatbuffers.Builder, optional:boolean) {
+static addOptional(builder:flatbuffers.Builder, optional:boolean) {
   builder.addFieldInt8(11, +optional, +false);
 }
 
-static add_padding(builder:flatbuffers.Builder, padding:number) {
+static addPadding(builder:flatbuffers.Builder, padding:number) {
   builder.addFieldInt16(12, padding, 0);
 }
 
-static add_offset64(builder:flatbuffers.Builder, offset64:boolean) {
+static addOffset64(builder:flatbuffers.Builder, offset64:boolean) {
   builder.addFieldInt8(13, +offset64, +false);
 }
 
@@ -328,13 +328,13 @@ unpack(): FieldT {
     (this.type() !== null ? this.type()!.unpack() : null),
     this.id(),
     this.offset(),
-    this.default_integer(),
-    this.default_real(),
+    this.defaultInteger(),
+    this.defaultReal(),
     this.deprecated(),
     this.required(),
     this.key(),
-    this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributes_Length()),
-    this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentation_Length()),
+    this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributesLength()),
+    this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentationLength()),
     this.optional(),
     this.padding(),
     this.offset64()
@@ -347,13 +347,13 @@ unpackTo(_o: FieldT): void {
   _o.type = (this.type() !== null ? this.type()!.unpack() : null);
   _o.id = this.id();
   _o.offset = this.offset();
-  _o.default_integer = this.default_integer();
-  _o.default_real = this.default_real();
+  _o.defaultInteger = this.defaultInteger();
+  _o.defaultReal = this.defaultReal();
   _o.deprecated = this.deprecated();
   _o.required = this.required();
   _o.key = this.key();
-  _o.attributes = this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributes_Length());
-  _o.documentation = this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentation_Length());
+  _o.attributes = this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributesLength());
+  _o.documentation = this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentationLength());
   _o.optional = this.optional();
   _o.padding = this.padding();
   _o.offset64 = this.offset64();
@@ -366,8 +366,8 @@ constructor(
   public type: TypeT|null = null,
   public id: number = 0,
   public offset: number = 0,
-  public default_integer: bigint = BigInt('0'),
-  public default_real: number = 0.0,
+  public defaultInteger: bigint = BigInt('0'),
+  public defaultReal: number = 0.0,
   public deprecated: boolean = false,
   public required: boolean = false,
   public key: boolean = false,
@@ -382,24 +382,24 @@ constructor(
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const name = (this.name !== null ? builder.createString(this.name!) : 0);
   const type = (this.type !== null ? this.type!.pack(builder) : 0);
-  const attributes = Field.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
-  const documentation = Field.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
+  const attributes = Field.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
+  const documentation = Field.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
 
   Field.startField(builder);
-  Field.add_name(builder, name);
-  Field.add_type(builder, type);
-  Field.add_id(builder, this.id);
-  Field.add_offset(builder, this.offset);
-  Field.add_default_integer(builder, this.default_integer);
-  Field.add_default_real(builder, this.default_real);
-  Field.add_deprecated(builder, this.deprecated);
-  Field.add_required(builder, this.required);
-  Field.add_key(builder, this.key);
-  Field.add_attributes(builder, attributes);
-  Field.add_documentation(builder, documentation);
-  Field.add_optional(builder, this.optional);
-  Field.add_padding(builder, this.padding);
-  Field.add_offset64(builder, this.offset64);
+  Field.addName(builder, name);
+  Field.addType(builder, type);
+  Field.addId(builder, this.id);
+  Field.addOffset(builder, this.offset);
+  Field.addDefaultInteger(builder, this.defaultInteger);
+  Field.addDefaultReal(builder, this.defaultReal);
+  Field.addDeprecated(builder, this.deprecated);
+  Field.addRequired(builder, this.required);
+  Field.addKey(builder, this.key);
+  Field.addAttributes(builder, attributes);
+  Field.addDocumentation(builder, documentation);
+  Field.addOptional(builder, this.optional);
+  Field.addPadding(builder, this.padding);
+  Field.addOffset64(builder, this.offset64);
 
   return Field.endField(builder);
 }

@@ -48,7 +48,7 @@ static startA(builder:flatbuffers.Builder) {
   builder.startObject(1);
 }
 
-static add_a(builder:flatbuffers.Builder, a:number) {
+static addA(builder:flatbuffers.Builder, a:number) {
   builder.addFieldInt32(0, a, 0);
 }
 
@@ -59,7 +59,7 @@ static endA(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createA(builder:flatbuffers.Builder, a:number):flatbuffers.Offset {
   A.startA(builder);
-  A.add_a(builder, a);
+  A.addA(builder, a);
   return A.endA(builder);
 }
 

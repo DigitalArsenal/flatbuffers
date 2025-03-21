@@ -38,7 +38,7 @@ static startTableB(builder:flatbuffers.Builder) {
   builder.startObject(1);
 }
 
-static add_a(builder:flatbuffers.Builder, aOffset:flatbuffers.Offset) {
+static addA(builder:flatbuffers.Builder, aOffset:flatbuffers.Offset) {
   builder.addFieldOffset(0, aOffset, 0);
 }
 
@@ -49,7 +49,7 @@ static endTableB(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createTableB(builder:flatbuffers.Builder, aOffset:flatbuffers.Offset):flatbuffers.Offset {
   TableB.startTableB(builder);
-  TableB.add_a(builder, aOffset);
+  TableB.addA(builder, aOffset);
   return TableB.endTableB(builder);
 }
 

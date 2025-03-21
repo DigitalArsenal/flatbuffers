@@ -39,12 +39,12 @@ values(index: number, obj?:EnumVal):EnumVal|null {
   return offset ? (obj || new EnumVal()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
-values_Length():number {
+valuesLength():number {
   const offset = this.bb!.__offset(this.bb_pos, 6);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
 
-is_union():boolean {
+isUnion():boolean {
   const offset = this.bb!.__offset(this.bb_pos, 8);
   return offset ? !!this.bb!.readInt8(this.bb_pos + offset) : false;
 }
@@ -60,7 +60,7 @@ mutate_is_union(value:boolean):boolean {
   return true;
 }
 
-underlying_type(obj?:Type):Type|null {
+underlyingType(obj?:Type):Type|null {
   const offset = this.bb!.__offset(this.bb_pos, 10);
   return offset ? (obj || new Type()).__init(this.bb!.__indirect(this.bb_pos + offset), this.bb!) : null;
 }
@@ -70,7 +70,7 @@ attributes(index: number, obj?:KeyValue):KeyValue|null {
   return offset ? (obj || new KeyValue()).__init(this.bb!.__indirect(this.bb!.__vector(this.bb_pos + offset) + index * 4), this.bb!) : null;
 }
 
-attributes_Length():number {
+attributesLength():number {
   const offset = this.bb!.__offset(this.bb_pos, 12);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
@@ -82,7 +82,7 @@ documentation(index: number,optionalEncoding?:any):string|Uint8Array|null {
   return offset ? this.bb!.__string(this.bb!.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
 }
 
-documentation_Length():number {
+documentationLength():number {
   const offset = this.bb!.__offset(this.bb_pos, 14);
   return offset ? this.bb!.__vector_len(this.bb_pos + offset) : 0;
 }
@@ -90,9 +90,9 @@ documentation_Length():number {
 /**
  * File that this Enum is declared in.
  */
-declaration_file():string|null
-declaration_file(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
-declaration_file(optionalEncoding?:any):string|Uint8Array|null {
+declarationFile():string|null
+declarationFile(optionalEncoding:flatbuffers.Encoding):string|Uint8Array|null
+declarationFile(optionalEncoding?:any):string|Uint8Array|null {
   const offset = this.bb!.__offset(this.bb_pos, 16);
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
@@ -105,15 +105,15 @@ static startEnum(builder:flatbuffers.Builder) {
   builder.startObject(7);
 }
 
-static add_name(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
+static addName(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
   builder.addFieldOffset(0, nameOffset, 0);
 }
 
-static add_values(builder:flatbuffers.Builder, valuesOffset:flatbuffers.Offset) {
+static addValues(builder:flatbuffers.Builder, valuesOffset:flatbuffers.Offset) {
   builder.addFieldOffset(1, valuesOffset, 0);
 }
 
-static create_values_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static createValuesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -121,23 +121,23 @@ static create_values_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset
   return builder.endVector();
 }
 
-static start_values_Vector(builder:flatbuffers.Builder, numElems:number) {
+static startValuesVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static add_is_union(builder:flatbuffers.Builder, isUnion:boolean) {
+static addIsUnion(builder:flatbuffers.Builder, isUnion:boolean) {
   builder.addFieldInt8(2, +isUnion, +false);
 }
 
-static add_underlying_type(builder:flatbuffers.Builder, underlyingTypeOffset:flatbuffers.Offset) {
+static addUnderlyingType(builder:flatbuffers.Builder, underlyingTypeOffset:flatbuffers.Offset) {
   builder.addFieldOffset(3, underlyingTypeOffset, 0);
 }
 
-static add_attributes(builder:flatbuffers.Builder, attributesOffset:flatbuffers.Offset) {
+static addAttributes(builder:flatbuffers.Builder, attributesOffset:flatbuffers.Offset) {
   builder.addFieldOffset(4, attributesOffset, 0);
 }
 
-static create_attributes_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static createAttributesVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -145,15 +145,15 @@ static create_attributes_Vector(builder:flatbuffers.Builder, data:flatbuffers.Of
   return builder.endVector();
 }
 
-static start_attributes_Vector(builder:flatbuffers.Builder, numElems:number) {
+static startAttributesVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static add_documentation(builder:flatbuffers.Builder, documentationOffset:flatbuffers.Offset) {
+static addDocumentation(builder:flatbuffers.Builder, documentationOffset:flatbuffers.Offset) {
   builder.addFieldOffset(5, documentationOffset, 0);
 }
 
-static create_documentation_Vector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
+static createDocumentationVector(builder:flatbuffers.Builder, data:flatbuffers.Offset[]):flatbuffers.Offset {
   builder.startVector(4, data.length, 4);
   for (let i = data.length - 1; i >= 0; i--) {
     builder.addOffset(data[i]!);
@@ -161,11 +161,11 @@ static create_documentation_Vector(builder:flatbuffers.Builder, data:flatbuffers
   return builder.endVector();
 }
 
-static start_documentation_Vector(builder:flatbuffers.Builder, numElems:number) {
+static startDocumentationVector(builder:flatbuffers.Builder, numElems:number) {
   builder.startVector(4, numElems, 4);
 }
 
-static add_declaration_file(builder:flatbuffers.Builder, declarationFileOffset:flatbuffers.Offset) {
+static addDeclarationFile(builder:flatbuffers.Builder, declarationFileOffset:flatbuffers.Offset) {
   builder.addFieldOffset(6, declarationFileOffset, 0);
 }
 
@@ -181,24 +181,24 @@ static endEnum(builder:flatbuffers.Builder):flatbuffers.Offset {
 unpack(): EnumT {
   return new EnumT(
     this.name(),
-    this.bb!.createObjList<EnumVal, EnumValT>(this.values.bind(this), this.values_Length()),
-    this.is_union(),
-    (this.underlying_type() !== null ? this.underlying_type()!.unpack() : null),
-    this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributes_Length()),
-    this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentation_Length()),
-    this.declaration_file()
+    this.bb!.createObjList<EnumVal, EnumValT>(this.values.bind(this), this.valuesLength()),
+    this.isUnion(),
+    (this.underlyingType() !== null ? this.underlyingType()!.unpack() : null),
+    this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributesLength()),
+    this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentationLength()),
+    this.declarationFile()
   );
 }
 
 
 unpackTo(_o: EnumT): void {
   _o.name = this.name();
-  _o.values = this.bb!.createObjList<EnumVal, EnumValT>(this.values.bind(this), this.values_Length());
-  _o.is_union = this.is_union();
-  _o.underlying_type = (this.underlying_type() !== null ? this.underlying_type()!.unpack() : null);
-  _o.attributes = this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributes_Length());
-  _o.documentation = this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentation_Length());
-  _o.declaration_file = this.declaration_file();
+  _o.values = this.bb!.createObjList<EnumVal, EnumValT>(this.values.bind(this), this.valuesLength());
+  _o.isUnion = this.isUnion();
+  _o.underlyingType = (this.underlyingType() !== null ? this.underlyingType()!.unpack() : null);
+  _o.attributes = this.bb!.createObjList<KeyValue, KeyValueT>(this.attributes.bind(this), this.attributesLength());
+  _o.documentation = this.bb!.createScalarList<string>(this.documentation.bind(this), this.documentationLength());
+  _o.declarationFile = this.declarationFile();
 }
 }
 
@@ -206,30 +206,30 @@ export class EnumT implements flatbuffers.IGeneratedObject {
 constructor(
   public name: string|Uint8Array|null = null,
   public values: (EnumValT)[] = [],
-  public is_union: boolean = false,
-  public underlying_type: TypeT|null = null,
+  public isUnion: boolean = false,
+  public underlyingType: TypeT|null = null,
   public attributes: (KeyValueT)[] = [],
   public documentation: (string)[] = [],
-  public declaration_file: string|Uint8Array|null = null
+  public declarationFile: string|Uint8Array|null = null
 ){}
 
 
 pack(builder:flatbuffers.Builder): flatbuffers.Offset {
   const name = (this.name !== null ? builder.createString(this.name!) : 0);
-  const values = Enum.create_values_Vector(builder, builder.createObjectOffsetList(this.values));
-  const underlying_type = (this.underlying_type !== null ? this.underlying_type!.pack(builder) : 0);
-  const attributes = Enum.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
-  const documentation = Enum.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
-  const declaration_file = (this.declaration_file !== null ? builder.createString(this.declaration_file!) : 0);
+  const values = Enum.createValuesVector(builder, builder.createObjectOffsetList(this.values));
+  const underlyingType = (this.underlyingType !== null ? this.underlyingType!.pack(builder) : 0);
+  const attributes = Enum.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
+  const documentation = Enum.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
+  const declarationFile = (this.declarationFile !== null ? builder.createString(this.declarationFile!) : 0);
 
   Enum.startEnum(builder);
-  Enum.add_name(builder, name);
-  Enum.add_values(builder, values);
-  Enum.add_is_union(builder, this.is_union);
-  Enum.add_underlying_type(builder, underlying_type);
-  Enum.add_attributes(builder, attributes);
-  Enum.add_documentation(builder, documentation);
-  Enum.add_declaration_file(builder, declaration_file);
+  Enum.addName(builder, name);
+  Enum.addValues(builder, values);
+  Enum.addIsUnion(builder, this.isUnion);
+  Enum.addUnderlyingType(builder, underlyingType);
+  Enum.addAttributes(builder, attributes);
+  Enum.addDocumentation(builder, documentation);
+  Enum.addDeclarationFile(builder, declarationFile);
 
   return Enum.endEnum(builder);
 }

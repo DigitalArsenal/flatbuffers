@@ -73,15 +73,15 @@ static startTab(builder:flatbuffers.Builder) {
   builder.startObject(3);
 }
 
-static add_abc(builder:flatbuffers.Builder, abc:Abc) {
+static addAbc(builder:flatbuffers.Builder, abc:Abc) {
   builder.addFieldInt32(0, abc, Abc.a);
 }
 
-static add_arg(builder:flatbuffers.Builder, arg:class_) {
+static addArg(builder:flatbuffers.Builder, arg:class_) {
   builder.addFieldInt32(1, arg, class_.arguments_);
 }
 
-static add_name(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
+static addName(builder:flatbuffers.Builder, nameOffset:flatbuffers.Offset) {
   builder.addFieldOffset(2, nameOffset, 0);
 }
 
@@ -92,9 +92,9 @@ static endTab(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createTab(builder:flatbuffers.Builder, abc:Abc, arg:class_, nameOffset:flatbuffers.Offset):flatbuffers.Offset {
   Tab.startTab(builder);
-  Tab.add_abc(builder, abc);
-  Tab.add_arg(builder, arg);
-  Tab.add_name(builder, nameOffset);
+  Tab.addAbc(builder, abc);
+  Tab.addArg(builder, arg);
+  Tab.addName(builder, nameOffset);
   return Tab.endTab(builder);
 }
 

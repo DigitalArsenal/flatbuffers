@@ -48,7 +48,7 @@ static startHandFan(builder:flatbuffers.Builder) {
   builder.startObject(1);
 }
 
-static add_length(builder:flatbuffers.Builder, length:number) {
+static addLength(builder:flatbuffers.Builder, length:number) {
   builder.addFieldInt32(0, length, 0);
 }
 
@@ -59,7 +59,7 @@ static endHandFan(builder:flatbuffers.Builder):flatbuffers.Offset {
 
 static createHandFan(builder:flatbuffers.Builder, length:number):flatbuffers.Offset {
   HandFan.startHandFan(builder);
-  HandFan.add_length(builder, length);
+  HandFan.addLength(builder, length);
   return HandFan.endHandFan(builder);
 }
 

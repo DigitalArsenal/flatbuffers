@@ -14,7 +14,7 @@ export enum ABC {
   C = 777
 }
 
-export function unionToABC(
+export function unionToAbc(
   type: ABC,
   accessor: (obj:A|B|C) => A|B|C|null
 ): A|B|C|null {
@@ -27,7 +27,7 @@ export function unionToABC(
   }
 }
 
-export function unionListToABC(
+export function unionListToAbc(
   type: ABC, 
   accessor: (index: number, obj:A|B|C) => A|B|C|null, 
   index: number

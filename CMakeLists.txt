@@ -150,6 +150,7 @@ set(FlatBuffers_Library_SRCS
   src/idl_gen_text.cpp
   src/reflection.cpp
   src/util.cpp
+  src/global_options.cpp
 )
 
 set(FlatBuffers_Compiler_SRCS

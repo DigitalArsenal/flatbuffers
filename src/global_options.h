@@ -5,6 +5,6 @@
 
 #include "flatbuffers/flatc.h" 
 
-inline flatbuffers::FlatCOptions global_options;
+extern flatbuffers::FlatCOptions global_options;
 
 #endif  // GLOBAL_OPTIONS_H

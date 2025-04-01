@@ -20,10 +20,16 @@ maximum memory efficiency. It allows you to directly access serialized data with
 
     Use `cmake` to create the build files for your platform and then perform the compilation (Linux example).
 
-    ```
+    ```bash
     cmake -G "Unix Makefiles"
     make -j
     ```
+
+   OSX Example
+
+   ```bash
+   cmake -G "Unix Makefiles" -DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk .
+   ```
 
 2. Define your flatbuffer schema (`.fbs`)
 

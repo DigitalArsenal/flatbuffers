@@ -135,6 +135,7 @@ set(FlatBuffers_Library_SRCS
   include/flatbuffers/hash.h
   include/flatbuffers/idl.h
   include/flatbuffers/minireflect.h
+  include/flatbuffers/options.h
   include/flatbuffers/reflection.h
   include/flatbuffers/reflection_generated.h
   include/flatbuffers/registry.h
@@ -150,6 +151,7 @@ set(FlatBuffers_Library_SRCS
   src/idl_gen_text.cpp
   src/reflection.cpp
   src/util.cpp
+  src/options.cpp
 )
 
 set(FlatBuffers_Compiler_SRCS

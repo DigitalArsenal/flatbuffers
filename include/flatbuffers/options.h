@@ -5,7 +5,7 @@
 
 namespace flatbuffers {
 
-inline FlatCOptions global_options;
+extern FlatCOptions global_options;
 
 }
 

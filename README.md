@@ -1,5 +1,4 @@
-![logo](http://google.github.io/flatbuffers/fpl_logo_small.png) FlatBuffers
-===========
+# ![logo](https://flatbuffers.dev/assets/flatbuffers_logo.svg) FlatBuffers
 
 ![Build status](https://github.com/google/flatbuffers/actions/workflows/build.yml/badge.svg?branch=master)
 [![BuildKite status](https://badge.buildkite.com/7979d93bc6279aa539971f271253c65d5e8fe2fe43c90bbb25.svg)](https://buildkite.com/bazel/flatbuffers)
@@ -9,7 +8,6 @@
 [![Discord Chat](https://img.shields.io/discord/656202785926152206.svg)](https:///discord.gg/6qgKs3R)
 [![Twitter Follow](https://img.shields.io/twitter/follow/wvo.svg?style=social)](https://twitter.com/wvo)
 [![Twitter Follow](https://img.shields.io/twitter/follow/dbaileychess.svg?style=social)](https://twitter.com/dbaileychess)
-
 
 **FlatBuffers** is a cross platform serialization library architected for
 maximum memory efficiency. It allows you to directly access serialized data without parsing/unpacking it first, while still having great forwards/backwards compatibility.
@@ -39,10 +37,10 @@ maximum memory efficiency. It allows you to directly access serialized data with
 
     Use the `flatc` compiler to take your schema and generate language-specific code:
 
-    ```
+    ```bash
     ./flatc --cpp --rust monster.fbs
     ```
-    
+
     Which generates `monster_generated.h` and `monster_generated.rs` files.
 
 4. Serialize data
@@ -56,7 +54,7 @@ maximum memory efficiency. It allows you to directly access serialized data with
 6. Read the data
 
     Use the generated accessors to read the data from the serialized buffer.
-    
+
     It doesn't need to be the same language/schema version, FlatBuffers ensures the data is readable across languages and schema versions. See the [`Rust` example](https://github.com/google/flatbuffers/blob/master/samples/sample_binary.rs#L92-L106) reading the data written by `C++`.
 
 ## Documentation
@@ -64,6 +62,7 @@ maximum memory efficiency. It allows you to directly access serialized data with
 **Go to our [landing page][] to browse our documentation.**
 
 ## Supported operating systems
+
 - Windows
 - macOS
 - Linux
@@ -97,27 +96,25 @@ FlatBuffers does not follow traditional SemVer versioning (see [rationale](https
 
 ## Contribution
 
-* [FlatBuffers Issues Tracker][] to submit an issue.
-* [stackoverflow.com][] with [`flatbuffers` tag][] for any questions regarding FlatBuffers.
+- [FlatBuffers Issues Tracker][] to submit an issue.
+- [stackoverflow.com][] with [`flatbuffers` tag][] for any questions regarding FlatBuffers.
 
 *To contribute to this project,* see [CONTRIBUTING][].
 
 ## Community
 
-* [Discord Server](https:///discord.gg/6qgKs3R)
+- [Discord Server](https:///discord.gg/6qgKs3R)
 
 ## Security
 
 Please see our [Security Policy](SECURITY.md) for reporting vulnerabilities.
 
 ## Licensing
-*Flatbuffers* is licensed under the Apache License, Version 2.0. See [LICENSE][] for the full license text.
 
-<br>
+*Flatbuffers* is licensed under the Apache License, Version 2.0. See [LICENSE][] for the full license text.
 
    [CONTRIBUTING]: http://github.com/google/flatbuffers/blob/master/CONTRIBUTING.md
    [`flatbuffers` tag]: https://stackoverflow.com/questions/tagged/flatbuffers
-   [FlatBuffers Google Group]: https://groups.google.com/forum/#!forum/flatbuffers
    [FlatBuffers Issues Tracker]: http://github.com/google/flatbuffers/issues
    [stackoverflow.com]: http://stackoverflow.com/search?q=flatbuffers
    [landing page]: https://google.github.io/flatbuffers

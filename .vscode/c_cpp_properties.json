@@ -1,21 +1,31 @@
 {
-    "configurations": [
-        {
-            "name": "Mac",
-            "includePath": [
-                "${workspaceFolder}/**",
-                "${workspaceFolder}/include/flatbuffers"
-            ],
-            "defines": [],
-            "macFrameworkPath": [
-                "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks"
-            ],
-            "compilerPath": "/usr/bin/clang",
-            "cStandard": "c17",
-            "cppStandard": "c++17",
-            "intelliSenseMode": "macos-clang-arm64",
-            "configurationProvider": "ms-vscode.cmake-tools"
-        }
-    ],
-    "version": 4
+  "configurations": [
+    {
+      "name": "Mac",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/include/flatbuffers"
+      ],
+      "defines": [],
+      "macFrameworkPath": [
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks"
+      ],
+      "compilerPath": "/usr/bin/clang",
+      "cStandard": "c17",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "macos-clang-arm64",
+      "configurationProvider": "ms-vscode.cmake-tools"
+    },
+    {
+      "name": "Linux",
+      "includePath": ["${workspaceFolder}/**"],
+      "defines": [],
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "c17",
+      "cppStandard": "gnu++17",
+      "intelliSenseMode": "linux-gcc-x64",
+      "configurationProvider": "ms-vscode.cmake-tools"
+    }
+  ],
+  "version": 4
 }

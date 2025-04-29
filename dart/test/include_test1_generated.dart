@@ -5,7 +5,7 @@ import 'dart:typed_data' show Uint8List;
 import 'package:flat_buffers/flat_buffers.dart' as fb;
 
 
-import './include_test2_my_game.other_name_space_generated.dart' as my_game_other_name_space;
+import './include_test2_MyGame.OtherNameSpace_generated.dart' as MyGame_OtherNameSpace;
 
 class TableA {
   TableA._(this._bc, this._bcOffset);
@@ -19,7 +19,7 @@ class TableA {
   final fb.BufferContext _bc;
   final int _bcOffset;
 
-  my_game_other_name_space.TableB? get b => my_game_other_name_space.TableB.reader.vTableGetNullable(_bc, _bcOffset, 4);
+  MyGame_OtherNameSpace.TableB? get b => MyGame_OtherNameSpace.TableB.reader.vTableGetNullable(_bc, _bcOffset, 4);
 
   @override
   String toString() {
@@ -36,7 +36,7 @@ class TableA {
 }
 
 class TableAT implements fb.Packable {
-  my_game_other_name_space.TableBT? b;
+  MyGame_OtherNameSpace.TableBT? b;
 
   TableAT({
       this.b});
@@ -72,7 +72,7 @@ class TableABuilder {
     fbBuilder.startTable(1);
   }
 
-  int addBOffset(int? offset) {
+  int add_bOffset(int? offset) {
     fbBuilder.addOffset(0, offset);
     return fbBuilder.offset;
   }
@@ -83,10 +83,10 @@ class TableABuilder {
 }
 
 class TableAObjectBuilder extends fb.ObjectBuilder {
-  final my_game_other_name_space.TableBObjectBuilder? _b;
+  final MyGame_OtherNameSpace.TableBObjectBuilder? _b;
 
   TableAObjectBuilder({
-    my_game_other_name_space.TableBObjectBuilder? b,
+    MyGame_OtherNameSpace.TableBObjectBuilder? b,
   })
       : _b = b;
 

@@ -57,6 +57,7 @@ option(FLATBUFFERS_SKIP_MONSTER_EXTRA
 option(FLATBUFFERS_STRICT_MODE
       "Build flatbuffers with all warnings as errors (-Werror or /WX)."
       OFF)
+option(FLATBUFFERS_BUILD_EMBIND "Build flatbuffers_embind target (WebAssembly + Embind)" OFF)
 
 if(NOT DEFINED FLATBUFFERS_CPP_STD)
   set(FLATBUFFERS_CPP_STD 11)
@@ -605,7 +606,7 @@ function(compile_flatbuffers_schema_to_embedded_binary SRC_FBS OPT)
   register_generated_output(${GEN_BFBS_HEADER})
 endfunction()
 
-if(FLATBUFFERS_BUILD_TESTS)
+if(NOT EMSCRIPTEN AND FLATBUFFERS_BUILD_TESTS)
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/tests" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
   file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/samples" DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
 
@@ -722,7 +723,7 @@ if(FLATBUFFERS_INSTALL)
     )
   endif()
 
-  if(FLATBUFFERS_BUILD_FLATC)
+  if(FLATBUFFERS_BUILD_FLATC AND NOT EMSCRIPTEN)
     install(
       TARGETS flatc EXPORT FlatcTargets
       RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -810,3 +811,41 @@ target_include_directories(
   FlatBuffers
   INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/include>)
+
+ #----------------------------------------------------
+ # Emscripten/WASM Embind target for flatbuffers_embind
+ #----------------------------------------------------
+
+ if(EMSCRIPTEN AND FLATBUFFERS_BUILD_EMBIND)
+
+  set(BF_EMBIND_SRC
+    ${FlatBuffers_Compiler_SRCS}
+    bindings/emscripten/flatbuffers_embind.cpp
+  )
+
+  add_executable(flatbuffers_embind EXCLUDE_FROM_ALL ${BF_EMBIND_SRC})
+
+  target_compile_options(flatbuffers_embind PRIVATE -Wno-main)
+
+  target_include_directories(flatbuffers_embind PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/emscripten
+  )
+
+  # Output will be: build/flatbuffers_embind.js (and .wasm if not SINGLE_FILE=1)
+  set_target_properties(flatbuffers_embind PROPERTIES
+    OUTPUT_NAME "flatbuffers_embind"
+    SUFFIX ".js"
+    LINKER_LANGUAGE CXX
+    LINK_FLAGS "--bind --no-entry -sMODULARIZE=1 -sSINGLE_FILE=1 -sEXPORT_NAME=flatbuffers -sENVIRONMENT=web,node -sALLOW_MEMORY_GROWTH=1"
+  )
+
+  target_link_libraries(flatbuffers_embind PRIVATE ProjectConfig)
+
+  add_custom_command(TARGET flatbuffers_embind POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "flatbuffers_embind.js built to: $<TARGET_FILE:flatbuffers_embind>"
+  )
+
+endif()
+

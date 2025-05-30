@@ -17,15 +17,15 @@ class Foo {
   final fb.BufferContext _bc;
   final int _bcOffset;
 
-  FooProperties? get myFoo => FooProperties.reader.vTableGetNullable(_bc, _bcOffset, 4);
+  foo_properties? get my_foo => foo_properties.reader.vTableGetNullable(_bc, _bcOffset, 4);
 
   @override
   String toString() {
-    return 'Foo{myFoo: ${myFoo}}';
+    return 'Foo{my_foo: ${my_foo}}';
   }
 
   FooT unpack() => FooT(
-      myFoo: myFoo?.unpack());
+      my_foo: my_foo?.unpack());
 
   static int pack(fb.Builder fbBuilder, FooT? object) {
     if (object == null) return 0;
@@ -34,23 +34,23 @@ class Foo {
 }
 
 class FooT implements fb.Packable {
-  FooPropertiesT? myFoo;
+  foo_propertiesT? my_foo;
 
   FooT({
-      this.myFoo});
+      this.my_foo});
 
   @override
   int pack(fb.Builder fbBuilder) {
     fbBuilder.startTable(1);
-    if (myFoo != null) {
-      fbBuilder.addStruct(0, myFoo!.pack(fbBuilder));
+    if (my_foo != null) {
+      fbBuilder.addStruct(0, my_foo!.pack(fbBuilder));
     }
     return fbBuilder.endTable();
   }
 
   @override
   String toString() {
-    return 'FooT{myFoo: ${myFoo}}';
+    return 'FooT{my_foo: ${my_foo}}';
   }
 }
 
@@ -71,7 +71,7 @@ class FooBuilder {
     fbBuilder.startTable(1);
   }
 
-  int addMyFoo(int offset) {
+  int add_my_foo(int offset) {
     fbBuilder.addStruct(0, offset);
     return fbBuilder.offset;
   }
@@ -82,19 +82,19 @@ class FooBuilder {
 }
 
 class FooObjectBuilder extends fb.ObjectBuilder {
-  final FooPropertiesObjectBuilder? _myFoo;
+  final foo_propertiesObjectBuilder? _my_foo;
 
   FooObjectBuilder({
-    FooPropertiesObjectBuilder? myFoo,
+    foo_propertiesObjectBuilder? my_foo,
   })
-      : _myFoo = myFoo;
+      : _my_foo = my_foo;
 
   /// Finish building, and store into the [fbBuilder].
   @override
   int finish(fb.Builder fbBuilder) {
     fbBuilder.startTable(1);
-    if (_myFoo != null) {
-      fbBuilder.addStruct(0, _myFoo!.finish(fbBuilder));
+    if (_my_foo != null) {
+      fbBuilder.addStruct(0, _my_foo!.finish(fbBuilder));
     }
     return fbBuilder.endTable();
   }
@@ -107,10 +107,10 @@ class FooObjectBuilder extends fb.ObjectBuilder {
     return fbBuilder.buffer;
   }
 }
-class FooProperties {
-  FooProperties._(this._bc, this._bcOffset);
+class foo_properties {
+  foo_properties._(this._bc, this._bcOffset);
 
-  static const fb.Reader<FooProperties> reader = _FooPropertiesReader();
+  static const fb.Reader<foo_properties> reader = _foo_propertiesReader();
 
   final fb.BufferContext _bc;
   final int _bcOffset;
@@ -120,24 +120,24 @@ class FooProperties {
 
   @override
   String toString() {
-    return 'FooProperties{a: ${a}, b: ${b}}';
+    return 'foo_properties{a: ${a}, b: ${b}}';
   }
 
-  FooPropertiesT unpack() => FooPropertiesT(
+  foo_propertiesT unpack() => foo_propertiesT(
       a: a,
       b: b);
 
-  static int pack(fb.Builder fbBuilder, FooPropertiesT? object) {
+  static int pack(fb.Builder fbBuilder, foo_propertiesT? object) {
     if (object == null) return 0;
     return object.pack(fbBuilder);
   }
 }
 
-class FooPropertiesT implements fb.Packable {
+class foo_propertiesT implements fb.Packable {
   bool a;
   bool b;
 
-  FooPropertiesT({
+  foo_propertiesT({
       required this.a,
       required this.b});
 
@@ -150,23 +150,23 @@ class FooPropertiesT implements fb.Packable {
 
   @override
   String toString() {
-    return 'FooPropertiesT{a: ${a}, b: ${b}}';
+    return 'foo_propertiesT{a: ${a}, b: ${b}}';
   }
 }
 
-class _FooPropertiesReader extends fb.StructReader<FooProperties> {
-  const _FooPropertiesReader();
+class _foo_propertiesReader extends fb.StructReader<foo_properties> {
+  const _foo_propertiesReader();
 
   @override
   int get size => 2;
 
   @override
-  FooProperties createObject(fb.BufferContext bc, int offset) => 
-    FooProperties._(bc, offset);
+  foo_properties createObject(fb.BufferContext bc, int offset) => 
+    foo_properties._(bc, offset);
 }
 
-class FooPropertiesBuilder {
-  FooPropertiesBuilder(this.fbBuilder);
+class foo_propertiesBuilder {
+  foo_propertiesBuilder(this.fbBuilder);
 
   final fb.Builder fbBuilder;
 
@@ -178,11 +178,11 @@ class FooPropertiesBuilder {
 
 }
 
-class FooPropertiesObjectBuilder extends fb.ObjectBuilder {
+class foo_propertiesObjectBuilder extends fb.ObjectBuilder {
   final bool _a;
   final bool _b;
 
-  FooPropertiesObjectBuilder({
+  foo_propertiesObjectBuilder({
     required bool a,
     required bool b,
   })

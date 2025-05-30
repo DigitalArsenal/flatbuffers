@@ -731,7 +731,7 @@ enum class Case {
 // Convert the `input` string of case `input_case` to the specified
 // `output_case`.
 std::string ConvertCase(const std::string &input, Case output_case,
-                        Case input_case = Case::kSnake, bool from_idl = false);
+                        Case input_case = Case::kSnake);
 
 }  // namespace flatbuffers
 

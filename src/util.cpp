@@ -444,9 +444,9 @@ bool ReadEnvironmentVariable(const char *var_name, std::string *_value) {
 }
 
 std::string ConvertCase(const std::string &input, Case output_case,
-                        Case input_case) {
+                        Case input_case, bool ignore_preserve_case) {
   if (output_case == Case::kKeep ||
-      (global_options.preserve_case)) {
+      (global_options.preserve_case && !ignore_preserve_case)) {
     return input;
   }
   // The output cases expect snake_case inputs, so if we don't have that input

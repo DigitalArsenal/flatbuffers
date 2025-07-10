@@ -131,10 +131,12 @@ class NestedUnionTestT(object):
     def _UnPack(self, nestedUnionTest):
         if nestedUnionTest is None:
             return
-        self.name = nestedUnionTest.name()
-        self.data_type = nestedUnionTest.data_type()
-        self.data = MyGame.Example.NestedUnion.Any.AnyCreator(self.data_type, nestedUnionTest.data())
-        self.id = nestedUnionTest.id()
+        self.name = nestedUnionTest.Name()
+        if self.name is not None:
+            self.name = self.name.decode('utf-8')
+        self.dataType = nestedUnionTest.DataType()
+        self.data = MyGame.Example.NestedUnion.Any.AnyCreator(self.dataType, nestedUnionTest.Data())
+        self.id = nestedUnionTest.Id()
 
     # NestedUnionTestT
     def Pack(self, builder):

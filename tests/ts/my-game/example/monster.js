@@ -457,7 +457,7 @@ export class Monster {
     }
     vector_of_enums(index) {
         const offset = this.bb.__offset(this.bb_pos, 98);
-        return offset ? this.bb.readUint8(this.bb.__vector(this.bb_pos + offset) + index) : 0;
+        return offset ? this.bb.readUint8(this.bb.__vector(this.bb_pos + offset) + index) : null;
     }
     vector_of_enums_Length() {
         const offset = this.bb.__offset(this.bb_pos, 98);

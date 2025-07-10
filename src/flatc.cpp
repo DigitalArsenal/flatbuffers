@@ -258,6 +258,7 @@ const static FlatCOption flatc_options[] = {
   { "", "python-typing", "", "Generate Python type annotations" },
   { "", "preserve-case", "", "Preserve all property cases as defined in IDL" },
   { "", "python-version", "", "Generate code for the given Python version." },
+  { "", "python-decode-obj-api-strings", "", "Decode bytes to strings for the Python Object API"},
   { "", "python-gen-numpy", "", "Whether to generate numpy helpers." },
   { "", "ts-omit-entrypoint", "",
     "Omit emission of namespace entrypoint file" },
@@ -686,6 +687,8 @@ FlatCOptions FlatCompiler::ParseFromCommandLineArguments(int argc,
       } else if (arg == "--python-version") {
         if (++argi >= argc) Error("missing value following: " + arg, true);
         opts.python_version = argv[argi];
+      } else if (arg == "--python-decode-obj-api-strings") {
+        opts.python_decode_obj_api_strings = true;
       } else if (arg == "--python-gen-numpy" ||
                  arg == "--python-gen-numpy=true") {
         opts.python_gen_numpy = true;

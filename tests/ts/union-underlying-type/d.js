@@ -29,7 +29,7 @@ export class D {
     }
     test_vector_of_union_type(index) {
         const offset = this.bb.__offset(this.bb_pos, 8);
-        return offset ? this.bb.readInt32(this.bb.__vector(this.bb_pos + offset) + index * 4) : 0;
+        return offset ? this.bb.readInt32(this.bb.__vector(this.bb_pos + offset) + index * 4) : null;
     }
     test_vector_of_union_type_Length() {
         const offset = this.bb.__offset(this.bb_pos, 8);

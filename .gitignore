@@ -157,3 +157,9 @@ MODULE.bazel.lock
 
 # Ignore the generated docs
 docs/site
+
+# Ignore the Emscripten install directory
+emsdk/
+
+# Ignore the wasm build directory
+wasm_build/

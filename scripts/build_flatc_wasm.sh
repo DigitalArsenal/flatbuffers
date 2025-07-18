@@ -18,14 +18,20 @@ echo "[flatc_wasm] Building flatc.mjs (ES6, isomorphic)..."
 
 mkdir -p wasm_build
 
-# Use the actual CMake source list
 emcmake cmake -S . -B wasm_build \
   -DFLATBUFFERS_BUILD_FLATC=ON \
   -DFLATBUFFERS_BUILD_TESTS=OFF \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_EXE_LINKER_FLAGS="-s MODULARIZE=1 -s EXPORT_ES6=1 -s ENVIRONMENT=web,worker,node -s FORCE_FILESYSTEM=1 -s EXPORTED_FUNCTIONS=['_main'] -s EXIT_RUNTIME=1"
+  -DCMAKE_EXE_LINKER_FLAGS="-s EXPORTED_RUNTIME_METHODS='[\"FS\",\"callMain\"]' \
+                            -s MODULARIZE=1 \
+                            -s EXPORT_ES6=1 \
+                            -s ENVIRONMENT=web,worker,node \
+                            -s FORCE_FILESYSTEM=1 \
+                            -s EXPORTED_RUNTIME_METHODS=['FS','FS_createDataFile','callMain'] \
+                            -s EXPORTED_FUNCTIONS=['_main'] \
+                            -s EXIT_RUNTIME=1 \
+                            -s SINGLE_FILE=1"
 
 emmake cmake --build wasm_build --target flatc -- -j${CORES}
 
-# Rename to flatc.mjs
 mv wasm_build/flatc.js wasm_build/flatc.mjs

@@ -16,7 +16,7 @@
 
 // clang-format off
 // Dont't remove `format off`, it prevent reordering of win-includes.
-
+#include "flatbuffers/idl.h"
 #include <cstring>
 #if defined(__MINGW32__) || defined(__MINGW64__) || defined(__CYGWIN__) || \
     defined(__QNXNTO__)
@@ -440,9 +440,15 @@ bool ReadEnvironmentVariable(const char *var_name, std::string *_value) {
   return true;
 }
 
+
+using flatbuffers::internal_idl_tracking::IsIdlNamePtr;
+
 std::string ConvertCase(const std::string &input, Case output_case,
                         Case input_case) {
-  if (output_case == Case::kKeep) return input;
+  if (output_case == Case::kKeep ||
+     flatbuffers::internal_idl_tracking::IsIdlNamePtr(&input)
+    ) 
+    return input;
   // The output cases expect snake_case inputs, so if we don't have that input
   // format, try to convert to snake_case.
   switch (input_case) {

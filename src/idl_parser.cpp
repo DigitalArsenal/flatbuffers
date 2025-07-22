@@ -897,7 +897,8 @@ CheckedError Parser::AddField(StructDef &struct_def, const std::string &name,
 }
 
 CheckedError Parser::ParseField(StructDef &struct_def) {
-  std::string name = attribute_;
+  //std::string name = attribute_;
+  IdlName name(attribute_);
 
   if (LookupCreateStruct(name, false, false))
     return Error("field name can not be the same as table/struct name");

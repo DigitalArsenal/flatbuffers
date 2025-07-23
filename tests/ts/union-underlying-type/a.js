@@ -36,7 +36,7 @@ export class A {
     static startA(builder) {
         builder.startObject(1);
     }
-    static add_a(builder, a) {
+    static addA(builder, a) {
         builder.addFieldInt32(0, a, 0);
     }
     static endA(builder) {
@@ -45,7 +45,7 @@ export class A {
     }
     static createA(builder, a) {
         A.startA(builder);
-        A.add_a(builder, a);
+        A.addA(builder, a);
         return A.endA(builder);
     }
     unpack() {

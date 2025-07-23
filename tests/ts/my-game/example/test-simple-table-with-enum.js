@@ -37,7 +37,7 @@ export class TestSimpleTableWithEnum {
     static startTestSimpleTableWithEnum(builder) {
         builder.startObject(1);
     }
-    static add_color(builder, color) {
+    static addColor(builder, color) {
         builder.addFieldInt8(0, color, Color.Green);
     }
     static endTestSimpleTableWithEnum(builder) {
@@ -46,7 +46,7 @@ export class TestSimpleTableWithEnum {
     }
     static createTestSimpleTableWithEnum(builder, color) {
         TestSimpleTableWithEnum.startTestSimpleTableWithEnum(builder);
-        TestSimpleTableWithEnum.add_color(builder, color);
+        TestSimpleTableWithEnum.addColor(builder, color);
         return TestSimpleTableWithEnum.endTestSimpleTableWithEnum(builder);
     }
     serialize() {

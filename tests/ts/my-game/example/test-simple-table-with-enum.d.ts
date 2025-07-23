@@ -10,7 +10,7 @@ export declare class TestSimpleTableWithEnum implements flatbuffers.IUnpackableO
     mutate_color(value: Color): boolean;
     static getFullyQualifiedName(): string;
     static startTestSimpleTableWithEnum(builder: flatbuffers.Builder): void;
-    static add_color(builder: flatbuffers.Builder, color: Color): void;
+    static addColor(builder: flatbuffers.Builder, color: Color): void;
     static endTestSimpleTableWithEnum(builder: flatbuffers.Builder): flatbuffers.Offset;
     static createTestSimpleTableWithEnum(builder: flatbuffers.Builder, color: Color): flatbuffers.Offset;
     serialize(): Uint8Array;

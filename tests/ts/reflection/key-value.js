@@ -32,10 +32,10 @@ export class KeyValue {
     static startKeyValue(builder) {
         builder.startObject(2);
     }
-    static add_key(builder, keyOffset) {
+    static addKey(builder, keyOffset) {
         builder.addFieldOffset(0, keyOffset, 0);
     }
-    static add_value(builder, valueOffset) {
+    static addValue(builder, valueOffset) {
         builder.addFieldOffset(1, valueOffset, 0);
     }
     static endKeyValue(builder) {
@@ -45,8 +45,8 @@ export class KeyValue {
     }
     static createKeyValue(builder, keyOffset, valueOffset) {
         KeyValue.startKeyValue(builder);
-        KeyValue.add_key(builder, keyOffset);
-        KeyValue.add_value(builder, valueOffset);
+        KeyValue.addKey(builder, keyOffset);
+        KeyValue.addValue(builder, valueOffset);
         return KeyValue.endKeyValue(builder);
     }
     unpack() {

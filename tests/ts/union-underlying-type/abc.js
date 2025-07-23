@@ -10,7 +10,7 @@ export var ABC;
     ABC[ABC["B"] = 666] = "B";
     ABC[ABC["C"] = 777] = "C";
 })(ABC || (ABC = {}));
-export function unionToABC(type, accessor) {
+export function unionToAbc(type, accessor) {
     switch (ABC[type]) {
         case 'NONE': return null;
         case 'A': return accessor(new A());
@@ -19,7 +19,7 @@ export function unionToABC(type, accessor) {
         default: return null;
     }
 }
-export function unionListToABC(type, accessor, index) {
+export function unionListToAbc(type, accessor, index) {
     switch (ABC[type]) {
         case 'NONE': return null;
         case 'A': return accessor(index, new A());

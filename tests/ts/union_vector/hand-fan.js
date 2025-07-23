@@ -36,7 +36,7 @@ export class HandFan {
     static startHandFan(builder) {
         builder.startObject(1);
     }
-    static add_length(builder, length) {
+    static addLength(builder, length) {
         builder.addFieldInt32(0, length, 0);
     }
     static endHandFan(builder) {
@@ -45,7 +45,7 @@ export class HandFan {
     }
     static createHandFan(builder, length) {
         HandFan.startHandFan(builder);
-        HandFan.add_length(builder, length);
+        HandFan.addLength(builder, length);
         return HandFan.endHandFan(builder);
     }
     unpack() {

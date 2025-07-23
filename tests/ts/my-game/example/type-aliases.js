@@ -142,11 +142,11 @@ export class TypeAliases {
         const offset = this.bb.__offset(this.bb_pos, 24);
         return offset ? this.bb.readInt8(this.bb.__vector(this.bb_pos + offset) + index) : 0;
     }
-    v8_Length() {
+    v8Length() {
         const offset = this.bb.__offset(this.bb_pos, 24);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
-    v8_Array() {
+    v8Array() {
         const offset = this.bb.__offset(this.bb_pos, 24);
         return offset ? new Int8Array(this.bb.bytes().buffer, this.bb.bytes().byteOffset + this.bb.__vector(this.bb_pos + offset), this.bb.__vector_len(this.bb_pos + offset)) : null;
     }
@@ -154,11 +154,11 @@ export class TypeAliases {
         const offset = this.bb.__offset(this.bb_pos, 26);
         return offset ? this.bb.readFloat64(this.bb.__vector(this.bb_pos + offset) + index * 8) : 0;
     }
-    vf64_Length() {
+    vf64Length() {
         const offset = this.bb.__offset(this.bb_pos, 26);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
-    vf64_Array() {
+    vf64Array() {
         const offset = this.bb.__offset(this.bb_pos, 26);
         return offset ? new Float64Array(this.bb.bytes().buffer, this.bb.bytes().byteOffset + this.bb.__vector(this.bb_pos + offset), this.bb.__vector_len(this.bb_pos + offset)) : null;
     }
@@ -168,60 +168,60 @@ export class TypeAliases {
     static startTypeAliases(builder) {
         builder.startObject(12);
     }
-    static add_i8(builder, i8) {
+    static addI8(builder, i8) {
         builder.addFieldInt8(0, i8, 0);
     }
-    static add_u8(builder, u8) {
+    static addU8(builder, u8) {
         builder.addFieldInt8(1, u8, 0);
     }
-    static add_i16(builder, i16) {
+    static addI16(builder, i16) {
         builder.addFieldInt16(2, i16, 0);
     }
-    static add_u16(builder, u16) {
+    static addU16(builder, u16) {
         builder.addFieldInt16(3, u16, 0);
     }
-    static add_i32(builder, i32) {
+    static addI32(builder, i32) {
         builder.addFieldInt32(4, i32, 0);
     }
-    static add_u32(builder, u32) {
+    static addU32(builder, u32) {
         builder.addFieldInt32(5, u32, 0);
     }
-    static add_i64(builder, i64) {
+    static addI64(builder, i64) {
         builder.addFieldInt64(6, i64, BigInt('0'));
     }
-    static add_u64(builder, u64) {
+    static addU64(builder, u64) {
         builder.addFieldInt64(7, u64, BigInt('0'));
     }
-    static add_f32(builder, f32) {
+    static addF32(builder, f32) {
         builder.addFieldFloat32(8, f32, 0.0);
     }
-    static add_f64(builder, f64) {
+    static addF64(builder, f64) {
         builder.addFieldFloat64(9, f64, 0.0);
     }
-    static add_v8(builder, v8Offset) {
+    static addV8(builder, v8Offset) {
         builder.addFieldOffset(10, v8Offset, 0);
     }
-    static create_v8_Vector(builder, data) {
+    static createV8Vector(builder, data) {
         builder.startVector(1, data.length, 1);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addInt8(data[i]);
         }
         return builder.endVector();
     }
-    static start_v8_Vector(builder, numElems) {
+    static startV8Vector(builder, numElems) {
         builder.startVector(1, numElems, 1);
     }
-    static add_vf64(builder, vf64Offset) {
+    static addVf64(builder, vf64Offset) {
         builder.addFieldOffset(11, vf64Offset, 0);
     }
-    static create_vf64_Vector(builder, data) {
+    static createVf64Vector(builder, data) {
         builder.startVector(8, data.length, 8);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addFloat64(data[i]);
         }
         return builder.endVector();
     }
-    static start_vf64_Vector(builder, numElems) {
+    static startVf64Vector(builder, numElems) {
         builder.startVector(8, numElems, 8);
     }
     static endTypeAliases(builder) {
@@ -230,18 +230,18 @@ export class TypeAliases {
     }
     static createTypeAliases(builder, i8, u8, i16, u16, i32, u32, i64, u64, f32, f64, v8Offset, vf64Offset) {
         TypeAliases.startTypeAliases(builder);
-        TypeAliases.add_i8(builder, i8);
-        TypeAliases.add_u8(builder, u8);
-        TypeAliases.add_i16(builder, i16);
-        TypeAliases.add_u16(builder, u16);
-        TypeAliases.add_i32(builder, i32);
-        TypeAliases.add_u32(builder, u32);
-        TypeAliases.add_i64(builder, i64);
-        TypeAliases.add_u64(builder, u64);
-        TypeAliases.add_f32(builder, f32);
-        TypeAliases.add_f64(builder, f64);
-        TypeAliases.add_v8(builder, v8Offset);
-        TypeAliases.add_vf64(builder, vf64Offset);
+        TypeAliases.addI8(builder, i8);
+        TypeAliases.addU8(builder, u8);
+        TypeAliases.addI16(builder, i16);
+        TypeAliases.addU16(builder, u16);
+        TypeAliases.addI32(builder, i32);
+        TypeAliases.addU32(builder, u32);
+        TypeAliases.addI64(builder, i64);
+        TypeAliases.addU64(builder, u64);
+        TypeAliases.addF32(builder, f32);
+        TypeAliases.addF64(builder, f64);
+        TypeAliases.addV8(builder, v8Offset);
+        TypeAliases.addVf64(builder, vf64Offset);
         return TypeAliases.endTypeAliases(builder);
     }
     serialize() {
@@ -251,7 +251,7 @@ export class TypeAliases {
         return TypeAliases.getRootAsTypeAliases(new flatbuffers.ByteBuffer(buffer));
     }
     unpack() {
-        return new TypeAliasesT(this.i8(), this.u8(), this.i16(), this.u16(), this.i32(), this.u32(), this.i64(), this.u64(), this.f32(), this.f64(), this.bb.createScalarList(this.v8.bind(this), this.v8_Length()), this.bb.createScalarList(this.vf64.bind(this), this.vf64_Length()));
+        return new TypeAliasesT(this.i8(), this.u8(), this.i16(), this.u16(), this.i32(), this.u32(), this.i64(), this.u64(), this.f32(), this.f64(), this.bb.createScalarList(this.v8.bind(this), this.v8Length()), this.bb.createScalarList(this.vf64.bind(this), this.vf64Length()));
     }
     unpackTo(_o) {
         _o.i8 = this.i8();
@@ -264,8 +264,8 @@ export class TypeAliases {
         _o.u64 = this.u64();
         _o.f32 = this.f32();
         _o.f64 = this.f64();
-        _o.v8 = this.bb.createScalarList(this.v8.bind(this), this.v8_Length());
-        _o.vf64 = this.bb.createScalarList(this.vf64.bind(this), this.vf64_Length());
+        _o.v8 = this.bb.createScalarList(this.v8.bind(this), this.v8Length());
+        _o.vf64 = this.bb.createScalarList(this.vf64.bind(this), this.vf64Length());
     }
 }
 export class TypeAliasesT {
@@ -284,8 +284,8 @@ export class TypeAliasesT {
         this.vf64 = vf64;
     }
     pack(builder) {
-        const v8 = TypeAliases.create_v8_Vector(builder, this.v8);
-        const vf64 = TypeAliases.create_vf64_Vector(builder, this.vf64);
+        const v8 = TypeAliases.createV8Vector(builder, this.v8);
+        const vf64 = TypeAliases.createVf64Vector(builder, this.vf64);
         return TypeAliases.createTypeAliases(builder, this.i8, this.u8, this.i16, this.u16, this.i32, this.u32, this.i64, this.u64, this.f32, this.f64, v8, vf64);
     }
 }

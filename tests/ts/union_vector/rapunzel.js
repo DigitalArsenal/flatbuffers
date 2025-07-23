@@ -9,7 +9,7 @@ export class Rapunzel {
         this.bb = bb;
         return this;
     }
-    hair_length() {
+    hairLength() {
         return this.bb.readInt32(this.bb_pos);
     }
     mutate_hair_length(value) {
@@ -28,17 +28,17 @@ export class Rapunzel {
         return builder.offset();
     }
     unpack() {
-        return new RapunzelT(this.hair_length());
+        return new RapunzelT(this.hairLength());
     }
     unpackTo(_o) {
-        _o.hair_length = this.hair_length();
+        _o.hairLength = this.hairLength();
     }
 }
 export class RapunzelT {
-    constructor(hair_length = 0) {
-        this.hair_length = hair_length;
+    constructor(hairLength = 0) {
+        this.hairLength = hairLength;
     }
     pack(builder) {
-        return Rapunzel.createRapunzel(builder, this.hair_length);
+        return Rapunzel.createRapunzel(builder, this.hairLength);
     }
 }

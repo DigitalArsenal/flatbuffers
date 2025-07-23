@@ -9,7 +9,7 @@ export declare class A implements flatbuffers.IUnpackableObject<AT> {
     mutate_a(value: number): boolean;
     static getFullyQualifiedName(): string;
     static startA(builder: flatbuffers.Builder): void;
-    static add_a(builder: flatbuffers.Builder, a: number): void;
+    static addA(builder: flatbuffers.Builder, a: number): void;
     static endA(builder: flatbuffers.Builder): flatbuffers.Offset;
     static createA(builder: flatbuffers.Builder, a: number): flatbuffers.Offset;
     unpack(): AT;

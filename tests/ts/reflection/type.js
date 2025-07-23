@@ -19,7 +19,7 @@ export class Type {
         bb.setPosition(bb.position() + flatbuffers.SIZE_PREFIX_LENGTH);
         return (obj || new Type()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
     }
-    base_type() {
+    baseType() {
         const offset = this.bb.__offset(this.bb_pos, 4);
         return offset ? this.bb.readInt8(this.bb_pos + offset) : BaseType.None;
     }
@@ -55,7 +55,7 @@ export class Type {
         this.bb.writeInt32(this.bb_pos + offset, value);
         return true;
     }
-    fixed_length() {
+    fixedLength() {
         const offset = this.bb.__offset(this.bb_pos, 10);
         return offset ? this.bb.readUint16(this.bb_pos + offset) : 0;
     }
@@ -70,7 +70,7 @@ export class Type {
     /**
      * The size (octets) of the `base_type` field.
      */
-    base_size() {
+    baseSize() {
         const offset = this.bb.__offset(this.bb_pos, 12);
         return offset ? this.bb.readUint32(this.bb_pos + offset) : 4;
     }
@@ -85,7 +85,7 @@ export class Type {
     /**
      * The size (octets) of the `element` field, if present.
      */
-    element_size() {
+    elementSize() {
         const offset = this.bb.__offset(this.bb_pos, 14);
         return offset ? this.bb.readUint32(this.bb_pos + offset) : 0;
     }
@@ -103,22 +103,22 @@ export class Type {
     static startType(builder) {
         builder.startObject(6);
     }
-    static add_base_type(builder, baseType) {
+    static addBaseType(builder, baseType) {
         builder.addFieldInt8(0, baseType, BaseType.None);
     }
-    static add_element(builder, element) {
+    static addElement(builder, element) {
         builder.addFieldInt8(1, element, BaseType.None);
     }
-    static add_index(builder, index) {
+    static addIndex(builder, index) {
         builder.addFieldInt32(2, index, -1);
     }
-    static add_fixed_length(builder, fixedLength) {
+    static addFixedLength(builder, fixedLength) {
         builder.addFieldInt16(3, fixedLength, 0);
     }
-    static add_base_size(builder, baseSize) {
+    static addBaseSize(builder, baseSize) {
         builder.addFieldInt32(4, baseSize, 4);
     }
-    static add_element_size(builder, elementSize) {
+    static addElementSize(builder, elementSize) {
         builder.addFieldInt32(5, elementSize, 0);
     }
     static endType(builder) {
@@ -127,36 +127,36 @@ export class Type {
     }
     static createType(builder, baseType, element, index, fixedLength, baseSize, elementSize) {
         Type.startType(builder);
-        Type.add_base_type(builder, baseType);
-        Type.add_element(builder, element);
-        Type.add_index(builder, index);
-        Type.add_fixed_length(builder, fixedLength);
-        Type.add_base_size(builder, baseSize);
-        Type.add_element_size(builder, elementSize);
+        Type.addBaseType(builder, baseType);
+        Type.addElement(builder, element);
+        Type.addIndex(builder, index);
+        Type.addFixedLength(builder, fixedLength);
+        Type.addBaseSize(builder, baseSize);
+        Type.addElementSize(builder, elementSize);
         return Type.endType(builder);
     }
     unpack() {
-        return new TypeT(this.base_type(), this.element(), this.index(), this.fixed_length(), this.base_size(), this.element_size());
+        return new TypeT(this.baseType(), this.element(), this.index(), this.fixedLength(), this.baseSize(), this.elementSize());
     }
     unpackTo(_o) {
-        _o.base_type = this.base_type();
+        _o.baseType = this.baseType();
         _o.element = this.element();
         _o.index = this.index();
-        _o.fixed_length = this.fixed_length();
-        _o.base_size = this.base_size();
-        _o.element_size = this.element_size();
+        _o.fixedLength = this.fixedLength();
+        _o.baseSize = this.baseSize();
+        _o.elementSize = this.elementSize();
     }
 }
 export class TypeT {
-    constructor(base_type = BaseType.None, element = BaseType.None, index = -1, fixed_length = 0, base_size = 4, element_size = 0) {
-        this.base_type = base_type;
+    constructor(baseType = BaseType.None, element = BaseType.None, index = -1, fixedLength = 0, baseSize = 4, elementSize = 0) {
+        this.baseType = baseType;
         this.element = element;
         this.index = index;
-        this.fixed_length = fixed_length;
-        this.base_size = base_size;
-        this.element_size = element_size;
+        this.fixedLength = fixedLength;
+        this.baseSize = baseSize;
+        this.elementSize = elementSize;
     }
     pack(builder) {
-        return Type.createType(builder, this.base_type, this.element, this.index, this.fixed_length, this.base_size, this.element_size);
+        return Type.createType(builder, this.baseType, this.element, this.index, this.fixedLength, this.baseSize, this.elementSize);
     }
 }

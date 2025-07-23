@@ -11,42 +11,42 @@ export declare class Schema implements flatbuffers.IUnpackableObject<SchemaT> {
     static getSizePrefixedRootAsSchema(bb: flatbuffers.ByteBuffer, obj?: Schema): Schema;
     static bufferHasIdentifier(bb: flatbuffers.ByteBuffer): boolean;
     objects(index: number, obj?: Object_): Object_ | null;
-    objects_Length(): number;
+    objectsLength(): number;
     enums(index: number, obj?: Enum): Enum | null;
-    enums_Length(): number;
-    file_ident(): string | null;
-    file_ident(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
-    file_ext(): string | null;
-    file_ext(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
-    root_table(obj?: Object_): Object_ | null;
+    enumsLength(): number;
+    fileIdent(): string | null;
+    fileIdent(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
+    fileExt(): string | null;
+    fileExt(optionalEncoding: flatbuffers.Encoding): string | Uint8Array | null;
+    rootTable(obj?: Object_): Object_ | null;
     services(index: number, obj?: Service): Service | null;
-    services_Length(): number;
-    advanced_features(): bigint;
+    servicesLength(): number;
+    advancedFeatures(): bigint;
     mutate_advanced_features(value: bigint): boolean;
     /**
      * All the files used in this compilation. Files are relative to where
      * flatc was invoked.
      */
-    fbs_files(index: number, obj?: SchemaFile): SchemaFile | null;
-    fbs_files_Length(): number;
+    fbsFiles(index: number, obj?: SchemaFile): SchemaFile | null;
+    fbsFilesLength(): number;
     static getFullyQualifiedName(): string;
     static startSchema(builder: flatbuffers.Builder): void;
-    static add_objects(builder: flatbuffers.Builder, objectsOffset: flatbuffers.Offset): void;
-    static create_objects_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static start_objects_Vector(builder: flatbuffers.Builder, numElems: number): void;
-    static add_enums(builder: flatbuffers.Builder, enumsOffset: flatbuffers.Offset): void;
-    static create_enums_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static start_enums_Vector(builder: flatbuffers.Builder, numElems: number): void;
-    static add_file_ident(builder: flatbuffers.Builder, fileIdentOffset: flatbuffers.Offset): void;
-    static add_file_ext(builder: flatbuffers.Builder, fileExtOffset: flatbuffers.Offset): void;
-    static add_root_table(builder: flatbuffers.Builder, rootTableOffset: flatbuffers.Offset): void;
-    static add_services(builder: flatbuffers.Builder, servicesOffset: flatbuffers.Offset): void;
-    static create_services_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static start_services_Vector(builder: flatbuffers.Builder, numElems: number): void;
-    static add_advanced_features(builder: flatbuffers.Builder, advancedFeatures: bigint): void;
-    static add_fbs_files(builder: flatbuffers.Builder, fbsFilesOffset: flatbuffers.Offset): void;
-    static create_fbs_files_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static start_fbs_files_Vector(builder: flatbuffers.Builder, numElems: number): void;
+    static addObjects(builder: flatbuffers.Builder, objectsOffset: flatbuffers.Offset): void;
+    static createObjectsVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static startObjectsVector(builder: flatbuffers.Builder, numElems: number): void;
+    static addEnums(builder: flatbuffers.Builder, enumsOffset: flatbuffers.Offset): void;
+    static createEnumsVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static startEnumsVector(builder: flatbuffers.Builder, numElems: number): void;
+    static addFileIdent(builder: flatbuffers.Builder, fileIdentOffset: flatbuffers.Offset): void;
+    static addFileExt(builder: flatbuffers.Builder, fileExtOffset: flatbuffers.Offset): void;
+    static addRootTable(builder: flatbuffers.Builder, rootTableOffset: flatbuffers.Offset): void;
+    static addServices(builder: flatbuffers.Builder, servicesOffset: flatbuffers.Offset): void;
+    static createServicesVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static startServicesVector(builder: flatbuffers.Builder, numElems: number): void;
+    static addAdvancedFeatures(builder: flatbuffers.Builder, advancedFeatures: bigint): void;
+    static addFbsFiles(builder: flatbuffers.Builder, fbsFilesOffset: flatbuffers.Offset): void;
+    static createFbsFilesVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static startFbsFilesVector(builder: flatbuffers.Builder, numElems: number): void;
     static endSchema(builder: flatbuffers.Builder): flatbuffers.Offset;
     static finishSchemaBuffer(builder: flatbuffers.Builder, offset: flatbuffers.Offset): void;
     static finishSizePrefixedSchemaBuffer(builder: flatbuffers.Builder, offset: flatbuffers.Offset): void;
@@ -56,12 +56,12 @@ export declare class Schema implements flatbuffers.IUnpackableObject<SchemaT> {
 export declare class SchemaT implements flatbuffers.IGeneratedObject {
     objects: (Object_T)[];
     enums: (EnumT)[];
-    file_ident: string | Uint8Array | null;
-    file_ext: string | Uint8Array | null;
-    root_table: Object_T | null;
+    fileIdent: string | Uint8Array | null;
+    fileExt: string | Uint8Array | null;
+    rootTable: Object_T | null;
     services: (ServiceT)[];
-    advanced_features: bigint;
-    fbs_files: (SchemaFileT)[];
-    constructor(objects?: (Object_T)[], enums?: (EnumT)[], file_ident?: string | Uint8Array | null, file_ext?: string | Uint8Array | null, root_table?: Object_T | null, services?: (ServiceT)[], advanced_features?: bigint, fbs_files?: (SchemaFileT)[]);
+    advancedFeatures: bigint;
+    fbsFiles: (SchemaFileT)[];
+    constructor(objects?: (Object_T)[], enums?: (EnumT)[], fileIdent?: string | Uint8Array | null, fileExt?: string | Uint8Array | null, rootTable?: Object_T | null, services?: (ServiceT)[], advancedFeatures?: bigint, fbsFiles?: (SchemaFileT)[]);
     pack(builder: flatbuffers.Builder): flatbuffers.Offset;
 }

@@ -104,25 +104,25 @@ export class Object_ {
     static startObject(builder) {
         builder.startObject(7);
     }
-    static add_return(builder, return_) {
+    static addReturn(builder, return_) {
         builder.addFieldInt32(0, return_, 0);
     }
-    static add_if(builder, if_) {
+    static addIf(builder, if_) {
         builder.addFieldInt32(1, if_, 0);
     }
-    static add_switch(builder, switch_) {
+    static addSwitch(builder, switch_) {
         builder.addFieldInt32(2, switch_, 0);
     }
-    static add_enum(builder, enum_) {
+    static addEnum(builder, enum_) {
         builder.addFieldInt32(3, enum_, class_.new_);
     }
-    static add_enum2(builder, enum2) {
+    static addEnum2(builder, enum2) {
         builder.addFieldInt32(4, enum2, foobar_class_.arguments_);
     }
-    static add_enum3(builder, enum3) {
+    static addEnum3(builder, enum3) {
         builder.addFieldInt32(5, enum3, Abc.a);
     }
-    static add_reflect(builder, reflectOffset) {
+    static addReflect(builder, reflectOffset) {
         builder.addFieldOffset(6, reflectOffset, 0);
     }
     static endObject(builder) {
@@ -155,13 +155,13 @@ export class Object_T {
     pack(builder) {
         const reflect = (this.reflect !== null ? this.reflect.pack(builder) : 0);
         Object_.startObject(builder);
-        Object_.add_return(builder, this.return_);
-        Object_.add_if(builder, this.if_);
-        Object_.add_switch(builder, this.switch_);
-        Object_.add_enum(builder, this.enum_);
-        Object_.add_enum2(builder, this.enum2);
-        Object_.add_enum3(builder, this.enum3);
-        Object_.add_reflect(builder, reflect);
+        Object_.addReturn(builder, this.return_);
+        Object_.addIf(builder, this.if_);
+        Object_.addSwitch(builder, this.switch_);
+        Object_.addEnum(builder, this.enum_);
+        Object_.addEnum2(builder, this.enum2);
+        Object_.addEnum3(builder, this.enum3);
+        Object_.addReflect(builder, reflect);
         return Object_.endObject(builder);
     }
 }

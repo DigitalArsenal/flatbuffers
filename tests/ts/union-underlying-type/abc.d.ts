@@ -7,5 +7,5 @@ export declare enum ABC {
     B = 666,
     C = 777
 }
-export declare function unionToABC(type: ABC, accessor: (obj: A | B | C) => A | B | C | null): A | B | C | null;
-export declare function unionListToABC(type: ABC, accessor: (index: number, obj: A | B | C) => A | B | C | null, index: number): A | B | C | null;
+export declare function unionToAbc(type: ABC, accessor: (obj: A | B | C) => A | B | C | null): A | B | C | null;
+export declare function unionListToAbc(type: ABC, accessor: (index: number, obj: A | B | C) => A | B | C | null, index: number): A | B | C | null;

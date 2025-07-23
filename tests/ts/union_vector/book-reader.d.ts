@@ -3,7 +3,7 @@ export declare class BookReader implements flatbuffers.IUnpackableObject<BookRea
     bb: flatbuffers.ByteBuffer | null;
     bb_pos: number;
     __init(i: number, bb: flatbuffers.ByteBuffer): BookReader;
-    books_read(): number;
+    booksRead(): number;
     mutate_books_read(value: number): boolean;
     static getFullyQualifiedName(): string;
     static sizeOf(): number;
@@ -12,7 +12,7 @@ export declare class BookReader implements flatbuffers.IUnpackableObject<BookRea
     unpackTo(_o: BookReaderT): void;
 }
 export declare class BookReaderT implements flatbuffers.IGeneratedObject {
-    books_read: number;
-    constructor(books_read?: number);
+    booksRead: number;
+    constructor(booksRead?: number);
     pack(builder: flatbuffers.Builder): flatbuffers.Offset;
 }

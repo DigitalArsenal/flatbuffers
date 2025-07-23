@@ -36,7 +36,7 @@ export class EnumVal {
         this.bb.writeInt64(this.bb_pos + offset, value);
         return true;
     }
-    union_type(obj) {
+    unionType(obj) {
         const offset = this.bb.__offset(this.bb_pos, 10);
         return offset ? (obj || new Type()).__init(this.bb.__indirect(this.bb_pos + offset), this.bb) : null;
     }
@@ -44,7 +44,7 @@ export class EnumVal {
         const offset = this.bb.__offset(this.bb_pos, 12);
         return offset ? this.bb.__string(this.bb.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
     }
-    documentation_Length() {
+    documentationLength() {
         const offset = this.bb.__offset(this.bb_pos, 12);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
@@ -52,7 +52,7 @@ export class EnumVal {
         const offset = this.bb.__offset(this.bb_pos, 14);
         return offset ? (obj || new KeyValue()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
     }
-    attributes_Length() {
+    attributesLength() {
         const offset = this.bb.__offset(this.bb_pos, 14);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
@@ -62,39 +62,39 @@ export class EnumVal {
     static startEnumVal(builder) {
         builder.startObject(6);
     }
-    static add_name(builder, nameOffset) {
+    static addName(builder, nameOffset) {
         builder.addFieldOffset(0, nameOffset, 0);
     }
-    static add_value(builder, value) {
+    static addValue(builder, value) {
         builder.addFieldInt64(1, value, BigInt('0'));
     }
-    static add_union_type(builder, unionTypeOffset) {
+    static addUnionType(builder, unionTypeOffset) {
         builder.addFieldOffset(3, unionTypeOffset, 0);
     }
-    static add_documentation(builder, documentationOffset) {
+    static addDocumentation(builder, documentationOffset) {
         builder.addFieldOffset(4, documentationOffset, 0);
     }
-    static create_documentation_Vector(builder, data) {
+    static createDocumentationVector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static start_documentation_Vector(builder, numElems) {
+    static startDocumentationVector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
-    static add_attributes(builder, attributesOffset) {
+    static addAttributes(builder, attributesOffset) {
         builder.addFieldOffset(5, attributesOffset, 0);
     }
-    static create_attributes_Vector(builder, data) {
+    static createAttributesVector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static start_attributes_Vector(builder, numElems) {
+    static startAttributesVector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
     static endEnumVal(builder) {
@@ -103,35 +103,35 @@ export class EnumVal {
         return offset;
     }
     unpack() {
-        return new EnumValT(this.name(), this.value(), (this.union_type() !== null ? this.union_type().unpack() : null), this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length()), this.bb.createObjList(this.attributes.bind(this), this.attributes_Length()));
+        return new EnumValT(this.name(), this.value(), (this.unionType() !== null ? this.unionType().unpack() : null), this.bb.createScalarList(this.documentation.bind(this), this.documentationLength()), this.bb.createObjList(this.attributes.bind(this), this.attributesLength()));
     }
     unpackTo(_o) {
         _o.name = this.name();
         _o.value = this.value();
-        _o.union_type = (this.union_type() !== null ? this.union_type().unpack() : null);
-        _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length());
-        _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributes_Length());
+        _o.unionType = (this.unionType() !== null ? this.unionType().unpack() : null);
+        _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentationLength());
+        _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributesLength());
     }
 }
 export class EnumValT {
-    constructor(name = null, value = BigInt('0'), union_type = null, documentation = [], attributes = []) {
+    constructor(name = null, value = BigInt('0'), unionType = null, documentation = [], attributes = []) {
         this.name = name;
         this.value = value;
-        this.union_type = union_type;
+        this.unionType = unionType;
         this.documentation = documentation;
         this.attributes = attributes;
     }
     pack(builder) {
         const name = (this.name !== null ? builder.createString(this.name) : 0);
-        const union_type = (this.union_type !== null ? this.union_type.pack(builder) : 0);
-        const documentation = EnumVal.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
-        const attributes = EnumVal.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
+        const unionType = (this.unionType !== null ? this.unionType.pack(builder) : 0);
+        const documentation = EnumVal.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
+        const attributes = EnumVal.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
         EnumVal.startEnumVal(builder);
-        EnumVal.add_name(builder, name);
-        EnumVal.add_value(builder, this.value);
-        EnumVal.add_union_type(builder, union_type);
-        EnumVal.add_documentation(builder, documentation);
-        EnumVal.add_attributes(builder, attributes);
+        EnumVal.addName(builder, name);
+        EnumVal.addValue(builder, this.value);
+        EnumVal.addUnionType(builder, unionType);
+        EnumVal.addDocumentation(builder, documentation);
+        EnumVal.addAttributes(builder, attributes);
         return EnumVal.endEnumVal(builder);
     }
 }

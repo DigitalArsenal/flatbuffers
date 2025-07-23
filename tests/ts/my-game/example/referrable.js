@@ -36,7 +36,7 @@ export class Referrable {
     static startReferrable(builder) {
         builder.startObject(1);
     }
-    static add_id(builder, id) {
+    static addId(builder, id) {
         builder.addFieldInt64(0, id, BigInt('0'));
     }
     static endReferrable(builder) {
@@ -45,7 +45,7 @@ export class Referrable {
     }
     static createReferrable(builder, id) {
         Referrable.startReferrable(builder);
-        Referrable.add_id(builder, id);
+        Referrable.addId(builder, id);
         return Referrable.endReferrable(builder);
     }
     serialize() {

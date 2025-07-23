@@ -18,7 +18,7 @@ export class Attacker {
         bb.setPosition(bb.position() + flatbuffers.SIZE_PREFIX_LENGTH);
         return (obj || new Attacker()).__init(bb.readInt32(bb.position()) + bb.position(), bb);
     }
-    sword_attack_damage() {
+    swordAttackDamage() {
         const offset = this.bb.__offset(this.bb_pos, 4);
         return offset ? this.bb.readInt32(this.bb_pos + offset) : 0;
     }
@@ -36,7 +36,7 @@ export class Attacker {
     static startAttacker(builder) {
         builder.startObject(1);
     }
-    static add_sword_attack_damage(builder, swordAttackDamage) {
+    static addSwordAttackDamage(builder, swordAttackDamage) {
         builder.addFieldInt32(0, swordAttackDamage, 0);
     }
     static endAttacker(builder) {
@@ -45,21 +45,21 @@ export class Attacker {
     }
     static createAttacker(builder, swordAttackDamage) {
         Attacker.startAttacker(builder);
-        Attacker.add_sword_attack_damage(builder, swordAttackDamage);
+        Attacker.addSwordAttackDamage(builder, swordAttackDamage);
         return Attacker.endAttacker(builder);
     }
     unpack() {
-        return new AttackerT(this.sword_attack_damage());
+        return new AttackerT(this.swordAttackDamage());
     }
     unpackTo(_o) {
-        _o.sword_attack_damage = this.sword_attack_damage();
+        _o.swordAttackDamage = this.swordAttackDamage();
     }
 }
 export class AttackerT {
-    constructor(sword_attack_damage = 0) {
-        this.sword_attack_damage = sword_attack_damage;
+    constructor(swordAttackDamage = 0) {
+        this.swordAttackDamage = swordAttackDamage;
     }
     pack(builder) {
-        return Attacker.createAttacker(builder, this.sword_attack_damage);
+        return Attacker.createAttacker(builder, this.swordAttackDamage);
     }
 }

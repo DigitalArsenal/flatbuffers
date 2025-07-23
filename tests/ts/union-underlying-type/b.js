@@ -28,7 +28,7 @@ export class B {
     static startB(builder) {
         builder.startObject(1);
     }
-    static add_b(builder, bOffset) {
+    static addB(builder, bOffset) {
         builder.addFieldOffset(0, bOffset, 0);
     }
     static endB(builder) {
@@ -37,7 +37,7 @@ export class B {
     }
     static createB(builder, bOffset) {
         B.startB(builder);
-        B.add_b(builder, bOffset);
+        B.addB(builder, bOffset);
         return B.endB(builder);
     }
     unpack() {

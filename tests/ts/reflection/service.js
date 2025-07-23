@@ -28,7 +28,7 @@ export class Service {
         const offset = this.bb.__offset(this.bb_pos, 6);
         return offset ? (obj || new RPCCall()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
     }
-    calls_Length() {
+    callsLength() {
         const offset = this.bb.__offset(this.bb_pos, 6);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
@@ -36,7 +36,7 @@ export class Service {
         const offset = this.bb.__offset(this.bb_pos, 8);
         return offset ? (obj || new KeyValue()).__init(this.bb.__indirect(this.bb.__vector(this.bb_pos + offset) + index * 4), this.bb) : null;
     }
-    attributes_Length() {
+    attributesLength() {
         const offset = this.bb.__offset(this.bb_pos, 8);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
@@ -44,11 +44,11 @@ export class Service {
         const offset = this.bb.__offset(this.bb_pos, 10);
         return offset ? this.bb.__string(this.bb.__vector(this.bb_pos + offset) + index * 4, optionalEncoding) : null;
     }
-    documentation_Length() {
+    documentationLength() {
         const offset = this.bb.__offset(this.bb_pos, 10);
         return offset ? this.bb.__vector_len(this.bb_pos + offset) : 0;
     }
-    declaration_file(optionalEncoding) {
+    declarationFile(optionalEncoding) {
         const offset = this.bb.__offset(this.bb_pos, 12);
         return offset ? this.bb.__string(this.bb_pos + offset, optionalEncoding) : null;
     }
@@ -58,49 +58,49 @@ export class Service {
     static startService(builder) {
         builder.startObject(5);
     }
-    static add_name(builder, nameOffset) {
+    static addName(builder, nameOffset) {
         builder.addFieldOffset(0, nameOffset, 0);
     }
-    static add_calls(builder, callsOffset) {
+    static addCalls(builder, callsOffset) {
         builder.addFieldOffset(1, callsOffset, 0);
     }
-    static create_calls_Vector(builder, data) {
+    static createCallsVector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static start_calls_Vector(builder, numElems) {
+    static startCallsVector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
-    static add_attributes(builder, attributesOffset) {
+    static addAttributes(builder, attributesOffset) {
         builder.addFieldOffset(2, attributesOffset, 0);
     }
-    static create_attributes_Vector(builder, data) {
+    static createAttributesVector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static start_attributes_Vector(builder, numElems) {
+    static startAttributesVector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
-    static add_documentation(builder, documentationOffset) {
+    static addDocumentation(builder, documentationOffset) {
         builder.addFieldOffset(3, documentationOffset, 0);
     }
-    static create_documentation_Vector(builder, data) {
+    static createDocumentationVector(builder, data) {
         builder.startVector(4, data.length, 4);
         for (let i = data.length - 1; i >= 0; i--) {
             builder.addOffset(data[i]);
         }
         return builder.endVector();
     }
-    static start_documentation_Vector(builder, numElems) {
+    static startDocumentationVector(builder, numElems) {
         builder.startVector(4, numElems, 4);
     }
-    static add_declaration_file(builder, declarationFileOffset) {
+    static addDeclarationFile(builder, declarationFileOffset) {
         builder.addFieldOffset(4, declarationFileOffset, 0);
     }
     static endService(builder) {
@@ -110,38 +110,38 @@ export class Service {
     }
     static createService(builder, nameOffset, callsOffset, attributesOffset, documentationOffset, declarationFileOffset) {
         Service.startService(builder);
-        Service.add_name(builder, nameOffset);
-        Service.add_calls(builder, callsOffset);
-        Service.add_attributes(builder, attributesOffset);
-        Service.add_documentation(builder, documentationOffset);
-        Service.add_declaration_file(builder, declarationFileOffset);
+        Service.addName(builder, nameOffset);
+        Service.addCalls(builder, callsOffset);
+        Service.addAttributes(builder, attributesOffset);
+        Service.addDocumentation(builder, documentationOffset);
+        Service.addDeclarationFile(builder, declarationFileOffset);
         return Service.endService(builder);
     }
     unpack() {
-        return new ServiceT(this.name(), this.bb.createObjList(this.calls.bind(this), this.calls_Length()), this.bb.createObjList(this.attributes.bind(this), this.attributes_Length()), this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length()), this.declaration_file());
+        return new ServiceT(this.name(), this.bb.createObjList(this.calls.bind(this), this.callsLength()), this.bb.createObjList(this.attributes.bind(this), this.attributesLength()), this.bb.createScalarList(this.documentation.bind(this), this.documentationLength()), this.declarationFile());
     }
     unpackTo(_o) {
         _o.name = this.name();
-        _o.calls = this.bb.createObjList(this.calls.bind(this), this.calls_Length());
-        _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributes_Length());
-        _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentation_Length());
-        _o.declaration_file = this.declaration_file();
+        _o.calls = this.bb.createObjList(this.calls.bind(this), this.callsLength());
+        _o.attributes = this.bb.createObjList(this.attributes.bind(this), this.attributesLength());
+        _o.documentation = this.bb.createScalarList(this.documentation.bind(this), this.documentationLength());
+        _o.declarationFile = this.declarationFile();
     }
 }
 export class ServiceT {
-    constructor(name = null, calls = [], attributes = [], documentation = [], declaration_file = null) {
+    constructor(name = null, calls = [], attributes = [], documentation = [], declarationFile = null) {
         this.name = name;
         this.calls = calls;
         this.attributes = attributes;
         this.documentation = documentation;
-        this.declaration_file = declaration_file;
+        this.declarationFile = declarationFile;
     }
     pack(builder) {
         const name = (this.name !== null ? builder.createString(this.name) : 0);
-        const calls = Service.create_calls_Vector(builder, builder.createObjectOffsetList(this.calls));
-        const attributes = Service.create_attributes_Vector(builder, builder.createObjectOffsetList(this.attributes));
-        const documentation = Service.create_documentation_Vector(builder, builder.createObjectOffsetList(this.documentation));
-        const declaration_file = (this.declaration_file !== null ? builder.createString(this.declaration_file) : 0);
-        return Service.createService(builder, name, calls, attributes, documentation, declaration_file);
+        const calls = Service.createCallsVector(builder, builder.createObjectOffsetList(this.calls));
+        const attributes = Service.createAttributesVector(builder, builder.createObjectOffsetList(this.attributes));
+        const documentation = Service.createDocumentationVector(builder, builder.createObjectOffsetList(this.documentation));
+        const declarationFile = (this.declarationFile !== null ? builder.createString(this.declarationFile) : 0);
+        return Service.createService(builder, name, calls, attributes, documentation, declarationFile);
     }
 }

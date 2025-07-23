@@ -9,7 +9,7 @@ export declare class C implements flatbuffers.IUnpackableObject<CT> {
     mutate_c(value: boolean): boolean;
     static getFullyQualifiedName(): string;
     static startC(builder: flatbuffers.Builder): void;
-    static add_c(builder: flatbuffers.Builder, c: boolean): void;
+    static addC(builder: flatbuffers.Builder, c: boolean): void;
     static endC(builder: flatbuffers.Builder): flatbuffers.Offset;
     static createC(builder: flatbuffers.Builder, c: boolean): flatbuffers.Offset;
     unpack(): CT;

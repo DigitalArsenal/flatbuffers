@@ -10,23 +10,23 @@ export declare class Movie implements flatbuffers.IUnpackableObject<MovieT> {
     static getRootAsMovie(bb: flatbuffers.ByteBuffer, obj?: Movie): Movie;
     static getSizePrefixedRootAsMovie(bb: flatbuffers.ByteBuffer, obj?: Movie): Movie;
     static bufferHasIdentifier(bb: flatbuffers.ByteBuffer): boolean;
-    main_character_type(): Character;
-    main_character<T extends flatbuffers.Table>(obj: any | string): any | string | null;
-    characters_type(index: number): Character | null;
-    characters_type_Length(): number;
-    characters_type_Array(): Uint8Array | null;
+    mainCharacterType(): Character;
+    mainCharacter<T extends flatbuffers.Table>(obj: any | string): any | string | null;
+    charactersType(index: number): Character | null;
+    charactersTypeLength(): number;
+    charactersTypeArray(): Uint8Array | null;
     characters(index: number, obj: any | string): any | string | null;
-    characters_Length(): number;
+    charactersLength(): number;
     static getFullyQualifiedName(): string;
     static startMovie(builder: flatbuffers.Builder): void;
-    static add_main_character_type(builder: flatbuffers.Builder, mainCharacterType: Character): void;
-    static add_main_character(builder: flatbuffers.Builder, mainCharacterOffset: flatbuffers.Offset): void;
-    static add_characters_type(builder: flatbuffers.Builder, charactersTypeOffset: flatbuffers.Offset): void;
-    static create_characters_type_Vector(builder: flatbuffers.Builder, data: Character[]): flatbuffers.Offset;
-    static start_characters_type_Vector(builder: flatbuffers.Builder, numElems: number): void;
-    static add_characters(builder: flatbuffers.Builder, charactersOffset: flatbuffers.Offset): void;
-    static create_characters_Vector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
-    static start_characters_Vector(builder: flatbuffers.Builder, numElems: number): void;
+    static addMainCharacterType(builder: flatbuffers.Builder, mainCharacterType: Character): void;
+    static addMainCharacter(builder: flatbuffers.Builder, mainCharacterOffset: flatbuffers.Offset): void;
+    static addCharactersType(builder: flatbuffers.Builder, charactersTypeOffset: flatbuffers.Offset): void;
+    static createCharactersTypeVector(builder: flatbuffers.Builder, data: Character[]): flatbuffers.Offset;
+    static startCharactersTypeVector(builder: flatbuffers.Builder, numElems: number): void;
+    static addCharacters(builder: flatbuffers.Builder, charactersOffset: flatbuffers.Offset): void;
+    static createCharactersVector(builder: flatbuffers.Builder, data: flatbuffers.Offset[]): flatbuffers.Offset;
+    static startCharactersVector(builder: flatbuffers.Builder, numElems: number): void;
     static endMovie(builder: flatbuffers.Builder): flatbuffers.Offset;
     static finishMovieBuffer(builder: flatbuffers.Builder, offset: flatbuffers.Offset): void;
     static finishSizePrefixedMovieBuffer(builder: flatbuffers.Builder, offset: flatbuffers.Offset): void;
@@ -35,10 +35,10 @@ export declare class Movie implements flatbuffers.IUnpackableObject<MovieT> {
     unpackTo(_o: MovieT): void;
 }
 export declare class MovieT implements flatbuffers.IGeneratedObject {
-    main_character_type: Character;
-    main_character: AttackerT | BookReaderT | RapunzelT | string | null;
-    characters_type: (Character)[];
+    mainCharacterType: Character;
+    mainCharacter: AttackerT | BookReaderT | RapunzelT | string | null;
+    charactersType: (Character)[];
     characters: (AttackerT | BookReaderT | RapunzelT | string)[];
-    constructor(main_character_type?: Character, main_character?: AttackerT | BookReaderT | RapunzelT | string | null, characters_type?: (Character)[], characters?: (AttackerT | BookReaderT | RapunzelT | string)[]);
+    constructor(mainCharacterType?: Character, mainCharacter?: AttackerT | BookReaderT | RapunzelT | string | null, charactersType?: (Character)[], characters?: (AttackerT | BookReaderT | RapunzelT | string)[]);
     pack(builder: flatbuffers.Builder): flatbuffers.Offset;
 }

@@ -446,7 +446,7 @@ using flatbuffers::internal_idl_tracking::IsIdlNamePtr;
 std::string ConvertCase(const std::string &input, Case output_case,
                         Case input_case) {
   if (output_case == Case::kKeep ||
-     flatbuffers::internal_idl_tracking::IsIdlNamePtr(&input)
+     flatbuffers::internal_idl_tracking::IsIdlNamePtr(&input, input)
     ) 
     return input;
   // The output cases expect snake_case inputs, so if we don't have that input

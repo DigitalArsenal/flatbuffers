@@ -191,20 +191,20 @@ class Parser;
 
 namespace internal_idl_tracking {
 
-void RegisterIdlNamePtr(const void *p);
-bool IsIdlNamePtr(const void *p);
+void RegisterIdlNamePtr(const void *p, const std::string &value);
+bool IsIdlNamePtr(const void *p, const std::string &value);
 
 }  // namespace internal_idl_tracking
 
 struct IdlName : public std::string {
   IdlName(const std::string &v) : std::string(v) {
-    flatbuffers::internal_idl_tracking::RegisterIdlNamePtr(this);
+    flatbuffers::internal_idl_tracking::RegisterIdlNamePtr(this, v);
   }
   IdlName(std::string &&v) : std::string(std::move(v)) {
-    flatbuffers::internal_idl_tracking::RegisterIdlNamePtr(this);
+    flatbuffers::internal_idl_tracking::RegisterIdlNamePtr(this, *this);
   }
   IdlName(const char *v) : std::string(v) {
-    flatbuffers::internal_idl_tracking::RegisterIdlNamePtr(this);
+    flatbuffers::internal_idl_tracking::RegisterIdlNamePtr(this, *this);
   }
 };
 

@@ -9,7 +9,7 @@
   "include": [
     "monster_test.ts",
     "typescript_keywords.ts",
-    "my-game/**/*.ts",
+    "MyGame/**/*.ts",
     "typescript/**/*.ts",
     "optional_scalars/**/*.ts",
     "namespace_test/**/*.ts",

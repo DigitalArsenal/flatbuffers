@@ -101,7 +101,7 @@ flatc(
     schema="arrays_test_complex/arrays_test_complex.fbs",
     prefix="arrays_test_complex"
 )
-esbuild("arrays_test_complex/my-game/example.ts",
+esbuild("arrays_test_complex/MyGame/Example.ts",
         "arrays_test_complex/arrays_test_complex_generated.cjs")
 
 flatc(
@@ -131,4 +131,14 @@ check_call(["tsc"])
 print("Running TypeScript Compiler in old node resolution mode for no_import_ext...")
 check_call(["tsc", "-p", "./tsconfig.node.json"])
 
-print("Skipping test execution for preserve-case output (build only)")
+NODE_CMD = ["node"]
+
+print("Running TypeScript Tests...")
+check_call(NODE_CMD + ["JavaScriptTest"])
+check_call(NODE_CMD + ["JavaScriptUnionVectorTest"])
+check_call(NODE_CMD + ["JavaScriptFlexBuffersTest"])
+check_call(NODE_CMD + ["JavaScriptComplexArraysTest"])
+check_call(NODE_CMD + ["JavaScriptUnionUnderlyingTypeTest"])
+
+print("Running old v1 TypeScript Tests...")
+check_call(NODE_CMD + ["JavaScriptTestv1.cjs", "./monster_test_generated.cjs"])

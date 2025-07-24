@@ -2,7 +2,7 @@ import assert from 'assert'
 import * as flatbuffers from 'flatbuffers'
 
 import { Character } from './union_vector/character.js'
-import { BookReader, BookReaderT } from './union_vector/book-reader.js'
+import { BookReader, BookReaderT } from './union_vector/BookReader.js'
 import { Attacker, AttackerT } from './union_vector/attacker.js'
 import { Movie, MovieT } from './union_vector/movie.js'
 

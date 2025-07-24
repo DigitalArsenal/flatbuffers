@@ -6,12 +6,12 @@ import assert from 'assert'
 import fs from 'fs'
 import * as flatbuffers from 'flatbuffers'
 
-import { Monster, MonsterT } from './my-game/example/monster.js'
-import { Test, TestT } from './my-game/example/test.js'
-import { Stat } from './my-game/example/stat.js'
-import { Vec3 } from './my-game/example/vec3.js'
-import { Color } from './my-game/example/color.js';
-import { Any } from './my-game/example/any.js';
+import { Monster, MonsterT } from './MyGame/Example/Monster.js'
+import { Test, TestT } from './MyGame/Example/Test.js'
+import { Stat } from './MyGame/Example/Stat.js'
+import { Vec3 } from './MyGame/Example/Vec3.js'
+import { Color } from './MyGame/Example/Color.js';
+import { Any } from './MyGame/Example/Any.js';
 
 function main() {
 
@@ -61,39 +61,39 @@ function createMonster(fbb) {
 
   var str = fbb.createString('MyMonster');
 
-  var inv = Monster.createInventoryVector(fbb, [0, 1, 2, 3, 4]);
+  var inv = Monster.create_inventory_Vector(fbb, [0, 1, 2, 3, 4]);
 
   var fred = fbb.createString('Fred');
   Monster.startMonster(fbb);
-  Monster.addName(fbb, fred);
+  Monster.add_name(fbb, fred);
   var mon2 = Monster.endMonster(fbb);
 
-  Monster.startTest4Vector(fbb, 2);
+  Monster.start_test4_Vector(fbb, 2);
   Test.createTest(fbb, 10, 20);
   Test.createTest(fbb, 30, 40);
   var test4 = fbb.endVector();
 
-  var testArrayOfString = Monster.createTestarrayofstringVector(fbb, [
+  var testArrayOfString = Monster.create_testarrayofstring_Vector(fbb, [
     fbb.createString('test1'),
     fbb.createString('test2')
   ]);
 
-  var testVectorOfLongs = Monster.createVectorOfLongsVector(fbb, [
+  var testVectorOfLongs = Monster.create_vector_of_longs_Vector(fbb, [
     1n,
     101010100n
   ]);
 
   Monster.startMonster(fbb);
-  Monster.addPos(fbb, Vec3.createVec3(fbb, 1, 2, 3, 3, Color.Green, 5, 6));
-  Monster.addHp(fbb, 80);
-  Monster.addName(fbb, str);
-  Monster.addInventory(fbb, inv);
-  Monster.addTestType(fbb, Any.Monster);
-  Monster.addTest(fbb, mon2);
-  Monster.addTest4(fbb, test4);
-  Monster.addTestarrayofstring(fbb, testArrayOfString);
-  Monster.addVectorOfLongs(fbb, testVectorOfLongs);
-  Monster.addTestbool(fbb, true);
+  Monster.add_pos(fbb, Vec3.createVec3(fbb, 1, 2, 3, 3, Color.Green, 5, 6));
+  Monster.add_hp(fbb, 80);
+  Monster.add_name(fbb, str);
+  Monster.add_inventory(fbb, inv);
+  Monster.add_test_type(fbb, Any.Monster);
+  Monster.add_test(fbb, mon2);
+  Monster.add_test4(fbb, test4);
+  Monster.add_testarrayofstring(fbb, testArrayOfString);
+  Monster.add_vector_of_longs(fbb, testVectorOfLongs);
+  Monster.add_testbool(fbb, true);
   var mon = Monster.endMonster(fbb);
 
   Monster.finishMonsterBuffer(fbb, mon);
@@ -154,7 +154,7 @@ function testObjApiUnpack(monster) {
   assert.strictEqual(test3.a, 5);
   assert.strictEqual(test3.b, 6);
 
-  assert.strictEqual(monster.testType, Any.Monster);
+  assert.strictEqual(monster.test_type, Any.Monster);
   let monster2 = monster.test;
   assert.strictEqual(monster2 != null, true);
   assert.strictEqual(monster2 instanceof MonsterT, true);
@@ -199,37 +199,37 @@ function testBuffer(bb) {
   assert.strictEqual(t.a(), 5);
   assert.strictEqual(t.b(), 6);
 
-  assert.strictEqual(monster.testType(), Any.Monster);
+  assert.strictEqual(monster.test_type(), Any.Monster);
   var monster2 = new Monster();
   assert.strictEqual(monster.test(monster2) != null, true);
   assert.strictEqual(monster2.name(), 'Fred');
 
-  assert.strictEqual(monster.inventoryLength(), 5);
+  assert.strictEqual(monster.inventory_Length(), 5);
   var invsum = 0;
-  for (var i = 0; i < monster.inventoryLength(); i++) {
+  for (var i = 0; i < monster.inventory_Length(); i++) {
     invsum += monster.inventory(i);
   }
   assert.strictEqual(invsum, 10);
 
   var invsum2 = 0;
-  var invArr = monster.inventoryArray();
+  var invArr = monster.inventory_Array();
   for (var i = 0; i < invArr.length; i++) {
     invsum2 += invArr[i];
   }
   assert.strictEqual(invsum2, 10);
 
   let longSum = 0n;
-  for (let idx = 0; idx < monster.vectorOfLongsLength(); ++idx) {
-    longSum += monster.vectorOfLongs(idx);
+  for (let idx = 0; idx < monster.vector_of_longs_Length(); ++idx) {
+    longSum += monster.vector_of_longs(idx);
   }
   assert.strictEqual(longSum, 101010101n);
 
   var test_0 = monster.test4(0);
   var test_1 = monster.test4(1);
-  assert.strictEqual(monster.test4Length(), 2);
+  assert.strictEqual(monster.test4_Length(), 2);
   assert.strictEqual(test_0.a() + test_0.b() + test_1.a() + test_1.b(), 100);
 
-  assert.strictEqual(monster.testarrayofstringLength(), 2);
+  assert.strictEqual(monster.testarrayofstring_Length(), 2);
   assert.strictEqual(monster.testarrayofstring(0), 'test1');
   assert.strictEqual(monster.testarrayofstring(1), 'test2');
 
@@ -251,19 +251,19 @@ function test64bit() {
   var stat2 = Stat.endStat(fbb);
 
   Monster.startMonster(fbb);
-  Monster.addName(fbb, required);
-  Monster.addTestempty(fbb, stat2);
+  Monster.add_name(fbb, required);
+  Monster.add_testempty(fbb, stat2);
   var mon2 = Monster.endMonster(fbb);
 
   Stat.startStat(fbb);
   // 2541551405100253985 = 0x2345678987654321
-  Stat.addVal(fbb, 0x2345678987654321n);
+  Stat.add_val(fbb, 0x2345678987654321n);
   var stat = Stat.endStat(fbb);
 
   Monster.startMonster(fbb);
-  Monster.addName(fbb, required);
-  Monster.addEnemy(fbb, mon2);
-  Monster.addTestempty(fbb, stat);
+  Monster.add_name(fbb, required);
+  Monster.add_enemy(fbb, mon2);
+  Monster.add_testempty(fbb, stat);
   var mon = Monster.endMonster(fbb);
 
   Monster.finishMonsterBuffer(fbb, mon);
@@ -297,13 +297,13 @@ function testUnicode() {
     var monster = Monster.getRootAsMonster(bb);
     assert.strictEqual(monster.name(), json.name);
     assert.deepEqual(Buffer.from(monster.name(flatbuffers.Encoding.UTF8_BYTES)), Buffer.from(json.name));
-    assert.strictEqual(monster.testarrayoftablesLength(), json.testarrayoftables.length);
+    assert.strictEqual(monster.testarrayoftables_Length(), json.testarrayoftables.length);
     json.testarrayoftables.forEach(function(table, i) {
       var value = monster.testarrayoftables(i);
       assert.strictEqual(value.name(), table.name);
       assert.deepEqual(Buffer.from(value.name(flatbuffers.Encoding.UTF8_BYTES)), Buffer.from(table.name));
     });
-    assert.strictEqual(monster.testarrayofstringLength(), json.testarrayofstring.length);
+    assert.strictEqual(monster.testarrayofstring_Length(), json.testarrayofstring.length);
     json.testarrayofstring.forEach(function(string, i) {
       assert.strictEqual(monster.testarrayofstring(i), string);
       assert.deepEqual(Buffer.from(monster.testarrayofstring(i, flatbuffers.Encoding.UTF8_BYTES)), Buffer.from(string));
@@ -317,17 +317,17 @@ function testUnicode() {
   var testarrayoftablesOffsets = json.testarrayoftables.map(function(table) {
     var name = fbb.createString(new Uint8Array(Buffer.from(table.name)));
     Monster.startMonster(fbb);
-    Monster.addName(fbb, name);
+    Monster.add_name(fbb, name);
     return Monster.endMonster(fbb);
   });
-  var testarrayoftablesOffset = Monster.createTestarrayoftablesVector(fbb,
+  var testarrayoftablesOffset = Monster.create_testarrayoftables_Vector(fbb,
     testarrayoftablesOffsets);
-  var testarrayofstringOffset = Monster.createTestarrayofstringVector(fbb,
+  var testarrayofstringOffset = Monster.create_testarrayofstring_Vector(fbb,
     json.testarrayofstring.map(function(string) { return fbb.createString(string); }));
   Monster.startMonster(fbb);
-  Monster.addTestarrayofstring(fbb, testarrayofstringOffset);
-  Monster.addTestarrayoftables(fbb, testarrayoftablesOffset);
-  Monster.addName(fbb, name);
+  Monster.add_testarrayofstring(fbb, testarrayofstringOffset);
+  Monster.add_testarrayoftables(fbb, testarrayoftablesOffset);
+  Monster.add_name(fbb, name);
   Monster.finishSizePrefixedMonsterBuffer(fbb, Monster.endMonster(fbb));
   var bb = new flatbuffers.ByteBuffer(fbb.asUint8Array())
   bb.setPosition(4);
@@ -489,12 +489,12 @@ function testCreateByteVector() {
   const offset = builder.createByteVector(data);
   
   Monster.startMonster(builder);
-  Monster.addName(builder, required);
-  Monster.addInventory(builder, offset)
+  Monster.add_name(builder, required);
+  Monster.add_inventory(builder, offset)
   builder.finish(Monster.endMonster(builder));
 
   let decodedMonster = Monster.getRootAsMonster(builder.dataBuffer());
-  assert.deepEqual(decodedMonster.inventoryArray(), data);
+  assert.deepEqual(decodedMonster.inventory_Array(), data);
 }
 
 main();

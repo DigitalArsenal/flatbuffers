@@ -24,9 +24,9 @@ flatbuffer_ts_library(
 )
 
 TEST_DATA = glob([
-    "my-game/*.js",
-    "my-game/example/*.js",
-    "my-game/example2/*.js",
+    "MyGame/*.js",
+    "MyGame/Example/*.js",
+    "MyGame/example2/*.js",
 ])
 
 TEST_UNION_VECTOR_DATA = glob([

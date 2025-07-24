@@ -4,7 +4,7 @@
 
 import * as flatbuffers from 'flatbuffers';
 
-import { TableB, TableBT } from './my-game/other-name-space/table-b.js';
+import { TableB, TableBT } from './MyGame/other-name-space/TableB.js';
 
 
 export class TableA implements flatbuffers.IUnpackableObject<TableAT> {

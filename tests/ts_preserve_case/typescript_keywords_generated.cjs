@@ -1733,7 +1733,7 @@ __export(typescript_exports, {
   class_: () => class_2
 });
 
-// typescript/Object.ts
+// typescript/Object.js
 var flatbuffers11 = __toESM(require("flatbuffers"), 1);
 
 // foobar/class.js
@@ -1742,14 +1742,14 @@ var class_;
   class_3[class_3["arguments_"] = 0] = "arguments_";
 })(class_ || (class_ = {}));
 
-// typescript/class.ts
-var class_2 = /* @__PURE__ */ ((class_3) => {
+// typescript/class.js
+var class_2;
+(function(class_3) {
   class_3[class_3["new_"] = 0] = "new_";
   class_3[class_3["instanceof_"] = 1] = "instanceof_";
-  return class_3;
-})(class_2 || {});
+})(class_2 || (class_2 = {}));
 
-// typescript/Object.ts
+// typescript/Object.js
 var Object_2 = class _Object_ {
   constructor() {
     this.bb = null;
@@ -1805,7 +1805,7 @@ var Object_2 = class _Object_ {
   }
   enum_() {
     const offset = this.bb.__offset(this.bb_pos, 10);
-    return offset ? this.bb.readInt32(this.bb_pos + offset) : 0 /* new_ */;
+    return offset ? this.bb.readInt32(this.bb_pos + offset) : class_2.new_;
   }
   mutate_enum(value) {
     const offset = this.bb.__offset(this.bb_pos, 10);
@@ -1859,7 +1859,7 @@ var Object_2 = class _Object_ {
     builder.addFieldInt32(2, switch_, 0);
   }
   static add_enum(builder, enum_) {
-    builder.addFieldInt32(3, enum_, 0 /* new_ */);
+    builder.addFieldInt32(3, enum_, class_2.new_);
   }
   static add_enum2(builder, enum2) {
     builder.addFieldInt32(4, enum2, class_.arguments_);
@@ -1875,15 +1875,7 @@ var Object_2 = class _Object_ {
     return offset;
   }
   unpack() {
-    return new Object_T2(
-      this.return_(),
-      this.if_(),
-      this.switch_(),
-      this.enum_(),
-      this.enum2(),
-      this.enum3(),
-      this.reflect() !== null ? this.reflect().unpack() : null
-    );
+    return new Object_T2(this.return_(), this.if_(), this.switch_(), this.enum_(), this.enum2(), this.enum3(), this.reflect() !== null ? this.reflect().unpack() : null);
   }
   unpackTo(_o) {
     _o.return_ = this.return_();
@@ -1896,7 +1888,7 @@ var Object_2 = class _Object_ {
   }
 };
 var Object_T2 = class {
-  constructor(return_ = 0, if_ = 0, switch_ = 0, enum_ = 0 /* new_ */, enum2 = class_.arguments_, enum3 = Abc.a, reflect = null) {
+  constructor(return_ = 0, if_ = 0, switch_ = 0, enum_ = class_2.new_, enum2 = class_.arguments_, enum3 = Abc.a, reflect = null) {
     this.return_ = return_;
     this.if_ = if_;
     this.switch_ = switch_;

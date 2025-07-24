@@ -1,26 +1,11 @@
 <?php
-
-$base = dirname(dirname(__FILE__));
-$runtimeFiles = [
-    "Constants.php",
-    "ByteBuffer.php",
-    "FlatbufferBuilder.php",
-    "Table.php",
-    "Struct.php",
-];
-
-foreach ($runtimeFiles as $file) {
-    $path = join(DIRECTORY_SEPARATOR, [$base, "php", $file]);
-    echo "Requiring: $path\n";
-    require $path;
-}
 // manual load for testing. please use PSR style autoloader when you use flatbuffers.
 require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "Constants.php"));
 require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "ByteBuffer.php"));
 require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "FlatbufferBuilder.php"));
 require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "Table.php"));
 require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "Struct.php"));
-foreach (glob(join(DIRECTORY_SEPARATOR, array(dirname(__FILE__), "MyGame", "Example", "*.php"))) as $file) {
+foreach (glob(join(DIRECTORY_SEPARATOR, array(dirname(__FILE__), "php_preserve_case", "MyGame", "Example", "*.php"))) as $file) {
     require $file;
 }
 
@@ -74,15 +59,15 @@ function main()
         \MyGame\Example\Color::Green,
         5, //short
         6));
-    \MyGame\Example\Monster::AddHp($fbb, 80);
-    \MyGame\Example\Monster::AddName($fbb, $str);
-    \MyGame\Example\Monster::AddInventory($fbb, $inv);
-    \MyGame\Example\Monster::AddTestType($fbb, \MyGame\Example\Any::Monster);
-    \MyGame\Example\Monster::AddTest($fbb, $mon2);
-    \MyGame\Example\Monster::AddTest4($fbb, $test4);
-    \MyGame\Example\Monster::AddTestarrayofstring($fbb, $testArrayOfString);
-    \MyGame\Example\Monster::AddEnemy($fbb, $enemy);
-    \MyGame\Example\Monster::AddTestbool($fbb, true);
+    \MyGame\Example\Monster::addhp($fbb, 80);
+    \MyGame\Example\Monster::addname($fbb, $str);
+    \MyGame\Example\Monster::addinventory($fbb, $inv);
+    \MyGame\Example\Monster::addtest_type($fbb, \MyGame\Example\Any::Monster);
+    \MyGame\Example\Monster::addtest($fbb, $mon2);
+    \MyGame\Example\Monster::addtest4($fbb, $test4);
+    \MyGame\Example\Monster::addtestarrayofstring($fbb, $testArrayOfString);
+    \MyGame\Example\Monster::addenemy($fbb, $enemy);
+    \MyGame\Example\Monster::addtestbool($fbb, true);
     $mon = \MyGame\Example\Monster::EndMonster($fbb);
 
     \MyGame\Example\Monster::FinishMonsterBuffer($fbb, $mon);
@@ -130,11 +115,11 @@ function test_buffer(Assert $assert, Google\FlatBuffers\ByteBuffer $bb) {
     $t = $pos->GetTest3();
     $assert->strictEqual($t->GetA(), 5);
     $assert->strictEqual($t->GetB(), 6);
-    $assert->strictEqual($monster->GetTestType(), \MyGame\Example\Any::Monster);
+    $assert->strictEqual($monster->gettest_type(), \MyGame\Example\Any::Monster);
 
     $monster2 = new \MyGame\Example\Monster();
-    $assert->strictEqual($monster->GetTest($monster2) != null, true);
-    $assert->strictEqual($monster2->GetName(), 'Fred');
+    $assert->strictEqual($monster->gettest($monster2) != null, true);
+    $assert->strictEqual($monster2->getname(), 'Fred');
 
     $assert->strictEqual($monster->GetInventoryLength(), 5);
     $invsum = 0;
@@ -150,12 +135,12 @@ function test_buffer(Assert $assert, Google\FlatBuffers\ByteBuffer $bb) {
     $assert->strictEqual($monster->GetTest4Length(), 2);
     $assert->strictEqual($test_0->GetA() + $test_0->GetB() + $test_1->GetA() + $test_1->GetB(), 100);
 
-    $assert->strictEqual($monster->GetTestarrayofstringLength(), 2);
-    $assert->strictEqual($monster->GetTestarrayofstring(0), 'test1');
-    $assert->strictEqual($monster->GetTestarrayofstring(1), 'test2');
+    $assert->strictEqual($monster->getTestarrayofstringLength(), 2);
+    $assert->strictEqual($monster->getTestarrayofstring(0), 'test1');
+    $assert->strictEqual($monster->getTestarrayofstring(1), 'test2');
 
     $fred = $monster->getEnemy();
-    $assert->Equal('Fred', $fred->getName());
+    $assert->Equal('Fred', $fred->getname());
 
     $assert->strictEqual($monster->GetTestbool(), true);
 }

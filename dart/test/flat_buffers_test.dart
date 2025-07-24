@@ -934,10 +934,10 @@ class ListOfEnumsTest {
 class BoolInStructTest {
   void test_boolInStruct() async {
     var mystruct = example4.FooObjectBuilder(
-        myFoo: example4.FooPropertiesObjectBuilder(a: true, b: false));
+        my_foo: example4.foo_propertiesObjectBuilder(a: true, b: false));
     var bytes = mystruct.toBytes();
     var mystruct_read = example4.Foo(bytes);
-    expect(mystruct_read.myFoo!.a, true);
-    expect(mystruct_read.myFoo!.b, false);
+    expect(mystruct_read.my_foo!.a, true);
+    expect(mystruct_read.my_foo!.b, false);
   }
 }

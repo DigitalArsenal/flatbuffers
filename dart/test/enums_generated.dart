@@ -107,7 +107,7 @@ class MyTableBuilder {
     fbBuilder.startTable(1);
   }
 
-  int addOptionsOffset(int? offset) {
+  int add_optionsOffset(int? offset) {
     fbBuilder.addOffset(0, offset);
     return fbBuilder.offset;
   }

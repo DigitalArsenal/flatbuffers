@@ -29,7 +29,7 @@ class Referrable(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Referrable
-    def Id(self):
+    def id(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
@@ -41,51 +41,14 @@ def ReferrableStart(builder):
 def Start(builder):
     ReferrableStart(builder)
 
-def ReferrableAddId(builder, id):
+def ReferrableAddid(builder, id):
     builder.PrependUint64Slot(0, id, 0)
 
-def AddId(builder, id):
-    ReferrableAddId(builder, id)
+def Addid(builder, id):
+    ReferrableAddid(builder, id)
 
 def ReferrableEnd(builder):
     return builder.EndObject()
 
 def End(builder):
     return ReferrableEnd(builder)
-
-
-class ReferrableT(object):
-
-    # ReferrableT
-    def __init__(self):
-        self.id = 0  # type: int
-
-    @classmethod
-    def InitFromBuf(cls, buf, pos):
-        referrable = Referrable()
-        referrable.Init(buf, pos)
-        return cls.InitFromObj(referrable)
-
-    @classmethod
-    def InitFromPackedBuf(cls, buf, pos=0):
-        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, pos)
-        return cls.InitFromBuf(buf, pos+n)
-
-    @classmethod
-    def InitFromObj(cls, referrable):
-        x = ReferrableT()
-        x._UnPack(referrable)
-        return x
-
-    # ReferrableT
-    def _UnPack(self, referrable):
-        if referrable is None:
-            return
-        self.id = referrable.Id()
-
-    # ReferrableT
-    def Pack(self, builder):
-        ReferrableStart(builder)
-        ReferrableAddId(builder, self.id)
-        referrable = ReferrableEnd(builder)
-        return referrable

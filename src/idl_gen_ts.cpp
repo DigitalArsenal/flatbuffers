@@ -150,7 +150,9 @@ class TsGenerator : public BaseGenerator {
     std::string code;
 
     code += "// " + std::string(FlatBuffersGeneratedWarning()) + "\n\n" +
-        "/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */\n\n";
+            "/* eslint-disable @typescript-eslint/no-unused-vars, "
+            "@typescript-eslint/no-explicit-any, "
+            "@typescript-eslint/no-non-null-assertion */\n\n";
 
     for (auto it = bare_imports.begin(); it != bare_imports.end(); it++) {
       code += it->second.import_statement + "\n";
@@ -570,13 +572,14 @@ class TsGenerator : public BaseGenerator {
         type.enum_def->underlying_type.base_type != type.base_type) {
       return type.enum_def->underlying_type;
     } else {
-        return Type(BASE_TYPE_UCHAR);
+      return Type(BASE_TYPE_UCHAR);
     }
   }
 
-  static Type GetUnderlyingVectorType(const Type &vector_type)
-  {
-    return (vector_type.base_type == BASE_TYPE_UTYPE) ? GetUnionUnderlyingType(vector_type) : vector_type;
+  static Type GetUnderlyingVectorType(const Type &vector_type) {
+    return (vector_type.base_type == BASE_TYPE_UTYPE)
+               ? GetUnionUnderlyingType(vector_type)
+               : vector_type;
   }
 
   // Returns the method name for use with add/put calls.
@@ -923,6 +926,7 @@ class TsGenerator : public BaseGenerator {
     import.bare_file_path = bare_file_path;
     import.rel_file_path = rel_file_path;
     std::string import_extension = parser_.opts.ts_no_import_ext ? "" : ".js";
+
     import.import_statement = "import { " + symbols_expression + " } from '" +
                               rel_file_path + import_extension + "';";
     import.export_statement = "export { " + symbols_expression + " } from '." +
@@ -1068,7 +1072,7 @@ class TsGenerator : public BaseGenerator {
 
         ret = "(() => {\n";
         ret += "      const temp = " + conversion_function + "(this." +
-               namer_.Method(field_name, "Type") + "(), " +
+               namer_.Method(field_name, "type") + "(), " +
                field_binded_method + ");\n";
         ret += "      if(temp === null) { return null; }\n";
         ret += union_has_string
@@ -1078,18 +1082,18 @@ class TsGenerator : public BaseGenerator {
         ret += "  })()";
       } else {
         const auto conversion_function = GenUnionListConvFuncName(enum_def);
-
+        const auto type_name = namer_.Method(field_name, "type");
         ret = "(() => {\n";
         ret += "    const ret: (" +
                GenObjApiUnionTypeTS(imports, *union_type.struct_def,
                                     parser_.opts, *union_type.enum_def) +
                ")[] = [];\n";
         ret += "    for(let targetEnumIndex = 0; targetEnumIndex < this." +
-               namer_.Method(field_name, "TypeLength") + "()" +
+               namer_.Method(type_name, "Length") + "()" +
                "; "
                "++targetEnumIndex) {\n";
-        ret += "      const targetEnum = this." +
-               namer_.Method(field_name, "Type") + "(targetEnumIndex);\n";
+        ret += "      const targetEnum = this." + type_name +
+               "(targetEnumIndex);\n";
         ret += "      if(targetEnum === null || " + enum_type +
                "[targetEnum!] === 'NONE') { "
                "continue; }\n\n";
@@ -1540,12 +1544,13 @@ class TsGenerator : public BaseGenerator {
     // to preserve backwards compatibility, we allow the first field to be a
     // struct
     return struct_def.fields.vec.size() < 2 ||
-           std::all_of(std::begin(struct_def.fields.vec) + 1,
-                       std::end(struct_def.fields.vec),
-                       [](const FieldDef *f) -> bool {
-                         FLATBUFFERS_ASSERT(f != nullptr);
-                         return f->value.type.base_type != BASE_TYPE_STRUCT;
-                       });
+           std::all_of(
+               std::begin(struct_def.fields.vec) + 1,
+               std::end(struct_def.fields.vec),
+               [](const FieldDef *f) -> bool {
+                 FLATBUFFERS_ASSERT(f != nullptr);
+                 return f->value.type.base_type != BASE_TYPE_STRUCT;
+               });
   }
 
   // Generate an accessor struct with constructor for a flatbuffers struct.
@@ -1890,7 +1895,7 @@ class TsGenerator : public BaseGenerator {
                 "):boolean {\n";
 
         const std::string write_method =
-            "." + namer_.Method("write", GenType(field.value.type));
+            "." + namer_.Method("write" + GenType(field.value.type));
 
         if (struct_def.fixed) {
           code += "  " + GenBBAccess() + write_method + "(this.bb_pos + " +

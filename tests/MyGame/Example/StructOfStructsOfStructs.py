@@ -18,7 +18,7 @@ class StructOfStructsOfStructs(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # StructOfStructsOfStructs
-    def A(self, obj):
+    def a(self, obj):
         obj.Init(self._tab.Bytes, self._tab.Pos + 0)
         return obj
 
@@ -37,43 +37,3 @@ def CreateStructOfStructsOfStructs(builder, a_a_id, a_a_distance, a_b_a, a_b_b, 
     builder.PrependUint32(a_a_distance)
     builder.PrependUint32(a_a_id)
     return builder.Offset()
-
-import MyGame.Example.StructOfStructs
-try:
-    from typing import Optional
-except:
-    pass
-
-class StructOfStructsOfStructsT(object):
-
-    # StructOfStructsOfStructsT
-    def __init__(self):
-        self.a = None  # type: Optional[MyGame.Example.StructOfStructs.StructOfStructsT]
-
-    @classmethod
-    def InitFromBuf(cls, buf, pos):
-        structOfStructsOfStructs = StructOfStructsOfStructs()
-        structOfStructsOfStructs.Init(buf, pos)
-        return cls.InitFromObj(structOfStructsOfStructs)
-
-    @classmethod
-    def InitFromPackedBuf(cls, buf, pos=0):
-        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, pos)
-        return cls.InitFromBuf(buf, pos+n)
-
-    @classmethod
-    def InitFromObj(cls, structOfStructsOfStructs):
-        x = StructOfStructsOfStructsT()
-        x._UnPack(structOfStructsOfStructs)
-        return x
-
-    # StructOfStructsOfStructsT
-    def _UnPack(self, structOfStructsOfStructs):
-        if structOfStructsOfStructs is None:
-            return
-        if structOfStructsOfStructs.A(MyGame.Example.StructOfStructs.StructOfStructs()) is not None:
-            self.a = MyGame.Example.StructOfStructs.StructOfStructsT.InitFromObj(structOfStructsOfStructs.A(MyGame.Example.StructOfStructs.StructOfStructs()))
-
-    # StructOfStructsOfStructsT
-    def Pack(self, builder):
-        return CreateStructOfStructsOfStructs(builder, self.a.a.id, self.a.a.distance, self.a.b.a, self.a.b.b, self.a.c.id, self.a.c.distance)

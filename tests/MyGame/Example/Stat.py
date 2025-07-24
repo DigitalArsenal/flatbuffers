@@ -29,21 +29,21 @@ class Stat(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Stat
-    def Id(self):
+    def id(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.String(o + self._tab.Pos)
         return None
 
     # Stat
-    def Val(self):
+    def val(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Int64Flags, o + self._tab.Pos)
         return 0
 
     # Stat
-    def Count(self):
+    def count(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint16Flags, o + self._tab.Pos)
@@ -55,23 +55,23 @@ def StatStart(builder):
 def Start(builder):
     StatStart(builder)
 
-def StatAddId(builder, id):
+def StatAddid(builder, id):
     builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(id), 0)
 
-def AddId(builder, id):
-    StatAddId(builder, id)
+def Addid(builder, id):
+    StatAddid(builder, id)
 
-def StatAddVal(builder, val):
+def StatAddval(builder, val):
     builder.PrependInt64Slot(1, val, 0)
 
-def AddVal(builder, val):
-    StatAddVal(builder, val)
+def Addval(builder, val):
+    StatAddval(builder, val)
 
-def StatAddCount(builder, count):
+def StatAddcount(builder, count):
     builder.PrependUint16Slot(2, count, 0)
 
-def AddCount(builder, count):
-    StatAddCount(builder, count)
+def Addcount(builder, count):
+    StatAddcount(builder, count)
 
 def StatEnd(builder):
     return builder.EndObject()
@@ -83,10 +83,15 @@ def End(builder):
 class StatT(object):
 
     # StatT
-    def __init__(self):
-        self.id = None  # type: Optional[str]
-        self.val = 0  # type: int
-        self.count = 0  # type: int
+    def __init__(
+        self,
+        id = None,
+        val = 0,
+        count = 0,
+    ):
+        self.id = id  # type: Optional[str]
+        self.val = val  # type: int
+        self.count = count  # type: int
 
     @classmethod
     def InitFromBuf(cls, buf, pos):

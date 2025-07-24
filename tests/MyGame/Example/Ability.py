@@ -18,9 +18,9 @@ class Ability(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Ability
-    def Id(self): return self._tab.Get(flatbuffers.number_types.Uint32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
+    def id(self): return self._tab.Get(flatbuffers.number_types.Uint32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
     # Ability
-    def Distance(self): return self._tab.Get(flatbuffers.number_types.Uint32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(4))
+    def distance(self): return self._tab.Get(flatbuffers.number_types.Uint32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(4))
 
 def CreateAbility(builder, id, distance):
     builder.Prep(4, 8)
@@ -32,9 +32,13 @@ def CreateAbility(builder, id, distance):
 class AbilityT(object):
 
     # AbilityT
-    def __init__(self):
-        self.id = 0  # type: int
-        self.distance = 0  # type: int
+    def __init__(
+        self,
+        id = 0,
+        distance = 0,
+    ):
+        self.id = id  # type: int
+        self.distance = distance  # type: int
 
     @classmethod
     def InitFromBuf(cls, buf, pos):

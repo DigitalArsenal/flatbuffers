@@ -29,7 +29,7 @@ class TestSimpleTableWithEnum(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # TestSimpleTableWithEnum
-    def Color(self):
+    def color(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
@@ -41,11 +41,11 @@ def TestSimpleTableWithEnumStart(builder):
 def Start(builder):
     TestSimpleTableWithEnumStart(builder)
 
-def TestSimpleTableWithEnumAddColor(builder, color):
+def TestSimpleTableWithEnumAddcolor(builder, color):
     builder.PrependUint8Slot(0, color, 2)
 
-def AddColor(builder, color):
-    TestSimpleTableWithEnumAddColor(builder, color)
+def Addcolor(builder, color):
+    TestSimpleTableWithEnumAddcolor(builder, color)
 
 def TestSimpleTableWithEnumEnd(builder):
     return builder.EndObject()
@@ -57,8 +57,11 @@ def End(builder):
 class TestSimpleTableWithEnumT(object):
 
     # TestSimpleTableWithEnumT
-    def __init__(self):
-        self.color = 2  # type: int
+    def __init__(
+        self,
+        color = 2,
+    ):
+        self.color = color  # type: int
 
     @classmethod
     def InitFromBuf(cls, buf, pos):

@@ -119,7 +119,7 @@ mjs/**/*.d.ts
 .ninja_log
 build.ninja
 rules.ninja
-.vscode
+#.vscode
 dart/.pub/
 dart/.packages
 dart/pubspec.lock

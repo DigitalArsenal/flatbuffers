@@ -18,9 +18,9 @@ class Test(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Test
-    def A(self): return self._tab.Get(flatbuffers.number_types.Int16Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
+    def a(self): return self._tab.Get(flatbuffers.number_types.Int16Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
     # Test
-    def B(self): return self._tab.Get(flatbuffers.number_types.Int8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(2))
+    def b(self): return self._tab.Get(flatbuffers.number_types.Int8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(2))
 
 def CreateTest(builder, a, b):
     builder.Prep(2, 4)
@@ -33,9 +33,13 @@ def CreateTest(builder, a, b):
 class TestT(object):
 
     # TestT
-    def __init__(self):
-        self.a = 0  # type: int
-        self.b = 0  # type: int
+    def __init__(
+        self,
+        a = 0,
+        b = 0,
+    ):
+        self.a = a  # type: int
+        self.b = b  # type: int
 
     @classmethod
     def InitFromBuf(cls, buf, pos):

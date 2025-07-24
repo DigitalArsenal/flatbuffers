@@ -26,7 +26,7 @@ class TestSimpleTableWithEnum(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # TestSimpleTableWithEnum
-    def Color(self):
+    def color(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
@@ -38,11 +38,11 @@ def TestSimpleTableWithEnumStart(builder: flatbuffers.Builder):
 def Start(builder: flatbuffers.Builder):
     TestSimpleTableWithEnumStart(builder)
 
-def TestSimpleTableWithEnumAddColor(builder: flatbuffers.Builder, color: int):
+def TestSimpleTableWithEnumAddcolor(builder: flatbuffers.Builder, color: int):
     builder.PrependUint8Slot(0, color, 2)
 
-def AddColor(builder: flatbuffers.Builder, color: int):
-    TestSimpleTableWithEnumAddColor(builder, color)
+def Addcolor(builder: flatbuffers.Builder, color: int):
+    TestSimpleTableWithEnumAddcolor(builder, color)
 
 def TestSimpleTableWithEnumEnd(builder: flatbuffers.Builder) -> int:
     return builder.EndObject()
@@ -54,8 +54,11 @@ def End(builder: flatbuffers.Builder) -> int:
 class TestSimpleTableWithEnumT(object):
 
     # TestSimpleTableWithEnumT
-    def __init__(self):
-        self.color = 2  # type: int
+    def __init__(
+        self,
+        color = 2,
+    ):
+        self.color = color  # type: int
 
     @classmethod
     def InitFromBuf(cls, buf, pos):
@@ -78,11 +81,11 @@ class TestSimpleTableWithEnumT(object):
     def _UnPack(self, testSimpleTableWithEnum):
         if testSimpleTableWithEnum is None:
             return
-        self.color = testSimpleTableWithEnum.Color()
+        self.color = testSimpleTableWithEnum.color()
 
     # TestSimpleTableWithEnumT
     def Pack(self, builder):
         TestSimpleTableWithEnumStart(builder)
-        TestSimpleTableWithEnumAddColor(builder, self.color)
+        TestSimpleTableWithEnumAddcolor(builder, self.color)
         testSimpleTableWithEnum = TestSimpleTableWithEnumEnd(builder)
         return testSimpleTableWithEnum

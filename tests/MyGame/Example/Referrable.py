@@ -29,7 +29,7 @@ class Referrable(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Referrable
-    def Id(self):
+    def id(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint64Flags, o + self._tab.Pos)
@@ -41,11 +41,11 @@ def ReferrableStart(builder):
 def Start(builder):
     ReferrableStart(builder)
 
-def ReferrableAddId(builder, id):
+def ReferrableAddid(builder, id):
     builder.PrependUint64Slot(0, id, 0)
 
-def AddId(builder, id):
-    ReferrableAddId(builder, id)
+def Addid(builder, id):
+    ReferrableAddid(builder, id)
 
 def ReferrableEnd(builder):
     return builder.EndObject()
@@ -57,8 +57,11 @@ def End(builder):
 class ReferrableT(object):
 
     # ReferrableT
-    def __init__(self):
-        self.id = 0  # type: int
+    def __init__(
+        self,
+        id = 0,
+    ):
+        self.id = id  # type: int
 
     @classmethod
     def InitFromBuf(cls, buf, pos):

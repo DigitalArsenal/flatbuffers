@@ -1,18 +1,18 @@
 echo "************************ Java:"
 
-sh JavaTest.sh
+bash JavaTest.sh
 
 echo "************************ Kotlin:"
 
-sh KotlinTest.sh
+bash KotlinTest.sh
 
 echo "************************ Go:"
 
-sh GoTest.sh
+bash GoTest.sh
 
 echo "************************ Python:"
 
-sh PythonTest.sh
+bash PythonTest.sh
 
 echo "************************ TypeScript:"
 
@@ -27,21 +27,22 @@ cd tests
 echo "************************ C#:"
 
 cd FlatBuffers.Test
-sh NetTest.sh
+bash NetTest.sh
 cd ..
 
 echo "************************ PHP:"
 
 php phpTest.php
-sh phpUnionVectorTest.sh
+bash phpUnionVectorTest.sh
+bash phpUnionVectorTest_preserve_case.sh
 
 echo "************************ Dart:"
 
-sh DartTest.sh
+bash DartTest.sh
 
 echo "************************ Rust:"
 
-sh RustTest.sh
+bash RustTest.sh
 
 echo "************************ Lobster:"
 
@@ -55,5 +56,5 @@ echo "(in a different repo)"
 echo "************************ Swift:"
 
 cd FlatBuffers.Test.Swift
-sh SwiftTest.sh
+bash SwiftTest.sh
 cd ..

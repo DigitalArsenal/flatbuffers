@@ -34,4 +34,4 @@ emcmake cmake -S . -B wasm_build \
 
 emmake cmake --build wasm_build --target flatc -- -j${CORES}
 
-mv wasm_build/flatc.js wasm_build/flatc.mjs
+mv wasm_build/flatc.js wasm/src/flatc.mjs

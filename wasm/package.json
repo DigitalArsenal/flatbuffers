@@ -1,0 +1,54 @@
+{
+  "name": "flatc-wasm",
+  "version": "25.2.10",
+  "description": "FlatBuffers flatc WASM compiler wrapper for browser & Node",
+  "files": [
+    "src/**/*.mjs",
+    "src/**/*.d.ts"
+  ],
+  "main": "src/index.mjs",
+  "module": "src/index.mjs",
+  "type": "module",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "build": "echo \"No build step needed\"",
+    "lint": "eslint src",
+    "test": "npm run lint && node tests/index.test.js",
+    "prepublishOnly": "npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/google/flatbuffers.git",
+    "directory": "wasm"
+  },
+  "keywords": [
+    "flatbuffers",
+    "flatc",
+    "wasm",
+    "isomorphic",
+    "browser",
+    "node"
+  ],
+  "author": "The FlatBuffers project",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/google/flatbuffers/issues"
+  },
+  "homepage": "https://github.com/google/flatbuffers/tree/main/wasm",
+  "dependencies": {
+    "jszip": "^4.0.0"
+  },
+  "peerDependencies": {
+    "flatbuffers": ">=25.2.10"
+  },
+  "devDependencies": {
+    "eslint": "^9.29.0",
+    "@types/node": "^24.0.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

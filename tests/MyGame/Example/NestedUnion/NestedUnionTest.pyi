@@ -3,10 +3,8 @@ from __future__ import annotations
 import flatbuffers
 import numpy as np
 
-import flatbuffers
 import typing
 from MyGame.Example.NestedUnion.Any import Any
-from MyGame.Example.NestedUnion.NestedUnionTest import NestedUnionTest
 from MyGame.Example.NestedUnion.TestSimpleTableWithEnum import TestSimpleTableWithEnumT
 from MyGame.Example.NestedUnion.Vec3 import Vec3T
 from flatbuffers import table

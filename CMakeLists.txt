@@ -720,3 +720,18 @@ target_include_directories(
   FlatBuffers
   INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/include>)
+
+# Add WASM target
+
+add_custom_target(flatc_wasm
+  COMMAND ${CMAKE_COMMAND} -E echo "Running flatc WebAssembly build via script..."
+  COMMAND ${CMAKE_COMMAND} -E env bash ${CMAKE_SOURCE_DIR}/scripts/build_flatc_wasm.sh
+  COMMENT "Builds flatc.js and flatc.wasm from source"
+  USES_TERMINAL
+)
+# Cleans the WebAssembly build directory
+add_custom_target(clean_flatc_wasm
+  COMMAND ${CMAKE_COMMAND} -E echo "Cleaning WebAssembly build directory..."
+  COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_SOURCE_DIR}/wasm_build
+  COMMENT "Remove wasm_build directory and all contents"
+)

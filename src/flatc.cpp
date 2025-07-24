@@ -258,7 +258,8 @@ const static FlatCOption flatc_options[] = {
   { "", "python-typing", "", "Generate Python type annotations" },
   { "", "preserve-case", "", "Preserve all property cases as defined in IDL" },
   { "", "python-version", "", "Generate code for the given Python version." },
-  { "", "python-decode-obj-api-strings", "", "Decode bytes to strings for the Python Object API"},
+  { "", "python-decode-obj-api-strings", "",
+    "Decode bytes to strings for the Python Object API" },
   { "", "python-gen-numpy", "", "Whether to generate numpy helpers." },
   { "", "ts-omit-entrypoint", "",
     "Omit emission of namespace entrypoint file" },
@@ -640,7 +641,7 @@ FlatCOptions FlatCompiler::ParseFromCommandLineArguments(int argc,
         opts.set_empty_vectors_to_null = false;
       } else if (arg == "--force-empty-vectors") {
         opts.set_empty_vectors_to_null = false;
-      }else if (arg == "--preserve-case"){
+      } else if (arg == "--preserve-case") {
         options.preserve_case = true;
       } else if (arg == "--java-primitive-has-method") {
         opts.java_primitive_has_method = true;
@@ -739,6 +740,40 @@ FlatCOptions FlatCompiler::ParseFromCommandLineArguments(int argc,
         if (arg == "--proto") { opts.proto_mode = true; }
 
         auto code_generator_it = code_generators_.find(arg);
+
+        if (code_generator_it != code_generators_.end()) {
+          options.generators.push_back(code_generator_it->second);
+          if (options.preserve_case) {
+            static const std::set<std::string> preserve_case_supported = {
+              "cpp", "go", "php", "python", "ts", "jsonschema"
+            };
+            std::string matched_lang = arg;
+            if (matched_lang.rfind("--", 0) == 0)
+              matched_lang = matched_lang.substr(2);
+            else if (matched_lang.rfind("-", 0) == 0)
+              matched_lang = matched_lang.substr(1);
+            static const std::map<std::string, std::string> short_to_lang = {
+              { "b", "binary" }, { "c", "cpp" }, { "n", "csharp" },
+              { "d", "dart" },   { "g", "go" },  { "j", "java" },
+              { "t", "json" },   { "l", "lua" }, { "p", "python" },
+              { "r", "rust" },   { "T", "ts" }
+            };
+            auto it_lang = short_to_lang.find(matched_lang);
+            if (it_lang != short_to_lang.end()) matched_lang = it_lang->second;
+            if (!preserve_case_supported.count(matched_lang)) {
+              fprintf(stderr,
+                      "[FlatBuffers] --preserve-case is not currently "
+                      "supported for '%s' (%s).\n"
+                      "Pull requests are welcome at: "
+                      "https://github.com/DigitalArsenal/flatbuffers\n",
+                      matched_lang.c_str(), arg.c_str());
+            }
+          }
+        } else {
+          Error("unknown commandline argument: " + arg, true, true);
+          return options;
+        }
+        
         if (code_generator_it == code_generators_.end()) {
           Error("unknown commandline argument: " + arg, true);
           return options;

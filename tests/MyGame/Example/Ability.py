@@ -27,3 +27,43 @@ def CreateAbility(builder, id, distance):
     builder.PrependUint32(distance)
     builder.PrependUint32(id)
     return builder.Offset()
+
+
+class AbilityT(object):
+
+    # AbilityT
+    def __init__(
+        self,
+        id = 0,
+        distance = 0,
+    ):
+        self.id = id  # type: int
+        self.distance = distance  # type: int
+
+    @classmethod
+    def InitFromBuf(cls, buf, pos):
+        ability = Ability()
+        ability.Init(buf, pos)
+        return cls.InitFromObj(ability)
+
+    @classmethod
+    def InitFromPackedBuf(cls, buf, pos=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, pos)
+        return cls.InitFromBuf(buf, pos+n)
+
+    @classmethod
+    def InitFromObj(cls, ability):
+        x = AbilityT()
+        x._UnPack(ability)
+        return x
+
+    # AbilityT
+    def _UnPack(self, ability):
+        if ability is None:
+            return
+        self.id = ability.Id()
+        self.distance = ability.Distance()
+
+    # AbilityT
+    def Pack(self, builder):
+        return CreateAbility(builder, self.id, self.distance)

@@ -19,6 +19,10 @@ class ArrayTable(object):
   def a(self) -> ArrayStruct | None: ...
 class ArrayTableT(object):
   a: ArrayStructT | None
+  def __init__(
+    self,
+    a: 'ArrayStructT' | None = ...,
+  ) -> None: ...
   @classmethod
   def InitFromBuf(cls, buf: bytes, pos: int) -> ArrayTableT: ...
   @classmethod

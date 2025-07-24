@@ -1,4 +1,5 @@
-# ![logo](https://flatbuffers.dev/assets/flatbuffers_logo.svg) FlatBuffers
+![logo](https://flatbuffers.dev/assets/flatbuffers_logo.svg) FlatBuffers
+===========
 
 ![Build status](https://github.com/google/flatbuffers/actions/workflows/build.yml/badge.svg?branch=master)
 [![BuildKite status](https://badge.buildkite.com/7979d93bc6279aa539971f271253c65d5e8fe2fe43c90bbb25.svg)](https://buildkite.com/bazel/flatbuffers)

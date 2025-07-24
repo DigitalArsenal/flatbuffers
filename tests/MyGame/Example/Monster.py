@@ -1383,3 +1383,557 @@ def MonsterEnd(builder):
 
 def End(builder):
     return MonsterEnd(builder)
+
+import MyGame.Example.Ability
+import MyGame.Example.Any
+import MyGame.Example.AnyAmbiguousAliases
+import MyGame.Example.AnyUniqueAliases
+import MyGame.Example.Referrable
+import MyGame.Example.Stat
+import MyGame.Example.Test
+import MyGame.Example.TestSimpleTableWithEnum
+import MyGame.Example.Vec3
+import MyGame.Example2.Monster
+import MyGame.InParentNamespace
+try:
+    from typing import List, Optional, Union
+except:
+    pass
+
+class MonsterT(object):
+
+    # MonsterT
+    def __init__(self):
+        self.pos = None  # type: Optional[MyGame.Example.Vec3.Vec3T]
+        self.mana = 150  # type: int
+        self.hp = 100  # type: int
+        self.name = None  # type: Optional[str]
+        self.inventory = None  # type: Optional[List[int]]
+        self.color = 8  # type: int
+        self.testType = 0  # type: int
+        self.test = None  # type: Union[None, MyGame.Example.Monster.MonsterT, MyGame.Example.TestSimpleTableWithEnum.TestSimpleTableWithEnumT, MyGame.Example2.Monster.MonsterT]
+        self.test4 = None  # type: Optional[List[MyGame.Example.Test.TestT]]
+        self.testarrayofstring = None  # type: Optional[List[Optional[str]]]
+        self.testarrayoftables = None  # type: Optional[List[MyGame.Example.Monster.MonsterT]]
+        self.enemy = None  # type: Optional[MyGame.Example.Monster.MonsterT]
+        self.testnestedflatbuffer = None  # type: Optional[List[int]]
+        self.testempty = None  # type: Optional[MyGame.Example.Stat.StatT]
+        self.testbool = False  # type: bool
+        self.testhashs32Fnv1 = 0  # type: int
+        self.testhashu32Fnv1 = 0  # type: int
+        self.testhashs64Fnv1 = 0  # type: int
+        self.testhashu64Fnv1 = 0  # type: int
+        self.testhashs32Fnv1a = 0  # type: int
+        self.testhashu32Fnv1a = 0  # type: int
+        self.testhashs64Fnv1a = 0  # type: int
+        self.testhashu64Fnv1a = 0  # type: int
+        self.testarrayofbools = None  # type: Optional[List[bool]]
+        self.testf = 3.14159  # type: float
+        self.testf2 = 3.0  # type: float
+        self.testf3 = 0.0  # type: float
+        self.testarrayofstring2 = None  # type: Optional[List[Optional[str]]]
+        self.testarrayofsortedstruct = None  # type: Optional[List[MyGame.Example.Ability.AbilityT]]
+        self.flex = None  # type: Optional[List[int]]
+        self.test5 = None  # type: Optional[List[MyGame.Example.Test.TestT]]
+        self.vectorOfLongs = None  # type: Optional[List[int]]
+        self.vectorOfDoubles = None  # type: Optional[List[float]]
+        self.parentNamespaceTest = None  # type: Optional[MyGame.InParentNamespace.InParentNamespaceT]
+        self.vectorOfReferrables = None  # type: Optional[List[MyGame.Example.Referrable.ReferrableT]]
+        self.singleWeakReference = 0  # type: int
+        self.vectorOfWeakReferences = None  # type: Optional[List[int]]
+        self.vectorOfStrongReferrables = None  # type: Optional[List[MyGame.Example.Referrable.ReferrableT]]
+        self.coOwningReference = 0  # type: int
+        self.vectorOfCoOwningReferences = None  # type: Optional[List[int]]
+        self.nonOwningReference = 0  # type: int
+        self.vectorOfNonOwningReferences = None  # type: Optional[List[int]]
+        self.anyUniqueType = 0  # type: int
+        self.anyUnique = None  # type: Union[None, MyGame.Example.Monster.MonsterT, MyGame.Example.TestSimpleTableWithEnum.TestSimpleTableWithEnumT, MyGame.Example2.Monster.MonsterT]
+        self.anyAmbiguousType = 0  # type: int
+        self.anyAmbiguous = None  # type: Union[None, MyGame.Example.Monster.MonsterT, MyGame.Example.Monster.MonsterT, MyGame.Example.Monster.MonsterT]
+        self.vectorOfEnums = None  # type: Optional[List[int]]
+        self.signedEnum = -1  # type: int
+        self.testrequirednestedflatbuffer = None  # type: Optional[List[int]]
+        self.scalarKeySortedTables = None  # type: Optional[List[MyGame.Example.Stat.StatT]]
+        self.nativeInline = None  # type: Optional[MyGame.Example.Test.TestT]
+        self.longEnumNonEnumDefault = 0  # type: int
+        self.longEnumNormalDefault = 2  # type: int
+        self.nanDefault = float('nan')  # type: float
+        self.infDefault = float('inf')  # type: float
+        self.positiveInfDefault = float('inf')  # type: float
+        self.infinityDefault = float('inf')  # type: float
+        self.positiveInfinityDefault = float('inf')  # type: float
+        self.negativeInfDefault = float('-inf')  # type: float
+        self.negativeInfinityDefault = float('-inf')  # type: float
+        self.doubleInfDefault = float('inf')  # type: float
+
+    @classmethod
+    def InitFromBuf(cls, buf, pos):
+        monster = Monster()
+        monster.Init(buf, pos)
+        return cls.InitFromObj(monster)
+
+    @classmethod
+    def InitFromPackedBuf(cls, buf, pos=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, pos)
+        return cls.InitFromBuf(buf, pos+n)
+
+    @classmethod
+    def InitFromObj(cls, monster):
+        x = MonsterT()
+        x._UnPack(monster)
+        return x
+
+    # MonsterT
+    def _UnPack(self, monster):
+        if monster is None:
+            return
+        if monster.Pos() is not None:
+            self.pos = MyGame.Example.Vec3.Vec3T.InitFromObj(monster.Pos())
+        self.mana = monster.Mana()
+        self.hp = monster.Hp()
+        self.name = monster.Name()
+        if not monster.InventoryIsNone():
+            if np is None:
+                self.inventory = []
+                for i in range(monster.InventoryLength()):
+                    self.inventory.append(monster.Inventory(i))
+            else:
+                self.inventory = monster.InventoryAsNumpy()
+        self.color = monster.Color()
+        self.testType = monster.TestType()
+        self.test = MyGame.Example.Any.AnyCreator(self.testType, monster.Test())
+        if not monster.Test4IsNone():
+            self.test4 = []
+            for i in range(monster.Test4Length()):
+                if monster.Test4(i) is None:
+                    self.test4.append(None)
+                else:
+                    test_ = MyGame.Example.Test.TestT.InitFromObj(monster.Test4(i))
+                    self.test4.append(test_)
+        if not monster.TestarrayofstringIsNone():
+            self.testarrayofstring = []
+            for i in range(monster.TestarrayofstringLength()):
+                self.testarrayofstring.append(monster.Testarrayofstring(i))
+        if not monster.TestarrayoftablesIsNone():
+            self.testarrayoftables = []
+            for i in range(monster.TestarrayoftablesLength()):
+                if monster.Testarrayoftables(i) is None:
+                    self.testarrayoftables.append(None)
+                else:
+                    monster_ = MyGame.Example.Monster.MonsterT.InitFromObj(monster.Testarrayoftables(i))
+                    self.testarrayoftables.append(monster_)
+        if monster.Enemy() is not None:
+            self.enemy = MyGame.Example.Monster.MonsterT.InitFromObj(monster.Enemy())
+        if not monster.TestnestedflatbufferIsNone():
+            if np is None:
+                self.testnestedflatbuffer = []
+                for i in range(monster.TestnestedflatbufferLength()):
+                    self.testnestedflatbuffer.append(monster.Testnestedflatbuffer(i))
+            else:
+                self.testnestedflatbuffer = monster.TestnestedflatbufferAsNumpy()
+        if monster.Testempty() is not None:
+            self.testempty = MyGame.Example.Stat.StatT.InitFromObj(monster.Testempty())
+        self.testbool = monster.Testbool()
+        self.testhashs32Fnv1 = monster.Testhashs32Fnv1()
+        self.testhashu32Fnv1 = monster.Testhashu32Fnv1()
+        self.testhashs64Fnv1 = monster.Testhashs64Fnv1()
+        self.testhashu64Fnv1 = monster.Testhashu64Fnv1()
+        self.testhashs32Fnv1a = monster.Testhashs32Fnv1a()
+        self.testhashu32Fnv1a = monster.Testhashu32Fnv1a()
+        self.testhashs64Fnv1a = monster.Testhashs64Fnv1a()
+        self.testhashu64Fnv1a = monster.Testhashu64Fnv1a()
+        if not monster.TestarrayofboolsIsNone():
+            if np is None:
+                self.testarrayofbools = []
+                for i in range(monster.TestarrayofboolsLength()):
+                    self.testarrayofbools.append(monster.Testarrayofbools(i))
+            else:
+                self.testarrayofbools = monster.TestarrayofboolsAsNumpy()
+        self.testf = monster.Testf()
+        self.testf2 = monster.Testf2()
+        self.testf3 = monster.Testf3()
+        if not monster.Testarrayofstring2IsNone():
+            self.testarrayofstring2 = []
+            for i in range(monster.Testarrayofstring2Length()):
+                self.testarrayofstring2.append(monster.Testarrayofstring2(i))
+        if not monster.TestarrayofsortedstructIsNone():
+            self.testarrayofsortedstruct = []
+            for i in range(monster.TestarrayofsortedstructLength()):
+                if monster.Testarrayofsortedstruct(i) is None:
+                    self.testarrayofsortedstruct.append(None)
+                else:
+                    ability_ = MyGame.Example.Ability.AbilityT.InitFromObj(monster.Testarrayofsortedstruct(i))
+                    self.testarrayofsortedstruct.append(ability_)
+        if not monster.FlexIsNone():
+            if np is None:
+                self.flex = []
+                for i in range(monster.FlexLength()):
+                    self.flex.append(monster.Flex(i))
+            else:
+                self.flex = monster.FlexAsNumpy()
+        if not monster.Test5IsNone():
+            self.test5 = []
+            for i in range(monster.Test5Length()):
+                if monster.Test5(i) is None:
+                    self.test5.append(None)
+                else:
+                    test_ = MyGame.Example.Test.TestT.InitFromObj(monster.Test5(i))
+                    self.test5.append(test_)
+        if not monster.VectorOfLongsIsNone():
+            if np is None:
+                self.vectorOfLongs = []
+                for i in range(monster.VectorOfLongsLength()):
+                    self.vectorOfLongs.append(monster.VectorOfLongs(i))
+            else:
+                self.vectorOfLongs = monster.VectorOfLongsAsNumpy()
+        if not monster.VectorOfDoublesIsNone():
+            if np is None:
+                self.vectorOfDoubles = []
+                for i in range(monster.VectorOfDoublesLength()):
+                    self.vectorOfDoubles.append(monster.VectorOfDoubles(i))
+            else:
+                self.vectorOfDoubles = monster.VectorOfDoublesAsNumpy()
+        if monster.ParentNamespaceTest() is not None:
+            self.parentNamespaceTest = MyGame.InParentNamespace.InParentNamespaceT.InitFromObj(monster.ParentNamespaceTest())
+        if not monster.VectorOfReferrablesIsNone():
+            self.vectorOfReferrables = []
+            for i in range(monster.VectorOfReferrablesLength()):
+                if monster.VectorOfReferrables(i) is None:
+                    self.vectorOfReferrables.append(None)
+                else:
+                    referrable_ = MyGame.Example.Referrable.ReferrableT.InitFromObj(monster.VectorOfReferrables(i))
+                    self.vectorOfReferrables.append(referrable_)
+        self.singleWeakReference = monster.SingleWeakReference()
+        if not monster.VectorOfWeakReferencesIsNone():
+            if np is None:
+                self.vectorOfWeakReferences = []
+                for i in range(monster.VectorOfWeakReferencesLength()):
+                    self.vectorOfWeakReferences.append(monster.VectorOfWeakReferences(i))
+            else:
+                self.vectorOfWeakReferences = monster.VectorOfWeakReferencesAsNumpy()
+        if not monster.VectorOfStrongReferrablesIsNone():
+            self.vectorOfStrongReferrables = []
+            for i in range(monster.VectorOfStrongReferrablesLength()):
+                if monster.VectorOfStrongReferrables(i) is None:
+                    self.vectorOfStrongReferrables.append(None)
+                else:
+                    referrable_ = MyGame.Example.Referrable.ReferrableT.InitFromObj(monster.VectorOfStrongReferrables(i))
+                    self.vectorOfStrongReferrables.append(referrable_)
+        self.coOwningReference = monster.CoOwningReference()
+        if not monster.VectorOfCoOwningReferencesIsNone():
+            if np is None:
+                self.vectorOfCoOwningReferences = []
+                for i in range(monster.VectorOfCoOwningReferencesLength()):
+                    self.vectorOfCoOwningReferences.append(monster.VectorOfCoOwningReferences(i))
+            else:
+                self.vectorOfCoOwningReferences = monster.VectorOfCoOwningReferencesAsNumpy()
+        self.nonOwningReference = monster.NonOwningReference()
+        if not monster.VectorOfNonOwningReferencesIsNone():
+            if np is None:
+                self.vectorOfNonOwningReferences = []
+                for i in range(monster.VectorOfNonOwningReferencesLength()):
+                    self.vectorOfNonOwningReferences.append(monster.VectorOfNonOwningReferences(i))
+            else:
+                self.vectorOfNonOwningReferences = monster.VectorOfNonOwningReferencesAsNumpy()
+        self.anyUniqueType = monster.AnyUniqueType()
+        self.anyUnique = MyGame.Example.AnyUniqueAliases.AnyUniqueAliasesCreator(self.anyUniqueType, monster.AnyUnique())
+        self.anyAmbiguousType = monster.AnyAmbiguousType()
+        self.anyAmbiguous = MyGame.Example.AnyAmbiguousAliases.AnyAmbiguousAliasesCreator(self.anyAmbiguousType, monster.AnyAmbiguous())
+        if not monster.VectorOfEnumsIsNone():
+            if np is None:
+                self.vectorOfEnums = []
+                for i in range(monster.VectorOfEnumsLength()):
+                    self.vectorOfEnums.append(monster.VectorOfEnums(i))
+            else:
+                self.vectorOfEnums = monster.VectorOfEnumsAsNumpy()
+        self.signedEnum = monster.SignedEnum()
+        if not monster.TestrequirednestedflatbufferIsNone():
+            if np is None:
+                self.testrequirednestedflatbuffer = []
+                for i in range(monster.TestrequirednestedflatbufferLength()):
+                    self.testrequirednestedflatbuffer.append(monster.Testrequirednestedflatbuffer(i))
+            else:
+                self.testrequirednestedflatbuffer = monster.TestrequirednestedflatbufferAsNumpy()
+        if not monster.ScalarKeySortedTablesIsNone():
+            self.scalarKeySortedTables = []
+            for i in range(monster.ScalarKeySortedTablesLength()):
+                if monster.ScalarKeySortedTables(i) is None:
+                    self.scalarKeySortedTables.append(None)
+                else:
+                    stat_ = MyGame.Example.Stat.StatT.InitFromObj(monster.ScalarKeySortedTables(i))
+                    self.scalarKeySortedTables.append(stat_)
+        if monster.NativeInline() is not None:
+            self.nativeInline = MyGame.Example.Test.TestT.InitFromObj(monster.NativeInline())
+        self.longEnumNonEnumDefault = monster.LongEnumNonEnumDefault()
+        self.longEnumNormalDefault = monster.LongEnumNormalDefault()
+        self.nanDefault = monster.NanDefault()
+        self.infDefault = monster.InfDefault()
+        self.positiveInfDefault = monster.PositiveInfDefault()
+        self.infinityDefault = monster.InfinityDefault()
+        self.positiveInfinityDefault = monster.PositiveInfinityDefault()
+        self.negativeInfDefault = monster.NegativeInfDefault()
+        self.negativeInfinityDefault = monster.NegativeInfinityDefault()
+        self.doubleInfDefault = monster.DoubleInfDefault()
+
+    # MonsterT
+    def Pack(self, builder):
+        if self.name is not None:
+            name = builder.CreateString(self.name)
+        if self.inventory is not None:
+            if np is not None and type(self.inventory) is np.ndarray:
+                inventory = builder.CreateNumpyVector(self.inventory)
+            else:
+                MonsterStartInventoryVector(builder, len(self.inventory))
+                for i in reversed(range(len(self.inventory))):
+                    builder.PrependUint8(self.inventory[i])
+                inventory = builder.EndVector()
+        if self.test is not None:
+            test = self.test.Pack(builder)
+        if self.test4 is not None:
+            MonsterStartTest4Vector(builder, len(self.test4))
+            for i in reversed(range(len(self.test4))):
+                self.test4[i].Pack(builder)
+            test4 = builder.EndVector()
+        if self.testarrayofstring is not None:
+            testarrayofstringlist = []
+            for i in range(len(self.testarrayofstring)):
+                testarrayofstringlist.append(builder.CreateString(self.testarrayofstring[i]))
+            MonsterStartTestarrayofstringVector(builder, len(self.testarrayofstring))
+            for i in reversed(range(len(self.testarrayofstring))):
+                builder.PrependUOffsetTRelative(testarrayofstringlist[i])
+            testarrayofstring = builder.EndVector()
+        if self.testarrayoftables is not None:
+            testarrayoftableslist = []
+            for i in range(len(self.testarrayoftables)):
+                testarrayoftableslist.append(self.testarrayoftables[i].Pack(builder))
+            MonsterStartTestarrayoftablesVector(builder, len(self.testarrayoftables))
+            for i in reversed(range(len(self.testarrayoftables))):
+                builder.PrependUOffsetTRelative(testarrayoftableslist[i])
+            testarrayoftables = builder.EndVector()
+        if self.enemy is not None:
+            enemy = self.enemy.Pack(builder)
+        if self.testnestedflatbuffer is not None:
+            if np is not None and type(self.testnestedflatbuffer) is np.ndarray:
+                testnestedflatbuffer = builder.CreateNumpyVector(self.testnestedflatbuffer)
+            else:
+                MonsterStartTestnestedflatbufferVector(builder, len(self.testnestedflatbuffer))
+                for i in reversed(range(len(self.testnestedflatbuffer))):
+                    builder.PrependUint8(self.testnestedflatbuffer[i])
+                testnestedflatbuffer = builder.EndVector()
+        if self.testempty is not None:
+            testempty = self.testempty.Pack(builder)
+        if self.testarrayofbools is not None:
+            if np is not None and type(self.testarrayofbools) is np.ndarray:
+                testarrayofbools = builder.CreateNumpyVector(self.testarrayofbools)
+            else:
+                MonsterStartTestarrayofboolsVector(builder, len(self.testarrayofbools))
+                for i in reversed(range(len(self.testarrayofbools))):
+                    builder.PrependBool(self.testarrayofbools[i])
+                testarrayofbools = builder.EndVector()
+        if self.testarrayofstring2 is not None:
+            testarrayofstring2list = []
+            for i in range(len(self.testarrayofstring2)):
+                testarrayofstring2list.append(builder.CreateString(self.testarrayofstring2[i]))
+            MonsterStartTestarrayofstring2Vector(builder, len(self.testarrayofstring2))
+            for i in reversed(range(len(self.testarrayofstring2))):
+                builder.PrependUOffsetTRelative(testarrayofstring2list[i])
+            testarrayofstring2 = builder.EndVector()
+        if self.testarrayofsortedstruct is not None:
+            MonsterStartTestarrayofsortedstructVector(builder, len(self.testarrayofsortedstruct))
+            for i in reversed(range(len(self.testarrayofsortedstruct))):
+                self.testarrayofsortedstruct[i].Pack(builder)
+            testarrayofsortedstruct = builder.EndVector()
+        if self.flex is not None:
+            if np is not None and type(self.flex) is np.ndarray:
+                flex = builder.CreateNumpyVector(self.flex)
+            else:
+                MonsterStartFlexVector(builder, len(self.flex))
+                for i in reversed(range(len(self.flex))):
+                    builder.PrependUint8(self.flex[i])
+                flex = builder.EndVector()
+        if self.test5 is not None:
+            MonsterStartTest5Vector(builder, len(self.test5))
+            for i in reversed(range(len(self.test5))):
+                self.test5[i].Pack(builder)
+            test5 = builder.EndVector()
+        if self.vectorOfLongs is not None:
+            if np is not None and type(self.vectorOfLongs) is np.ndarray:
+                vectorOfLongs = builder.CreateNumpyVector(self.vectorOfLongs)
+            else:
+                MonsterStartVectorOfLongsVector(builder, len(self.vectorOfLongs))
+                for i in reversed(range(len(self.vectorOfLongs))):
+                    builder.PrependInt64(self.vectorOfLongs[i])
+                vectorOfLongs = builder.EndVector()
+        if self.vectorOfDoubles is not None:
+            if np is not None and type(self.vectorOfDoubles) is np.ndarray:
+                vectorOfDoubles = builder.CreateNumpyVector(self.vectorOfDoubles)
+            else:
+                MonsterStartVectorOfDoublesVector(builder, len(self.vectorOfDoubles))
+                for i in reversed(range(len(self.vectorOfDoubles))):
+                    builder.PrependFloat64(self.vectorOfDoubles[i])
+                vectorOfDoubles = builder.EndVector()
+        if self.parentNamespaceTest is not None:
+            parentNamespaceTest = self.parentNamespaceTest.Pack(builder)
+        if self.vectorOfReferrables is not None:
+            vectorOfReferrableslist = []
+            for i in range(len(self.vectorOfReferrables)):
+                vectorOfReferrableslist.append(self.vectorOfReferrables[i].Pack(builder))
+            MonsterStartVectorOfReferrablesVector(builder, len(self.vectorOfReferrables))
+            for i in reversed(range(len(self.vectorOfReferrables))):
+                builder.PrependUOffsetTRelative(vectorOfReferrableslist[i])
+            vectorOfReferrables = builder.EndVector()
+        if self.vectorOfWeakReferences is not None:
+            if np is not None and type(self.vectorOfWeakReferences) is np.ndarray:
+                vectorOfWeakReferences = builder.CreateNumpyVector(self.vectorOfWeakReferences)
+            else:
+                MonsterStartVectorOfWeakReferencesVector(builder, len(self.vectorOfWeakReferences))
+                for i in reversed(range(len(self.vectorOfWeakReferences))):
+                    builder.PrependUint64(self.vectorOfWeakReferences[i])
+                vectorOfWeakReferences = builder.EndVector()
+        if self.vectorOfStrongReferrables is not None:
+            vectorOfStrongReferrableslist = []
+            for i in range(len(self.vectorOfStrongReferrables)):
+                vectorOfStrongReferrableslist.append(self.vectorOfStrongReferrables[i].Pack(builder))
+            MonsterStartVectorOfStrongReferrablesVector(builder, len(self.vectorOfStrongReferrables))
+            for i in reversed(range(len(self.vectorOfStrongReferrables))):
+                builder.PrependUOffsetTRelative(vectorOfStrongReferrableslist[i])
+            vectorOfStrongReferrables = builder.EndVector()
+        if self.vectorOfCoOwningReferences is not None:
+            if np is not None and type(self.vectorOfCoOwningReferences) is np.ndarray:
+                vectorOfCoOwningReferences = builder.CreateNumpyVector(self.vectorOfCoOwningReferences)
+            else:
+                MonsterStartVectorOfCoOwningReferencesVector(builder, len(self.vectorOfCoOwningReferences))
+                for i in reversed(range(len(self.vectorOfCoOwningReferences))):
+                    builder.PrependUint64(self.vectorOfCoOwningReferences[i])
+                vectorOfCoOwningReferences = builder.EndVector()
+        if self.vectorOfNonOwningReferences is not None:
+            if np is not None and type(self.vectorOfNonOwningReferences) is np.ndarray:
+                vectorOfNonOwningReferences = builder.CreateNumpyVector(self.vectorOfNonOwningReferences)
+            else:
+                MonsterStartVectorOfNonOwningReferencesVector(builder, len(self.vectorOfNonOwningReferences))
+                for i in reversed(range(len(self.vectorOfNonOwningReferences))):
+                    builder.PrependUint64(self.vectorOfNonOwningReferences[i])
+                vectorOfNonOwningReferences = builder.EndVector()
+        if self.anyUnique is not None:
+            anyUnique = self.anyUnique.Pack(builder)
+        if self.anyAmbiguous is not None:
+            anyAmbiguous = self.anyAmbiguous.Pack(builder)
+        if self.vectorOfEnums is not None:
+            if np is not None and type(self.vectorOfEnums) is np.ndarray:
+                vectorOfEnums = builder.CreateNumpyVector(self.vectorOfEnums)
+            else:
+                MonsterStartVectorOfEnumsVector(builder, len(self.vectorOfEnums))
+                for i in reversed(range(len(self.vectorOfEnums))):
+                    builder.PrependUint8(self.vectorOfEnums[i])
+                vectorOfEnums = builder.EndVector()
+        if self.testrequirednestedflatbuffer is not None:
+            if np is not None and type(self.testrequirednestedflatbuffer) is np.ndarray:
+                testrequirednestedflatbuffer = builder.CreateNumpyVector(self.testrequirednestedflatbuffer)
+            else:
+                MonsterStartTestrequirednestedflatbufferVector(builder, len(self.testrequirednestedflatbuffer))
+                for i in reversed(range(len(self.testrequirednestedflatbuffer))):
+                    builder.PrependUint8(self.testrequirednestedflatbuffer[i])
+                testrequirednestedflatbuffer = builder.EndVector()
+        if self.scalarKeySortedTables is not None:
+            scalarKeySortedTableslist = []
+            for i in range(len(self.scalarKeySortedTables)):
+                scalarKeySortedTableslist.append(self.scalarKeySortedTables[i].Pack(builder))
+            MonsterStartScalarKeySortedTablesVector(builder, len(self.scalarKeySortedTables))
+            for i in reversed(range(len(self.scalarKeySortedTables))):
+                builder.PrependUOffsetTRelative(scalarKeySortedTableslist[i])
+            scalarKeySortedTables = builder.EndVector()
+        MonsterStart(builder)
+        if self.pos is not None:
+            pos = self.pos.Pack(builder)
+            MonsterAddPos(builder, pos)
+        MonsterAddMana(builder, self.mana)
+        MonsterAddHp(builder, self.hp)
+        if self.name is not None:
+            MonsterAddName(builder, name)
+        if self.inventory is not None:
+            MonsterAddInventory(builder, inventory)
+        MonsterAddColor(builder, self.color)
+        MonsterAddTestType(builder, self.testType)
+        if self.test is not None:
+            MonsterAddTest(builder, test)
+        if self.test4 is not None:
+            MonsterAddTest4(builder, test4)
+        if self.testarrayofstring is not None:
+            MonsterAddTestarrayofstring(builder, testarrayofstring)
+        if self.testarrayoftables is not None:
+            MonsterAddTestarrayoftables(builder, testarrayoftables)
+        if self.enemy is not None:
+            MonsterAddEnemy(builder, enemy)
+        if self.testnestedflatbuffer is not None:
+            MonsterAddTestnestedflatbuffer(builder, testnestedflatbuffer)
+        if self.testempty is not None:
+            MonsterAddTestempty(builder, testempty)
+        MonsterAddTestbool(builder, self.testbool)
+        MonsterAddTesthashs32Fnv1(builder, self.testhashs32Fnv1)
+        MonsterAddTesthashu32Fnv1(builder, self.testhashu32Fnv1)
+        MonsterAddTesthashs64Fnv1(builder, self.testhashs64Fnv1)
+        MonsterAddTesthashu64Fnv1(builder, self.testhashu64Fnv1)
+        MonsterAddTesthashs32Fnv1a(builder, self.testhashs32Fnv1a)
+        MonsterAddTesthashu32Fnv1a(builder, self.testhashu32Fnv1a)
+        MonsterAddTesthashs64Fnv1a(builder, self.testhashs64Fnv1a)
+        MonsterAddTesthashu64Fnv1a(builder, self.testhashu64Fnv1a)
+        if self.testarrayofbools is not None:
+            MonsterAddTestarrayofbools(builder, testarrayofbools)
+        MonsterAddTestf(builder, self.testf)
+        MonsterAddTestf2(builder, self.testf2)
+        MonsterAddTestf3(builder, self.testf3)
+        if self.testarrayofstring2 is not None:
+            MonsterAddTestarrayofstring2(builder, testarrayofstring2)
+        if self.testarrayofsortedstruct is not None:
+            MonsterAddTestarrayofsortedstruct(builder, testarrayofsortedstruct)
+        if self.flex is not None:
+            MonsterAddFlex(builder, flex)
+        if self.test5 is not None:
+            MonsterAddTest5(builder, test5)
+        if self.vectorOfLongs is not None:
+            MonsterAddVectorOfLongs(builder, vectorOfLongs)
+        if self.vectorOfDoubles is not None:
+            MonsterAddVectorOfDoubles(builder, vectorOfDoubles)
+        if self.parentNamespaceTest is not None:
+            MonsterAddParentNamespaceTest(builder, parentNamespaceTest)
+        if self.vectorOfReferrables is not None:
+            MonsterAddVectorOfReferrables(builder, vectorOfReferrables)
+        MonsterAddSingleWeakReference(builder, self.singleWeakReference)
+        if self.vectorOfWeakReferences is not None:
+            MonsterAddVectorOfWeakReferences(builder, vectorOfWeakReferences)
+        if self.vectorOfStrongReferrables is not None:
+            MonsterAddVectorOfStrongReferrables(builder, vectorOfStrongReferrables)
+        MonsterAddCoOwningReference(builder, self.coOwningReference)
+        if self.vectorOfCoOwningReferences is not None:
+            MonsterAddVectorOfCoOwningReferences(builder, vectorOfCoOwningReferences)
+        MonsterAddNonOwningReference(builder, self.nonOwningReference)
+        if self.vectorOfNonOwningReferences is not None:
+            MonsterAddVectorOfNonOwningReferences(builder, vectorOfNonOwningReferences)
+        MonsterAddAnyUniqueType(builder, self.anyUniqueType)
+        if self.anyUnique is not None:
+            MonsterAddAnyUnique(builder, anyUnique)
+        MonsterAddAnyAmbiguousType(builder, self.anyAmbiguousType)
+        if self.anyAmbiguous is not None:
+            MonsterAddAnyAmbiguous(builder, anyAmbiguous)
+        if self.vectorOfEnums is not None:
+            MonsterAddVectorOfEnums(builder, vectorOfEnums)
+        MonsterAddSignedEnum(builder, self.signedEnum)
+        if self.testrequirednestedflatbuffer is not None:
+            MonsterAddTestrequirednestedflatbuffer(builder, testrequirednestedflatbuffer)
+        if self.scalarKeySortedTables is not None:
+            MonsterAddScalarKeySortedTables(builder, scalarKeySortedTables)
+        if self.nativeInline is not None:
+            nativeInline = self.nativeInline.Pack(builder)
+            MonsterAddNativeInline(builder, nativeInline)
+        MonsterAddLongEnumNonEnumDefault(builder, self.longEnumNonEnumDefault)
+        MonsterAddLongEnumNormalDefault(builder, self.longEnumNormalDefault)
+        MonsterAddNanDefault(builder, self.nanDefault)
+        MonsterAddInfDefault(builder, self.infDefault)
+        MonsterAddPositiveInfDefault(builder, self.positiveInfDefault)
+        MonsterAddInfinityDefault(builder, self.infinityDefault)
+        MonsterAddPositiveInfinityDefault(builder, self.positiveInfinityDefault)
+        MonsterAddNegativeInfDefault(builder, self.negativeInfDefault)
+        MonsterAddNegativeInfinityDefault(builder, self.negativeInfinityDefault)
+        MonsterAddDoubleInfDefault(builder, self.doubleInfDefault)
+        monster = MonsterEnd(builder)
+        return monster

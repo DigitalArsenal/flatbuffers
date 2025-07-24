@@ -78,3 +78,49 @@ def StatEnd(builder):
 
 def End(builder):
     return StatEnd(builder)
+
+
+class StatT(object):
+
+    # StatT
+    def __init__(self):
+        self.id = None  # type: Optional[str]
+        self.val = 0  # type: int
+        self.count = 0  # type: int
+
+    @classmethod
+    def InitFromBuf(cls, buf, pos):
+        stat = Stat()
+        stat.Init(buf, pos)
+        return cls.InitFromObj(stat)
+
+    @classmethod
+    def InitFromPackedBuf(cls, buf, pos=0):
+        n = flatbuffers.encode.Get(flatbuffers.packer.uoffset, buf, pos)
+        return cls.InitFromBuf(buf, pos+n)
+
+    @classmethod
+    def InitFromObj(cls, stat):
+        x = StatT()
+        x._UnPack(stat)
+        return x
+
+    # StatT
+    def _UnPack(self, stat):
+        if stat is None:
+            return
+        self.id = stat.Id()
+        self.val = stat.Val()
+        self.count = stat.Count()
+
+    # StatT
+    def Pack(self, builder):
+        if self.id is not None:
+            id = builder.CreateString(self.id)
+        StatStart(builder)
+        if self.id is not None:
+            StatAddId(builder, id)
+        StatAddVal(builder, self.val)
+        StatAddCount(builder, self.count)
+        stat = StatEnd(builder)
+        return stat

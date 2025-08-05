@@ -19,68 +19,68 @@ class NestedStruct(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # NestedStruct
-    def a(self, j = None):
+    def A(self, j = None):
         if j is None:
-            return [self._tab.Get(flatbuffers.number_types.Int32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0 + i * 4)) for i in range(self.aLength())]
-        elif j >= 0 and j < self.aLength():
+            return [self._tab.Get(flatbuffers.number_types.Int32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0 + i * 4)) for i in range(self.ALength())]
+        elif j >= 0 and j < self.ALength():
             return self._tab.Get(flatbuffers.number_types.Int32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0 + j * 4))
         else:
             return None
 
     # NestedStruct
-    def aAsNumpy(self):
-        return self._tab.GetArrayAsNumpy(flatbuffers.number_types.Int32Flags, self._tab.Pos + 0, self.aLength())
+    def AAsNumpy(self):
+        return self._tab.GetArrayAsNumpy(flatbuffers.number_types.Int32Flags, self._tab.Pos + 0, self.ALength())
 
     # NestedStruct
-    def aLength(self) -> int:
+    def ALength(self) -> int:
         return 2
 
     # NestedStruct
-    def aIsNone(self) -> bool:
+    def AIsNone(self) -> bool:
         return False
 
     # NestedStruct
-    def b(self): return self._tab.Get(flatbuffers.number_types.Int8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(8))
+    def B(self): return self._tab.Get(flatbuffers.number_types.Int8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(8))
     # NestedStruct
-    def c(self, j = None):
+    def C(self, j = None):
         if j is None:
-            return [self._tab.Get(flatbuffers.number_types.Int8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(9 + i * 1)) for i in range(self.cLength())]
-        elif j >= 0 and j < self.cLength():
+            return [self._tab.Get(flatbuffers.number_types.Int8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(9 + i * 1)) for i in range(self.CLength())]
+        elif j >= 0 and j < self.CLength():
             return self._tab.Get(flatbuffers.number_types.Int8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(9 + j * 1))
         else:
             return None
 
     # NestedStruct
-    def cAsNumpy(self):
-        return self._tab.GetArrayAsNumpy(flatbuffers.number_types.Int8Flags, self._tab.Pos + 9, self.cLength())
+    def CAsNumpy(self):
+        return self._tab.GetArrayAsNumpy(flatbuffers.number_types.Int8Flags, self._tab.Pos + 9, self.CLength())
 
     # NestedStruct
-    def cLength(self) -> int:
+    def CLength(self) -> int:
         return 2
 
     # NestedStruct
-    def cIsNone(self) -> bool:
+    def CIsNone(self) -> bool:
         return False
 
     # NestedStruct
-    def d(self, j = None):
+    def D(self, j = None):
         if j is None:
-            return [self._tab.Get(flatbuffers.number_types.Int64Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(16 + i * 8)) for i in range(self.dLength())]
-        elif j >= 0 and j < self.dLength():
+            return [self._tab.Get(flatbuffers.number_types.Int64Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(16 + i * 8)) for i in range(self.DLength())]
+        elif j >= 0 and j < self.DLength():
             return self._tab.Get(flatbuffers.number_types.Int64Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(16 + j * 8))
         else:
             return None
 
     # NestedStruct
-    def dAsNumpy(self):
-        return self._tab.GetArrayAsNumpy(flatbuffers.number_types.Int64Flags, self._tab.Pos + 16, self.dLength())
+    def DAsNumpy(self):
+        return self._tab.GetArrayAsNumpy(flatbuffers.number_types.Int64Flags, self._tab.Pos + 16, self.DLength())
 
     # NestedStruct
-    def dLength(self) -> int:
+    def DLength(self) -> int:
         return 2
 
     # NestedStruct
-    def dIsNone(self) -> bool:
+    def DIsNone(self) -> bool:
         return False
 
 
@@ -137,28 +137,28 @@ class NestedStructT(object):
     def _UnPack(self, nestedStruct):
         if nestedStruct is None:
             return
-        if not nestedStruct.aIsNone():
+        if not nestedStruct.AIsNone():
             if np is None:
                 self.a = []
-                for i in range(nestedStruct.aLength()):
-                    self.a.append(nestedStruct.a(i))
+                for i in range(nestedStruct.ALength()):
+                    self.a.append(nestedStruct.A(i))
             else:
-                self.a = nestedStruct.aAsNumpy()
-        self.b = nestedStruct.b()
-        if not nestedStruct.cIsNone():
+                self.a = nestedStruct.AAsNumpy()
+        self.b = nestedStruct.B()
+        if not nestedStruct.CIsNone():
             if np is None:
                 self.c = []
-                for i in range(nestedStruct.cLength()):
-                    self.c.append(nestedStruct.c(i))
+                for i in range(nestedStruct.CLength()):
+                    self.c.append(nestedStruct.C(i))
             else:
-                self.c = nestedStruct.cAsNumpy()
-        if not nestedStruct.dIsNone():
+                self.c = nestedStruct.CAsNumpy()
+        if not nestedStruct.DIsNone():
             if np is None:
                 self.d = []
-                for i in range(nestedStruct.dLength()):
-                    self.d.append(nestedStruct.d(i))
+                for i in range(nestedStruct.DLength()):
+                    self.d.append(nestedStruct.D(i))
             else:
-                self.d = nestedStruct.dAsNumpy()
+                self.d = nestedStruct.DAsNumpy()
 
     # NestedStructT
     def Pack(self, builder):

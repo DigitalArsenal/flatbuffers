@@ -18,17 +18,17 @@ class StructOfStructs(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # StructOfStructs
-    def a(self, obj):
+    def A(self, obj):
         obj.Init(self._tab.Bytes, self._tab.Pos + 0)
         return obj
 
     # StructOfStructs
-    def b(self, obj):
+    def B(self, obj):
         obj.Init(self._tab.Bytes, self._tab.Pos + 8)
         return obj
 
     # StructOfStructs
-    def c(self, obj):
+    def C(self, obj):
         obj.Init(self._tab.Bytes, self._tab.Pos + 12)
         return obj
 

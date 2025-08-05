@@ -20,65 +20,65 @@ class ArrayStruct(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # ArrayStruct
-    def a(self): return self._tab.Get(flatbuffers.number_types.Float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
+    def A(self): return self._tab.Get(flatbuffers.number_types.Float32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(0))
     # ArrayStruct
-    def b(self, j = None):
+    def B(self, j = None):
         if j is None:
-            return [self._tab.Get(flatbuffers.number_types.Int32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(4 + i * 4)) for i in range(self.bLength())]
-        elif j >= 0 and j < self.bLength():
+            return [self._tab.Get(flatbuffers.number_types.Int32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(4 + i * 4)) for i in range(self.BLength())]
+        elif j >= 0 and j < self.BLength():
             return self._tab.Get(flatbuffers.number_types.Int32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(4 + j * 4))
         else:
             return None
 
     # ArrayStruct
-    def bAsNumpy(self):
-        return self._tab.GetArrayAsNumpy(flatbuffers.number_types.Int32Flags, self._tab.Pos + 4, self.bLength())
+    def BAsNumpy(self):
+        return self._tab.GetArrayAsNumpy(flatbuffers.number_types.Int32Flags, self._tab.Pos + 4, self.BLength())
 
     # ArrayStruct
-    def bLength(self) -> int:
+    def BLength(self) -> int:
         return 15
 
     # ArrayStruct
-    def bIsNone(self) -> bool:
+    def BIsNone(self) -> bool:
         return False
 
     # ArrayStruct
-    def c(self): return self._tab.Get(flatbuffers.number_types.Int8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(64))
+    def C(self): return self._tab.Get(flatbuffers.number_types.Int8Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(64))
     # ArrayStruct
-    def d(self, i: int) -> NestedStruct:
+    def D(self, i: int) -> NestedStruct:
         obj = NestedStruct()
         obj.Init(self._tab.Bytes, self._tab.Pos + 72 + i * 32)
         return obj
 
     # ArrayStruct
-    def dLength(self) -> int:
+    def DLength(self) -> int:
         return 2
 
     # ArrayStruct
-    def dIsNone(self) -> bool:
+    def DIsNone(self) -> bool:
         return False
 
     # ArrayStruct
-    def e(self): return self._tab.Get(flatbuffers.number_types.Int32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(136))
+    def E(self): return self._tab.Get(flatbuffers.number_types.Int32Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(136))
     # ArrayStruct
-    def f(self, j = None):
+    def F(self, j = None):
         if j is None:
-            return [self._tab.Get(flatbuffers.number_types.Int64Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(144 + i * 8)) for i in range(self.fLength())]
-        elif j >= 0 and j < self.fLength():
+            return [self._tab.Get(flatbuffers.number_types.Int64Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(144 + i * 8)) for i in range(self.FLength())]
+        elif j >= 0 and j < self.FLength():
             return self._tab.Get(flatbuffers.number_types.Int64Flags, self._tab.Pos + flatbuffers.number_types.UOffsetTFlags.py_type(144 + j * 8))
         else:
             return None
 
     # ArrayStruct
-    def fAsNumpy(self):
-        return self._tab.GetArrayAsNumpy(flatbuffers.number_types.Int64Flags, self._tab.Pos + 144, self.fLength())
+    def FAsNumpy(self):
+        return self._tab.GetArrayAsNumpy(flatbuffers.number_types.Int64Flags, self._tab.Pos + 144, self.FLength())
 
     # ArrayStruct
-    def fLength(self) -> int:
+    def FLength(self) -> int:
         return 2
 
     # ArrayStruct
-    def fIsNone(self) -> bool:
+    def FIsNone(self) -> bool:
         return False
 
 
@@ -151,31 +151,31 @@ class ArrayStructT(object):
     def _UnPack(self, arrayStruct):
         if arrayStruct is None:
             return
-        self.a = arrayStruct.a()
-        if not arrayStruct.bIsNone():
+        self.a = arrayStruct.A()
+        if not arrayStruct.BIsNone():
             if np is None:
                 self.b = []
-                for i in range(arrayStruct.bLength()):
-                    self.b.append(arrayStruct.b(i))
+                for i in range(arrayStruct.BLength()):
+                    self.b.append(arrayStruct.B(i))
             else:
-                self.b = arrayStruct.bAsNumpy()
-        self.c = arrayStruct.c()
-        if not arrayStruct.dIsNone():
+                self.b = arrayStruct.BAsNumpy()
+        self.c = arrayStruct.C()
+        if not arrayStruct.DIsNone():
             self.d = []
-            for i in range(arrayStruct.dLength()):
-                if arrayStruct.d(i) is None:
+            for i in range(arrayStruct.DLength()):
+                if arrayStruct.D(i) is None:
                     self.d.append(None)
                 else:
-                    nestedStruct_ = MyGame.Example.NestedStruct.NestedStructT.InitFromObj(arrayStruct.d(i))
+                    nestedStruct_ = MyGame.Example.NestedStruct.NestedStructT.InitFromObj(arrayStruct.D(i))
                     self.d.append(nestedStruct_)
-        self.e = arrayStruct.e()
-        if not arrayStruct.fIsNone():
+        self.e = arrayStruct.E()
+        if not arrayStruct.FIsNone():
             if np is None:
                 self.f = []
-                for i in range(arrayStruct.fLength()):
-                    self.f.append(arrayStruct.f(i))
+                for i in range(arrayStruct.FLength()):
+                    self.f.append(arrayStruct.F(i))
             else:
-                self.f = arrayStruct.fAsNumpy()
+                self.f = arrayStruct.FAsNumpy()
 
     # ArrayStructT
     def Pack(self, builder):

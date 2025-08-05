@@ -29,21 +29,21 @@ class Stat(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # Stat
-    def id(self):
+    def Id(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.String(o + self._tab.Pos)
         return None
 
     # Stat
-    def val(self):
+    def Val(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Int64Flags, o + self._tab.Pos)
         return 0
 
     # Stat
-    def count(self):
+    def Count(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint16Flags, o + self._tab.Pos)
@@ -55,23 +55,23 @@ def StatStart(builder):
 def Start(builder):
     StatStart(builder)
 
-def StatAddid(builder, id):
+def StatAddId(builder, id):
     builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(id), 0)
 
-def Addid(builder, id):
-    StatAddid(builder, id)
+def AddId(builder, id):
+    StatAddId(builder, id)
 
-def StatAddval(builder, val):
+def StatAddVal(builder, val):
     builder.PrependInt64Slot(1, val, 0)
 
-def Addval(builder, val):
-    StatAddval(builder, val)
+def AddVal(builder, val):
+    StatAddVal(builder, val)
 
-def StatAddcount(builder, count):
+def StatAddCount(builder, count):
     builder.PrependUint16Slot(2, count, 0)
 
-def Addcount(builder, count):
-    StatAddcount(builder, count)
+def AddCount(builder, count):
+    StatAddCount(builder, count)
 
 def StatEnd(builder):
     return builder.EndObject()

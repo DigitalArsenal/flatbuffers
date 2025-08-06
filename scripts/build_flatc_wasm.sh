@@ -34,7 +34,7 @@ emcmake cmake -S . -B wasm_build \
   -DCMAKE_EXE_LINKER_FLAGS="-s EXPORTED_RUNTIME_METHODS='[\"FS\",\"callMain\"]' \
                             -s MODULARIZE=1 \
                             -s EXPORT_ES6=1 \
-                            -s ENVIRONMENT=web,worker,node \
+                            -s ENVIRONMENT=web,worker \
                             -s FORCE_FILESYSTEM=1 \
                             -s EXPORTED_RUNTIME_METHODS=['FS','FS_createDataFile','callMain'] \
                             -s EXPORTED_FUNCTIONS=['_main'] \

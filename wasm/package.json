@@ -16,7 +16,7 @@
   "scripts": {
     "build": "echo \"No build step needed\"",
     "lint": "eslint src/index.mjs",
-    "test": "npm run lint && vitest run",
+    "test": "npm run lint && vitest run test",
     "prepublishOnly": "npm test"
   },
   "repository": {
@@ -39,6 +39,7 @@
   },
   "homepage": "https://github.com/google/flatbuffers/tree/main/wasm",
   "dependencies": {
+    "emittery": "^1.2.0",
     "jszip": "3.10.1"
   },
   "peerDependencies": {

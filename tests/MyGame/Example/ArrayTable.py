@@ -32,7 +32,7 @@ class ArrayTable(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # ArrayTable
-    def a(self) -> Optional[ArrayStruct]:
+    def A(self) -> Optional[ArrayStruct]:
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             x = o + self._tab.Pos
@@ -47,11 +47,11 @@ def ArrayTableStart(builder: flatbuffers.Builder):
 def Start(builder: flatbuffers.Builder):
     ArrayTableStart(builder)
 
-def ArrayTableAdda(builder: flatbuffers.Builder, a: Any):
+def ArrayTableAddA(builder: flatbuffers.Builder, a: Any):
     builder.PrependStructSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(a), 0)
 
-def Adda(builder: flatbuffers.Builder, a: Any):
-    ArrayTableAdda(builder, a)
+def AddA(builder: flatbuffers.Builder, a: Any):
+    ArrayTableAddA(builder, a)
 
 def ArrayTableEnd(builder: flatbuffers.Builder) -> int:
     return builder.EndObject()
@@ -95,14 +95,14 @@ class ArrayTableT(object):
     def _UnPack(self, arrayTable):
         if arrayTable is None:
             return
-        if arrayTable.a() is not None:
-            self.a = MyGame.Example.ArrayStruct.ArrayStructT.InitFromObj(arrayTable.a())
+        if arrayTable.A() is not None:
+            self.a = MyGame.Example.ArrayStruct.ArrayStructT.InitFromObj(arrayTable.A())
 
     # ArrayTableT
     def Pack(self, builder):
         ArrayTableStart(builder)
         if self.a is not None:
             a = self.a.Pack(builder)
-            ArrayTableAdda(builder, a)
+            ArrayTableAddA(builder, a)
         arrayTable = ArrayTableEnd(builder)
         return arrayTable

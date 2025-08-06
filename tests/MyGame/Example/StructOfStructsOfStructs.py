@@ -18,7 +18,7 @@ class StructOfStructsOfStructs(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # StructOfStructsOfStructs
-    def a(self, obj):
+    def A(self, obj):
         obj.Init(self._tab.Bytes, self._tab.Pos + 0)
         return obj
 

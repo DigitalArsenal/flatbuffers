@@ -26,7 +26,7 @@ class TestSimpleTableWithEnum(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # TestSimpleTableWithEnum
-    def color(self):
+    def Color(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
@@ -38,11 +38,11 @@ def TestSimpleTableWithEnumStart(builder: flatbuffers.Builder):
 def Start(builder: flatbuffers.Builder):
     TestSimpleTableWithEnumStart(builder)
 
-def TestSimpleTableWithEnumAddcolor(builder: flatbuffers.Builder, color: int):
+def TestSimpleTableWithEnumAddColor(builder: flatbuffers.Builder, color: int):
     builder.PrependUint8Slot(0, color, 2)
 
-def Addcolor(builder: flatbuffers.Builder, color: int):
-    TestSimpleTableWithEnumAddcolor(builder, color)
+def AddColor(builder: flatbuffers.Builder, color: int):
+    TestSimpleTableWithEnumAddColor(builder, color)
 
 def TestSimpleTableWithEnumEnd(builder: flatbuffers.Builder) -> int:
     return builder.EndObject()
@@ -81,11 +81,11 @@ class TestSimpleTableWithEnumT(object):
     def _UnPack(self, testSimpleTableWithEnum):
         if testSimpleTableWithEnum is None:
             return
-        self.color = testSimpleTableWithEnum.color()
+        self.color = testSimpleTableWithEnum.Color()
 
     # TestSimpleTableWithEnumT
     def Pack(self, builder):
         TestSimpleTableWithEnumStart(builder)
-        TestSimpleTableWithEnumAddcolor(builder, self.color)
+        TestSimpleTableWithEnumAddColor(builder, self.color)
         testSimpleTableWithEnum = TestSimpleTableWithEnumEnd(builder)
         return testSimpleTableWithEnum

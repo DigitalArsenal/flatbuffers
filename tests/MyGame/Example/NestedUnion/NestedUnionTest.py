@@ -28,21 +28,21 @@ class NestedUnionTest(object):
         self._tab = flatbuffers.table.Table(buf, pos)
 
     # NestedUnionTest
-    def name(self) -> Optional[str]:
+    def Name(self) -> Optional[str]:
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(4))
         if o != 0:
             return self._tab.String(o + self._tab.Pos)
         return None
 
     # NestedUnionTest
-    def data_type(self):
+    def DataType(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(6))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Uint8Flags, o + self._tab.Pos)
         return 0
 
     # NestedUnionTest
-    def data(self) -> Optional[flatbuffers.table.Table]:
+    def Data(self) -> Optional[flatbuffers.table.Table]:
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(8))
         if o != 0:
             obj = Table(bytearray(), 0)
@@ -51,7 +51,7 @@ class NestedUnionTest(object):
         return None
 
     # NestedUnionTest
-    def id(self):
+    def Id(self):
         o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(10))
         if o != 0:
             return self._tab.Get(flatbuffers.number_types.Int16Flags, o + self._tab.Pos)
@@ -63,29 +63,29 @@ def NestedUnionTestStart(builder: flatbuffers.Builder):
 def Start(builder: flatbuffers.Builder):
     NestedUnionTestStart(builder)
 
-def NestedUnionTestAddname(builder: flatbuffers.Builder, name: int):
+def NestedUnionTestAddName(builder: flatbuffers.Builder, name: int):
     builder.PrependUOffsetTRelativeSlot(0, flatbuffers.number_types.UOffsetTFlags.py_type(name), 0)
 
-def Addname(builder: flatbuffers.Builder, name: int):
-    NestedUnionTestAddname(builder, name)
+def AddName(builder: flatbuffers.Builder, name: int):
+    NestedUnionTestAddName(builder, name)
 
-def NestedUnionTestAdddata_type(builder: flatbuffers.Builder, dataType: int):
+def NestedUnionTestAddDataType(builder: flatbuffers.Builder, dataType: int):
     builder.PrependUint8Slot(1, dataType, 0)
 
-def Adddata_type(builder: flatbuffers.Builder, dataType: int):
-    NestedUnionTestAdddata_type(builder, dataType)
+def AddDataType(builder: flatbuffers.Builder, dataType: int):
+    NestedUnionTestAddDataType(builder, dataType)
 
-def NestedUnionTestAdddata(builder: flatbuffers.Builder, data: int):
+def NestedUnionTestAddData(builder: flatbuffers.Builder, data: int):
     builder.PrependUOffsetTRelativeSlot(2, flatbuffers.number_types.UOffsetTFlags.py_type(data), 0)
 
-def Adddata(builder: flatbuffers.Builder, data: int):
-    NestedUnionTestAdddata(builder, data)
+def AddData(builder: flatbuffers.Builder, data: int):
+    NestedUnionTestAddData(builder, data)
 
-def NestedUnionTestAddid(builder: flatbuffers.Builder, id: int):
+def NestedUnionTestAddId(builder: flatbuffers.Builder, id: int):
     builder.PrependInt16Slot(3, id, 0)
 
-def Addid(builder: flatbuffers.Builder, id: int):
-    NestedUnionTestAddid(builder, id)
+def AddId(builder: flatbuffers.Builder, id: int):
+    NestedUnionTestAddId(builder, id)
 
 def NestedUnionTestEnd(builder: flatbuffers.Builder) -> int:
     return builder.EndObject()
@@ -138,8 +138,6 @@ class NestedUnionTestT(object):
         if nestedUnionTest is None:
             return
         self.name = nestedUnionTest.Name()
-        if self.name is not None:
-            self.name = self.name.decode('utf-8')
         self.dataType = nestedUnionTest.DataType()
         self.data = MyGame.Example.NestedUnion.Any.AnyCreator(self.dataType, nestedUnionTest.Data())
         self.id = nestedUnionTest.Id()
@@ -152,10 +150,10 @@ class NestedUnionTestT(object):
             data = self.data.Pack(builder)
         NestedUnionTestStart(builder)
         if self.name is not None:
-            NestedUnionTestAddname(builder, name)
-        NestedUnionTestAdddata_type(builder, self.data_type)
+            NestedUnionTestAddName(builder, name)
+        NestedUnionTestAddDataType(builder, self.dataType)
         if self.data is not None:
-            NestedUnionTestAdddata(builder, data)
-        NestedUnionTestAddid(builder, self.id)
+            NestedUnionTestAddData(builder, data)
+        NestedUnionTestAddId(builder, self.id)
         nestedUnionTest = NestedUnionTestEnd(builder)
         return nestedUnionTest

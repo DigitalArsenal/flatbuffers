@@ -11,6 +11,15 @@ fi
 
 cd "$(dirname "$0")/.."
 
+if [ ! -d "./emsdk" ]; then
+  echo "[flatc_wasm] emsdk not found, cloning and installing..."
+  git clone https://github.com/emscripten-core/emsdk.git
+  cd emsdk
+  ./emsdk install latest
+  ./emsdk activate latest
+  cd ..
+fi
+
 echo "[flatc_wasm] Activating emsdk..."
 source ./emsdk/emsdk_env.sh
 

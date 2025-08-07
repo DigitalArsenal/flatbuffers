@@ -8,9 +8,6 @@ import console from "node:console";
 const TEST_ROOT = new URL("../../tests/", import.meta.url).pathname;
 const BIN_FILE = join(TEST_ROOT, "monsterdata_test.mon");
 
-/**
- * Loads the schema input from test files.
- */
 async function loadSchemaFile() {
   const files = await loadFbsFiles(TEST_ROOT);
   const main = files.find((f) => f.path.endsWith("monster_test.fbs"));
@@ -21,9 +18,6 @@ async function loadSchemaFile() {
   };
 }
 
-/**
- * Converts the monsterdata_test.mon binary file to JSON using FlatcRunner.
- */
 async function loadJsonFromBinary(schemaInput) {
   const binary = await Deno.readFile(BIN_FILE);
   const runner = await FlatcRunner.init();
@@ -35,9 +29,6 @@ async function loadJsonFromBinary(schemaInput) {
   return jsonBuffer;
 }
 
-/**
- * Initializes a StreamingTransformer with the schema input.
- */
 function initTransformer(schemaInput) {
   return StreamingTransformer.create(schemaInput);
 }
@@ -46,17 +37,23 @@ Deno.test("StreamingTransformer (Deno) round-trip test", async () => {
   const schemaInput = await loadSchemaFile();
   const inputJson = await loadJsonFromBinary(schemaInput);
 
-  const { outputJson } = await runStreamingTransformerTest({
+  const result = await runStreamingTransformerTest({
     initTransformer,
     loadSchemaFile: () => schemaInput,
     sampleJson: () => Promise.resolve(new TextEncoder().encode(inputJson)),
   });
 
-  const input = JSON.parse(inputJson);
-  const output = JSON.parse(outputJson);
+  const input = JSON.parse(result.inputJson);
+  const output = JSON.parse(result.outputJson);
 
   assertEquals(output.name, input.name);
   assertEquals(output.pos.x, input.pos.x);
   assertEquals(output.pos.y, input.pos.y);
   assertEquals(output.pos.z, input.pos.z);
+
+  console.log(
+    `[perf] rounds=${result.rounds}, total=${result.totalTimeMs.toFixed(
+      2
+    )}ms, per round=${result.timePerTransformMs.toFixed(2)}ms`
+  );
 });

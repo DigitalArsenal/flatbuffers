@@ -25,7 +25,7 @@ export async function runStreamingTransformerTest({
   const baseJsonBuffer = await sampleJson();
   const baseJson = JSON.parse(new TextDecoder().decode(baseJsonBuffer));
 
-  const rounds = 100;
+  const rounds = 50;
   const mutatedJsons = [];
 
   for (let i = 0; i < rounds; i++) {

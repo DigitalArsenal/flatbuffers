@@ -13,6 +13,7 @@ import { listAllFiles } from "../fs/list.mjs";
 import { generateBinary } from "../generators/binary.mjs";
 import { generateJSON } from "../generators/json.mjs";
 import { generateCode } from "../generators/code.mjs";
+import console from "node:console";
 
 /**
  * Class representing the FlatBuffers compiler runner.
@@ -80,7 +81,9 @@ export class FlatcRunner extends Emittery {
       cur += "/" + part;
       try {
         FS.mkdir(cur);
-      } catch {}
+      } catch {
+        //not required
+      }
     }
     FS.writeFile(
       path,

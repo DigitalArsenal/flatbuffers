@@ -1,21 +1,17 @@
 /**
- * Converts a FlatBuffer binary (.mon) file into its corresponding JSON representation.
+ * Converts a FlatBuffer binary (.mon) to its JSON representation.
  *
- * Mounts the schema and binary files into the WebAssembly file system, runs the
- * FlatBuffers compiler (`flatc`) with the `--json` flag, and returns the resulting JSON string.
+ * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput - Full schema input tree.
+ * @param {{ path: string, data: Uint8Array }} binaryInput - The binary buffer to deserialize.
+ * @param {string[]} [includeDirs=[]] - Optional include directories.
+ * @param {Object} [opts={}] - Output options.
+ * @param {boolean} [opts.rawBinary=true]
+ * @param {boolean} [opts.strictJson=false]
+ * @param {boolean} [opts.defaultsJson=false]
+ * @param {"utf8" | null} [opts.encoding=null]
+ * @returns {string|Uint8Array} The JSON output.
  *
- * @param {{ path: string, data: string|Uint8Array }} schemaInput - The FlatBuffers schema file.
- * @param {{ path: string, data: Uint8Array }} binaryInput - The FlatBuffer binary input (.mon) to deserialize.
- * @param {string[]} [includeDirs=[]] - Optional array of include directories for schema resolution.
- * @param {Object} [opts={}] - Optional flags for JSON output behavior.
- * @param {boolean} [opts.rawBinary=true] - Include raw binary data (default: true).
- * @param {boolean} [opts.strictJson=false] - Enable strict JSON compliance.
- * @param {boolean} [opts.defaultsJson=false] - Output default values in JSON.
- * @returns {string} The resulting JSON string.
- *
- * @throws {Error} If the FlatBuffers compiler exits with a non-zero status code.
- *
- * @this {FlatcRunner} The FlatcRunner instance containing the initialized WebAssembly Module.
+ * @this {FlatcRunner}
  */
 export function generateJSON(
   schemaInput,
@@ -23,11 +19,16 @@ export function generateJSON(
   includeDirs = [],
   opts = {}
 ) {
+  const outPath = binaryInput.path.replace(/\.mon$/, ".json");
+
   this.mountFiles([
-    schemaInput,
+    ...Object.entries(schemaInput.files).map(([path, data]) => ({
+      path,
+      data: typeof data === "string" ? data : new Uint8Array(data),
+    })),
     { path: binaryInput.path, data: binaryInput.data },
   ]);
-  const outPath = binaryInput.path.replace(/\.mon$/, ".json");
+
   const args = [
     "--json",
     ...(opts.rawBinary === false ? [] : ["--raw-binary"]),
@@ -36,11 +37,15 @@ export function generateJSON(
     "-o",
     outPath.substring(0, outPath.lastIndexOf("/")) || "/",
     ...includeDirs.flatMap((d) => ["-I", d]),
-    schemaInput.path,
+    schemaInput.entry,
     "--",
     binaryInput.path,
   ];
+
   const result = this.runCommand(args);
   if (result.code !== 0) throw new Error(result.stderr);
-  return this.Module.FS.readFile(outPath, { encoding: "utf8" });
+
+  return this.Module.FS.readFile(outPath, {
+    encoding: opts?.encoding ?? null,
+  });
 }

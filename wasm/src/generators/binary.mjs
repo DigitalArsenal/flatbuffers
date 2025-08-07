@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { getIncludeDirsFromSchemaInput } from "../fs/generate-include.mjs";
-import console from "node:console";
+
 /**
  * Generates a FlatBuffer binary (.mon) file from the given schema and JSON input.
+ * Caches the mounted schema and include paths to avoid reloading on repeated use.
+ * Cleans up temporary files after execution.
  *
  * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput - Schema tree to mount.
  * @param {string|Uint8Array} jsonInput - JSON input to serialize.
@@ -16,11 +18,30 @@ export function generateBinary(schemaInput, jsonInput) {
 
   this.Module.FS.mkdirTree(outDir);
 
+  const schemaUnchanged =
+    this._cachedSchema &&
+    this._cachedSchema.entry === schemaInput.entry &&
+    Object.keys(this._cachedSchema.files).length ===
+      Object.keys(schemaInput.files).length &&
+    Object.keys(this._cachedSchema.files).every(
+      (key) =>
+        schemaInput.files[key] &&
+        this._cachedSchema.files[key] === schemaInput.files[key]
+    );
+
+  if (!schemaUnchanged) {
+    this.mountFiles(
+      Object.entries(schemaInput.files).map(([path, data]) => ({
+        path,
+        data: typeof data === "string" ? data : new Uint8Array(data),
+      }))
+    );
+    this._cachedSchema = schemaInput;
+    this._cachedIncludeDirs = getIncludeDirsFromSchemaInput(schemaInput);
+  }
+
+  // Always mount fresh JSON input
   this.mountFiles([
-    ...Object.entries(schemaInput.files).map(([path, data]) => ({
-      path,
-      data: typeof data === "string" ? data : new Uint8Array(data),
-    })),
     {
       path: jsonInputPath,
       data:
@@ -30,23 +51,70 @@ export function generateBinary(schemaInput, jsonInput) {
     },
   ]);
 
-  const includeDirs = getIncludeDirsFromSchemaInput(schemaInput);
-
   const args = [
     "--binary",
     "--unknown-json",
     "-o",
     outDir,
-    ...includeDirs.flatMap((d) => ["-I", d]),
+    ...this._cachedIncludeDirs.flatMap((d) => ["-I", d]),
     schemaInput.entry,
     jsonInputPath,
   ];
 
   const result = this.runCommand(args);
-  if (result.code !== 0) throw new Error(result.stderr);
 
-  const file = this.Module.FS.readdir(outDir).find((f) => f.endsWith(".mon"));
-  if (!file) throw new Error("No output file (.mon) was produced");
+  const cleanup = () => {
+    try {
+      this.Module.FS.unlink(jsonInputPath);
+    } catch {}
 
-  return this.Module.FS.readFile(`${outDir}/${file}`);
+    try {
+      const outputFiles = this.Module.FS.readdir(outDir);
+      for (const f of outputFiles) {
+        if (f !== "." && f !== "..") {
+          try {
+            this.Module.FS.unlink(`${outDir}/${f}`);
+          } catch {}
+        }
+      }
+      this.Module.FS.rmdir(outDir);
+    } catch {}
+  };
+
+  if (result.code !== 0) {
+    cleanup();
+    throw new Error(
+      [
+        `flatc failed with exit code ${result.code}`,
+        `Arguments: ${args.join(" ")}`,
+        `--- stdout ---`,
+        result.stdout?.trim() || "(empty)",
+        `--- stderr ---`,
+        result.stderr?.trim() || "(empty)",
+      ].join("\n")
+    );
+  }
+
+  const files = this.Module.FS.readdir(outDir);
+  const file = files.find((f) => f.endsWith(".mon"));
+
+  if (!file) {
+    cleanup();
+    throw new Error(
+      [
+        `flatc succeeded but no .mon output was found.`,
+        `Expected output in directory: ${outDir}`,
+        `Files present: ${files.join(", ")}`,
+        `Arguments: ${args.join(" ")}`,
+        `--- stdout ---`,
+        result.stdout?.trim() || "(empty)",
+        `--- stderr ---`,
+        result.stderr?.trim() || "(empty)",
+      ].join("\n")
+    );
+  }
+
+  const output = this.Module.FS.readFile(`${outDir}/${file}`);
+  cleanup();
+  return output;
 }

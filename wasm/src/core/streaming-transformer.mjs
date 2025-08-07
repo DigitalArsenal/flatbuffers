@@ -1,76 +1,104 @@
 import { FlatcRunner } from "./runner.mjs";
 import flatcModule from "../flatc.mjs";
-import console from "node:console";
 
 /**
- * Class for performing high-performance FlatBuffer transformations in a streaming context.
- * Extends FlatcRunner and supports persistent schema preloading.
+ * Stateless high-performance FlatBuffer transformer.
+ * Internally manages WASM instances for each transform call to prevent memory leaks.
  */
-export class StreamingTransformer extends FlatcRunner {
+export class StreamingTransformer {
   /** @type {{ entry: string, files: Record<string, string | Uint8Array> }} */
   #schemaInput;
 
   /**
-   * Initialize a StreamingTransformer with preloaded FlatBuffer schema files.
-   *
    * @param {{ entry: string, files: Record<string, string | Uint8Array> }} schemaInput
-   * @param {Object} [moduleOptions={}]
+   */
+  constructor(schemaInput) {
+    this.#schemaInput = schemaInput;
+  }
+
+  /**
+   * @param {{ entry: string, files: Record<string, string | Uint8Array> }} schemaInput
    * @returns {Promise<StreamingTransformer>}
    */
-  static async create(schemaInput, moduleOptions = {}) {
-    const instance = new StreamingTransformer(
-      null,
-      moduleOptions.stdoutStream,
-      moduleOptions.stderrStream
-    );
+  static async create(schemaInput) {
+    return new StreamingTransformer(schemaInput);
+  }
 
+  /**
+   * Convert JSON to FlatBuffer binary (fresh WASM instance per call).
+   * @param {string | Uint8Array} json
+   * @returns {Promise<Uint8Array>}
+   */
+  async transformJsonToBinary(json) {
+    const runner = await this.#initRunner();
+    try {
+      return runner.generateBinary(this.#schemaInput, json);
+    } finally {
+      this.#destroyRunner(runner);
+    }
+  }
+
+  /**
+   * Convert FlatBuffer binary to JSON (fresh WASM instance per call).
+   * @param {Uint8Array} buffer
+   * @returns {Promise<Uint8Array>}
+   */
+  async transformBinaryToJson(buffer) {
+    const runner = await this.#initRunner();
+    try {
+      return runner.generateJSON(
+        this.#schemaInput,
+        { path: "/input.mon", data: buffer },
+        undefined,
+        { encoding: null }
+      );
+    } finally {
+      this.#destroyRunner(runner);
+    }
+  }
+
+  /**
+   * Internal: Create a fresh FlatcRunner with new WASM instance.
+   * @returns {Promise<FlatcRunner>}
+   */
+  async #initRunner() {
+    const runner = new FlatcRunner(null);
     const Module = await flatcModule({
       noExitRuntime: true,
       noInitialRun: true,
-      print: (text) => (instance._stdout += text + "\n"),
-      printErr: (text) => (instance._stderr += text + "\n"),
-      ...moduleOptions,
+      print: (text) => (runner._stdout += text + "\n"),
+      printErr: (text) => (runner._stderr += text + "\n"),
     });
-
-    instance.Module = Module;
-
-   /* const filesArray = Object.entries(schemaInput.files).map(
-      ([path, data]) => ({
-        path,
-        data: typeof data === "string" ? data : new Uint8Array(data),
-      })
-    );*/
-
-   // instance.mountFiles(filesArray);
-    instance.#schemaInput = schemaInput;
-
-    return instance;
+    runner.Module = Module;
+    return runner;
   }
 
   /**
-   * Convert JSON to FlatBuffer binary using the preloaded schema.
-   *
-   * @param {string | Uint8Array} json
-   * @returns {Uint8Array}
+   * Internal: Clean up the FS and memory (no-op if not needed).
+   * @param {FlatcRunner} runner
    */
-  transformJsonToBinary(json) {
-    if (!this.#schemaInput) throw new Error("Schema not loaded.");
-    return this.generateBinary(this.#schemaInput, json);
-  }
-
-  /**
-   * Convert FlatBuffer binary to JSON (as UTF-8 buffer) using the preloaded schema.
-   *
-   * @param {Uint8Array} buffer
-   * @returns {Uint8Array} JSON output as raw buffer
-   */
-  transformBinaryToJson(buffer) {
-    if (!this.#schemaInput) throw new Error("Schema not loaded.");
-    return this.generateJSON(
-      this.#schemaInput,
-      { path: "/input.mon", data: buffer },
-      undefined,
-      { encoding: null }
-    );
+  #destroyRunner(runner) {
+    if (runner?.Module?.FS) {
+      try {
+        const root = runner.Module.FS.readdir("/");
+        for (const name of root) {
+          if (name === "." || name === "..") continue;
+          try {
+            runner.Module.FS.unmount(`/${name}`);
+          } catch {
+            //not required
+          }
+          try {
+            runner.Module.FS.rmdir(`/${name}`);
+          } catch {
+            //not required
+          }
+        }
+        runner.Module.FS.streams.length = 0;
+        runner.Module.FS.root.contents = {};
+      } catch {
+        //not required
+      }
+    }
   }
 }

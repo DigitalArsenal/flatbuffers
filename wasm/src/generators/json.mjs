@@ -1,9 +1,10 @@
+import { getIncludeDirsFromSchemaInput } from "../fs/generate-include.mjs";
+
 /**
  * Converts a FlatBuffer binary (.mon) to its JSON representation.
  *
  * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput - Full schema input tree.
  * @param {{ path: string, data: Uint8Array }} binaryInput - The binary buffer to deserialize.
- * @param {string[]} [includeDirs=[]] - Optional include directories.
  * @param {Object} [opts={}] - Output options.
  * @param {boolean} [opts.rawBinary=true]
  * @param {boolean} [opts.strictJson=false]
@@ -13,13 +14,9 @@
  *
  * @this {FlatcRunner}
  */
-export function generateJSON(
-  schemaInput,
-  binaryInput,
-  includeDirs = [],
-  opts = {}
-) {
+export function generateJSON(schemaInput, binaryInput, opts = {}) {
   const outPath = binaryInput.path.replace(/\.mon$/, ".json");
+  const outDir = outPath.substring(0, outPath.lastIndexOf("/")) || "/";
 
   this.mountFiles([
     ...Object.entries(schemaInput.files).map(([path, data]) => ({
@@ -29,13 +26,15 @@ export function generateJSON(
     { path: binaryInput.path, data: binaryInput.data },
   ]);
 
+  const includeDirs = getIncludeDirsFromSchemaInput(schemaInput);
+
   const args = [
     "--json",
     ...(opts.rawBinary === false ? [] : ["--raw-binary"]),
     ...(opts.strictJson ? ["--strict-json"] : []),
     ...(opts.defaultsJson ? ["--defaults-json"] : []),
     "-o",
-    outPath.substring(0, outPath.lastIndexOf("/")) || "/",
+    outDir,
     ...includeDirs.flatMap((d) => ["-I", d]),
     schemaInput.entry,
     "--",

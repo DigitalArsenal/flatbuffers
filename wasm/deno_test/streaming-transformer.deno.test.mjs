@@ -1,5 +1,3 @@
-// deno_test/streaming-transformer.deno.test.mjs
-
 import { assertEquals } from "https://deno.land/std@0.214.0/assert/mod.ts";
 import { StreamingTransformer } from "../src/mod.mjs";
 import { runStreamingTransformerTest } from "../shared_test/streaming-transformer-test.mjs";
@@ -12,7 +10,7 @@ const TEST_ROOT = new URL("../../tests/", import.meta.url).pathname;
  */
 async function loadSchemaFile() {
   const files = await loadFbsFiles(TEST_ROOT);
-  const main = files.find((f) => f.path.endsWith("/monster_test.fbs"));
+  const main = files.find((f) => f.path.endsWith("monster_test.fbs"));
   if (!main) throw new Error("monster_test.fbs not found");
   return {
     entry: main.path,
@@ -21,21 +19,23 @@ async function loadSchemaFile() {
 }
 
 /**
- * Provides a sample JSON object for the Monster schema.
+ * Provides a sample JSON buffer for the Monster schema.
+ * Must return raw Uint8Array.
  */
 function sampleJson() {
-  return Promise.resolve({
+  const obj = {
     pos: { x: 1, y: 2, z: 3 },
     name: "Orc",
     color: "Red",
-  });
+  };
+  return Promise.resolve(new TextEncoder().encode(JSON.stringify(obj)));
 }
 
 /**
  * Initializes a StreamingTransformer with the schema input.
  */
-async function initTransformer(schemaInput) {
-  return await StreamingTransformer.create(schemaInput);
+function initTransformer(schemaInput) {
+  return StreamingTransformer.create(schemaInput);
 }
 
 Deno.test("StreamingTransformer (Deno) round-trip test", async () => {
@@ -45,8 +45,11 @@ Deno.test("StreamingTransformer (Deno) round-trip test", async () => {
     sampleJson,
   });
 
-  assertEquals(outputJson.name, inputJson.name);
-  assertEquals(outputJson.pos.x, inputJson.pos.x);
-  assertEquals(outputJson.pos.y, inputJson.pos.y);
-  assertEquals(outputJson.pos.z, inputJson.pos.z);
+  const input = JSON.parse(inputJson);
+  const output = JSON.parse(outputJson);
+
+  assertEquals(output.name, input.name);
+  assertEquals(output.pos.x, input.pos.x);
+  assertEquals(output.pos.y, input.pos.y);
+  assertEquals(output.pos.z, input.pos.z);
 });

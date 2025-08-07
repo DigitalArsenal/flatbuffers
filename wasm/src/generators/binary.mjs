@@ -1,16 +1,15 @@
 import { randomUUID } from "node:crypto";
-
+import { getIncludeDirsFromSchemaInput } from "../fs/generate-include.mjs";
 /**
  * Generates a FlatBuffer binary (.mon) file from the given schema and JSON input.
  *
  * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput - Schema tree to mount.
  * @param {string|Uint8Array} jsonInput - JSON input to serialize.
- * @param {string[]} [includeDirs=[]] - Optional include directories.
  * @returns {Uint8Array} The compiled binary output.
  *
  * @this {FlatcRunner}
  */
-export function generateBinary(schemaInput, jsonInput, includeDirs = []) {
+export function generateBinary(schemaInput, jsonInput) {
   const outDir = `/${randomUUID()}`;
   const jsonInputPath = `/input-${randomUUID()}.json`;
 
@@ -29,6 +28,8 @@ export function generateBinary(schemaInput, jsonInput, includeDirs = []) {
           : jsonInput,
     },
   ]);
+
+  const includeDirs = getIncludeDirsFromSchemaInput(schemaInput);
 
   const args = [
     "--binary",

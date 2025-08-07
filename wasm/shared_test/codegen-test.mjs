@@ -17,7 +17,6 @@ export async function runCodegenSmokeTest({
       const files = runner.generateCode(
         schemaInput,
         language,
-        ["/", "include_test"],
         outputDir,
         options
       );

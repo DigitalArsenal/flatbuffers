@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { getIncludeDirsFromSchemaInput } from "../fs/generate-include.mjs";
 
 /**
  * @typedef {"cpp"|"csharp"|"dart"|"go"|"java"|"json"|"jsonschema"|"kotlin"|"kotlin-kmp"|"lobster"|"lua"|"nim"|"php"|"python"|"rust"|"swift"|"ts"} SupportedLanguage
@@ -6,41 +7,36 @@ import { randomUUID } from "node:crypto";
 
 /**
  * @typedef {Object} GenerateCodeOptions
- * @property {boolean} [genObjectApi] - Enable the object-based API.
- * @property {boolean} [genOneFile] - Generate a single file for supported languages.
- * @property {boolean} [pythonTyping] - Enable Python type annotations.
- * @property {boolean} [pythonVersion] - Enable Python version-specific code.
- * @property {boolean} [noIncludes] - Disable generation of include statements.
- * @property {boolean} [genCompare] - Generate equality operators in object API.
- * @property {boolean} [genNameStrings] - Generate type name functions.
- * @property {boolean} [reflectNames] - Enable name reflection in generated code.
- * @property {boolean} [reflectTypes] - Enable type reflection in generated code.
- * @property {boolean} [genJsonEmit] - Generate JSON emit code.
- * @property {boolean} [keepPrefix] - Retain original include prefix.
- * @property {boolean} [preserveCase] - Preserve field name casing.
+ * @property {boolean} [genObjectApi]
+ * @property {boolean} [genOneFile]
+ * @property {boolean} [pythonTyping]
+ * @property {boolean} [pythonVersion]
+ * @property {boolean} [noIncludes]
+ * @property {boolean} [genCompare]
+ * @property {boolean} [genNameStrings]
+ * @property {boolean} [reflectNames]
+ * @property {boolean} [reflectTypes]
+ * @property {boolean} [genJsonEmit]
+ * @property {boolean} [keepPrefix]
+ * @property {boolean} [preserveCase]
  */
 
 /**
  * Generates source code in the specified target language from a FlatBuffers schema input tree.
  *
- * Mounts all schema files into the WebAssembly file system, runs the FlatBuffers compiler
- * (`flatc`) with the given language and options, and returns the contents of the generated files.
+ * @param {{ files: Record<string, string|Uint8Array|Buffer>, entry: string }} schemaInput
+ * @param {SupportedLanguage} language
+ * @param {string} [outputDir]
+ * @param {GenerateCodeOptions} [options={}]
+ * @returns {Record<string, string>}
  *
- * @param {{ files: Record<string, string|Uint8Array|Buffer>, entry: string }} schemaInput - Virtual file tree for flatc. All keys are virtual paths.
- * @param {SupportedLanguage} language - Target language for code generation (e.g. "cpp", "rust", "python").
- * @param {string[]} [includeDirs=[]] - Include dirs passed to `-I`. Must correspond to prefixes in `schemaInput.files`.
- * @param {string} [outputDir] - Optional virtual output directory. Defaults to `/out/<uuid>`.
- * @param {GenerateCodeOptions} [options={}] - Additional flags to pass to `flatc`.
- * @returns {Record<string, string>} An object mapping generated filenames (relative paths) to contents.
- *
- * @throws {Error} If `flatc` exits with a non-zero status code.
+ * @throws {Error}
  *
  * @this {FlatcRunner}
  */
 export function generateCode(
   schemaInput,
   language,
-  includeDirs = [],
   outputDir = `/out/${randomUUID()}`,
   options = {}
 ) {
@@ -57,6 +53,8 @@ export function generateCode(
           : new Uint8Array(data),
     }))
   );
+
+  const includeDirs = getIncludeDirsFromSchemaInput(schemaInput);
 
   /** @type {string[]} */
   const args = [`--${language}`, "-o", outputDir];
@@ -81,7 +79,7 @@ export function generateCode(
   args.push(schemaInput.entry);
 
   const result = this.runCommand(args);
-  const success = result.code === 0;
+  if (result.code !== 0) throw new Error(result.stderr);
 
   const walk = (path, base = "") => {
     const result = {};
@@ -103,8 +101,5 @@ export function generateCode(
     return result;
   };
 
-  const files = success ? walk(outputDir) : {};
-
-  if (!success) throw new Error(result.stderr);
-  return files;
+  return walk(outputDir);
 }

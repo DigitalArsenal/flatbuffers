@@ -1,12 +1,14 @@
 import { FlatcRunner } from "./runner.mjs";
 import flatcModule from "../flatc.mjs";
+import console from "node:console";
 
 /**
  * Class for performing high-performance FlatBuffer transformations in a streaming context.
  * Extends FlatcRunner and supports persistent schema preloading.
  */
 export class StreamingTransformer extends FlatcRunner {
-  #entryPath = null;
+  /** @type {{ entry: string, files: Record<string, string | Uint8Array> }} */
+  #schemaInput;
 
   /**
    * Initialize a StreamingTransformer with preloaded FlatBuffer schema files.
@@ -36,8 +38,8 @@ export class StreamingTransformer extends FlatcRunner {
       ([path, data]) => ({ path, data })
     );
     instance.mountFiles(filesArray);
-    instance.#entryPath = schemaInput.entry;
-
+    instance.#schemaInput = schemaInput;
+    console.log(filesArray, schemaInput)
     return instance;
   }
 
@@ -48,16 +50,8 @@ export class StreamingTransformer extends FlatcRunner {
    * @returns {Uint8Array}
    */
   transformJsonToBinary(json) {
-    if (!this.#entryPath) throw new Error("Schema entry path not loaded.");
-    const schemaData = this.Module.FS.readFile(this.#entryPath);
-    const encodedJson =
-      typeof json === "string"
-        ? json
-        : new TextEncoder().encode(JSON.stringify(json));
-    return this.generateBinary(
-      { path: this.#entryPath, data: schemaData },
-      encodedJson
-    );
+    if (!this.#schemaInput) throw new Error("Schema not loaded.");
+    return this.generateBinary(this.#schemaInput, json);
   }
 
   /**
@@ -67,14 +61,7 @@ export class StreamingTransformer extends FlatcRunner {
    * @returns {Uint8Array} JSON output as raw buffer
    */
   transformBinaryToJson(buffer) {
-    if (!this.#entryPath) throw new Error("Schema entry path not loaded.");
-
-    const schemaData = this.Module.FS.readFile(this.#entryPath);
-    return this.generateJSON(
-      { path: this.#entryPath, data: schemaData },
-      buffer,
-      [],
-      { encoding: null }
-    );
+    if (!this.#schemaInput) throw new Error("Schema not loaded.");
+    return this.generateJSON(this.#schemaInput, buffer, [], { encoding: null });
   }
 }

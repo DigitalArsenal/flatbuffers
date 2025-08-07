@@ -3,8 +3,9 @@
  *
  * @param {object} options
  * @param {() => Promise<StreamingTransformer>} options.initTransformer - Factory that returns a StreamingTransformer instance.
- * @param {() => Promise<{ entry: string, files: Record<string, string|Uint8Array> }>} options.loadSchemaFile
+ * @param {() => Promise<{ entry: string, files: Record<string, string | Uint8Array> }>} options.loadSchemaFile
  * @param {() => Promise<Uint8Array>} options.sampleJson - Function that returns a raw JSON buffer
+ * @returns {Promise<{ inputJson: string, outputJson: string }>}
  */
 export async function runStreamingTransformerTest({
   initTransformer,
@@ -18,8 +19,8 @@ export async function runStreamingTransformerTest({
   const binary = transformer.transformJsonToBinary(jsonBuffer);
   const outputBuffer = transformer.transformBinaryToJson(binary);
 
-  const inputJson = new TextDecoder().decode(jsonBuffer);
-  const outputJson = new TextDecoder().decode(outputBuffer);
-
-  return { inputJson, outputJson };
+  return {
+    inputJson: new TextDecoder().decode(jsonBuffer),
+    outputJson: new TextDecoder().decode(outputBuffer),
+  };
 }

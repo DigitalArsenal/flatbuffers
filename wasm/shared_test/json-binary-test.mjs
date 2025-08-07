@@ -39,7 +39,6 @@ export async function runFlatcRoundTripTest({
   const roundTrippedJson = runner.generateJSON(
     schemaInput,
     { path: "/roundtrip.mon", data: binaryBuffer },
-    ["/", "include_test"],
     { strictJson: true, encoding: "utf8" }
   );
 
@@ -47,7 +46,6 @@ export async function runFlatcRoundTripTest({
   const expectedJson = runner.generateJSON(
     schemaInput,
     { path: "/expected.mon", data: expectedBuffer },
-    ["/", "include_test"],
     { strictJson: true, encoding: "utf8" }
   );
 

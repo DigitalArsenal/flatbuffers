@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getIncludeDirsFromSchemaInput } from "../fs/generate-include.mjs";
+import console from "node:console";
 /**
  * Generates a FlatBuffer binary (.mon) file from the given schema and JSON input.
  *

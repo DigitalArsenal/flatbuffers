@@ -34,12 +34,16 @@ export class StreamingTransformer extends FlatcRunner {
 
     instance.Module = Module;
 
-    const filesArray = Object.entries(schemaInput.files).map(
-      ([path, data]) => ({ path, data })
-    );
-    instance.mountFiles(filesArray);
+   /* const filesArray = Object.entries(schemaInput.files).map(
+      ([path, data]) => ({
+        path,
+        data: typeof data === "string" ? data : new Uint8Array(data),
+      })
+    );*/
+
+   // instance.mountFiles(filesArray);
     instance.#schemaInput = schemaInput;
-    console.log(filesArray, schemaInput)
+
     return instance;
   }
 
@@ -62,6 +66,11 @@ export class StreamingTransformer extends FlatcRunner {
    */
   transformBinaryToJson(buffer) {
     if (!this.#schemaInput) throw new Error("Schema not loaded.");
-    return this.generateJSON(this.#schemaInput, buffer, [], { encoding: null });
+    return this.generateJSON(
+      this.#schemaInput,
+      { path: "/input.mon", data: buffer },
+      undefined,
+      { encoding: null }
+    );
   }
 }

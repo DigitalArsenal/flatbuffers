@@ -31,22 +31,19 @@ export async function runFlatcRoundTripTest({
 
   const runner = await FlatcRunner.init({ stdoutStream: createStdoutStream() });
 
-  const binaryBuffer = runner.generateBinary(schemaInput, jsonInput, [
-    "/",
-    "include_test",
-  ]);
+  const binaryBuffer = runner.generateBinary(schemaInput, jsonInput);
 
   const roundTrippedJson = runner.generateJSON(
     schemaInput,
     { path: "/roundtrip.mon", data: binaryBuffer },
-    { strictJson: true, encoding: "utf8" }
+    { encoding: "utf8" }
   );
 
   const expectedBuffer = await readMonFile();
   const expectedJson = runner.generateJSON(
     schemaInput,
     { path: "/expected.mon", data: expectedBuffer },
-    { strictJson: true, encoding: "utf8" }
+    { encoding: "utf8" }
   );
 
   return {

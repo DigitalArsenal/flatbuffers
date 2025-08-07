@@ -7,7 +7,6 @@ import { getIncludeDirsFromSchemaInput } from "../fs/generate-include.mjs";
  * @param {{ path: string, data: Uint8Array }} binaryInput - The binary buffer to deserialize.
  * @param {Object} [opts={}] - Output options.
  * @param {boolean} [opts.rawBinary=true]
- * @param {boolean} [opts.strictJson=false]
  * @param {boolean} [opts.defaultsJson=false]
  * @param {"utf8" | null} [opts.encoding=null]
  * @returns {string|Uint8Array} The JSON output.
@@ -30,8 +29,8 @@ export function generateJSON(schemaInput, binaryInput, opts = {}) {
 
   const args = [
     "--json",
+    "--strict-json",
     ...(opts.rawBinary === false ? [] : ["--raw-binary"]),
-    ...(opts.strictJson ? ["--strict-json"] : []),
     ...(opts.defaultsJson ? ["--defaults-json"] : []),
     "-o",
     outDir,

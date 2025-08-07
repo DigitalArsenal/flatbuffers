@@ -1,9 +1,12 @@
 import { assertEquals } from "https://deno.land/std@0.214.0/assert/mod.ts";
-import { StreamingTransformer } from "../src/mod.mjs";
+import { FlatcRunner, StreamingTransformer } from "../src/mod.mjs";
 import { runStreamingTransformerTest } from "../shared_test/streaming-transformer-test.mjs";
 import { loadFbsFiles } from "../shared_test/util/load-fbs-files.mjs";
+import { join } from "https://deno.land/std@0.214.0/path/mod.ts";
+import console from "node:console";
 
 const TEST_ROOT = new URL("../../tests/", import.meta.url).pathname;
+const BIN_FILE = join(TEST_ROOT, "monsterdata_test.mon");
 
 /**
  * Loads the schema input from test files.
@@ -19,16 +22,17 @@ async function loadSchemaFile() {
 }
 
 /**
- * Provides a sample JSON buffer for the Monster schema.
- * Must return raw Uint8Array.
+ * Converts the monsterdata_test.mon binary file to JSON using FlatcRunner.
  */
-function sampleJson() {
-  const obj = {
-    pos: { x: 1, y: 2, z: 3 },
-    name: "Orc",
-    color: "Red",
-  };
-  return Promise.resolve(new TextEncoder().encode(JSON.stringify(obj)));
+async function loadJsonFromBinary(schemaInput) {
+  const binary = await Deno.readFile(BIN_FILE);
+  const runner = await FlatcRunner.init();
+  const jsonBuffer = runner.generateJSON(
+    schemaInput,
+    { path: "/input.mon", data: binary },
+    { encoding: "utf8" }
+  );
+  return jsonBuffer;
 }
 
 /**
@@ -39,10 +43,13 @@ function initTransformer(schemaInput) {
 }
 
 Deno.test("StreamingTransformer (Deno) round-trip test", async () => {
-  const { inputJson, outputJson } = await runStreamingTransformerTest({
+  const schemaInput = await loadSchemaFile();
+  const inputJson = await loadJsonFromBinary(schemaInput);
+
+  const { outputJson } = await runStreamingTransformerTest({
     initTransformer,
-    loadSchemaFile,
-    sampleJson,
+    loadSchemaFile: () => schemaInput,
+    sampleJson: () => Promise.resolve(new TextEncoder().encode(inputJson)),
   });
 
   const input = JSON.parse(inputJson);

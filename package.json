@@ -16,6 +16,8 @@
     "test": "tests"
   },
   "scripts": {
+    "emsdk:setup": "git clone --depth=1 https://github.com/emscripten-core/emsdk emsdk && cd emsdk && ./emsdk install latest && ./emsdk activate --embedded latest",
+    "emsdk:activate": "source ./emsdk/emsdk_env.sh",
     "test": "npm run compile && cd tests/ts && python3 ./TypeScriptTest.py",
     "lint": "eslint ts",
     "compile": "tsc && tsc -p tsconfig.mjs.json && esbuild js/flatbuffers.js --minify --global-name=flatbuffers --bundle --outfile=js/flatbuffers.min.js",

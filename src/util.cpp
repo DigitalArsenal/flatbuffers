@@ -346,12 +346,12 @@ std::string FilePath(const std::string &project, const std::string &filePath,
 std::string AbsolutePath(const std::string &filepath) {
   // clang-format off
 
-  #ifdef FLATBUFFERS_NO_ABSOLUTE_PATH_RESOLUTION
+  #if defined(__EMSCRIPTEN__) || defined(FLATBUFFERS_NO_ABSOLUTE_PATH_RESOLUTION)
     return filepath;
   #else
     #if defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__) || defined(__CYGWIN__)
       char abs_path[MAX_PATH];
-      return GetFullPathNameA(filepath.c_str(), MAX_PATH, abs_path, nullptr)
+      return GetFullPathNameA(filepath.c_str(), MAX_PATH, abs_path, nullptr);
     #else
       char *abs_path_temp = realpath(filepath.c_str(), nullptr);
       bool success = abs_path_temp != nullptr;
@@ -361,10 +361,10 @@ std::string AbsolutePath(const std::string &filepath) {
         free(abs_path_temp);
       }
       return success
-    #endif
       ? abs_path
       : filepath;
-  #endif // FLATBUFFERS_NO_ABSOLUTE_PATH_RESOLUTION
+    #endif
+  #endif // __EMSCRIPTEN__ || FLATBUFFERS_NO_ABSOLUTE_PATH_RESOLUTION
   // clang-format on
 }
 

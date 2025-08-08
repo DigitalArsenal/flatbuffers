@@ -2,16 +2,11 @@
 
 > An isomorphic WebAssembly wrapper for the [FlatBuffers](https://github.com/google/flatbuffers) `flatc` compiler — usable in **Node.js**, **Deno**, and the **Browser**.
 
-This package provides a unified interface to run `flatc` entirely in JavaScript environments. It wraps the Emscripten-compiled WASM binary of `flatc` and exposes ergonomic methods for:
-
-- Schema compilation (`.fbs`)
-- JSON ⇄ Binary `.mon` roundtrip
-- Code generation (TS, C++, etc.)
-- Support for browsers, Deno, and Node.js
+This package provides a unified interface to run `flatc` entirely in JavaScript environments using WebAssembly. It supports schema compilation, JSON ⇄ binary roundtrips, code generation, and more.
 
 ---
 
-## Installation
+## 📦 Installation
 
 ### Node.js
 
@@ -22,38 +17,86 @@ npm install flatc-wasm
 ### Deno
 
 ```ts
-import { FlatcRunner } from "npm:flatc-wasm"
+import { FlatcRunner } from "npm:flatc-wasm";
 ```
-
-> Also works from `unpkg` or any CDN when bundled via Vite, Rollup, or Webpack.
 
 ---
 
-## Example Usage
+## Quick Start
 
-```js
+### Node/Deno/Browser (FlatcRunner API)
+
+```ts
 import { FlatcRunner } from "flatc-wasm";
 
-// Initialize flatc (loads WASM)
 const runner = await FlatcRunner.init();
 
-// Mount .fbs schema and .json input
 runner.mountFiles([
-  { path: "/schema.fbs", data: "...schema content..." },
-  { path: "/monster.json", data: "...json content..." }
+  {
+    path: "/monster.fbs",
+    data: `
+      namespace MyGame.Sample;
+
+      table Monster {
+        id: int;
+        name: string;
+      }
+
+      root_type Monster;
+    `,
+  },
+  {
+    path: "/monster.json",
+    data: JSON.stringify({ id: 42, name: "Goblin" }),
+  },
 ]);
 
-// Generate binary
-const bin = runner.generateBinary(
-  { path: "/schema.fbs" },
+const binary = runner.generateBinary(
+  { path: "/monster.fbs" },
   { path: "/monster.json" }
 );
 
-// Convert back to JSON
-const json = runner.generateJSON(
-  { path: "/schema.fbs" },
-  { path: "/monster.mon", data: bin }
+const restoredJSON = runner.generateJSON(
+  { path: "/monster.fbs" },
+  { path: "/monster.mon", data: binary }
 );
+
+console.log("Restored JSON:", restoredJSON);
+```
+
+---
+
+## StreamingTransformer Example
+
+```ts
+import { StreamingTransformer } from "flatc-wasm";
+
+const transformer = await StreamingTransformer.create({
+  entry: "/monster.fbs",
+  files: {
+    "/monster.fbs": `
+      namespace MyGame.Sample;
+
+      table Monster {
+        id: int;
+        name: string;
+      }
+
+      root_type Monster;
+    `,
+  },
+});
+
+const binary = await transformer.transformJsonToBinary(
+  JSON.stringify({
+    id: 1,
+    name: "Zombie",
+  })
+);
+
+const json = await transformer.transformBinaryToJson(binary);
+
+console.log("Round-tripped JSON:", new TextDecoder().decode(json));
 ```
 
 ---
@@ -64,25 +107,46 @@ const json = runner.generateJSON(
 
 Initializes the WASM runtime.
 
-| Option          | Description                                  |
-|-----------------|----------------------------------------------|
-| `stdoutStream`  | Writable stream for stdout capture           |
-| `stderrStream`  | Writable stream for stderr capture           |
-
----
+| Option         | Description                        |
+| -------------- | ---------------------------------- |
+| `stdoutStream` | Writable stream for stdout capture |
+| `stderrStream` | Writable stream for stderr capture |
 
 ### Methods
 
-| Method              | Description                                         |
-|---------------------|-----------------------------------------------------|
-| `mountFile()`       | Mount a single file in the virtual FS              |
-| `mountFiles()`      | Mount multiple files                                |
-| `generateBinary()`  | Convert JSON + schema → `.mon` binary               |
-| `generateJSON()`    | Convert `.mon` binary → JSON                        |
-| `generateCode()`    | Generate target language code from schema           |
-| `listAllFiles()`    | List all files in a given mounted FS directory      |
-| `help()`            | Get flatc CLI help text                             |
-| `version()`         | Get flatc version string                            |
+- **`mountFile(path, data)`**  
+  Mounts a single file (e.g., a `.fbs` schema or `.json` input) into the in-memory file system used by the WASM module.
+
+- **`mountFiles([{ path, data }])`**  
+  Mounts multiple files at once into the virtual file system. Useful for schemas with imports/includes or multi-file projects.
+
+- **`generateBinary(schema, json)`**  
+  Compiles a JSON input into FlatBuffer binary format (`.mon`) using the provided schema.
+
+  - `schema`: `{ path: string }`
+  - `json`: `{ path: string, data: string | Uint8Array }`
+
+- **`generateJSON(schema, buffer)`**  
+  Converts FlatBuffer binary data back into a human-readable JSON object using the schema.
+
+  - `schema`: `{ path: string }`
+  - `buffer`: `{ path: string, data: Uint8Array }`
+
+- **`generateCode(schema)`**  
+  Generates target source code (e.g., TypeScript, C++, Rust) from the provided schema.  
+  Returns a mapping of file paths to their contents.
+
+- **`listAllFiles(path)`**  
+  Recursively lists all mounted files and directories under the given virtual path.
+
+- **`help()`**  
+  Returns the help text for the `flatc` command-line tool, showing available flags and options.
+
+- **`version()`**  
+  Returns the current version of the `flatc` compiler being used via WebAssembly.
+
+- **`getErrors()`**  
+  Retrieves any collected errors that occurred during file mounting or command execution.
 
 ---
 
@@ -97,10 +161,8 @@ npm test
 ### Deno
 
 ```bash
-deno task test
+deno task test --allow-read --allow-env
 ```
-
-> Make sure you provide permissions like `--allow-read` and `--allow-env`.
 
 ---
 

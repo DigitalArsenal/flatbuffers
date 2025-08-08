@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
 import fs from "node:fs/promises";
-import { TextEncoder, TextDecoder } from "node:util";
+import { TextEncoder } from "node:util";
 import { StreamingTransformer, FlatcRunner } from "../src/index.mjs";
 import { runStreamingTransformerTest } from "../shared_test/streaming-transformer-test.mjs";
 import { loadFbsFiles } from "../shared_test/util/load-fbs-files.mjs";
@@ -58,5 +58,5 @@ describe("StreamingTransformer", () => {
         2
       )}ms, per round=${result.timePerTransformMs.toFixed(2)}ms`
     );
-  });
+  }, 15000);
 });

@@ -300,6 +300,18 @@ static std::string GenerateFBS(const Parser& parser,
   } else {
     schema += "// Reconstructed from " + file_name + "\n\n";
   }
+  for (const auto& attr : parser.known_attributes_) {
+    fprintf(stderr, "DBG ATTR %s builtin=%s\n", attr.first.c_str(),
+            attr.second ? "true" : "false");
+  }
+  for (const auto& entry : parser.files_included_per_file_) {
+    fprintf(stderr, "DBG FILE %s includes %zu\n", entry.first.c_str(),
+            entry.second.size());
+    for (const auto& inc : entry.second) {
+      fprintf(stderr, "DBG  include schema=%s filename=%s\n",
+              inc.schema_name.c_str(), inc.filename.c_str());
+    }
+  }
   if (parser.opts.include_dependence_headers) {
     // clang-format off
     int num_includes = 0;
@@ -327,6 +339,10 @@ static std::string GenerateFBS(const Parser& parser,
   for (auto enum_def_it = parser.enums_.vec.begin();
        enum_def_it != parser.enums_.vec.end(); ++enum_def_it) {
     EnumDef& enum_def = **enum_def_it;
+    fprintf(stderr, "DBG ENUM %s idx=%d file=%s\n", enum_def.name.c_str(),
+            enum_def.index,
+            enum_def.declaration_file ? enum_def.declaration_file->c_str()
+                                      : "<null>");
     if (parser.opts.include_dependence_headers && enum_def.generated) {
       continue;
     }
@@ -370,6 +386,11 @@ static std::string GenerateFBS(const Parser& parser,
   for (auto it = parser.structs_.vec.begin(); it != parser.structs_.vec.end();
        ++it) {
     StructDef& struct_def = **it;
+    fprintf(stderr, "DBG STRUCT %s idx=%d file=%s decl=%s\n",
+            struct_def.name.c_str(), struct_def.index,
+            struct_def.file.c_str(),
+            struct_def.declaration_file ? struct_def.declaration_file->c_str()
+                                        : "<null>");
     const auto proto_fbs_ids = MapProtoIdsToFieldsId(
         struct_def, parser.opts.proto_id_gap_action, no_log);
     if (!proto_fbs_ids.successful) {

@@ -1068,6 +1068,9 @@ class Parser : public ParserState {
   // with Parse except that included filenames will not be populated.
   bool Deserialize(const reflection::Schema* schema);
 
+  bool ImportJsonSchema(const std::string& schema_json,
+                        const char* schema_filename);
+
   Type* DeserializeType(const reflection::Type* type);
 
   // Checks that the schema represented by this parser is a safe evolution
@@ -1222,6 +1225,8 @@ class Parser : public ParserState {
   FlatBufferBuilder builder_;  // any data contained in the file
   flexbuffers::Builder flex_builder_;
   flexbuffers::Reference flex_root_;
+  std::string imported_schema_bfbs_base64_;
+  std::vector<uint8_t> imported_schema_bfbs_raw_;
   StructDef* root_struct_def_;
   std::string file_identifier_;
   std::string file_extension_;

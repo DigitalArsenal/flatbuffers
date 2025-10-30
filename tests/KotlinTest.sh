@@ -1,4 +1,6 @@
-#!/bin/sh
+#!/usr/bin/env bash
+
+set -eu
 
 # Copyright 2014 Google Inc. All rights reserved.
 #
@@ -16,7 +18,8 @@
 
 echo Compile then run the Kotlin test.
 
-testdir=$(dirname $0)
+testdir="$(cd "$(dirname "$0")" && pwd)"
+repo_dir="$(cd "${testdir}/.." && pwd)"
 targetdir="${testdir}/kotlin"
 
 if [[ -e "${targetdir}" ]]; then
@@ -26,21 +29,29 @@ fi
 
 mkdir -v "${targetdir}"
 
-if ! find "${testdir}/../java" -type f -name "*.class" -delete; then
+if ! find "${repo_dir}/java" -type f -name "*.class" -delete; then
     echo "failed to clean .class files from java directory" >&2
     exit 1
 fi
 
-all_kt_files=`find . -name "*.kt" -print`
+find_sources() {
+    find "$@" -type f -name "*.kt" \
+        ! -path "${targetdir}/*"
+}
 
-# Compile java FlatBuffer library 
-javac ${testdir}/../java/src/main/java/com/google/flatbuffers/*.java -d $targetdir
+all_kt_files="$(find_sources "${testdir}")"
+
+# Compile java FlatBuffer library
+javac "${repo_dir}/java/src/main/java/com/google/flatbuffers/"*.java -d "${targetdir}"
 # Compile Kotlin files
-kotlinc $all_kt_files -classpath $targetdir -include-runtime -d $targetdir
+kotlinc ${all_kt_files} -classpath "${targetdir}" -include-runtime -d "${targetdir}"
 # Make jar
-jar cvf ${testdir}/kotlin_test.jar -C $targetdir . > /dev/null
+jar cvf "${testdir}/kotlin_test.jar" -C "${targetdir}" . > /dev/null
 # Run test
-kotlin -J"-ea" -cp ${testdir}/kotlin_test.jar KotlinTest
+(
+    cd "${testdir}"
+    kotlin -J"-ea" -cp "kotlin_test.jar" KotlinTest
+)
 # clean up
-rm -rf $targetdir
-rm ${testdir}/kotlin_test.jar
+rm -rf "${targetdir}"
+rm "${testdir}/kotlin_test.jar"

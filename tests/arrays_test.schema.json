@@ -3,7 +3,33 @@
   "definitions": {
     "MyGame_Example_TestEnum" : {
       "type" : "string",
-      "enum": ["A", "B", "C"]
+      "enum": ["A", "B", "C"],
+      "x-flatbuffers" : {
+        "definition" : "enum",
+        "name" : "MyGame.Example.TestEnum",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "underlying_type" : "Byte",
+        "values" : [
+          {
+            "name" : "A",
+            "value" : 0,
+            "base_type" : "None"
+          },
+          {
+            "name" : "B",
+            "value" : 1,
+            "base_type" : "None"
+          },
+          {
+            "name" : "C",
+            "value" : 2,
+            "base_type" : "None"
+          }
+        ]
+      }
     },
     "MyGame_Example_NestedStruct" : {
       "type" : "object",
@@ -11,63 +37,301 @@
         "a" : {
                 "type" : "array", "items" : {"type" : "integer", "minimum" : -2147483648, "maximum" : 2147483647},
                 "minItems": 2,
-                "maxItems": 2
+                "maxItems": 2,
+                "x-flatbuffers" : {
+                  "name" : "a",
+                  "type" : {
+                    "base_type" : "Array",
+                    "element" : "Int",
+                    "fixed_length" : 2
+                  },
+                  "presence" : "optional",
+                  "offset" : 0,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               },
         "b" : {
-                "$ref" : "#/definitions/MyGame_Example_TestEnum"
+                "$ref" : "#/definitions/MyGame_Example_TestEnum",
+                "x-flatbuffers" : {
+                  "name" : "b",
+                  "type" : {
+                    "base_type" : "Byte",
+                    "enum" : "MyGame.Example.TestEnum"
+                  },
+                  "presence" : "default",
+                  "offset" : 8,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "c" : {
                 "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_TestEnum"},
                 "minItems": 2,
-                "maxItems": 2
+                "maxItems": 2,
+                "x-flatbuffers" : {
+                  "name" : "c",
+                  "type" : {
+                    "base_type" : "Array",
+                    "element" : "Byte",
+                    "fixed_length" : 2,
+                    "enum" : "MyGame.Example.TestEnum"
+                  },
+                  "presence" : "optional",
+                  "offset" : 9,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                  "padding" : 5
+                }
               },
         "d" : {
                 "type" : "array", "items" : {"type" : "integer", "minimum" : -9223372036854775808, "maximum" : 9223372036854775807},
                 "minItems": 2,
-                "maxItems": 2
+                "maxItems": 2,
+                "x-flatbuffers" : {
+                  "name" : "d",
+                  "type" : {
+                    "base_type" : "Array",
+                    "element" : "Long",
+                    "fixed_length" : 2
+                  },
+                  "presence" : "optional",
+                  "offset" : 16,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "struct",
+        "name" : "MyGame.Example.NestedStruct",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "bytesize" : 32,
+        "minalign" : 8,
+        "sortbysize" : false,
+        "has_key" : false
+      }
     },
     "MyGame_Example_ArrayStruct" : {
       "type" : "object",
       "properties" : {
         "a" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "a",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 0,
+                  "default" : "0.0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "b" : {
                 "type" : "array", "items" : {"type" : "integer", "minimum" : -2147483648, "maximum" : 2147483647},
                 "minItems": 15,
-                "maxItems": 15
+                "maxItems": 15,
+                "x-flatbuffers" : {
+                  "name" : "b",
+                  "type" : {
+                    "base_type" : "Array",
+                    "element" : "Int",
+                    "fixed_length" : 15
+                  },
+                  "presence" : "optional",
+                  "offset" : 4,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               },
         "c" : {
-                "type" : "integer", "minimum" : -128, "maximum" : 127
+                "type" : "integer", "minimum" : -128, "maximum" : 127,
+                "x-flatbuffers" : {
+                  "name" : "c",
+                  "type" : {
+                    "base_type" : "Byte"
+                  },
+                  "presence" : "default",
+                  "offset" : 64,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                  "padding" : 7
+                }
               },
         "d" : {
                 "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_NestedStruct"},
                 "minItems": 2,
-                "maxItems": 2
+                "maxItems": 2,
+                "x-flatbuffers" : {
+                  "name" : "d",
+                  "type" : {
+                    "base_type" : "Array",
+                    "element" : "Obj",
+                    "fixed_length" : 2,
+                    "struct" : "MyGame.Example.NestedStruct"
+                  },
+                  "presence" : "optional",
+                  "offset" : 72,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               },
         "e" : {
-                "type" : "integer", "minimum" : -2147483648, "maximum" : 2147483647
+                "type" : "integer", "minimum" : -2147483648, "maximum" : 2147483647,
+                "x-flatbuffers" : {
+                  "name" : "e",
+                  "type" : {
+                    "base_type" : "Int"
+                  },
+                  "presence" : "default",
+                  "offset" : 136,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                  "padding" : 4
+                }
               },
         "f" : {
                 "type" : "array", "items" : {"type" : "integer", "minimum" : -9223372036854775808, "maximum" : 9223372036854775807},
                 "minItems": 2,
-                "maxItems": 2
+                "maxItems": 2,
+                "x-flatbuffers" : {
+                  "name" : "f",
+                  "type" : {
+                    "base_type" : "Array",
+                    "element" : "Long",
+                    "fixed_length" : 2
+                  },
+                  "presence" : "optional",
+                  "offset" : 144,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "struct",
+        "name" : "MyGame.Example.ArrayStruct",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "bytesize" : 160,
+        "minalign" : 8,
+        "sortbysize" : false,
+        "has_key" : false
+      }
     },
     "MyGame_Example_ArrayTable" : {
       "type" : "object",
       "properties" : {
         "a" : {
-                "$ref" : "#/definitions/MyGame_Example_ArrayStruct"
+                "$ref" : "#/definitions/MyGame_Example_ArrayStruct",
+                "x-flatbuffers" : {
+                  "name" : "a",
+                  "type" : {
+                    "base_type" : "Obj",
+                    "struct" : "MyGame.Example.ArrayStruct"
+                  },
+                  "presence" : "optional",
+                  "offset" : 4,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "table",
+        "name" : "MyGame.Example.ArrayTable",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "bytesize" : 0,
+        "minalign" : 1,
+        "sortbysize" : true,
+        "has_key" : false
+      }
     }
   },
-  "$ref" : "#/definitions/MyGame_Example_ArrayTable"
+  "$ref" : "#/definitions/MyGame_Example_ArrayTable",
+  "x-flatbuffers" : {
+    "root_type" : "MyGame.Example.ArrayTable",
+    "file_identifier" : "ARRT",
+    "file_extension" : "mon",
+    "advanced_features" : 1,
+    "schema_bfbs" : "HAAAAEJGQlMAABIAJAAEAAgADAAQABQAGAAcABIAAABAAAAANAAAACQAAAAYAAAAZAEAAAwAAAABAAAAAAAAAAAAAAADAAAAbW9uAAQAAABBUlJUAAAAAAEAAAAoAAAAAwAAAMABAAAsAQAAWAMAAAAAEgAUAAQACAAAAAwAAAAAABAAEgAAADQAAAAgAAAACAAAAEwDAADE+///AAAAAwAAAAABAAAAAQAAAAMAAACgAAAAaAAAACwAAAAXAAAATXlHYW1lLkV4YW1wbGUuVGVzdEVudW0ADAAYAAQADAAAAAgADAAAACAAAAAQAAAAAgAAAAAAAAAAAAAAoP///wEAAAABAAAAAQAAAEMAAAAMABQABAAMAAAACAAMAAAAHAAAAAwAAAABAAAAAAAAANT///8BAAAAAQAAAAEAAABCAAAADAAMAAQAAAAAAAgADAAAACQAAAAUAAAAEAAMAAAAAAAAAAAABAAIABAAAAABAAAAAQAAAAEAAABBAAAAFAAUAAQACAAAAAwAAAAAAAAAEAAUAAAAGAAAAAwAAAABAAAAPAIAAAEAAABAAAAAGQAAAE15R2FtZS5FeGFtcGxlLkFycmF5VGFibGUAAAAcABAACAAMAAAABgAAAAAAAAAAAAAAAAAAAAUAHAAAAAABBAAoAAAAFAAAABAAEAAHAAAACAAAAAAADAAQAAAAAAAADwAAAAABAAAAAQAAAGEAAAB0/v//AAAAATAAAAAQAAAACAAAAKAAAACkAQAABgAAADwBAAAIAQAAyAAAAHwAAABQAAAAJAAAABoAAABNeUdhbWUuRXhhbXBsZS5BcnJheVN0cnVjdAAAYP7//wAAAAEFAJAAFAAAAAQAAABk/f//EQkCAAgAAAABAAAAZgAAAK7///8AAAQAiAAEABQAAAAEAAAALP///wAAAAcBAAAAAQAAAGUAAACw/v//AAAAAQMASAAYAAAABAAAAFD+//8RDwIAAgAAAAQAAAABAAAAZAAeABQADAAQAAYACAAAAAAAAAAAAAAAAAAAAAAACgAeAAAAAAACAEAABwAoAAAAFAAAABAAEAAHAAAAAAAAAAgADAAQAAAAAAAAAwEAAAABAAAAAQAAAGMAAAA0////AAAAAQEABAAUAAAABAAAADj+//8RBw8ABAAAAAEAAABiAAAACAAMAAQACAAIAAAAJAAAABQAAAAQAAwABwAAAAAAAAAAAAgAEAAAAAAAAAsBAAAAAQAAAGEAAAAUABwACAAMAAcAEAAUAAAAAAAYABQAAAAAAAABMAAAABgAAAAIAAAAIAAAAAQAAAAAAAAAAAAAAAQAAAAwAQAA1AAAAIgAAABAAAAAGwAAAE15R2FtZS5FeGFtcGxlLk5lc3RlZFN0cnVjdAAcABQADAAQAAgACgAAAAAAAAAAAAAAAAAAAAcAHAAAAAAAAAEDABAAFAAAAAQAAAAg////EQkCAAgAAAABAAAAZAAeABQADAAQAAYACAAAAAAAAAAAAAAAAAAAAAUACgAeAAAAAAECAAkABQAoAAAAFAAAABAAEAAEAAUACAAGAAAADAAQAAAAEQMCAAAAAAABAAAAAQAAAGMAAAAMABAACAAMAAQABgAMAAAAAQAIACwAAAAUAAAAEAAUAAcAAAAIAAAADAAQABAAAAAAAAADAAAAAAEAAAABAAAAAQAAAGIAAAAcABAACAAMAAAAAAAAAAAAAAAAAAAAAAAAAAcAHAAAAAAAAAEkAAAAFAAAABAADAAEAAUAAAAGAAAACAAQAAAAEQcCAAQAAAABAAAAYQAAAA=="
+  }
 }

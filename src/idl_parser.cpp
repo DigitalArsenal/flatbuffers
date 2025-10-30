@@ -44,6 +44,38 @@ namespace {
 
 static const double kPi = 3.14159265358979323846;
 
+static bool DecodeBase64(const std::string& input,
+                         std::vector<uint8_t>* out) {
+  static int8_t table[256];
+  static bool initialized = false;
+  if (!initialized) {
+    std::fill(table, table + (sizeof(table) / sizeof(table[0])),
+              static_cast<int8_t>(-1));
+    const std::string alphabet =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    for (size_t i = 0; i < alphabet.size(); ++i) {
+      table[static_cast<uint8_t>(alphabet[i])] =
+          static_cast<int8_t>(i & 0x3F);
+    }
+    initialized = true;
+  }
+  out->clear();
+  int val = 0;
+  int bits = -8;
+  for (char ch : input) {
+    if (ch == '=') break;
+    const int8_t decoded = table[static_cast<uint8_t>(ch)];
+    if (decoded < 0) return false;
+    val = (val << 6) | decoded;
+    bits += 6;
+    if (bits >= 0) {
+      out->push_back(static_cast<uint8_t>((val >> bits) & 0xFF));
+      bits -= 8;
+    }
+  }
+  return true;
+}
+
 // The enums in the reflection schema should match the ones we use internally.
 // Compare the last element to check if these go out of sync.
 static_assert(BASE_TYPE_VECTOR64 ==
@@ -4137,6 +4169,7 @@ bool FieldDef::Deserialize(Parser& parser, const reflection::Field* field) {
   } else if (IsFloat(value.type.base_type)) {
     value.constant = FloatToString(field->default_real(), 17);
   }
+  deprecated = field->deprecated();
   presence = FieldDef::MakeFieldPresence(field->optional(), field->required());
   padding = field->padding();
   key = field->key();
@@ -4157,6 +4190,7 @@ bool FieldDef::Deserialize(Parser& parser, const reflection::Field* field) {
     if (!nested_flatbuffer) return false;
   }
   shared = attributes.Lookup("shared") != nullptr;
+  native_inline = attributes.Lookup("native_inline") != nullptr;
   DeserializeDoc(doc_comment, field->documentation());
   return true;
 }
@@ -4451,6 +4485,31 @@ bool Parser::Deserialize(const reflection::Schema* schema) {
       }
     }
   }
+  const std::string union_suffix = UnionTypeFieldSuffix();
+  const size_t union_suffix_len = union_suffix.length();
+  for (auto sit = structs_.vec.begin(); sit != structs_.vec.end(); ++sit) {
+    auto* struct_def = *sit;
+    for (auto fit = struct_def->fields.vec.begin();
+         fit != struct_def->fields.vec.end(); ++fit) {
+      auto* type_field = *fit;
+      const std::string& field_name = type_field->name;
+      if (field_name.length() <= union_suffix_len) continue;
+      if (field_name.compare(field_name.length() - union_suffix_len,
+                             union_suffix_len, union_suffix) != 0)
+        continue;
+      auto base_name =
+          field_name.substr(0, field_name.length() - union_suffix_len);
+      auto* union_field = struct_def->fields.Lookup(base_name);
+      if (!union_field) continue;
+      const bool is_union =
+          IsUnion(union_field->value.type) ||
+          (IsVector(union_field->value.type) &&
+           union_field->value.type.element == BASE_TYPE_UNION);
+      if (!is_union) continue;
+      union_field->sibling_union_field = type_field;
+      type_field->sibling_union_field = union_field;
+    }
+  }
   advanced_features_ = schema->advanced_features();
 
   if (schema->fbs_files())
@@ -4462,7 +4521,505 @@ bool Parser::Deserialize(const reflection::Schema* schema) {
         included_file.filename = f->str();
         files_included_per_file_[s->filename()->str()].insert(included_file);
       }
+  }
+
+  return true;
+}
+
+bool Parser::ImportJsonSchema(const std::string& schema_json,
+                              const char* schema_filename) {
+  if (!structs_.vec.empty() || !enums_.vec.empty()) {
+    error_ = "parser already contains schema definitions";
+    return false;
+  }
+
+  imported_schema_bfbs_base64_.clear();
+  imported_schema_bfbs_raw_.clear();
+
+  Parser json_parser;
+  json_parser.opts.strict_json = true;
+  json_parser.opts.allow_non_utf8 = opts.allow_non_utf8;
+  json_parser.opts.require_json_eof = true;
+  json_parser.opts.use_flexbuffers = true;
+  if (!json_parser.Parse(schema_json.c_str(), nullptr, schema_filename)) {
+    error_ = json_parser.error_;
+    return false;
+  }
+
+  const auto& flex_buffer = json_parser.flex_builder_.GetBuffer();
+  auto root = flexbuffers::GetRoot(flex_buffer.data(), flex_buffer.size());
+  if (!root.IsMap()) {
+    error_ = "JSON schema root must be an object";
+    return false;
+  }
+
+  auto root_map = root.AsMap();
+  auto root_meta_ref = root_map["x-flatbuffers"];
+  if (root_meta_ref.IsMap()) {
+    auto schema_bfbs_ref = root_meta_ref.AsMap()["schema_bfbs"];
+    if (schema_bfbs_ref.IsString()) {
+      std::vector<uint8_t> bfbs_bytes;
+      if (!DecodeBase64(schema_bfbs_ref.AsString().str(), &bfbs_bytes)) {
+        error_ = "invalid x-flatbuffers schema_bfbs";
+        return false;
+      }
+      imported_schema_bfbs_base64_ = schema_bfbs_ref.AsString().str();
+      imported_schema_bfbs_raw_ = std::move(bfbs_bytes);
+      return Deserialize(imported_schema_bfbs_raw_.data(),
+                         imported_schema_bfbs_raw_.size());
     }
+  }
+
+  auto defs_ref = root_map["definitions"];
+  if (!defs_ref.IsMap()) {
+    error_ = "JSON schema is missing a definitions object";
+    return false;
+  }
+
+  const auto defs = defs_ref.AsMap();
+  auto def_keys = defs.Keys();
+  auto def_vals = defs.Values();
+
+  auto string_or = [](const flexbuffers::Reference& ref) -> std::string {
+    return ref.IsString() ? ref.AsString().str() : std::string();
+  };
+
+  auto bool_or = [](const flexbuffers::Reference& ref, bool default_value)
+                     -> bool {
+    if (ref.IsBool()) return ref.AsBool();
+    if (ref.IsInt() || ref.IsUInt()) return ref.AsUInt64() != 0;
+    return default_value;
+  };
+
+  auto number_or = [](const flexbuffers::Reference& ref, uint64_t fallback)
+                       -> uint64_t {
+    if (ref.IsUInt()) return ref.AsUInt64();
+    if (ref.IsInt()) return static_cast<uint64_t>(ref.AsInt64());
+    return fallback;
+  };
+
+  auto parse_base_type = [](const std::string& token, BaseType* out) -> bool {
+    if (token.empty()) return false;
+    const auto& values = reflection::EnumValuesBaseType();
+    const char* const* names = reflection::EnumNamesBaseType();
+    for (size_t i = 0; names[i]; ++i) {
+      if (token == names[i]) {
+        *out = static_cast<BaseType>(values[i]);
+        return true;
+      }
+    }
+    return false;
+  };
+
+  auto parse_presence = [](const std::string& token) {
+    if (token == "required") return FieldDef::kRequired;
+    if (token == "optional") return FieldDef::kOptional;
+    return FieldDef::kDefault;
+  };
+
+  auto append_doc = [](const flexbuffers::Reference& ref,
+                       std::vector<std::string>& out_doc) {
+    if (!ref.IsVector()) return;
+    const auto vec = ref.AsVector();
+    for (size_t i = 0; i < vec.size(); ++i) {
+      if (vec[i].IsString()) out_doc.push_back(vec[i].AsString().str());
+    }
+  };
+
+  auto populate_attributes =
+      [this, &string_or](const flexbuffers::Reference& ref,
+                         SymbolTable<Value>& attributes) -> bool {
+        if (!ref.IsMap()) return true;
+        const auto map = ref.AsMap();
+        auto keys = map.Keys();
+        auto values = map.Values();
+        for (size_t i = 0; i < keys.size(); ++i) {
+          if (!(keys[i].IsString() || keys[i].IsKey())) continue;
+          std::string key = keys[i].AsString().str();
+          std::string value = string_or(values[i]);
+          auto attr_value = new Value();
+          attr_value->constant = value;
+          if (attributes.Add(key, attr_value)) {
+            delete attr_value;
+            return false;
+          }
+          known_attributes_[key];
+        }
+        return true;
+      };
+
+  auto build_type = [this, &parse_base_type, &string_or, &number_or](
+                        const flexbuffers::Reference& ref,
+                        Type* dest_type) -> bool {
+    if (!ref.IsMap()) return false;
+    const auto type_map = ref.AsMap();
+    BaseType base = BASE_TYPE_NONE;
+    if (!parse_base_type(string_or(type_map["base_type"]), &base))
+      return false;
+    Type type(base);
+    BaseType element = BASE_TYPE_NONE;
+    if (type_map["element"].IsString() &&
+        !parse_base_type(type_map["element"].AsString().str(), &element))
+      return false;
+    type.element = element;
+    if (type_map["fixed_length"].IsUInt() || type_map["fixed_length"].IsInt())
+      type.fixed_length = static_cast<uint16_t>(
+          number_or(type_map["fixed_length"], 0));
+
+    if (type_map["struct"].IsString()) {
+      auto struct_def = LookupStruct(type_map["struct"].AsString().str());
+      if (!struct_def) return false;
+      type.struct_def = struct_def;
+      struct_def->refcount++;
+    }
+
+    if (type_map["enum"].IsString()) {
+      auto enum_def = LookupEnum(type_map["enum"].AsString().str());
+      if (!enum_def) return false;
+      type.enum_def = enum_def;
+      enum_def->refcount++;
+    }
+
+    *dest_type = type;
+    return true;
+  };
+
+  struct StructInfo {
+    std::string qualified_name;
+    flexbuffers::Map schema_map;
+    flexbuffers::Map meta_map;
+    StructDef* def;
+    bool is_struct;
+  };
+
+  struct EnumInfo {
+    std::string qualified_name;
+    flexbuffers::Map schema_map;
+    flexbuffers::Map meta_map;
+    EnumDef* def;
+    bool is_union;
+  };
+
+  std::vector<StructInfo> structs_info;
+  std::vector<EnumInfo> enums_info;
+  std::map<std::string, Namespace*> namespaces_index;
+
+  for (size_t i = 0; i < def_keys.size(); ++i) {
+    if (!def_keys[i].IsKey()) {
+      error_ = "JSON schema definitions must use string keys";
+      return false;
+    }
+    const std::string schema_name = def_keys[i].AsKey();
+    if (!def_vals[i].IsMap()) {
+      error_ = "JSON schema definition '" + schema_name +
+               "' is not an object";
+      return false;
+    }
+    auto schema_map = def_vals[i].AsMap();
+    auto meta_ref = schema_map["x-flatbuffers"];
+    if (!meta_ref.IsMap()) {
+      error_ = "definition " + schema_name +
+               " is missing x-flatbuffers metadata";
+      return false;
+    }
+    auto meta_map = meta_ref.AsMap();
+    const std::string definition_kind = string_or(meta_map["definition"]);
+    const std::string qualified_name = string_or(meta_map["name"]);
+    if (qualified_name.empty()) {
+      error_ = "definition " + schema_name +
+               " is missing a qualified name annotation";
+      return false;
+    }
+
+    Namespace* ns =
+        GetNamespace(qualified_name, namespaces_, namespaces_index);
+    const std::string unqualified = UnqualifiedName(qualified_name);
+
+    if (definition_kind == "enum" || definition_kind == "union") {
+      auto enum_def = new EnumDef();
+      enum_def->defined_namespace = ns;
+      enum_def->name = unqualified;
+      RecordIdlName(&enum_def->name);
+      enum_def->is_union = (definition_kind == "union");
+      if (enums_.Add(qualified_name, enum_def)) {
+        delete enum_def;
+        error_ = "duplicate enum definition: " + qualified_name;
+        return false;
+      }
+      auto type_obj = new Type(BASE_TYPE_UNION, nullptr, enum_def);
+      if (types_.Add(qualified_name, type_obj)) {
+        delete type_obj;
+        error_ = "duplicate type mapping: " + qualified_name;
+        return false;
+      }
+      enum_def->index = static_cast<int>(enums_.vec.size() - 1);
+      enums_info.push_back({qualified_name, schema_map, meta_map, enum_def,
+                            enum_def->is_union});
+    } else if (definition_kind == "struct" || definition_kind == "table") {
+      auto struct_def = new StructDef();
+      struct_def->defined_namespace = ns;
+      struct_def->name = unqualified;
+      RecordIdlName(&struct_def->name);
+      struct_def->fixed = (definition_kind == "struct");
+      struct_def->predecl = false;
+      if (structs_.Add(qualified_name, struct_def)) {
+        delete struct_def;
+        error_ = "duplicate struct/table definition: " + qualified_name;
+        return false;
+      }
+      auto type_obj = new Type(BASE_TYPE_STRUCT, struct_def, nullptr);
+      if (types_.Add(qualified_name, type_obj)) {
+        delete type_obj;
+        error_ = "duplicate type mapping: " + qualified_name;
+        return false;
+      }
+      struct_def->index = static_cast<int>(structs_.vec.size() - 1);
+      structs_info.push_back({qualified_name, schema_map, meta_map, struct_def,
+                              struct_def->fixed});
+    } else {
+      error_ = "unsupported definition kind in JSON schema: " +
+               definition_kind;
+      return false;
+    }
+  }
+
+  for (auto& info : enums_info) {
+    auto& enum_def = *info.def;
+    enum_def.doc_comment.clear();
+    append_doc(info.meta_map["doc"], enum_def.doc_comment);
+    if (!populate_attributes(info.meta_map["attributes"],
+                             enum_def.attributes)) {
+      error_ = "failed to populate attributes for enum " +
+               info.qualified_name;
+      return false;
+    }
+
+    BaseType underlying = BASE_TYPE_NONE;
+    if (!parse_base_type(string_or(info.meta_map["underlying_type"]),
+                         &underlying)) {
+      error_ = "enum " + info.qualified_name +
+               " is missing a valid underlying type";
+      return false;
+    }
+    enum_def.underlying_type = Type(underlying);
+
+    auto values_ref = info.meta_map["values"];
+    if (!values_ref.IsVector()) {
+      error_ = "enum " + info.qualified_name +
+               " metadata is missing a values array";
+      return false;
+    }
+
+    const auto values_vec = values_ref.AsVector();
+    for (size_t i = 0; i < values_vec.size(); ++i) {
+      if (!values_vec[i].IsMap()) {
+        error_ = "enum " + info.qualified_name +
+                 " has malformed value metadata";
+        return false;
+      }
+      const auto val_map = values_vec[i].AsMap();
+      const std::string val_name = string_or(val_map["name"]);
+
+      EnumValBuilder ev_builder(*this, enum_def);
+      EnumVal* val = ev_builder.CreateEnumerator(val_name);
+
+      const int64_t numeric_value =
+          static_cast<int64_t>(number_or(val_map["value"], 0));
+      if (ev_builder.AssignEnumeratorValue(NumToString(numeric_value)).Check())
+        return false;
+
+      BaseType union_base = BASE_TYPE_NONE;
+      parse_base_type(string_or(val_map["base_type"]), &union_base);
+      val->union_type = Type(union_base);
+
+      if (val_map["struct"].IsString()) {
+        auto* struct_def = LookupStruct(val_map["struct"].AsString().str());
+        if (!struct_def) {
+          error_ = "enum value references unknown struct " +
+                   val_map["struct"].AsString().str();
+          return false;
+        }
+        val->union_type.struct_def = struct_def;
+        struct_def->refcount++;
+      }
+
+      if (val_map["enum"].IsString()) {
+        auto* enum_ref = LookupEnum(val_map["enum"].AsString().str());
+        if (!enum_ref) {
+          error_ = "enum value references unknown enum " +
+                   val_map["enum"].AsString().str();
+          return false;
+        }
+        val->union_type.enum_def = enum_ref;
+        enum_ref->refcount++;
+      }
+
+      append_doc(val_map["doc"], val->doc_comment);
+      if (!populate_attributes(val_map["attributes"], val->attributes)) {
+        error_ = "failed to read attributes for enum value " + val_name;
+        return false;
+      }
+
+      if (ev_builder.AcceptEnumerator(val->name).Check()) return false;
+    }
+  }
+
+  for (auto& info : structs_info) {
+    auto& struct_def = *info.def;
+    struct_def.doc_comment.clear();
+    append_doc(info.meta_map["doc"], struct_def.doc_comment);
+    if (!populate_attributes(info.meta_map["attributes"],
+                             struct_def.attributes)) {
+      error_ = "failed to populate attributes for struct/table " +
+               info.qualified_name;
+      return false;
+    }
+
+    struct_def.sortbysize = bool_or(info.meta_map["sortbysize"],
+                                    !struct_def.fixed);
+    struct_def.has_key = bool_or(info.meta_map["has_key"], false);
+    if (struct_def.fixed) {
+      struct_def.bytesize = static_cast<size_t>(
+          number_or(info.meta_map["bytesize"], 0));
+      struct_def.minalign = static_cast<size_t>(
+          number_or(info.meta_map["minalign"], 1));
+    }
+
+    std::vector<std::pair<uint64_t, FieldDef*>> field_entries;
+    std::vector<std::pair<FieldDef*, std::string>> union_links;
+    auto props_ref = info.schema_map["properties"];
+    if (props_ref.IsMap()) {
+      const auto props_map = props_ref.AsMap();
+      auto prop_keys = props_map.Keys();
+      auto prop_vals = props_map.Values();
+      for (size_t i = 0; i < prop_keys.size(); ++i) {
+        if (!(prop_keys[i].IsString() || prop_keys[i].IsKey()) ||
+            !prop_vals[i].IsMap())
+          continue;
+        const std::string field_name = prop_keys[i].AsString().str();
+        const auto prop_map = prop_vals[i].AsMap();
+        auto metadata_ref = prop_map["x-flatbuffers"];
+        if (!metadata_ref.IsMap()) {
+          error_ = "field " + field_name + " in " + info.qualified_name +
+                   " is missing x-flatbuffers metadata";
+          return false;
+        }
+        const auto field_meta = metadata_ref.AsMap();
+        auto* field = new FieldDef();
+        field->defined_namespace = struct_def.defined_namespace;
+        field->name = field_name;
+        RecordIdlName(&field->name);
+        field->value.offset = static_cast<voffset_t>(
+            number_or(field_meta["offset"], 0));
+        field->deprecated = bool_or(field_meta["deprecated"], false);
+        field->key = bool_or(field_meta["key"], false);
+        if (field->key) struct_def.has_key = true;
+        field->shared = bool_or(field_meta["shared"], false);
+        field->flexbuffer = bool_or(field_meta["flexbuffer"], false);
+        if (field->flexbuffer) uses_flexbuffers_ = true;
+        field->native_inline = bool_or(field_meta["native_inline"], false);
+        field->offset64 = bool_or(field_meta["offset64"], false);
+        field->padding = static_cast<size_t>(
+            number_or(field_meta["padding"], 0));
+
+        field->value.constant = string_or(field_meta["default"]);
+        if (field->value.constant.empty() && field_meta["default"].IsNull())
+          field->value.constant.clear();
+
+        field->presence =
+            parse_presence(string_or(field_meta["presence"]));
+        if (!build_type(field_meta["type"], &field->value.type)) {
+          delete field;
+          error_ = "invalid type metadata for field " + field_name +
+                   " in " + info.qualified_name;
+          return false;
+        }
+
+        if (field_meta["nested_flatbuffer"].IsString()) {
+          auto* nested =
+              LookupStruct(field_meta["nested_flatbuffer"].AsString().str());
+          if (!nested) {
+            delete field;
+            error_ = "field " + field_name + " references unknown nested "
+                     "FlatBuffer " +
+                     field_meta["nested_flatbuffer"].AsString().str();
+            return false;
+          }
+          field->nested_flatbuffer = nested;
+        }
+
+        if (field_meta["sibling_union_key"].IsString()) {
+          union_links.emplace_back(field,
+                                   field_meta["sibling_union_key"].AsString().str());
+        }
+
+        append_doc(field_meta["doc"], field->doc_comment);
+        if (!populate_attributes(field_meta["attributes"],
+                                 field->attributes)) {
+          delete field;
+          error_ = "failed to populate attributes for field " + field_name +
+                   " in " + info.qualified_name;
+          return false;
+        }
+
+        uint64_t order_key = struct_def.fixed
+                                  ? static_cast<uint64_t>(field->value.offset)
+                                  : static_cast<uint64_t>(field->value.offset);
+        field_entries.emplace_back(order_key, field);
+      }
+    } else if (!props_ref.IsNull()) {
+      error_ = "JSON schema properties for '" + info.qualified_name +
+               "' are not an object (type " +
+               NumToString(static_cast<int>(props_ref.GetType())) + ")";
+      return false;
+    }
+
+    std::sort(field_entries.begin(), field_entries.end(),
+              [](const std::pair<uint64_t, FieldDef*>& a,
+                 const std::pair<uint64_t, FieldDef*>& b) {
+                if (a.first == b.first)
+                  return a.second->name < b.second->name;
+                return a.first < b.first;
+              });
+
+    for (auto& entry : field_entries) {
+      if (struct_def.fields.Add(entry.second->name, entry.second)) {
+        delete entry.second;
+        error_ = "duplicate field " + entry.second->name + " in " +
+                 info.qualified_name;
+        return false;
+      }
+    }
+
+    for (const auto& link : union_links) {
+      auto* partner = struct_def.fields.Lookup(link.second);
+      if (!partner) {
+        error_ = "union sibling reference " + link.second + " missing in " +
+                 info.qualified_name;
+        return false;
+      }
+      link.first->sibling_union_field = partner;
+    }
+  }
+
+  if (root_meta_ref.IsMap()) {
+    const auto root_meta = root_meta_ref.AsMap();
+    file_identifier_ = string_or(root_meta["file_identifier"]);
+    file_extension_ = string_or(root_meta["file_extension"]);
+    advanced_features_ = static_cast<int>(
+        number_or(root_meta["advanced_features"], 0));
+
+    const auto root_type_name = string_or(root_meta["root_type"]);
+    if (!root_type_name.empty()) {
+      root_struct_def_ = LookupStruct(root_type_name);
+      if (!root_struct_def_) {
+        error_ = "root type " + root_type_name + " not found in schema";
+        return false;
+      }
+    } else {
+      root_struct_def_ = nullptr;
+    }
+  }
 
   return true;
 }

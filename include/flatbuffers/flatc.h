@@ -41,6 +41,7 @@ struct FlatCOptions {
   std::string output_path;
 
   std::vector<std::string> filenames;
+  std::vector<std::string> schema_filenames;
 
   std::list<std::string> include_directories_storage;
   std::vector<const char*> include_directories;

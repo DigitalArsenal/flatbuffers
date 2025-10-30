@@ -3,414 +3,2666 @@
   "definitions": {
     "MyGame_OtherNameSpace_FromInclude" : {
       "type" : "string",
-      "enum": ["IncludeVal"]
+      "enum": ["IncludeVal"],
+      "x-flatbuffers" : {
+        "definition" : "enum",
+        "name" : "MyGame.OtherNameSpace.FromInclude",
+        "namespace" : [
+          "MyGame",
+          "OtherNameSpace"
+        ],
+        "underlying_type" : "Long",
+        "values" : [
+          {
+            "name" : "IncludeVal",
+            "value" : 0,
+            "base_type" : "None"
+          }
+        ]
+      }
     },
     "MyGame_Example_Color" : {
       "type" : "string",
-      "enum": ["Red", "Green", "Blue"]
+      "enum": ["Red", "Green", "Blue"],
+      "x-flatbuffers" : {
+        "definition" : "enum",
+        "name" : "MyGame.Example.Color",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "underlying_type" : "UByte",
+          "attributes" : {
+            "bit_flags" : "0"
+          },
+          "doc" : [
+            " Composite components of Monster color."
+          ],
+        "values" : [
+          {
+            "name" : "Red",
+            "value" : 1,
+            "base_type" : "None"
+          },
+          {
+            "name" : "Green",
+            "value" : 2,
+            "base_type" : "None",
+            "doc" : [
+              " \\brief color Green",
+              " Green is bit_flag with value (1u << 1)"
+            ]
+          },
+          {
+            "name" : "Blue",
+            "value" : 8,
+            "base_type" : "None",
+            "doc" : [
+              " \\brief color Blue (1u << 3)"
+            ]
+          }
+        ]
+      }
     },
     "MyGame_Example_Race" : {
       "type" : "string",
-      "enum": ["None", "Human", "Dwarf", "Elf"]
+      "enum": ["None", "Human", "Dwarf", "Elf"],
+      "x-flatbuffers" : {
+        "definition" : "enum",
+        "name" : "MyGame.Example.Race",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "underlying_type" : "Byte",
+        "values" : [
+          {
+            "name" : "None",
+            "value" : -1,
+            "base_type" : "None"
+          },
+          {
+            "name" : "Human",
+            "value" : 0,
+            "base_type" : "None"
+          },
+          {
+            "name" : "Dwarf",
+            "value" : 1,
+            "base_type" : "None"
+          },
+          {
+            "name" : "Elf",
+            "value" : 2,
+            "base_type" : "None"
+          }
+        ]
+      }
     },
     "MyGame_Example_LongEnum" : {
       "type" : "string",
-      "enum": ["LongOne", "LongTwo", "LongBig"]
+      "enum": ["LongOne", "LongTwo", "LongBig"],
+      "x-flatbuffers" : {
+        "definition" : "enum",
+        "name" : "MyGame.Example.LongEnum",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "underlying_type" : "ULong",
+          "attributes" : {
+            "bit_flags" : "0"
+          },
+        "values" : [
+          {
+            "name" : "LongOne",
+            "value" : 2,
+            "base_type" : "None"
+          },
+          {
+            "name" : "LongTwo",
+            "value" : 4,
+            "base_type" : "None"
+          },
+          {
+            "name" : "LongBig",
+            "value" : 1099511627776,
+            "base_type" : "None"
+          }
+        ]
+      }
     },
     "MyGame_Example_Any" : {
       "type" : "string",
-      "enum": ["NONE", "Monster", "TestSimpleTableWithEnum", "MyGame_Example2_Monster"]
+      "enum": ["NONE", "Monster", "TestSimpleTableWithEnum", "MyGame_Example2_Monster"],
+      "x-flatbuffers" : {
+        "definition" : "union",
+        "name" : "MyGame.Example.Any",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "underlying_type" : "UType",
+        "values" : [
+          {
+            "name" : "NONE",
+            "value" : 0,
+            "base_type" : "None"
+          },
+          {
+            "name" : "Monster",
+            "value" : 1,
+            "base_type" : "Obj",
+            "struct" : "MyGame.Example.Monster"
+          },
+          {
+            "name" : "TestSimpleTableWithEnum",
+            "value" : 2,
+            "base_type" : "Obj",
+            "struct" : "MyGame.Example.TestSimpleTableWithEnum"
+          },
+          {
+            "name" : "MyGame_Example2_Monster",
+            "value" : 3,
+            "base_type" : "Obj",
+            "struct" : "MyGame.Example2.Monster"
+          }
+        ]
+      }
     },
     "MyGame_Example_AnyUniqueAliases" : {
       "type" : "string",
-      "enum": ["NONE", "M", "TS", "M2"]
+      "enum": ["NONE", "M", "TS", "M2"],
+      "x-flatbuffers" : {
+        "definition" : "union",
+        "name" : "MyGame.Example.AnyUniqueAliases",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "underlying_type" : "UType",
+        "values" : [
+          {
+            "name" : "NONE",
+            "value" : 0,
+            "base_type" : "None"
+          },
+          {
+            "name" : "M",
+            "value" : 1,
+            "base_type" : "Obj",
+            "struct" : "MyGame.Example.Monster"
+          },
+          {
+            "name" : "TS",
+            "value" : 2,
+            "base_type" : "Obj",
+            "struct" : "MyGame.Example.TestSimpleTableWithEnum"
+          },
+          {
+            "name" : "M2",
+            "value" : 3,
+            "base_type" : "Obj",
+            "struct" : "MyGame.Example2.Monster"
+          }
+        ]
+      }
     },
     "MyGame_Example_AnyAmbiguousAliases" : {
       "type" : "string",
-      "enum": ["NONE", "M1", "M2", "M3"]
+      "enum": ["NONE", "M1", "M2", "M3"],
+      "x-flatbuffers" : {
+        "definition" : "union",
+        "name" : "MyGame.Example.AnyAmbiguousAliases",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "underlying_type" : "UType",
+        "values" : [
+          {
+            "name" : "NONE",
+            "value" : 0,
+            "base_type" : "None"
+          },
+          {
+            "name" : "M1",
+            "value" : 1,
+            "base_type" : "Obj",
+            "struct" : "MyGame.Example.Monster"
+          },
+          {
+            "name" : "M2",
+            "value" : 2,
+            "base_type" : "Obj",
+            "struct" : "MyGame.Example.Monster"
+          },
+          {
+            "name" : "M3",
+            "value" : 3,
+            "base_type" : "Obj",
+            "struct" : "MyGame.Example.Monster"
+          }
+        ]
+      }
     },
     "MyGame_OtherNameSpace_Unused" : {
       "type" : "object",
       "properties" : {
         "a" : {
-                "type" : "integer", "minimum" : -2147483648, "maximum" : 2147483647
+                "type" : "integer", "minimum" : -2147483648, "maximum" : 2147483647,
+                "x-flatbuffers" : {
+                  "name" : "a",
+                  "type" : {
+                    "base_type" : "Int"
+                  },
+                  "presence" : "default",
+                  "offset" : 0,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "struct",
+        "name" : "MyGame.OtherNameSpace.Unused",
+        "namespace" : [
+          "MyGame",
+          "OtherNameSpace"
+        ],
+        "bytesize" : 4,
+        "minalign" : 4,
+        "sortbysize" : false,
+        "has_key" : false
+      }
     },
     "MyGame_OtherNameSpace_TableB" : {
       "type" : "object",
       "properties" : {
         "a" : {
-                "$ref" : "#/definitions/TableA"
+                "$ref" : "#/definitions/TableA",
+                "x-flatbuffers" : {
+                  "name" : "a",
+                  "type" : {
+                    "base_type" : "Obj",
+                    "struct" : "TableA"
+                  },
+                  "presence" : "optional",
+                  "offset" : 4,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "table",
+        "name" : "MyGame.OtherNameSpace.TableB",
+        "namespace" : [
+          "MyGame",
+          "OtherNameSpace"
+        ],
+        "bytesize" : 0,
+        "minalign" : 1,
+        "sortbysize" : true,
+        "has_key" : false
+      }
     },
     "TableA" : {
       "type" : "object",
       "properties" : {
         "b" : {
-                "$ref" : "#/definitions/MyGame_OtherNameSpace_TableB"
+                "$ref" : "#/definitions/MyGame_OtherNameSpace_TableB",
+                "x-flatbuffers" : {
+                  "name" : "b",
+                  "type" : {
+                    "base_type" : "Obj",
+                    "struct" : "MyGame.OtherNameSpace.TableB"
+                  },
+                  "presence" : "optional",
+                  "offset" : 4,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "table",
+        "name" : "TableA",
+        "namespace" : [
+        ],
+        "bytesize" : 0,
+        "minalign" : 1,
+        "sortbysize" : true,
+        "has_key" : false
+      }
     },
     "MyGame_InParentNamespace" : {
       "type" : "object",
       "properties" : {
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "table",
+        "name" : "MyGame.InParentNamespace",
+        "namespace" : [
+          "MyGame"
+        ],
+        "bytesize" : 0,
+        "minalign" : 1,
+        "sortbysize" : true,
+        "has_key" : false
+      }
     },
     "MyGame_Example2_Monster" : {
       "type" : "object",
       "properties" : {
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "table",
+        "name" : "MyGame.Example2.Monster",
+        "namespace" : [
+          "MyGame",
+          "Example2"
+        ],
+        "bytesize" : 0,
+        "minalign" : 1,
+        "sortbysize" : true,
+        "has_key" : false
+      }
     },
     "MyGame_Example_Test" : {
       "type" : "object",
       "properties" : {
         "a" : {
-                "type" : "integer", "minimum" : -32768, "maximum" : 32767
+                "type" : "integer", "minimum" : -32768, "maximum" : 32767,
+                "x-flatbuffers" : {
+                  "name" : "a",
+                  "type" : {
+                    "base_type" : "Short"
+                  },
+                  "presence" : "default",
+                  "offset" : 0,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "b" : {
-                "type" : "integer", "minimum" : -128, "maximum" : 127
+                "type" : "integer", "minimum" : -128, "maximum" : 127,
+                "x-flatbuffers" : {
+                  "name" : "b",
+                  "type" : {
+                    "base_type" : "Byte"
+                  },
+                  "presence" : "default",
+                  "offset" : 2,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                  "padding" : 1
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "struct",
+        "name" : "MyGame.Example.Test",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "bytesize" : 4,
+        "minalign" : 2,
+        "sortbysize" : false,
+        "has_key" : false
+      }
     },
     "MyGame_Example_TestSimpleTableWithEnum" : {
       "type" : "object",
       "properties" : {
         "color" : {
-                "$ref" : "#/definitions/MyGame_Example_Color"
+                "$ref" : "#/definitions/MyGame_Example_Color",
+                "x-flatbuffers" : {
+                  "name" : "color",
+                  "type" : {
+                    "base_type" : "UByte",
+                    "enum" : "MyGame.Example.Color"
+                  },
+                  "presence" : "default",
+                  "offset" : 4,
+                  "default" : "2",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "table",
+        "name" : "MyGame.Example.TestSimpleTableWithEnum",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "bytesize" : 0,
+        "minalign" : 1,
+        "sortbysize" : true,
+        "has_key" : false,
+          "attributes" : {
+            "csharp_partial" : "0",
+            "private" : "0"
+          }
+      }
     },
     "MyGame_Example_Vec3" : {
       "type" : "object",
       "properties" : {
         "x" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "x",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 0,
+                  "default" : "0.0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "y" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "y",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 4,
+                  "default" : "0.0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "z" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "z",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 8,
+                  "default" : "0.0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                  "padding" : 4
+                }
               },
         "test1" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "test1",
+                  "type" : {
+                    "base_type" : "Double"
+                  },
+                  "presence" : "default",
+                  "offset" : 16,
+                  "default" : "0.0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "test2" : {
-                "$ref" : "#/definitions/MyGame_Example_Color"
+                "$ref" : "#/definitions/MyGame_Example_Color",
+                "x-flatbuffers" : {
+                  "name" : "test2",
+                  "type" : {
+                    "base_type" : "UByte",
+                    "enum" : "MyGame.Example.Color"
+                  },
+                  "presence" : "default",
+                  "offset" : 24,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                  "padding" : 1
+                }
               },
         "test3" : {
-                "$ref" : "#/definitions/MyGame_Example_Test"
+                "$ref" : "#/definitions/MyGame_Example_Test",
+                "x-flatbuffers" : {
+                  "name" : "test3",
+                  "type" : {
+                    "base_type" : "Obj",
+                    "struct" : "MyGame.Example.Test"
+                  },
+                  "presence" : "optional",
+                  "offset" : 26,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                  "padding" : 2
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "struct",
+        "name" : "MyGame.Example.Vec3",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "bytesize" : 32,
+        "minalign" : 8,
+        "sortbysize" : false,
+        "has_key" : false,
+          "attributes" : {
+            "force_align" : "8"
+          }
+      }
     },
     "MyGame_Example_Ability" : {
       "type" : "object",
       "properties" : {
         "id" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 4294967295
+                "type" : "integer", "minimum" : 0, "maximum" : 4294967295,
+                "x-flatbuffers" : {
+                  "name" : "id",
+                  "type" : {
+                    "base_type" : "UInt"
+                  },
+                  "presence" : "default",
+                  "offset" : 0,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : true,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "key" : "0"
+                    }
+                }
               },
         "distance" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 4294967295
+                "type" : "integer", "minimum" : 0, "maximum" : 4294967295,
+                "x-flatbuffers" : {
+                  "name" : "distance",
+                  "type" : {
+                    "base_type" : "UInt"
+                  },
+                  "presence" : "default",
+                  "offset" : 4,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "struct",
+        "name" : "MyGame.Example.Ability",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "bytesize" : 8,
+        "minalign" : 4,
+        "sortbysize" : false,
+        "has_key" : true
+      }
     },
     "MyGame_Example_StructOfStructs" : {
       "type" : "object",
       "properties" : {
         "a" : {
-                "$ref" : "#/definitions/MyGame_Example_Ability"
+                "$ref" : "#/definitions/MyGame_Example_Ability",
+                "x-flatbuffers" : {
+                  "name" : "a",
+                  "type" : {
+                    "base_type" : "Obj",
+                    "struct" : "MyGame.Example.Ability"
+                  },
+                  "presence" : "optional",
+                  "offset" : 0,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               },
         "b" : {
-                "$ref" : "#/definitions/MyGame_Example_Test"
+                "$ref" : "#/definitions/MyGame_Example_Test",
+                "x-flatbuffers" : {
+                  "name" : "b",
+                  "type" : {
+                    "base_type" : "Obj",
+                    "struct" : "MyGame.Example.Test"
+                  },
+                  "presence" : "optional",
+                  "offset" : 8,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               },
         "c" : {
-                "$ref" : "#/definitions/MyGame_Example_Ability"
+                "$ref" : "#/definitions/MyGame_Example_Ability",
+                "x-flatbuffers" : {
+                  "name" : "c",
+                  "type" : {
+                    "base_type" : "Obj",
+                    "struct" : "MyGame.Example.Ability"
+                  },
+                  "presence" : "optional",
+                  "offset" : 12,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "struct",
+        "name" : "MyGame.Example.StructOfStructs",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "bytesize" : 20,
+        "minalign" : 4,
+        "sortbysize" : false,
+        "has_key" : false
+      }
     },
     "MyGame_Example_StructOfStructsOfStructs" : {
       "type" : "object",
       "properties" : {
         "a" : {
-                "$ref" : "#/definitions/MyGame_Example_StructOfStructs"
+                "$ref" : "#/definitions/MyGame_Example_StructOfStructs",
+                "x-flatbuffers" : {
+                  "name" : "a",
+                  "type" : {
+                    "base_type" : "Obj",
+                    "struct" : "MyGame.Example.StructOfStructs"
+                  },
+                  "presence" : "optional",
+                  "offset" : 0,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "struct",
+        "name" : "MyGame.Example.StructOfStructsOfStructs",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "bytesize" : 20,
+        "minalign" : 4,
+        "sortbysize" : false,
+        "has_key" : false
+      }
     },
     "MyGame_Example_Stat" : {
       "type" : "object",
       "properties" : {
         "id" : {
-                "type" : "string"
+                "type" : "string",
+                "x-flatbuffers" : {
+                  "name" : "id",
+                  "type" : {
+                    "base_type" : "String"
+                  },
+                  "presence" : "optional",
+                  "offset" : 4,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               },
         "val" : {
-                "type" : "integer", "minimum" : -9223372036854775808, "maximum" : 9223372036854775807
+                "type" : "integer", "minimum" : -9223372036854775808, "maximum" : 9223372036854775807,
+                "x-flatbuffers" : {
+                  "name" : "val",
+                  "type" : {
+                    "base_type" : "Long"
+                  },
+                  "presence" : "default",
+                  "offset" : 6,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "count" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 65535
+                "type" : "integer", "minimum" : 0, "maximum" : 65535,
+                "x-flatbuffers" : {
+                  "name" : "count",
+                  "type" : {
+                    "base_type" : "UShort"
+                  },
+                  "presence" : "default",
+                  "offset" : 8,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : true,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "key" : "0"
+                    }
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "table",
+        "name" : "MyGame.Example.Stat",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "bytesize" : 0,
+        "minalign" : 1,
+        "sortbysize" : true,
+        "has_key" : true
+      }
     },
     "MyGame_Example_Referrable" : {
       "type" : "object",
       "properties" : {
         "id" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615
+                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615,
+                "x-flatbuffers" : {
+                  "name" : "id",
+                  "type" : {
+                    "base_type" : "ULong"
+                  },
+                  "presence" : "default",
+                  "offset" : 4,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : true,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "hash" : "fnv1a_64",
+                      "key" : "0"
+                    }
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "table",
+        "name" : "MyGame.Example.Referrable",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "bytesize" : 0,
+        "minalign" : 1,
+        "sortbysize" : true,
+        "has_key" : true
+      }
     },
     "MyGame_Example_Monster" : {
       "type" : "object",
       "description" : "an example documentation comment: \"monster object\"",
       "properties" : {
         "pos" : {
-                "$ref" : "#/definitions/MyGame_Example_Vec3"
+                "$ref" : "#/definitions/MyGame_Example_Vec3",
+                "x-flatbuffers" : {
+                  "name" : "pos",
+                  "type" : {
+                    "base_type" : "Obj",
+                    "struct" : "MyGame.Example.Vec3"
+                  },
+                  "presence" : "optional",
+                  "offset" : 4,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "0"
+                    }
+                }
               },
         "mana" : {
-                "type" : "integer", "minimum" : -32768, "maximum" : 32767
+                "type" : "integer", "minimum" : -32768, "maximum" : 32767,
+                "x-flatbuffers" : {
+                  "name" : "mana",
+                  "type" : {
+                    "base_type" : "Short"
+                  },
+                  "presence" : "default",
+                  "offset" : 6,
+                  "default" : "150",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "1"
+                    }
+                }
               },
         "hp" : {
-                "type" : "integer", "minimum" : -32768, "maximum" : 32767
+                "type" : "integer", "minimum" : -32768, "maximum" : 32767,
+                "x-flatbuffers" : {
+                  "name" : "hp",
+                  "type" : {
+                    "base_type" : "Short"
+                  },
+                  "presence" : "default",
+                  "offset" : 8,
+                  "default" : "100",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "2"
+                    }
+                }
               },
         "name" : {
-                "type" : "string"
+                "type" : "string",
+                "x-flatbuffers" : {
+                  "name" : "name",
+                  "type" : {
+                    "base_type" : "String"
+                  },
+                  "presence" : "required",
+                  "offset" : 10,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : true,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "3",
+                      "key" : "0"
+                    }
+                }
               },
         "friendly" : {
                 "type" : "boolean",
-                "deprecated" : true
+                "deprecated" : true,
+                "x-flatbuffers" : {
+                  "name" : "friendly",
+                  "type" : {
+                    "base_type" : "Bool"
+                  },
+                  "presence" : "default",
+                  "offset" : 12,
+                  "default" : "0",
+                  "deprecated" : true,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "deprecated" : "0",
+                      "id" : "4",
+                      "priority" : "1"
+                    }
+                }
               },
         "inventory" : {
-                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" :255}
+                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" :255},
+                "x-flatbuffers" : {
+                  "name" : "inventory",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "UByte"
+                  },
+                  "presence" : "optional",
+                  "offset" : 14,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "5"
+                    }
+                }
               },
         "color" : {
-                "$ref" : "#/definitions/MyGame_Example_Color"
+                "$ref" : "#/definitions/MyGame_Example_Color",
+                "x-flatbuffers" : {
+                  "name" : "color",
+                  "type" : {
+                    "base_type" : "UByte",
+                    "enum" : "MyGame.Example.Color"
+                  },
+                  "presence" : "default",
+                  "offset" : 16,
+                  "default" : "8",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "6"
+                    }
+                }
               },
         "test_type" : {
-                "$ref" : "#/definitions/MyGame_Example_Any"
+                "$ref" : "#/definitions/MyGame_Example_Any",
+                "x-flatbuffers" : {
+                  "name" : "test_type",
+                  "type" : {
+                    "base_type" : "UType",
+                    "enum" : "MyGame.Example.Any"
+                  },
+                  "presence" : "default",
+                  "offset" : 18,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                  "sibling_union_key" : "test",
+                    "attributes" : {
+                      "id" : "7"
+                    }
+                }
               },
         "test" : {
-                "anyOf": [{ "$ref" : "#/definitions/MyGame_Example_Monster" },{ "$ref" : "#/definitions/MyGame_Example_TestSimpleTableWithEnum" },{ "$ref" : "#/definitions/MyGame_Example2_Monster" }]
+                "anyOf": [{ "$ref" : "#/definitions/MyGame_Example_Monster" },{ "$ref" : "#/definitions/MyGame_Example_TestSimpleTableWithEnum" },{ "$ref" : "#/definitions/MyGame_Example2_Monster" }],
+                "x-flatbuffers" : {
+                  "name" : "test",
+                  "type" : {
+                    "base_type" : "Union",
+                    "enum" : "MyGame.Example.Any"
+                  },
+                  "presence" : "optional",
+                  "offset" : 20,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                  "sibling_union_key" : "test_type",
+                    "attributes" : {
+                      "id" : "8"
+                    }
+                }
               },
         "test4" : {
-                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Test"}
+                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Test"},
+                "x-flatbuffers" : {
+                  "name" : "test4",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "Obj",
+                    "struct" : "MyGame.Example.Test"
+                  },
+                  "presence" : "optional",
+                  "offset" : 22,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "9"
+                    }
+                }
               },
         "testarrayofstring" : {
-                "type" : "array", "items" : {"type" : "string"}
+                "type" : "array", "items" : {"type" : "string"},
+                "x-flatbuffers" : {
+                  "name" : "testarrayofstring",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "String"
+                  },
+                  "presence" : "optional",
+                  "offset" : 24,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "10"
+                    }
+                }
               },
         "testarrayoftables" : {
                 "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Monster"},
-                "description" : "an example documentation comment: this will end up in the generated code\nmultiline too"
+                "description" : "an example documentation comment: this will end up in the generated code\nmultiline too",
+                "x-flatbuffers" : {
+                  "name" : "testarrayoftables",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "Obj",
+                    "struct" : "MyGame.Example.Monster"
+                  },
+                  "presence" : "optional",
+                  "offset" : 26,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "11"
+                    },
+                    "doc" : [
+                      " an example documentation comment: this will end up in the generated code",
+                      " multiline too"
+                    ]
+                }
               },
         "enemy" : {
-                "$ref" : "#/definitions/MyGame_Example_Monster"
+                "$ref" : "#/definitions/MyGame_Example_Monster",
+                "x-flatbuffers" : {
+                  "name" : "enemy",
+                  "type" : {
+                    "base_type" : "Obj",
+                    "struct" : "MyGame.Example.Monster"
+                  },
+                  "presence" : "optional",
+                  "offset" : 28,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "12"
+                    }
+                }
               },
         "testnestedflatbuffer" : {
-                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" :255}
+                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" :255},
+                "x-flatbuffers" : {
+                  "name" : "testnestedflatbuffer",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "UByte"
+                  },
+                  "presence" : "optional",
+                  "offset" : 30,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                  "nested_flatbuffer" : "MyGame.Example.Monster",
+                    "attributes" : {
+                      "id" : "13",
+                      "nested_flatbuffer" : "Monster"
+                    }
+                }
               },
         "testempty" : {
-                "$ref" : "#/definitions/MyGame_Example_Stat"
+                "$ref" : "#/definitions/MyGame_Example_Stat",
+                "x-flatbuffers" : {
+                  "name" : "testempty",
+                  "type" : {
+                    "base_type" : "Obj",
+                    "struct" : "MyGame.Example.Stat"
+                  },
+                  "presence" : "optional",
+                  "offset" : 32,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "14"
+                    }
+                }
               },
         "testbool" : {
-                "type" : "boolean"
+                "type" : "boolean",
+                "x-flatbuffers" : {
+                  "name" : "testbool",
+                  "type" : {
+                    "base_type" : "Bool"
+                  },
+                  "presence" : "default",
+                  "offset" : 34,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "15"
+                    }
+                }
               },
         "testhashs32_fnv1" : {
-                "type" : "integer", "minimum" : -2147483648, "maximum" : 2147483647
+                "type" : "integer", "minimum" : -2147483648, "maximum" : 2147483647,
+                "x-flatbuffers" : {
+                  "name" : "testhashs32_fnv1",
+                  "type" : {
+                    "base_type" : "Int"
+                  },
+                  "presence" : "default",
+                  "offset" : 36,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "hash" : "fnv1_32",
+                      "id" : "16"
+                    }
+                }
               },
         "testhashu32_fnv1" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 4294967295
+                "type" : "integer", "minimum" : 0, "maximum" : 4294967295,
+                "x-flatbuffers" : {
+                  "name" : "testhashu32_fnv1",
+                  "type" : {
+                    "base_type" : "UInt"
+                  },
+                  "presence" : "default",
+                  "offset" : 38,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "hash" : "fnv1_32",
+                      "id" : "17"
+                    }
+                }
               },
         "testhashs64_fnv1" : {
-                "type" : "integer", "minimum" : -9223372036854775808, "maximum" : 9223372036854775807
+                "type" : "integer", "minimum" : -9223372036854775808, "maximum" : 9223372036854775807,
+                "x-flatbuffers" : {
+                  "name" : "testhashs64_fnv1",
+                  "type" : {
+                    "base_type" : "Long"
+                  },
+                  "presence" : "default",
+                  "offset" : 40,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "hash" : "fnv1_64",
+                      "id" : "18"
+                    }
+                }
               },
         "testhashu64_fnv1" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615
+                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615,
+                "x-flatbuffers" : {
+                  "name" : "testhashu64_fnv1",
+                  "type" : {
+                    "base_type" : "ULong"
+                  },
+                  "presence" : "default",
+                  "offset" : 42,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "hash" : "fnv1_64",
+                      "id" : "19"
+                    }
+                }
               },
         "testhashs32_fnv1a" : {
-                "type" : "integer", "minimum" : -2147483648, "maximum" : 2147483647
+                "type" : "integer", "minimum" : -2147483648, "maximum" : 2147483647,
+                "x-flatbuffers" : {
+                  "name" : "testhashs32_fnv1a",
+                  "type" : {
+                    "base_type" : "Int"
+                  },
+                  "presence" : "default",
+                  "offset" : 44,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "hash" : "fnv1a_32",
+                      "id" : "20"
+                    }
+                }
               },
         "testhashu32_fnv1a" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 4294967295
+                "type" : "integer", "minimum" : 0, "maximum" : 4294967295,
+                "x-flatbuffers" : {
+                  "name" : "testhashu32_fnv1a",
+                  "type" : {
+                    "base_type" : "UInt"
+                  },
+                  "presence" : "default",
+                  "offset" : 46,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "cpp_ptr_type" : "naked",
+                      "cpp_type" : "Stat",
+                      "hash" : "fnv1a_32",
+                      "id" : "21"
+                    }
+                }
               },
         "testhashs64_fnv1a" : {
-                "type" : "integer", "minimum" : -9223372036854775808, "maximum" : 9223372036854775807
+                "type" : "integer", "minimum" : -9223372036854775808, "maximum" : 9223372036854775807,
+                "x-flatbuffers" : {
+                  "name" : "testhashs64_fnv1a",
+                  "type" : {
+                    "base_type" : "Long"
+                  },
+                  "presence" : "default",
+                  "offset" : 48,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "hash" : "fnv1a_64",
+                      "id" : "22"
+                    }
+                }
               },
         "testhashu64_fnv1a" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615
+                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615,
+                "x-flatbuffers" : {
+                  "name" : "testhashu64_fnv1a",
+                  "type" : {
+                    "base_type" : "ULong"
+                  },
+                  "presence" : "default",
+                  "offset" : 50,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "hash" : "fnv1a_64",
+                      "id" : "23"
+                    }
+                }
               },
         "testarrayofbools" : {
-                "type" : "array", "items" : {"type" : "boolean"}
+                "type" : "array", "items" : {"type" : "boolean"},
+                "x-flatbuffers" : {
+                  "name" : "testarrayofbools",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "Bool"
+                  },
+                  "presence" : "optional",
+                  "offset" : 52,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "24"
+                    }
+                }
               },
         "testf" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "testf",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 54,
+                  "default" : "3.141590118",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "25"
+                    }
+                }
               },
         "testf2" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "testf2",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 56,
+                  "default" : "3.0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "26"
+                    }
+                }
               },
         "testf3" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "testf3",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 58,
+                  "default" : "0.0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "27"
+                    }
+                }
               },
         "testarrayofstring2" : {
-                "type" : "array", "items" : {"type" : "string"}
+                "type" : "array", "items" : {"type" : "string"},
+                "x-flatbuffers" : {
+                  "name" : "testarrayofstring2",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "String"
+                  },
+                  "presence" : "optional",
+                  "offset" : 60,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "28"
+                    }
+                }
               },
         "testarrayofsortedstruct" : {
-                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Ability"}
+                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Ability"},
+                "x-flatbuffers" : {
+                  "name" : "testarrayofsortedstruct",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "Obj",
+                    "struct" : "MyGame.Example.Ability"
+                  },
+                  "presence" : "optional",
+                  "offset" : 62,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "29"
+                    }
+                }
               },
         "flex" : {
-                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" :255}
+                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" :255},
+                "x-flatbuffers" : {
+                  "name" : "flex",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "UByte"
+                  },
+                  "presence" : "optional",
+                  "offset" : 64,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : true,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "flexbuffer" : "0",
+                      "id" : "30"
+                    }
+                }
               },
         "test5" : {
-                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Test"}
+                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Test"},
+                "x-flatbuffers" : {
+                  "name" : "test5",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "Obj",
+                    "struct" : "MyGame.Example.Test"
+                  },
+                  "presence" : "optional",
+                  "offset" : 66,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "31"
+                    }
+                }
               },
         "vector_of_longs" : {
-                "type" : "array", "items" : {"type" : "integer", "minimum" : -9223372036854775808, "maximum" : 9223372036854775807}
+                "type" : "array", "items" : {"type" : "integer", "minimum" : -9223372036854775808, "maximum" : 9223372036854775807},
+                "x-flatbuffers" : {
+                  "name" : "vector_of_longs",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "Long"
+                  },
+                  "presence" : "optional",
+                  "offset" : 68,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "32"
+                    }
+                }
               },
         "vector_of_doubles" : {
-                "type" : "array", "items" : {"type" : "number"}
+                "type" : "array", "items" : {"type" : "number"},
+                "x-flatbuffers" : {
+                  "name" : "vector_of_doubles",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "Double"
+                  },
+                  "presence" : "optional",
+                  "offset" : 70,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "33"
+                    }
+                }
               },
         "parent_namespace_test" : {
-                "$ref" : "#/definitions/MyGame_InParentNamespace"
+                "$ref" : "#/definitions/MyGame_InParentNamespace",
+                "x-flatbuffers" : {
+                  "name" : "parent_namespace_test",
+                  "type" : {
+                    "base_type" : "Obj",
+                    "struct" : "MyGame.InParentNamespace"
+                  },
+                  "presence" : "optional",
+                  "offset" : 72,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "34"
+                    }
+                }
               },
         "vector_of_referrables" : {
-                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Referrable"}
+                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Referrable"},
+                "x-flatbuffers" : {
+                  "name" : "vector_of_referrables",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "Obj",
+                    "struct" : "MyGame.Example.Referrable"
+                  },
+                  "presence" : "optional",
+                  "offset" : 74,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "35"
+                    }
+                }
               },
         "single_weak_reference" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615
+                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615,
+                "x-flatbuffers" : {
+                  "name" : "single_weak_reference",
+                  "type" : {
+                    "base_type" : "ULong"
+                  },
+                  "presence" : "default",
+                  "offset" : 76,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "cpp_ptr_type" : "naked",
+                      "cpp_type" : "ReferrableT",
+                      "hash" : "fnv1a_64",
+                      "id" : "36"
+                    }
+                }
               },
         "vector_of_weak_references" : {
-                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615}
+                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615},
+                "x-flatbuffers" : {
+                  "name" : "vector_of_weak_references",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "ULong"
+                  },
+                  "presence" : "optional",
+                  "offset" : 78,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "cpp_ptr_type" : "naked",
+                      "cpp_type" : "ReferrableT",
+                      "hash" : "fnv1a_64",
+                      "id" : "37"
+                    }
+                }
               },
         "vector_of_strong_referrables" : {
-                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Referrable"}
+                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Referrable"},
+                "x-flatbuffers" : {
+                  "name" : "vector_of_strong_referrables",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "Obj",
+                    "struct" : "MyGame.Example.Referrable"
+                  },
+                  "presence" : "optional",
+                  "offset" : 80,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "cpp_ptr_type" : "default_ptr_type",
+                      "id" : "38"
+                    }
+                }
               },
         "co_owning_reference" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615
+                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615,
+                "x-flatbuffers" : {
+                  "name" : "co_owning_reference",
+                  "type" : {
+                    "base_type" : "ULong"
+                  },
+                  "presence" : "default",
+                  "offset" : 82,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "cpp_ptr_type" : "naked",
+                      "cpp_type" : "ReferrableT",
+                      "hash" : "fnv1a_64",
+                      "id" : "39"
+                    }
+                }
               },
         "vector_of_co_owning_references" : {
-                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615}
+                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615},
+                "x-flatbuffers" : {
+                  "name" : "vector_of_co_owning_references",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "ULong"
+                  },
+                  "presence" : "optional",
+                  "offset" : 84,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "cpp_ptr_type" : "default_ptr_type",
+                      "cpp_ptr_type_get" : ".get()",
+                      "cpp_type" : "ReferrableT",
+                      "hash" : "fnv1a_64",
+                      "id" : "40"
+                    }
+                }
               },
         "non_owning_reference" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615
+                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615,
+                "x-flatbuffers" : {
+                  "name" : "non_owning_reference",
+                  "type" : {
+                    "base_type" : "ULong"
+                  },
+                  "presence" : "default",
+                  "offset" : 86,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "cpp_ptr_type" : "naked",
+                      "cpp_ptr_type_get" : "",
+                      "cpp_type" : "ReferrableT",
+                      "hash" : "fnv1a_64",
+                      "id" : "41"
+                    }
+                }
               },
         "vector_of_non_owning_references" : {
-                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615}
+                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615},
+                "x-flatbuffers" : {
+                  "name" : "vector_of_non_owning_references",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "ULong"
+                  },
+                  "presence" : "optional",
+                  "offset" : 88,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "cpp_ptr_type" : "naked",
+                      "cpp_ptr_type_get" : "",
+                      "cpp_type" : "ReferrableT",
+                      "hash" : "fnv1a_64",
+                      "id" : "42"
+                    }
+                }
               },
         "any_unique_type" : {
-                "$ref" : "#/definitions/MyGame_Example_AnyUniqueAliases"
+                "$ref" : "#/definitions/MyGame_Example_AnyUniqueAliases",
+                "x-flatbuffers" : {
+                  "name" : "any_unique_type",
+                  "type" : {
+                    "base_type" : "UType",
+                    "enum" : "MyGame.Example.AnyUniqueAliases"
+                  },
+                  "presence" : "default",
+                  "offset" : 90,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                  "sibling_union_key" : "any_unique",
+                    "attributes" : {
+                      "id" : "43"
+                    }
+                }
               },
         "any_unique" : {
-                "anyOf": [{ "$ref" : "#/definitions/MyGame_Example_Monster" },{ "$ref" : "#/definitions/MyGame_Example_TestSimpleTableWithEnum" },{ "$ref" : "#/definitions/MyGame_Example2_Monster" }]
+                "anyOf": [{ "$ref" : "#/definitions/MyGame_Example_Monster" },{ "$ref" : "#/definitions/MyGame_Example_TestSimpleTableWithEnum" },{ "$ref" : "#/definitions/MyGame_Example2_Monster" }],
+                "x-flatbuffers" : {
+                  "name" : "any_unique",
+                  "type" : {
+                    "base_type" : "Union",
+                    "enum" : "MyGame.Example.AnyUniqueAliases"
+                  },
+                  "presence" : "optional",
+                  "offset" : 92,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                  "sibling_union_key" : "any_unique_type",
+                    "attributes" : {
+                      "id" : "44"
+                    }
+                }
               },
         "any_ambiguous_type" : {
-                "$ref" : "#/definitions/MyGame_Example_AnyAmbiguousAliases"
+                "$ref" : "#/definitions/MyGame_Example_AnyAmbiguousAliases",
+                "x-flatbuffers" : {
+                  "name" : "any_ambiguous_type",
+                  "type" : {
+                    "base_type" : "UType",
+                    "enum" : "MyGame.Example.AnyAmbiguousAliases"
+                  },
+                  "presence" : "default",
+                  "offset" : 94,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                  "sibling_union_key" : "any_ambiguous",
+                    "attributes" : {
+                      "id" : "45"
+                    }
+                }
               },
         "any_ambiguous" : {
-                "anyOf": [{ "$ref" : "#/definitions/MyGame_Example_Monster" },{ "$ref" : "#/definitions/MyGame_Example_Monster" },{ "$ref" : "#/definitions/MyGame_Example_Monster" }]
+                "anyOf": [{ "$ref" : "#/definitions/MyGame_Example_Monster" },{ "$ref" : "#/definitions/MyGame_Example_Monster" },{ "$ref" : "#/definitions/MyGame_Example_Monster" }],
+                "x-flatbuffers" : {
+                  "name" : "any_ambiguous",
+                  "type" : {
+                    "base_type" : "Union",
+                    "enum" : "MyGame.Example.AnyAmbiguousAliases"
+                  },
+                  "presence" : "optional",
+                  "offset" : 96,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                  "sibling_union_key" : "any_ambiguous_type",
+                    "attributes" : {
+                      "id" : "46"
+                    }
+                }
               },
         "vector_of_enums" : {
-                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Color"}
+                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Color"},
+                "x-flatbuffers" : {
+                  "name" : "vector_of_enums",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "UByte",
+                    "enum" : "MyGame.Example.Color"
+                  },
+                  "presence" : "optional",
+                  "offset" : 98,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "47"
+                    }
+                }
               },
         "signed_enum" : {
-                "$ref" : "#/definitions/MyGame_Example_Race"
+                "$ref" : "#/definitions/MyGame_Example_Race",
+                "x-flatbuffers" : {
+                  "name" : "signed_enum",
+                  "type" : {
+                    "base_type" : "Byte",
+                    "enum" : "MyGame.Example.Race"
+                  },
+                  "presence" : "default",
+                  "offset" : 100,
+                  "default" : "-1",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "48"
+                    }
+                }
               },
         "testrequirednestedflatbuffer" : {
-                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" :255}
+                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" :255},
+                "x-flatbuffers" : {
+                  "name" : "testrequirednestedflatbuffer",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "UByte"
+                  },
+                  "presence" : "optional",
+                  "offset" : 102,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                  "nested_flatbuffer" : "MyGame.Example.Monster",
+                    "attributes" : {
+                      "id" : "49",
+                      "nested_flatbuffer" : "Monster"
+                    }
+                }
               },
         "scalar_key_sorted_tables" : {
-                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Stat"}
+                "type" : "array", "items" : {"$ref" : "#/definitions/MyGame_Example_Stat"},
+                "x-flatbuffers" : {
+                  "name" : "scalar_key_sorted_tables",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "Obj",
+                    "struct" : "MyGame.Example.Stat"
+                  },
+                  "presence" : "optional",
+                  "offset" : 104,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "50"
+                    }
+                }
               },
         "native_inline" : {
-                "$ref" : "#/definitions/MyGame_Example_Test"
+                "$ref" : "#/definitions/MyGame_Example_Test",
+                "x-flatbuffers" : {
+                  "name" : "native_inline",
+                  "type" : {
+                    "base_type" : "Obj",
+                    "struct" : "MyGame.Example.Test"
+                  },
+                  "presence" : "optional",
+                  "offset" : 106,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : true,
+                  "offset64" : false,
+                  "optional" : true,
+                    "attributes" : {
+                      "id" : "51",
+                      "native_inline" : "0"
+                    }
+                }
               },
         "long_enum_non_enum_default" : {
-                "$ref" : "#/definitions/MyGame_Example_LongEnum"
+                "$ref" : "#/definitions/MyGame_Example_LongEnum",
+                "x-flatbuffers" : {
+                  "name" : "long_enum_non_enum_default",
+                  "type" : {
+                    "base_type" : "ULong",
+                    "enum" : "MyGame.Example.LongEnum"
+                  },
+                  "presence" : "default",
+                  "offset" : 108,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "52"
+                    }
+                }
               },
         "long_enum_normal_default" : {
-                "$ref" : "#/definitions/MyGame_Example_LongEnum"
+                "$ref" : "#/definitions/MyGame_Example_LongEnum",
+                "x-flatbuffers" : {
+                  "name" : "long_enum_normal_default",
+                  "type" : {
+                    "base_type" : "ULong",
+                    "enum" : "MyGame.Example.LongEnum"
+                  },
+                  "presence" : "default",
+                  "offset" : 110,
+                  "default" : "2",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "53"
+                    }
+                }
               },
         "nan_default" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "nan_default",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 112,
+                  "default" : "nan",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "54"
+                    }
+                }
               },
         "inf_default" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "inf_default",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 114,
+                  "default" : "inf",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "55"
+                    }
+                }
               },
         "positive_inf_default" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "positive_inf_default",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 116,
+                  "default" : "inf",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "56"
+                    }
+                }
               },
         "infinity_default" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "infinity_default",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 118,
+                  "default" : "inf",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "57"
+                    }
+                }
               },
         "positive_infinity_default" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "positive_infinity_default",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 120,
+                  "default" : "inf",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "58"
+                    }
+                }
               },
         "negative_inf_default" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "negative_inf_default",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 122,
+                  "default" : "-inf",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "59"
+                    }
+                }
               },
         "negative_infinity_default" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "negative_infinity_default",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 124,
+                  "default" : "-inf",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "60"
+                    }
+                }
               },
         "double_inf_default" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "double_inf_default",
+                  "type" : {
+                    "base_type" : "Double"
+                  },
+                  "presence" : "default",
+                  "offset" : 126,
+                  "default" : "inf",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false,
+                    "attributes" : {
+                      "id" : "61"
+                    }
+                }
               }
       },
       "required" : ["name"],
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "table",
+        "name" : "MyGame.Example.Monster",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "bytesize" : 0,
+        "minalign" : 1,
+        "sortbysize" : true,
+        "has_key" : true,
+          "doc" : [
+            " an example documentation comment: \"monster object\""
+          ]
+      }
     },
     "MyGame_Example_TypeAliases" : {
       "type" : "object",
       "properties" : {
         "i8" : {
-                "type" : "integer", "minimum" : -128, "maximum" : 127
+                "type" : "integer", "minimum" : -128, "maximum" : 127,
+                "x-flatbuffers" : {
+                  "name" : "i8",
+                  "type" : {
+                    "base_type" : "Byte"
+                  },
+                  "presence" : "default",
+                  "offset" : 4,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "u8" : {
-                "type" : "integer", "minimum" : 0, "maximum" :255
+                "type" : "integer", "minimum" : 0, "maximum" :255,
+                "x-flatbuffers" : {
+                  "name" : "u8",
+                  "type" : {
+                    "base_type" : "UByte"
+                  },
+                  "presence" : "default",
+                  "offset" : 6,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "i16" : {
-                "type" : "integer", "minimum" : -32768, "maximum" : 32767
+                "type" : "integer", "minimum" : -32768, "maximum" : 32767,
+                "x-flatbuffers" : {
+                  "name" : "i16",
+                  "type" : {
+                    "base_type" : "Short"
+                  },
+                  "presence" : "default",
+                  "offset" : 8,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "u16" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 65535
+                "type" : "integer", "minimum" : 0, "maximum" : 65535,
+                "x-flatbuffers" : {
+                  "name" : "u16",
+                  "type" : {
+                    "base_type" : "UShort"
+                  },
+                  "presence" : "default",
+                  "offset" : 10,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "i32" : {
-                "type" : "integer", "minimum" : -2147483648, "maximum" : 2147483647
+                "type" : "integer", "minimum" : -2147483648, "maximum" : 2147483647,
+                "x-flatbuffers" : {
+                  "name" : "i32",
+                  "type" : {
+                    "base_type" : "Int"
+                  },
+                  "presence" : "default",
+                  "offset" : 12,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "u32" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 4294967295
+                "type" : "integer", "minimum" : 0, "maximum" : 4294967295,
+                "x-flatbuffers" : {
+                  "name" : "u32",
+                  "type" : {
+                    "base_type" : "UInt"
+                  },
+                  "presence" : "default",
+                  "offset" : 14,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "i64" : {
-                "type" : "integer", "minimum" : -9223372036854775808, "maximum" : 9223372036854775807
+                "type" : "integer", "minimum" : -9223372036854775808, "maximum" : 9223372036854775807,
+                "x-flatbuffers" : {
+                  "name" : "i64",
+                  "type" : {
+                    "base_type" : "Long"
+                  },
+                  "presence" : "default",
+                  "offset" : 16,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "u64" : {
-                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615
+                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615,
+                "x-flatbuffers" : {
+                  "name" : "u64",
+                  "type" : {
+                    "base_type" : "ULong"
+                  },
+                  "presence" : "default",
+                  "offset" : 18,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "f32" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "f32",
+                  "type" : {
+                    "base_type" : "Float"
+                  },
+                  "presence" : "default",
+                  "offset" : 20,
+                  "default" : "0.0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "f64" : {
-                "type" : "number"
+                "type" : "number",
+                "x-flatbuffers" : {
+                  "name" : "f64",
+                  "type" : {
+                    "base_type" : "Double"
+                  },
+                  "presence" : "default",
+                  "offset" : 22,
+                  "default" : "0.0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : false
+                }
               },
         "v8" : {
-                "type" : "array", "items" : {"type" : "integer", "minimum" : -128, "maximum" : 127}
+                "type" : "array", "items" : {"type" : "integer", "minimum" : -128, "maximum" : 127},
+                "x-flatbuffers" : {
+                  "name" : "v8",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "Byte"
+                  },
+                  "presence" : "optional",
+                  "offset" : 24,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               },
         "vf64" : {
-                "type" : "array", "items" : {"type" : "number"}
+                "type" : "array", "items" : {"type" : "number"},
+                "x-flatbuffers" : {
+                  "name" : "vf64",
+                  "type" : {
+                    "base_type" : "Vector",
+                    "element" : "Double"
+                  },
+                  "presence" : "optional",
+                  "offset" : 26,
+                  "default" : "0",
+                  "deprecated" : false,
+                  "key" : false,
+                  "shared" : false,
+                  "flexbuffer" : false,
+                  "native_inline" : false,
+                  "offset64" : false,
+                  "optional" : true
+                }
               }
       },
-      "additionalProperties" : false
+      "additionalProperties" : false,
+      "x-flatbuffers" : {
+        "definition" : "table",
+        "name" : "MyGame.Example.TypeAliases",
+        "namespace" : [
+          "MyGame",
+          "Example"
+        ],
+        "bytesize" : 0,
+        "minalign" : 1,
+        "sortbysize" : true,
+        "has_key" : false
+      }
     }
   },
-  "$ref" : "#/definitions/MyGame_Example_Monster"
+  "$ref" : "#/definitions/MyGame_Example_Monster",
+  "x-flatbuffers" : {
+    "root_type" : "MyGame.Example.Monster",
+    "file_identifier" : "MONS",
+    "file_extension" : "mon",
+    "advanced_features" : 0,
+    "schema_bfbs" : "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"
+  }
 }

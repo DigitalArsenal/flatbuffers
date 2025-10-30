@@ -112,6 +112,12 @@ int main(int argc, const char* argv[]) {
       flatbuffers::NewFBSCodeGenerator());
 
   flatc.RegisterCodeGenerator(
+      flatbuffers::FlatCOption{
+          "", "fbs", "",
+          "Regenerate a FlatBuffers schema (.fbs) from the loaded schema"},
+      flatbuffers::NewFBSCodeGenerator(/*no_log=*/true));
+
+  flatc.RegisterCodeGenerator(
       flatbuffers::FlatCOption{"g", "go", "",
                                "Generate Go files for tables/structs"},
       flatbuffers::NewGoCodeGenerator());

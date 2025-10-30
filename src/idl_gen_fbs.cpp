@@ -277,23 +277,29 @@ static std::string GenerateFBS(const Parser& parser,
                                bool no_log = false) {
   // Proto namespaces may clash with table names, escape the ones that were
   // generated from a table:
-  for (auto it = parser.namespaces_.begin(); it != parser.namespaces_.end();
-       ++it) {
-    auto& ns = **it;
-    for (size_t i = 0; i < ns.from_table; i++) {
-      ns.components[ns.components.size() - 1 - i] += "_";
-    }
+  if (parser.opts.proto_mode) {
+    for (auto it = parser.namespaces_.begin(); it != parser.namespaces_.end();
+         ++it) {
+      auto& ns = **it;
+      for (size_t i = 0; i < ns.from_table; i++) {
+        ns.components[ns.components.size() - 1 - i] += "_";
+      }
 
-    if (parser.opts.proto_mode && !parser.opts.proto_namespace_suffix.empty()) {
-      // Since we know that all these namespaces come from a .proto, and all are
-      // being converted, we can simply apply this suffix to all of them.
-      ns.components.insert(ns.components.end() - ns.from_table,
-                           parser.opts.proto_namespace_suffix);
+      if (!parser.opts.proto_namespace_suffix.empty()) {
+        // Since we know that all these namespaces come from a .proto, and all
+        // are being converted, we can simply apply this suffix to all of them.
+        ns.components.insert(ns.components.end() - ns.from_table,
+                             parser.opts.proto_namespace_suffix);
+      }
     }
   }
 
   std::string schema;
-  schema += "// Generated from " + file_name + ".proto\n\n";
+  if (parser.opts.proto_mode) {
+    schema += "// Generated from " + file_name + ".proto\n\n";
+  } else {
+    schema += "// Reconstructed from " + file_name + "\n\n";
+  }
   if (parser.opts.include_dependence_headers) {
     // clang-format off
     int num_includes = 0;
@@ -338,7 +344,22 @@ static std::string GenerateFBS(const Parser& parser,
       auto& ev = **it;
       GenComment(ev.doc_comment, &schema, nullptr, "  ");
       if (enum_def.is_union) {
-        schema += "  " + GenType(ev.union_type) + ",\n";
+        std::string type_name = GenType(ev.union_type);
+        if (type_name.empty()) {
+          schema += "  " + ev.name + ",\n";
+        } else {
+          std::string stripped = type_name;
+          auto dot_pos = stripped.find_last_of('.');
+          if (dot_pos != std::string::npos) {
+            stripped = stripped.substr(dot_pos + 1);
+          }
+          if (ev.name.empty() || ev.name == stripped ||
+              ev.name == type_name) {
+            schema += "  " + type_name + ",\n";
+          } else {
+            schema += "  " + ev.name + ": " + type_name + ",\n";
+          }
+        }
       } else {
         schema += "  " + ev.name + " = " + enum_def.ToString(ev) + ",\n";
       }

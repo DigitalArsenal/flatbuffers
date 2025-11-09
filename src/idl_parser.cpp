@@ -15,9 +15,14 @@
  */
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cerrno>
+#include <cstdlib>
 #include <iostream>
 #include <list>
+#include <map>
+#include <set>
 #include <string>
 #include <utility>
 
@@ -3545,6 +3550,1851 @@ bool Parser::ParseJson(const char* json, const char* json_filename) {
       !StartParseFile(json, json_filename).Check() && !DoParseJson().Check();
   FLATBUFFERS_ASSERT(initial_depth == parse_depth_counter_);
   return done;
+}
+
+namespace {
+
+struct FieldNumericRange;
+
+struct CanonicalSchemaOrdering {
+  std::vector<std::string> definition_order;
+  std::map<std::string, std::vector<std::string>> property_order;
+  std::map<std::string, std::map<std::string, FieldNumericRange>> field_ranges;
+};
+
+inline std::string FlexToString(const flexbuffers::Reference& ref) {
+  return ref.IsString() ? ref.AsString().str() : std::string();
+}
+
+inline bool FlexToBool(const flexbuffers::Reference& ref, bool default_value) {
+  if (ref.IsBool()) return ref.AsBool();
+  if (ref.IsInt()) return ref.AsInt64() != 0;
+  return default_value;
+}
+
+inline int64_t FlexToInt(const flexbuffers::Reference& ref, int64_t def) {
+  if (ref.IsInt()) return ref.AsInt64();
+  if (ref.IsUInt()) return static_cast<int64_t>(ref.AsUInt64());
+  return def;
+}
+
+inline uint64_t FlexToUInt(const flexbuffers::Reference& ref, uint64_t def) {
+  if (ref.IsUInt()) return ref.AsUInt64();
+  if (ref.IsInt()) return static_cast<uint64_t>(ref.AsInt64());
+  return def;
+}
+
+inline std::vector<std::string> FlexToStringVector(
+    const flexbuffers::Reference& ref) {
+  std::vector<std::string> out;
+  if (!ref.IsVector()) return out;
+  auto vec = ref.AsVector();
+  out.reserve(vec.size());
+  for (size_t i = 0; i < vec.size(); ++i) {
+    out.push_back(FlexToString(vec[i]));
+  }
+  return out;
+}
+
+inline double FlexToDouble(const flexbuffers::Reference& ref, double def) {
+  if (ref.IsFloat()) return ref.AsDouble();
+  if (ref.IsInt()) return static_cast<double>(ref.AsInt64());
+  if (ref.IsUInt()) return static_cast<double>(ref.AsUInt64());
+  return def;
+}
+
+class SchemaJsonWriter {
+ public:
+  explicit SchemaJsonWriter(int indent_step)
+      : indent_step_(indent_step >= 0 ? indent_step : 2), expecting_value_(false) {}
+
+  void BeginObject() {
+    StartValue();
+    out_ += "{";
+    frames_.push_back(Frame{/*is_object=*/true, /*first=*/true});
+  }
+
+  void EndObject() {
+    FLATBUFFERS_ASSERT(!frames_.empty() && frames_.back().is_object);
+    const auto frame = frames_.back();
+    frames_.pop_back();
+    if (!frame.first) {
+      out_ += "\n";
+      AppendIndent(frames_.size());
+    }
+    out_ += "}";
+  }
+
+  void BeginArray() {
+    StartValue();
+    out_ += "[";
+    frames_.push_back(Frame{/*is_object=*/false, /*first=*/true});
+  }
+
+  void EndArray() {
+    FLATBUFFERS_ASSERT(!frames_.empty() && !frames_.back().is_object);
+    const auto frame = frames_.back();
+    frames_.pop_back();
+    if (!frame.first) {
+      out_ += "\n";
+      AppendIndent(frames_.size());
+    }
+    out_ += "]";
+  }
+
+  void Key(const std::string& key) {
+    FLATBUFFERS_ASSERT(!frames_.empty() && frames_.back().is_object);
+    auto& frame = frames_.back();
+    if (!frame.first) {
+      out_ += ",\n";
+    } else {
+      out_ += "\n";
+      frame.first = false;
+    }
+    AppendIndent(frames_.size());
+    out_ += JsonString(key);
+    out_ += " : ";
+    expecting_value_ = true;
+  }
+
+  void String(const std::string& value) {
+    StartValue();
+    out_ += JsonString(value);
+  }
+
+  void Bool(bool value) {
+    StartValue();
+    out_ += value ? "true" : "false";
+  }
+
+  void Int(int64_t value) {
+    StartValue();
+    out_ += NumToString(value);
+  }
+
+  void Uint(uint64_t value) {
+    StartValue();
+    out_ += NumToString(value);
+  }
+
+  void Double(double value) {
+    StartValue();
+    out_ += FloatToString(value, std::numeric_limits<double>::max_digits10);
+  }
+
+  void Null() {
+    StartValue();
+    out_ += "null";
+  }
+
+  std::string Release() {
+    FLATBUFFERS_ASSERT(frames_.empty());
+    return out_;
+  }
+
+ private:
+  struct Frame {
+    bool is_object;
+    bool first;
+  };
+
+  void StartValue() {
+    if (expecting_value_) {
+      expecting_value_ = false;
+      return;
+    }
+    if (frames_.empty()) return;
+    auto& frame = frames_.back();
+    if (!frame.first) {
+      out_ += ",\n";
+    } else {
+      out_ += "\n";
+      frame.first = false;
+    }
+    AppendIndent(frames_.size());
+  }
+
+  void AppendIndent(size_t depth) {
+    out_.append(static_cast<size_t>(indent_step_) * depth, ' ');
+  }
+
+  static std::string JsonString(const std::string& value) {
+    std::string escaped;
+    if (!EscapeString(value.c_str(), value.length(), &escaped, true, true))
+      return "\"\"";
+    return escaped;
+  }
+
+  std::string out_;
+  std::vector<Frame> frames_;
+  int indent_step_;
+  bool expecting_value_;
+};
+
+enum class CanonicalDefinitionKind { kEnum, kTable };
+
+struct CanonicalDefinitionEntry {
+  std::string name;
+  flexbuffers::Map schema;
+  CanonicalDefinitionKind kind;
+};
+
+struct UnionFieldInfo {
+  std::string enum_name;
+  std::string value_field_name;
+  std::string type_field_name;
+  std::vector<std::string> variants;
+};
+
+struct FieldNumericRange {
+  std::string minimum;
+  std::string maximum;
+};
+
+struct TableUnionBindings {
+  std::map<std::string, UnionFieldInfo> value_fields;
+  std::map<std::string, std::string> type_fields;
+  std::map<std::string, std::string> type_to_value;
+};
+
+static std::string CanonicalRefToName(const std::string& ref) {
+  static const char kPrefix[] = "#/definitions/";
+  if (ref.compare(0, sizeof(kPrefix) - 1, kPrefix) == 0) {
+    return ref.substr(sizeof(kPrefix) - 1);
+  }
+  return ref;
+}
+
+static bool ReferenceToUInt64(const flexbuffers::Reference& ref,
+                              uint64_t* value) {
+  if (!value) return false;
+  if (ref.IsUInt()) {
+    *value = ref.AsUInt64();
+    return true;
+  }
+  if (ref.IsInt()) {
+    const int64_t v = ref.AsInt64();
+    if (v < 0) return false;
+    *value = static_cast<uint64_t>(v);
+    return true;
+  }
+  if (ref.IsFloat()) {
+    double d = FlexToDouble(ref, 0.0);
+    if (d < 0.0) return false;
+    if (d >= static_cast<double>(std::numeric_limits<uint64_t>::max())) {
+      *value = std::numeric_limits<uint64_t>::max();
+    } else {
+      *value = static_cast<uint64_t>(d);
+    }
+    return true;
+  }
+  if (ref.IsString()) {
+    uint64_t parsed = 0;
+    const std::string str = FlexToString(ref);
+    if (StringToNumber(str.c_str(), &parsed)) {
+      *value = parsed;
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool ParseUnsignedLiteral(const std::string& literal,
+                                 uint64_t* value) {
+  if (!value) return false;
+  char* end = nullptr;
+  errno = 0;
+  unsigned long long parsed = strtoull(literal.c_str(), &end, 10);
+  if (end == literal.c_str()) return false;
+  if (errno == ERANGE) {
+    *value = std::numeric_limits<uint64_t>::max();
+    return true;
+  }
+  *value = static_cast<uint64_t>(parsed);
+  return true;
+}
+
+static bool ParseSignedLiteral(const std::string& literal, int64_t* value) {
+  if (!value) return false;
+  char* end = nullptr;
+  errno = 0;
+  long long parsed = strtoll(literal.c_str(), &end, 10);
+  if (end == literal.c_str()) return false;
+  if (errno == ERANGE) {
+    if (literal[0] == '-')
+      *value = std::numeric_limits<int64_t>::min();
+    else
+      *value = std::numeric_limits<int64_t>::max();
+    return true;
+  }
+  *value = static_cast<int64_t>(parsed);
+  return true;
+}
+
+static bool ReferenceToInt64(const flexbuffers::Reference& ref,
+                             int64_t* value) {
+  if (!value) return false;
+  if (ref.IsInt()) {
+    *value = ref.AsInt64();
+    return true;
+  }
+  if (ref.IsUInt()) {
+    const uint64_t v = ref.AsUInt64();
+    if (v > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+      *value = std::numeric_limits<int64_t>::max();
+    } else {
+      *value = static_cast<int64_t>(v);
+    }
+    return true;
+  }
+  if (ref.IsFloat()) {
+    double d = FlexToDouble(ref, 0.0);
+    if (d <= static_cast<double>(std::numeric_limits<int64_t>::min())) {
+      *value = std::numeric_limits<int64_t>::min();
+    } else if (d >=
+               static_cast<double>(std::numeric_limits<int64_t>::max())) {
+      *value = std::numeric_limits<int64_t>::max();
+    } else {
+      *value = static_cast<int64_t>(d);
+    }
+    return true;
+  }
+  if (ref.IsString()) {
+    int64_t parsed = 0;
+    const std::string str = FlexToString(ref);
+    if (StringToNumber(str.c_str(), &parsed)) {
+      *value = parsed;
+      return true;
+    }
+  }
+  return false;
+}
+
+static size_t SkipWhitespace(const std::string& json, size_t pos) {
+  const size_t n = json.size();
+  while (pos < n &&
+         std::isspace(static_cast<unsigned char>(json[pos])) != 0) {
+    ++pos;
+  }
+  return pos;
+}
+
+static size_t SkipJsonString(const std::string& json, size_t pos) {
+  FLATBUFFERS_ASSERT(json[pos] == '"');
+  ++pos;
+  bool escape = false;
+  const size_t n = json.size();
+  while (pos < n) {
+    const char c = json[pos++];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (c == '\\') {
+      escape = true;
+      continue;
+    }
+    if (c == '"') break;
+  }
+  return pos;
+}
+
+static size_t ExtractJsonString(const std::string& json, size_t pos,
+                                std::string* out) {
+  FLATBUFFERS_ASSERT(json[pos] == '"');
+  if (out) out->clear();
+  ++pos;
+  bool escape = false;
+  const size_t n = json.size();
+  while (pos < n) {
+    const char c = json[pos++];
+    if (escape) {
+      escape = false;
+      if (out) out->push_back(c);
+      continue;
+    }
+    if (c == '\\') {
+      escape = true;
+      continue;
+    }
+    if (c == '"') break;
+    if (out) out->push_back(c);
+  }
+  return pos;
+}
+
+static size_t SkipJsonNumber(const std::string& json, size_t pos) {
+  const size_t n = json.size();
+  if (json[pos] == '-') ++pos;
+  while (pos < n && std::isdigit(static_cast<unsigned char>(json[pos])) != 0)
+    ++pos;
+  if (pos < n && json[pos] == '.') {
+    ++pos;
+    while (pos < n &&
+           std::isdigit(static_cast<unsigned char>(json[pos])) != 0)
+      ++pos;
+  }
+  if (pos < n && (json[pos] == 'e' || json[pos] == 'E')) {
+    ++pos;
+    if (pos < n && (json[pos] == '+' || json[pos] == '-')) ++pos;
+    while (pos < n &&
+           std::isdigit(static_cast<unsigned char>(json[pos])) != 0)
+      ++pos;
+  }
+  return pos;
+}
+
+static size_t SkipJsonLiteral(const std::string& json, size_t pos) {
+  const size_t n = json.size();
+  while (pos < n &&
+         std::isalpha(static_cast<unsigned char>(json[pos])) != 0) {
+    ++pos;
+  }
+  return pos;
+}
+
+static size_t SkipJsonValue(const std::string& json, size_t pos) {
+  pos = SkipWhitespace(json, pos);
+  if (pos >= json.size()) return json.size();
+  const char c = json[pos];
+  if (c == '"') return SkipJsonString(json, pos);
+  if (c == '{') {
+    ++pos;
+    int depth = 1;
+    bool in_string = false;
+    bool escape = false;
+    while (pos < json.size() && depth > 0) {
+      const char ch = json[pos++];
+      if (in_string) {
+        if (escape) {
+          escape = false;
+        } else if (ch == '\\') {
+          escape = true;
+        } else if (ch == '"') {
+          in_string = false;
+        }
+        continue;
+      }
+      if (ch == '"') {
+        in_string = true;
+        continue;
+      }
+      if (ch == '{') {
+        ++depth;
+      } else if (ch == '}') {
+        --depth;
+      }
+    }
+    return pos;
+  }
+  if (c == '[') {
+    ++pos;
+    int depth = 1;
+    bool in_string = false;
+    bool escape = false;
+    while (pos < json.size() && depth > 0) {
+      const char ch = json[pos++];
+      if (in_string) {
+        if (escape) {
+          escape = false;
+        } else if (ch == '\\') {
+          escape = true;
+        } else if (ch == '"') {
+          in_string = false;
+        }
+        continue;
+      }
+      if (ch == '"') {
+        in_string = true;
+        continue;
+      }
+      if (ch == '[') {
+        ++depth;
+      } else if (ch == ']') {
+        --depth;
+      }
+    }
+    return pos;
+  }
+  if ((c >= '0' && c <= '9') || c == '-') return SkipJsonNumber(json, pos);
+  if (std::isalpha(static_cast<unsigned char>(c)) != 0)
+    return SkipJsonLiteral(json, pos);
+  return pos + 1;
+}
+
+static void TrimWhitespaceInPlace(std::string* value) {
+  if (!value) return;
+  size_t start = 0;
+  while (start < value->size() &&
+         std::isspace(static_cast<unsigned char>((*value)[start])) != 0) {
+    ++start;
+  }
+  size_t end = value->size();
+  while (end > start &&
+         std::isspace(static_cast<unsigned char>((*value)[end - 1])) != 0) {
+    --end;
+  }
+  if (start == 0 && end == value->size()) return;
+  *value = value->substr(start, end - start);
+}
+
+static void ExtractFieldNumericRange(
+    const std::string& json, size_t object_start,
+    const std::string& definition_name, const std::string& field_name,
+    CanonicalSchemaOrdering* ordering) {
+  if (!ordering) return;
+  FieldNumericRange range;
+  size_t pos = object_start + 1;
+  while (pos < json.size()) {
+    pos = SkipWhitespace(json, pos);
+    if (pos >= json.size() || json[pos] == '}') break;
+    if (json[pos] != '"') {
+      pos = SkipJsonValue(json, pos);
+      continue;
+    }
+    std::string key;
+    pos = ExtractJsonString(json, pos, &key);
+    pos = SkipWhitespace(json, pos);
+    if (pos >= json.size() || json[pos] != ':') break;
+    pos = SkipWhitespace(json, pos + 1);
+    size_t value_start = pos;
+    size_t value_end = SkipJsonValue(json, value_start);
+    if (key == "items" && value_start < json.size() &&
+        json[value_start] == '{') {
+      ExtractFieldNumericRange(json, value_start, definition_name,
+                               field_name + "[]", ordering);
+    } else if (key == "minimum" || key == "maximum") {
+      std::string literal = json.substr(value_start, value_end - value_start);
+      TrimWhitespaceInPlace(&literal);
+      if (key == "minimum")
+        range.minimum = literal;
+      else
+        range.maximum = literal;
+    }
+    pos = SkipWhitespace(json, value_end);
+    if (pos < json.size() && json[pos] == ',') ++pos;
+  }
+  if (!range.minimum.empty() || !range.maximum.empty()) {
+    ordering->field_ranges[definition_name][field_name] = range;
+  }
+}
+
+static size_t ExtractPropertiesMetadata(
+    const std::string& json, size_t pos, const std::string& definition_name,
+    CanonicalSchemaOrdering* ordering) {
+  FLATBUFFERS_ASSERT(json[pos] == '{');
+  ++pos;
+  while (pos < json.size()) {
+    pos = SkipWhitespace(json, pos);
+    if (pos >= json.size()) break;
+    if (json[pos] == '}') return pos + 1;
+    if (json[pos] != '"') {
+      pos = SkipJsonValue(json, pos);
+      continue;
+    }
+    std::string property_name;
+    pos = ExtractJsonString(json, pos, &property_name);
+    pos = SkipWhitespace(json, pos);
+    if (pos >= json.size() || json[pos] != ':') break;
+    pos = SkipWhitespace(json, pos + 1);
+    if (ordering)
+      ordering->property_order[definition_name].push_back(property_name);
+    size_t value_start = pos;
+    size_t value_end = SkipJsonValue(json, value_start);
+    if (value_start < json.size() && json[value_start] == '{') {
+      ExtractFieldNumericRange(json, value_start, definition_name, property_name,
+                               ordering);
+    }
+    pos = SkipWhitespace(json, value_end);
+    if (pos < json.size() && json[pos] == ',') ++pos;
+  }
+  return pos;
+}
+
+static bool ExtractAnyOfReferences(const flexbuffers::Map& schema_map,
+                                   std::vector<std::string>* refs) {
+  const auto any_of = schema_map["anyOf"];
+  if (!any_of.IsVector()) return false;
+  auto vec = any_of.AsVector();
+  if (vec.size() == 0) return false;
+  std::vector<std::string> local_refs;
+  for (size_t i = 0; i < vec.size(); ++i) {
+    if (!vec[i].IsMap()) return false;
+    auto ref_map = vec[i].AsMap();
+    const std::string ref = CanonicalRefToName(FlexToString(ref_map["$ref"]));
+    if (ref.empty()) return false;
+    local_refs.push_back(ref);
+  }
+  if (refs) *refs = local_refs;
+  return !local_refs.empty();
+}
+static void ExtractPropertyOrderFromDefinition(
+    const std::string& json, size_t object_start,
+    const std::string& definition_name, CanonicalSchemaOrdering* ordering) {
+  size_t pos = object_start + 1;
+  const size_t end = SkipJsonValue(json, object_start);
+  while (pos < end) {
+    pos = SkipWhitespace(json, pos);
+    if (pos >= end || json[pos] == '}') break;
+    if (json[pos] != '"') {
+      pos = SkipJsonValue(json, pos);
+      continue;
+    }
+    std::string key;
+    pos = ExtractJsonString(json, pos, &key);
+    pos = SkipWhitespace(json, pos);
+    if (pos >= end || json[pos] != ':') break;
+    pos = SkipWhitespace(json, pos + 1);
+    if (key == "properties" && pos < end && json[pos] == '{') {
+      pos = ExtractPropertiesMetadata(json, pos, definition_name, ordering);
+    } else {
+      pos = SkipJsonValue(json, pos);
+    }
+    pos = SkipWhitespace(json, pos);
+    if (pos < end && json[pos] == ',') ++pos;
+  }
+}
+
+static CanonicalSchemaOrdering ExtractCanonicalOrderingInfo(
+    const std::string& schema_json) {
+  CanonicalSchemaOrdering ordering;
+  const char kDefinitionsToken[] = "\"definitions\"";
+  size_t pos = schema_json.find(kDefinitionsToken);
+  if (pos == std::string::npos) return ordering;
+  pos = schema_json.find('{', pos + sizeof(kDefinitionsToken) - 1);
+  if (pos == std::string::npos) return ordering;
+  size_t i = pos + 1;
+  while (i < schema_json.size()) {
+    i = SkipWhitespace(schema_json, i);
+    if (i >= schema_json.size() || schema_json[i] == '}') break;
+    if (schema_json[i] != '"') {
+      ++i;
+      continue;
+    }
+    std::string definition_name;
+    size_t after_key = ExtractJsonString(schema_json, i, &definition_name);
+    ordering.definition_order.push_back(definition_name);
+    i = SkipWhitespace(schema_json, after_key);
+    if (i >= schema_json.size() || schema_json[i] != ':') break;
+    i = SkipWhitespace(schema_json, i + 1);
+    size_t value_start = i;
+    size_t value_end = SkipJsonValue(schema_json, value_start);
+    if (value_end > schema_json.size()) break;
+    if (value_start < schema_json.size() && schema_json[value_start] == '{') {
+      ExtractPropertyOrderFromDefinition(schema_json, value_start,
+                                         definition_name, &ordering);
+    }
+    i = SkipWhitespace(schema_json, value_end);
+    if (i < schema_json.size() && schema_json[i] == ',') {
+      ++i;
+      continue;
+    }
+    if (i < schema_json.size() && schema_json[i] == '}') break;
+  }
+  return ordering;
+}
+
+static void AnalyzeTableUnions(
+    const std::string& table_name, const flexbuffers::Map& struct_map,
+    const std::set<std::string>& enum_names,
+    std::map<std::string, std::vector<std::string>>* union_variants,
+    std::map<std::string, TableUnionBindings>* table_union_bindings) {
+  auto properties_ref = struct_map["properties"];
+  if (!properties_ref.IsMap()) return;
+  auto properties_map = properties_ref.AsMap();
+  std::map<std::string, std::string> type_field_enums;
+  for (size_t i = 0; i < properties_map.size(); ++i) {
+    const std::string field_name = properties_map.Keys()[i].AsString().str();
+    auto schema_ref = properties_map.Values()[i];
+    if (!schema_ref.IsMap()) continue;
+    auto schema_map = schema_ref.AsMap();
+    const std::string ref = CanonicalRefToName(FlexToString(schema_map["$ref"]));
+    if (!ref.empty() && enum_names.count(ref)) {
+      type_field_enums[field_name] = ref;
+    }
+  }
+
+  TableUnionBindings bindings;
+  for (size_t i = 0; i < properties_map.size(); ++i) {
+    const std::string field_name = properties_map.Keys()[i].AsString().str();
+    auto schema_ref = properties_map.Values()[i];
+    if (!schema_ref.IsMap()) continue;
+    std::vector<std::string> refs;
+    if (!ExtractAnyOfReferences(schema_ref.AsMap(), &refs)) continue;
+    const std::string type_field_name = field_name + "_type";
+    auto type_it = type_field_enums.find(type_field_name);
+    if (type_it == type_field_enums.end()) continue;
+    const std::string& enum_name = type_it->second;
+    UnionFieldInfo info;
+    info.enum_name = enum_name;
+    info.value_field_name = field_name;
+    info.type_field_name = type_field_name;
+    info.variants = refs;
+    bindings.value_fields[field_name] = info;
+    bindings.type_fields[type_field_name] = enum_name;
+    bindings.type_to_value[type_field_name] = field_name;
+    auto& existing_variants = (*union_variants)[enum_name];
+    if (existing_variants.empty()) existing_variants = refs;
+  }
+  if (!bindings.value_fields.empty()) {
+    (*table_union_bindings)[table_name] = std::move(bindings);
+  }
+}
+
+static std::string GuessScalarBaseType(const flexbuffers::Map& schema_map,
+                                       const FieldNumericRange* overrides) {
+  const std::string type = FlexToString(schema_map["type"]);
+  if (type == "string") return "string";
+  if (type == "boolean") return "bool";
+  if (type == "number") return "double";
+  if (type == "integer") {
+    const auto min_ref = schema_map["minimum"];
+    const auto max_ref = schema_map["maximum"];
+    int64_t min_value = 0;
+    uint64_t max_value = 0;
+    bool has_min = ReferenceToInt64(min_ref, &min_value);
+    bool has_max = ReferenceToUInt64(max_ref, &max_value);
+    uint64_t override_max_value = 0;
+    bool has_override_max = false;
+    int64_t override_min_value = 0;
+    bool has_override_min = false;
+    bool non_negative = !has_min || min_value >= 0;
+    if (overrides && !overrides->minimum.empty() &&
+        ParseSignedLiteral(overrides->minimum, &override_min_value)) {
+      has_override_min = true;
+    }
+    if (overrides && !overrides->maximum.empty() &&
+        ParseUnsignedLiteral(overrides->maximum, &override_max_value)) {
+      has_override_max = true;
+    }
+    if (has_override_min) {
+      min_value = override_min_value;
+      has_min = true;
+      non_negative = min_value >= 0;
+    }
+    if (has_override_max) {
+      max_value = override_max_value;
+      has_max = true;
+    }
+
+    if (non_negative) {
+      if (has_max && max_value <= std::numeric_limits<uint8_t>::max())
+        return "ubyte";
+      if (has_max && max_value <= std::numeric_limits<uint16_t>::max())
+        return "ushort";
+      if (has_max && max_value <= std::numeric_limits<uint32_t>::max())
+        return "uint";
+      return "ulong";
+    }
+
+    int64_t signed_max = 0;
+    if (!ReferenceToInt64(max_ref, &signed_max)) signed_max = 0;
+    if (has_override_max)
+      signed_max =
+          static_cast<int64_t>(std::min<uint64_t>(
+              override_max_value,
+              static_cast<uint64_t>(std::numeric_limits<int64_t>::max())));
+    if (min_value >= -128 && signed_max <= 127) return "byte";
+    if (min_value >= -32768 && signed_max <= 32767) return "short";
+    if (min_value >= std::numeric_limits<int32_t>::min() &&
+        signed_max <= std::numeric_limits<int32_t>::max()) {
+      return "int";
+    }
+    return "long";
+  }
+  return "int";
+}
+
+static void WriteDocFromDescription(SchemaJsonWriter& writer,
+                                    const flexbuffers::Reference& desc_ref) {
+  writer.Key("doc");
+  writer.BeginArray();
+  if (desc_ref.IsString()) writer.String(FlexToString(desc_ref));
+  writer.EndArray();
+}
+
+static void WriteHeuristicScalarOrRefType(
+    const flexbuffers::Map& schema_map, const std::set<std::string>& enum_names,
+    SchemaJsonWriter& writer, const FieldNumericRange* overrides) {
+  const std::string ref = FlexToString(schema_map["$ref"]);
+  if (!ref.empty()) {
+    const std::string name = CanonicalRefToName(ref);
+    if (enum_names.count(name)) {
+      writer.Key("base_type");
+      writer.String("int");
+      writer.Key("enum");
+      writer.String(name);
+    } else {
+      writer.Key("base_type");
+      writer.String("struct");
+      writer.Key("struct");
+      writer.String(name);
+    }
+    return;
+  }
+
+  const std::string base = GuessScalarBaseType(schema_map, overrides);
+  writer.Key("base_type");
+  writer.String(base);
+}
+
+static void WriteHeuristicType(const flexbuffers::Reference& schema_ref,
+                               const std::set<std::string>& enum_names,
+                               SchemaJsonWriter& writer,
+                               const FieldNumericRange* overrides,
+                               const FieldNumericRange* element_overrides = nullptr) {
+  writer.BeginObject();
+  if (!schema_ref.IsMap()) {
+    writer.Key("base_type");
+    writer.String("int");
+    writer.EndObject();
+    return;
+  }
+
+  auto schema_map = schema_ref.AsMap();
+  const std::string type = FlexToString(schema_map["type"]);
+  if (type == "array") {
+    const uint64_t min_items = FlexToUInt(schema_map["minItems"], 0);
+    const uint64_t max_items = FlexToUInt(schema_map["maxItems"], min_items);
+    const bool fixed_length =
+        min_items != 0 && max_items != 0 && min_items == max_items;
+    writer.Key("base_type");
+    writer.String(fixed_length ? "array" : "vector");
+    const auto items_ref = schema_map["items"];
+    if (items_ref.IsMap()) {
+      auto items_map = items_ref.AsMap();
+      const std::string item_ref = FlexToString(items_map["$ref"]);
+      if (!item_ref.empty()) {
+        const std::string name = CanonicalRefToName(item_ref);
+        if (enum_names.count(name)) {
+          writer.Key("element");
+          writer.String("int");
+          writer.Key("enum");
+          writer.String(name);
+        } else {
+          writer.Key("element");
+          writer.String("struct");
+          writer.Key("struct");
+          writer.String(name);
+        }
+      } else {
+        const std::string base =
+            GuessScalarBaseType(items_map, element_overrides);
+        writer.Key("element");
+        writer.String(base);
+      }
+    } else {
+      writer.Key("element");
+      writer.String("int");
+    }
+    if (fixed_length) {
+      writer.Key("fixed_length");
+      writer.Int(static_cast<int64_t>(min_items));
+    }
+    writer.EndObject();
+    return;
+  }
+
+  WriteHeuristicScalarOrRefType(schema_map, enum_names, writer, overrides);
+  writer.EndObject();
+}
+
+static void WriteHeuristicEnumDefinition(
+    SchemaJsonWriter& writer, const std::string& schema_source,
+    const std::string& name, const flexbuffers::Map& enum_map,
+    const std::map<std::string, std::vector<std::string>>* union_variants) {
+  writer.Key(name);
+  writer.BeginObject();
+  writer.Key("const");
+  writer.BeginObject();
+  writer.Key("kind");
+  writer.String("enum");
+  writer.Key("name");
+  writer.String(name);
+  writer.Key("namespace");
+  writer.BeginArray();
+  writer.EndArray();
+  WriteDocFromDescription(writer, enum_map["description"]);
+  writer.Key("attributes");
+  writer.BeginArray();
+  writer.EndArray();
+  const std::vector<std::string>* union_variants_list = nullptr;
+  if (union_variants) {
+    auto it = union_variants->find(name);
+    if (it != union_variants->end()) {
+      union_variants_list = &it->second;
+    }
+  }
+  const bool is_union = union_variants_list != nullptr;
+  writer.Key("underlying_type");
+  writer.BeginObject();
+  writer.Key("base_type");
+  writer.String(is_union ? "utype" : "int");
+  if (is_union) {
+    writer.Key("enum");
+    writer.String(name);
+  }
+  writer.EndObject();
+  writer.Key("is_union");
+  writer.Bool(is_union);
+  writer.Key("values");
+  writer.BeginArray();
+  const auto values_ref = enum_map["enum"];
+  size_t variant_index = 0;
+  if (values_ref.IsVector()) {
+    auto values_vec = values_ref.AsVector();
+    for (size_t i = 0; i < values_vec.size(); ++i) {
+      writer.BeginObject();
+      writer.Key("name");
+      writer.String(FlexToString(values_vec[i]));
+      writer.Key("value");
+      writer.Int(static_cast<int64_t>(i));
+      writer.Key("doc");
+      writer.BeginArray();
+      writer.EndArray();
+      writer.Key("attributes");
+      writer.BeginArray();
+      writer.EndArray();
+      if (is_union) {
+        writer.Key("union_type");
+        writer.BeginObject();
+        if (i == 0 || variant_index >= union_variants_list->size()) {
+          writer.Key("base_type");
+          writer.String("none");
+        } else {
+          writer.Key("base_type");
+          writer.String("struct");
+          writer.Key("struct");
+          writer.String((*union_variants_list)[variant_index]);
+          ++variant_index;
+        }
+        writer.EndObject();
+      }
+      writer.EndObject();
+    }
+  }
+  writer.EndArray();
+  writer.Key("file");
+  writer.String(schema_source);
+  writer.EndObject();
+  writer.EndObject();
+}
+
+static void WriteHeuristicTableDefinition(
+    SchemaJsonWriter& writer, const std::string& schema_source,
+    const std::string& name, const flexbuffers::Map& struct_map,
+    const std::set<std::string>& enum_names,
+    const std::vector<std::string>* canonical_property_order,
+    const std::map<std::string, TableUnionBindings>* table_union_bindings,
+    const std::map<std::string, std::map<std::string, FieldNumericRange>>*
+        field_ranges) {
+  writer.Key(name);
+  writer.BeginObject();
+  writer.Key("const");
+  writer.BeginObject();
+  writer.Key("kind");
+  writer.String("table");
+  writer.Key("name");
+  writer.String(name);
+  writer.Key("namespace");
+  writer.BeginArray();
+  writer.EndArray();
+  WriteDocFromDescription(writer, struct_map["description"]);
+  writer.Key("attributes");
+  writer.BeginArray();
+  writer.EndArray();
+  writer.Key("sortbysize");
+  writer.Bool(true);
+  writer.Key("has_key");
+  writer.Bool(false);
+
+  std::set<std::string> required_fields;
+  const auto required_ref = struct_map["required"];
+  if (required_ref.IsVector()) {
+    auto required_vec = required_ref.AsVector();
+    for (size_t i = 0; i < required_vec.size(); ++i) {
+      required_fields.insert(FlexToString(required_vec[i]));
+    }
+  }
+
+  const TableUnionBindings* table_union_info = nullptr;
+  if (table_union_bindings) {
+    auto binding_it = table_union_bindings->find(name);
+    if (binding_it != table_union_bindings->end()) {
+      table_union_info = &binding_it->second;
+    }
+  }
+
+  const std::map<std::string, FieldNumericRange>* definition_ranges = nullptr;
+  if (field_ranges) {
+    auto range_it = field_ranges->find(name);
+    if (range_it != field_ranges->end()) {
+      definition_ranges = &range_it->second;
+    }
+  }
+
+  writer.Key("fields");
+  writer.BeginArray();
+  const auto properties_ref = struct_map["properties"];
+  if (properties_ref.IsMap()) {
+    auto properties_map = properties_ref.AsMap();
+    int64_t field_id = 0;
+    std::set<std::string> emitted_fields;
+    auto emit_field = [&](const std::string& field_name,
+                          const flexbuffers::Reference& field_schema_ref) {
+      if (!field_schema_ref.IsMap()) return;
+      auto field_schema_map = field_schema_ref.AsMap();
+      writer.BeginObject();
+      writer.Key("name");
+      writer.String(field_name);
+      writer.Key("id");
+      writer.Int(field_id++);
+
+      const bool is_required = required_fields.count(field_name) != 0;
+      writer.Key("presence");
+      writer.String(is_required ? "required" : "default");
+
+      writer.Key("deprecated");
+      writer.Bool(FlexToBool(field_schema_map["deprecated"], false));
+      writer.Key("key");
+      writer.Bool(false);
+      writer.Key("shared");
+      writer.Bool(false);
+      writer.Key("native_inline");
+      writer.Bool(false);
+      writer.Key("flexbuffer");
+      writer.Bool(false);
+      writer.Key("offset64");
+      writer.Bool(false);
+
+      WriteDocFromDescription(writer, field_schema_map["description"]);
+      writer.Key("attributes");
+      writer.BeginArray();
+      writer.EndArray();
+
+      const FieldNumericRange* numeric_override = nullptr;
+      if (definition_ranges) {
+        auto fr_it = definition_ranges->find(field_name);
+        if (fr_it != definition_ranges->end()) {
+          numeric_override = &fr_it->second;
+        }
+      }
+      const FieldNumericRange* element_override = nullptr;
+      if (definition_ranges) {
+        auto element_it =
+            definition_ranges->find(field_name + std::string("[]"));
+        if (element_it != definition_ranges->end()) {
+          element_override = &element_it->second;
+        }
+      }
+
+      bool handled_type = false;
+      if (table_union_info) {
+        auto union_value_it = table_union_info->value_fields.find(field_name);
+        if (union_value_it != table_union_info->value_fields.end()) {
+          const auto& union_info = union_value_it->second;
+          writer.Key("type");
+          writer.BeginObject();
+          writer.Key("base_type");
+          writer.String("union");
+          writer.Key("enum");
+          writer.String(union_info.enum_name);
+          writer.EndObject();
+          writer.Key("sibling");
+          writer.String(union_info.type_field_name);
+          handled_type = true;
+        }
+        auto union_type_it = table_union_info->type_fields.find(field_name);
+        if (!handled_type && union_type_it != table_union_info->type_fields.end()) {
+          const std::string& enum_name = union_type_it->second;
+          writer.Key("type");
+          writer.BeginObject();
+          writer.Key("base_type");
+          writer.String("utype");
+          writer.Key("enum");
+          writer.String(enum_name);
+          writer.EndObject();
+          auto sibling_it = table_union_info->type_to_value.find(field_name);
+          if (sibling_it != table_union_info->type_to_value.end()) {
+            writer.Key("sibling");
+            writer.String(sibling_it->second);
+          }
+          handled_type = true;
+        }
+      }
+      if (!handled_type) {
+        writer.Key("type");
+        WriteHeuristicType(field_schema_ref, enum_names, writer,
+                           numeric_override, element_override);
+      }
+
+      writer.Key("default");
+      writer.String("0");
+      writer.EndObject();
+      emitted_fields.insert(field_name);
+    };
+
+    if (canonical_property_order) {
+      for (const auto& field_name : *canonical_property_order) {
+        auto ref = properties_map[field_name];
+        if (!ref.IsNull()) emit_field(field_name, ref);
+      }
+    }
+    for (size_t i = 0; i < properties_map.size(); ++i) {
+      const std::string field_name = properties_map.Keys()[i].AsString().str();
+      if (emitted_fields.count(field_name)) continue;
+      emit_field(field_name, properties_map.Values()[i]);
+    }
+  }
+  writer.EndArray();
+  writer.Key("file");
+  writer.String(schema_source);
+  writer.EndObject();
+  writer.EndObject();
+}
+
+static std::string BuildHeuristicJsonSchemaIr(
+    const Parser& parser, const flexbuffers::Map& root_map,
+    const flexbuffers::Map& canonical_defs,
+    const std::string& normalized_filename,
+    const std::vector<std::string>& canonical_definition_order,
+    const std::map<std::string, std::vector<std::string>>&
+        canonical_property_order,
+    const std::map<std::string, std::map<std::string, FieldNumericRange>>&
+        canonical_field_ranges) {
+  const std::string schema_source = normalized_filename;
+  SchemaJsonWriter writer(parser.opts.indent_step);
+  writer.BeginObject();
+  writer.Key("$schema");
+  writer.String("https://json-schema.org/draft/2020-12/schema");
+  std::string schema_id = schema_source.empty()
+                              ? "canonical.ir.schema.json"
+                              : PosixPath(StripExtension(schema_source) + ".ir.schema.json");
+  writer.Key("$id");
+  writer.String(schema_id);
+
+  writer.Key("$defs");
+  writer.BeginObject();
+
+  writer.Key("$file");
+  writer.BeginObject();
+  writer.Key("const");
+  writer.BeginObject();
+  writer.Key("source");
+  writer.String(schema_source);
+  const std::string root_ref = FlexToString(root_map["$ref"]);
+  const std::string root_type = CanonicalRefToName(root_ref);
+  if (!root_type.empty()) {
+    writer.Key("root_type");
+    writer.String(root_type);
+  }
+  writer.EndObject();
+  writer.EndObject();
+
+  std::map<std::string, CanonicalDefinitionEntry> definitions_by_name;
+  std::vector<CanonicalDefinitionEntry> ordered_defs;
+  std::set<std::string> enum_names;
+  for (size_t i = 0; i < canonical_defs.size(); ++i) {
+    const std::string def_name = canonical_defs.Keys()[i].AsString().str();
+    auto entry_ref = canonical_defs.Values()[i];
+    if (!entry_ref.IsMap()) continue;
+    auto entry_map = entry_ref.AsMap();
+    if (entry_map["enum"].IsVector()) {
+      enum_names.insert(def_name);
+      definitions_by_name.emplace(
+          def_name,
+          CanonicalDefinitionEntry{def_name, entry_map,
+                                   CanonicalDefinitionKind::kEnum});
+    } else if (entry_map["properties"].IsMap()) {
+      definitions_by_name.emplace(
+          def_name,
+          CanonicalDefinitionEntry{def_name, entry_map,
+                                   CanonicalDefinitionKind::kTable});
+    }
+  }
+
+  if (!canonical_definition_order.empty()) {
+    for (const auto& name : canonical_definition_order) {
+      auto it = definitions_by_name.find(name);
+      if (it == definitions_by_name.end()) continue;
+      ordered_defs.push_back(it->second);
+      definitions_by_name.erase(it);
+    }
+  }
+  for (const auto& kv : definitions_by_name) ordered_defs.push_back(kv.second);
+
+  std::map<std::string, std::vector<std::string>> union_variants;
+  std::map<std::string, TableUnionBindings> table_union_bindings;
+  for (const auto& def : ordered_defs) {
+    if (def.kind != CanonicalDefinitionKind::kTable) continue;
+    AnalyzeTableUnions(def.name, def.schema, enum_names, &union_variants,
+                       &table_union_bindings);
+  }
+
+  if (!ordered_defs.empty()) {
+    writer.Key("$order");
+    writer.BeginObject();
+    writer.Key("const");
+    writer.BeginArray();
+    for (const auto& def : ordered_defs) writer.String(def.name);
+    writer.EndArray();
+    writer.EndObject();
+  }
+
+  for (const auto& def : ordered_defs) {
+    if (def.kind == CanonicalDefinitionKind::kEnum) {
+      WriteHeuristicEnumDefinition(writer, schema_source, def.name, def.schema,
+                                   &union_variants);
+    } else {
+      const auto property_it = canonical_property_order.find(def.name);
+      const std::vector<std::string>* property_order =
+          property_it == canonical_property_order.end() ? nullptr
+                                                       : &property_it->second;
+      WriteHeuristicTableDefinition(writer, schema_source, def.name, def.schema,
+                                    enum_names, property_order,
+                                    &table_union_bindings,
+                                    &canonical_field_ranges);
+    }
+  }
+
+  writer.EndObject();  // $defs
+
+  if (!root_ref.empty()) {
+    writer.Key("$ref");
+    writer.String(root_ref);
+  }
+
+  writer.EndObject();
+  std::string json = writer.Release();
+  if (parser.opts.indent_step >= 0) json += "\n";
+#if 0
+  if (!normalized_filename.empty()) {
+    const std::string debug_path =
+        normalized_filename + ".fallback.ir.json";
+    SaveFile(debug_path.c_str(), json.c_str(), false);
+  }
+#endif
+  return json;
+}
+
+inline bool IsAbsolutePosixPath(const std::string& path) {
+  return !path.empty() &&
+         (path[0] == '/' ||
+          (path.size() > 1 &&
+           ((path[1] == ':' && ((path[0] >= 'A' && path[0] <= 'Z') ||
+                                (path[0] >= 'a' && path[0] <= 'z'))) ||
+            (path[0] == '\\' && path[1] == '\\'))));
+}
+
+inline std::string DeriveIncludeSchemaName(const std::string& ref_path,
+                                           const std::string& fallback) {
+  static const char kSuffix[] = ".ir.schema.json";
+  if (ref_path.size() >= sizeof(kSuffix) - 1 &&
+      ref_path.compare(ref_path.size() - (sizeof(kSuffix) - 1),
+                       sizeof(kSuffix) - 1, kSuffix) == 0) {
+    return ref_path.substr(
+               0, ref_path.size() - static_cast<size_t>(sizeof(kSuffix) - 1)) +
+           ".fbs";
+  }
+  return fallback;
+}
+
+inline BaseType StringToBaseTypeIr(const std::string& name) {
+  if (name == "none") return BASE_TYPE_NONE;
+  if (name == "utype") return BASE_TYPE_UTYPE;
+  if (name == "bool") return BASE_TYPE_BOOL;
+  if (name == "byte") return BASE_TYPE_CHAR;
+  if (name == "ubyte") return BASE_TYPE_UCHAR;
+  if (name == "short") return BASE_TYPE_SHORT;
+  if (name == "ushort") return BASE_TYPE_USHORT;
+  if (name == "int") return BASE_TYPE_INT;
+  if (name == "uint") return BASE_TYPE_UINT;
+  if (name == "long") return BASE_TYPE_LONG;
+  if (name == "ulong") return BASE_TYPE_ULONG;
+  if (name == "float") return BASE_TYPE_FLOAT;
+  if (name == "double") return BASE_TYPE_DOUBLE;
+  if (name == "string") return BASE_TYPE_STRING;
+  if (name == "struct") return BASE_TYPE_STRUCT;
+  if (name == "vector") return BASE_TYPE_VECTOR;
+  if (name == "vector64") return BASE_TYPE_VECTOR64;
+  if (name == "array") return BASE_TYPE_ARRAY;
+  if (name == "union") return BASE_TYPE_UNION;
+  return BASE_TYPE_NONE;
+}
+
+}  // namespace
+
+bool Parser::ImportJsonSchema(const std::string& schema_json,
+                              const char* schema_filename,
+                              bool allow_canonical_fallback) {
+  const std::string normalized_filename =
+      schema_filename ? PosixPath(AbsolutePath(schema_filename))
+                      : std::string();
+  if (!normalized_filename.empty()) {
+    if (!imported_json_schema_files_.insert(normalized_filename).second) {
+      return true;
+    }
+  }
+
+  Parser json_parser;
+  json_parser.opts.strict_json = true;
+  json_parser.opts.allow_non_utf8 = opts.allow_non_utf8;
+  json_parser.opts.require_json_eof = true;
+  json_parser.opts.use_flexbuffers = true;
+  if (!json_parser.ParseFlexBuffer(schema_json.c_str(), schema_filename,
+                                   &json_parser.flex_builder_)) {
+    error_ = json_parser.error_;
+    return false;
+  }
+
+  const auto& buffer = json_parser.flex_builder_.GetBuffer();
+  auto root = flexbuffers::GetRoot(buffer.data(), buffer.size());
+  if (!root.IsMap()) {
+    error_ = "JSON schema root must be an object";
+    return false;
+  }
+  const auto root_map = root.AsMap();
+
+  const auto defs_ref = root_map["$defs"];
+  if (!defs_ref.IsMap()) {
+    const auto canonical_defs_ref = root_map["definitions"];
+    if (!allow_canonical_fallback || !canonical_defs_ref.IsMap()) {
+      error_ = "JSON schema missing $defs section";
+      return false;
+    }
+    auto canonical_defs_map = canonical_defs_ref.AsMap();
+    CanonicalSchemaOrdering canonical_order =
+        ExtractCanonicalOrderingInfo(schema_json);
+    std::string fallback_json =
+        BuildHeuristicJsonSchemaIr(
+            *this, root_map, canonical_defs_map, normalized_filename,
+            canonical_order.definition_order, canonical_order.property_order,
+            canonical_order.field_ranges);
+    if (fallback_json.empty()) {
+      error_ = "unable to synthesise IR metadata from canonical JSON schema";
+      return false;
+    }
+    suppress_json_schema_ir_metadata_ = true;
+    if (!normalized_filename.empty()) {
+      imported_json_schema_files_.erase(normalized_filename);
+    }
+    return ImportJsonSchema(fallback_json, schema_filename, false);
+  }
+  const auto defs_map = defs_ref.AsMap();
+
+  const auto file_entry = defs_map["$file"];
+  if (!file_entry.IsMap()) {
+    error_ = "JSON schema missing $file metadata";
+    return false;
+  }
+  const auto file_const = file_entry.AsMap()["const"];
+  if (!file_const.IsMap()) {
+    error_ = "JSON schema $file metadata is malformed";
+    return false;
+  }
+  const auto file_map = file_const.AsMap();
+
+  std::string schema_source = PosixPath(FlexToString(file_map["source"]));
+  if (schema_source.empty()) schema_source = normalized_filename;
+  imported_json_schema_sources_[normalized_filename] = schema_source;
+
+  const std::string schema_dir =
+      normalized_filename.empty()
+          ? std::string()
+          : StripFileName(normalized_filename);
+  const std::string schema_source_posix = PosixPath(schema_source);
+
+  auto attribute_vec = file_map["attributes"];
+  if (attribute_vec.IsVector()) {
+    auto list = attribute_vec.AsVector();
+    for (size_t i = 0; i < list.size(); ++i) {
+      auto attr_name = FlexToString(list[i]);
+      if (!attr_name.empty()) known_attributes_[attr_name] = false;
+    }
+  }
+
+  std::string pending_root_type;
+  if (!root_struct_def_) pending_root_type = FlexToString(file_map["root_type"]);
+  std::string pending_identifier = FlexToString(file_map["file_identifier"]);
+  std::string pending_extension = FlexToString(file_map["file_extension"]);
+  if (!pending_identifier.empty() && file_identifier_.empty())
+    file_identifier_ = pending_identifier;
+  if (!pending_extension.empty() && file_extension_.empty())
+    file_extension_ = pending_extension;
+
+  struct PendingStruct {
+    StructDef* def;
+    flexbuffers::Map map;
+  };
+  struct PendingEnum {
+    EnumDef* def;
+    flexbuffers::Map map;
+    std::string qualified_name;
+  };
+
+  std::vector<PendingStruct> pending_structs;
+  std::vector<PendingEnum> pending_enums;
+
+  auto previous_file = file_being_parsed_;
+  if (!schema_source.empty()) file_being_parsed_ = schema_source;
+
+  auto make_namespace = [&](const std::vector<std::string>& components)
+                            -> Namespace* {
+    auto ns = new Namespace();
+    ns->components = components;
+    return UniqueNamespace(ns);
+  };
+
+  std::vector<std::string> definition_keys;
+  const auto order_entry = defs_map["$order"];
+  if (order_entry.IsMap()) {
+    const auto order_map = order_entry.AsMap();
+    const auto order_const = order_map["const"];
+    if (order_const.IsVector()) {
+      auto order_vec = order_const.AsVector();
+      for (size_t oi = 0; oi < order_vec.size(); ++oi) {
+        auto key = FlexToString(order_vec[oi]);
+        if (!key.empty()) definition_keys.push_back(key);
+      }
+    }
+  }
+  if (definition_keys.empty()) {
+    for (size_t i = 0; i < defs_map.size(); ++i) {
+      const std::string key = defs_map.Keys()[i].AsString().str();
+      if (key == "$file" || key == "$order") continue;
+      definition_keys.push_back(key);
+    }
+  }
+
+  for (const auto& entry_name : definition_keys) {
+    if (entry_name == "$file" || entry_name == "$order") continue;
+    const auto entry = defs_map[entry_name];
+    if (!entry.IsMap()) continue;
+    const auto entry_map = entry.AsMap();
+    const auto const_ref = entry_map["const"];
+    if (!const_ref.IsMap()) continue;
+    const auto const_map = const_ref.AsMap();
+
+    const std::string kind = FlexToString(const_map["kind"]);
+    if (kind == "table" || kind == "struct") {
+      auto ns_components = FlexToStringVector(const_map["namespace"]);
+      Namespace* ns = make_namespace(ns_components);
+      const std::string local_name = FlexToString(const_map["name"]);
+      if (structs_.dict.find(entry_name) != structs_.dict.end()) {
+        error_ = "duplicate definition for: " + entry_name;
+        file_being_parsed_ = previous_file;
+        return false;
+      }
+      auto struct_def = new StructDef();
+      struct_def->name = local_name;
+      struct_def->defined_namespace = ns;
+      struct_def->predecl = false;
+      if (structs_.Add(entry_name, struct_def)) {
+        delete struct_def;
+        error_ = "duplicate definition for: " + entry_name;
+        file_being_parsed_ = previous_file;
+        return false;
+      }
+      struct_def = structs_.dict[entry_name];
+      struct_def->defined_namespace = ns;
+      struct_def->name = local_name;
+      struct_def->doc_comment = FlexToStringVector(const_map["doc"]);
+      struct_def->file = schema_source;
+      struct_def->generated = false;
+      struct_def->fixed = (kind == "struct");
+      struct_def->sortbysize = FlexToBool(const_map["sortbysize"], true);
+      struct_def->has_key = FlexToBool(const_map["has_key"], false);
+      if (const_map["declaration_file"].IsString()) {
+        struct_def->declaration_file =
+            &GetPooledString(PosixPath(FlexToString(const_map["declaration_file"])));
+      } else {
+        struct_def->declaration_file = nullptr;
+      }
+      if (struct_def->fixed) {
+        struct_def->minalign =
+            static_cast<size_t>(FlexToUInt(const_map["minalign"], 1));
+        struct_def->bytesize =
+            static_cast<size_t>(FlexToUInt(const_map["bytesize"], 0));
+      } else {
+        struct_def->minalign = 1;
+      }
+      struct_def->attributes.dict.clear();
+      struct_def->attributes.vec.clear();
+      if (const_map["attributes"].IsVector()) {
+        auto attrs = const_map["attributes"].AsVector();
+        for (size_t ai = 0; ai < attrs.size(); ++ai) {
+          if (!attrs[ai].IsMap()) continue;
+          auto attr_map = attrs[ai].AsMap();
+          std::string attr_name = FlexToString(attr_map["name"]);
+          if (attr_name.empty()) continue;
+          auto value = new Value();
+          value->constant = FlexToString(attr_map["value"]);
+          value->type.base_type =
+              StringToBaseTypeIr(FlexToString(attr_map["type"]));
+          if (struct_def->attributes.Add(attr_name, value)) {
+            delete value;
+          }
+        }
+      }
+      struct_def->fields.dict.clear();
+      struct_def->fields.vec.clear();
+      pending_structs.push_back({struct_def, const_map});
+
+      if (types_.dict.find(entry_name) == types_.dict.end()) {
+        auto type = new Type(BASE_TYPE_STRUCT, struct_def, nullptr);
+        if (types_.Add(entry_name, type)) delete type;
+      }
+    } else if (kind == "enum") {
+      auto ns_components = FlexToStringVector(const_map["namespace"]);
+      Namespace* ns = make_namespace(ns_components);
+      if (enums_.dict.find(entry_name) != enums_.dict.end()) {
+        error_ = "duplicate enum definition: " + entry_name;
+        file_being_parsed_ = previous_file;
+        return false;
+      }
+      auto enum_def = new EnumDef();
+      enum_def->name = FlexToString(const_map["name"]);
+      enum_def->defined_namespace = ns;
+      enum_def->is_union = FlexToBool(const_map["is_union"], false);
+      enum_def->file = schema_source;
+      if (enums_.Add(entry_name, enum_def)) {
+        delete enum_def;
+        error_ = "duplicate enum definition: " + entry_name;
+        file_being_parsed_ = previous_file;
+        return false;
+      }
+      enum_def = enums_.dict[entry_name];
+      enum_def->defined_namespace = ns;
+      enum_def->name = FlexToString(const_map["name"]);
+      enum_def->doc_comment = FlexToStringVector(const_map["doc"]);
+      enum_def->file = schema_source;
+      enum_def->is_union = FlexToBool(const_map["is_union"], false);
+      if (const_map["declaration_file"].IsString()) {
+        enum_def->declaration_file =
+            &GetPooledString(PosixPath(FlexToString(const_map["declaration_file"])));
+      } else {
+        enum_def->declaration_file = nullptr;
+      }
+      enum_def->attributes.dict.clear();
+      enum_def->attributes.vec.clear();
+      if (const_map["attributes"].IsVector()) {
+        auto attrs = const_map["attributes"].AsVector();
+        for (size_t ai = 0; ai < attrs.size(); ++ai) {
+          if (!attrs[ai].IsMap()) continue;
+          auto attr_map = attrs[ai].AsMap();
+          std::string attr_name = FlexToString(attr_map["name"]);
+          if (attr_name.empty()) continue;
+          auto value = new Value();
+          value->constant = FlexToString(attr_map["value"]);
+          value->type.base_type =
+              StringToBaseTypeIr(FlexToString(attr_map["type"]));
+          if (enum_def->attributes.Add(attr_name, value)) delete value;
+        }
+      }
+      enum_def->underlying_type.base_type =
+          enum_def->is_union ? BASE_TYPE_UTYPE : BASE_TYPE_INT;
+      enum_def->underlying_type.enum_def = enum_def;
+      pending_enums.push_back({enum_def, const_map, entry_name});
+
+      BaseType enum_type_code =
+          enum_def->is_union ? BASE_TYPE_UNION
+                             : enum_def->underlying_type.base_type;
+      if (types_.dict.find(entry_name) == types_.dict.end()) {
+        auto type = new Type(enum_type_code, nullptr, enum_def);
+        type->enum_def = enum_def;
+        if (types_.Add(entry_name, type)) delete type;
+      }
+    }
+  }
+
+  const auto allof_ref = root_map["allOf"];
+  if (allof_ref.IsVector()) {
+    auto refs = allof_ref.AsVector();
+    for (size_t i = 0; i < refs.size(); ++i) {
+      if (!refs[i].IsMap()) continue;
+      const auto ref_map = refs[i].AsMap();
+      std::string ref_value = FlexToString(ref_map["$ref"]);
+      if (ref_value.empty()) continue;
+      const auto hash_pos = ref_value.find('#');
+      std::string ref_file =
+          hash_pos == std::string::npos ? ref_value : ref_value.substr(0, hash_pos);
+      if (ref_file.empty()) continue;
+      std::string include_json_path = PosixPath(ref_file);
+      if (!IsAbsolutePosixPath(include_json_path) && !schema_dir.empty()) {
+        include_json_path =
+            PosixPath(ConCatPathFileName(schema_dir, include_json_path));
+      }
+      include_json_path = PosixPath(AbsolutePath(include_json_path));
+
+      std::string include_contents;
+      if (!imported_json_schema_files_.count(include_json_path)) {
+        if (!LoadFile(include_json_path.c_str(), true, &include_contents)) {
+          error_ = "unable to load included schema: " + include_json_path;
+          return false;
+        }
+        if (!ImportJsonSchema(include_contents, include_json_path.c_str())) {
+          return false;
+        }
+      }
+
+      const auto include_source_it =
+          imported_json_schema_sources_.find(include_json_path);
+      std::string include_source =
+          include_source_it != imported_json_schema_sources_.end()
+              ? include_source_it->second
+              : DeriveIncludeSchemaName(ref_file, include_json_path);
+
+      IncludedFile included_file;
+      included_file.schema_name =
+          DeriveIncludeSchemaName(ref_file, include_source);
+      included_file.filename = include_source;
+      files_included_per_file_[schema_source].insert(included_file);
+    }
+  }
+
+  auto build_type = [&](const flexbuffers::Map& type_map, Type* out) -> bool {
+    std::string base = FlexToString(type_map["base_type"]);
+    BaseType base_type = StringToBaseTypeIr(base);
+    if (base_type == BASE_TYPE_NONE && base != "none") {
+      error_ = "unknown base type: " + base;
+      return false;
+    }
+    *out = Type(base_type);
+    out->element = BASE_TYPE_NONE;
+    out->struct_def = nullptr;
+    out->enum_def = nullptr;
+    out->fixed_length =
+        static_cast<uint16_t>(FlexToUInt(type_map["fixed_length"], 0));
+    if (type_map["element"].IsString()) {
+      out->element = StringToBaseTypeIr(FlexToString(type_map["element"]));
+    }
+    if (type_map["struct"].IsString()) {
+      std::string struct_name = FlexToString(type_map["struct"]);
+      auto it = structs_.dict.find(struct_name);
+      if (it == structs_.dict.end()) {
+        error_ = "unknown struct reference: " + struct_name;
+        return false;
+      }
+      out->struct_def = it->second;
+    }
+    if (type_map["enum"].IsString()) {
+      std::string enum_name = FlexToString(type_map["enum"]);
+      auto it = enums_.dict.find(enum_name);
+      if (it == enums_.dict.end()) {
+        error_ = "unknown enum reference: " + enum_name;
+        return false;
+      }
+      out->enum_def = it->second;
+    }
+    return true;
+  };
+
+  struct PendingSibling {
+    StructDef* def;
+    FieldDef* field;
+    std::string sibling;
+  };
+  std::vector<PendingSibling> pending_siblings;
+
+  for (const auto& pending : pending_structs) {
+    StructDef* struct_def = pending.def;
+    const auto const_map = pending.map;
+    const auto fields_ref = const_map["fields"];
+    if (!fields_ref.IsVector()) continue;
+    auto fields_vec = fields_ref.AsVector();
+    for (size_t fi = 0; fi < fields_vec.size(); ++fi) {
+      if (!fields_vec[fi].IsMap()) continue;
+      auto field_map = fields_vec[fi].AsMap();
+      auto field = new FieldDef();
+      field->name = FlexToString(field_map["name"]);
+      field->doc_comment = FlexToStringVector(field_map["doc"]);
+      field->deprecated = FlexToBool(field_map["deprecated"], false);
+      field->key = FlexToBool(field_map["key"], false);
+      field->shared = FlexToBool(field_map["shared"], false);
+      field->native_inline = FlexToBool(field_map["native_inline"], false);
+      field->flexbuffer = FlexToBool(field_map["flexbuffer"], false);
+      field->offset64 = FlexToBool(field_map["offset64"], false);
+      std::string presence = FlexToString(field_map["presence"]);
+      if (presence == "required")
+        field->presence = FieldDef::kRequired;
+      else if (presence == "optional")
+        field->presence = FieldDef::kOptional;
+      else
+        field->presence = FieldDef::kDefault;
+      field->value.constant = FlexToString(field_map["default"]);
+      field->file = schema_source;
+
+      if (field_map["attributes"].IsVector()) {
+        auto attrs = field_map["attributes"].AsVector();
+        for (size_t ai = 0; ai < attrs.size(); ++ai) {
+          if (!attrs[ai].IsMap()) continue;
+          auto attr_map = attrs[ai].AsMap();
+          std::string attr_name = FlexToString(attr_map["name"]);
+          if (attr_name.empty()) continue;
+          auto value = new Value();
+          value->constant = FlexToString(attr_map["value"]);
+          value->type.base_type =
+              StringToBaseTypeIr(FlexToString(attr_map["type"]));
+          if (field->attributes.Add(attr_name, value)) delete value;
+        }
+      }
+
+      const auto type_ref = field_map["type"];
+      if (!type_ref.IsMap() || !build_type(type_ref.AsMap(), &field->value.type)) {
+        delete field;
+        file_being_parsed_ = previous_file;
+        return false;
+      }
+
+      int64_t offset =
+          FlexToInt(field_map["id"],
+                    static_cast<int64_t>(
+                        ~(static_cast<voffset_t>(0U))));
+      field->value.offset = static_cast<voffset_t>(
+          offset == -1 ? ~(static_cast<voffset_t>(0U)) : offset);
+
+      if (field_map["nested_flatbuffer"].IsString()) {
+        std::string nested_name = FlexToString(field_map["nested_flatbuffer"]);
+        auto nested_it = structs_.dict.find(nested_name);
+        if (nested_it == structs_.dict.end()) {
+          delete field;
+          error_ = "unknown nested_flatbuffer type: " + nested_name;
+          file_being_parsed_ = previous_file;
+          return false;
+        }
+        field->nested_flatbuffer = nested_it->second;
+      }
+
+      if (struct_def->fields.Add(field->name, field)) {
+        delete field;
+        error_ = "duplicate field: " + field->name;
+        file_being_parsed_ = previous_file;
+        return false;
+      }
+
+      if (field_map["sibling"].IsString()) {
+        pending_siblings.push_back(
+            {struct_def, field, FlexToString(field_map["sibling"])});
+      }
+    }
+  }
+
+  for (const auto& pending : pending_siblings) {
+    auto sibling_field = pending.def->fields.Lookup(pending.sibling);
+    if (sibling_field) {
+      pending.field->sibling_union_field = sibling_field;
+    }
+  }
+
+  for (const auto& pending : pending_enums) {
+    EnumDef* enum_def = pending.def;
+    const auto const_map = pending.map;
+    const auto type_ref = const_map["underlying_type"];
+    if (type_ref.IsMap()) {
+      Type underlying;
+      if (!build_type(type_ref.AsMap(), &underlying)) {
+        file_being_parsed_ = previous_file;
+        return false;
+      }
+      enum_def->underlying_type = underlying;
+      enum_def->underlying_type.enum_def = enum_def;
+      auto type_it = types_.dict.find(pending.qualified_name);
+      if (type_it != types_.dict.end()) {
+        type_it->second->base_type =
+            enum_def->is_union ? BASE_TYPE_UNION
+                               : enum_def->underlying_type.base_type;
+        type_it->second->enum_def = enum_def;
+      }
+    }
+
+    EnumValBuilder evb(*this, *enum_def);
+    const auto values_ref = const_map["values"];
+    if (values_ref.IsVector()) {
+      auto values_vec = values_ref.AsVector();
+      for (size_t vi = 0; vi < values_vec.size(); ++vi) {
+        if (!values_vec[vi].IsMap()) continue;
+        auto value_map = values_vec[vi].AsMap();
+        std::string value_name = FlexToString(value_map["name"]);
+        int64_t value_number = FlexToInt(value_map["value"], 0);
+        EnumVal* ev = evb.CreateEnumerator(value_name, value_number);
+        ev->doc_comment = FlexToStringVector(value_map["doc"]);
+        if (value_map["attributes"].IsVector()) {
+          auto attrs = value_map["attributes"].AsVector();
+          for (size_t ai = 0; ai < attrs.size(); ++ai) {
+            if (!attrs[ai].IsMap()) continue;
+            auto attr_map = attrs[ai].AsMap();
+            std::string attr_name = FlexToString(attr_map["name"]);
+            if (attr_name.empty()) continue;
+            auto value = new Value();
+            value->constant = FlexToString(attr_map["value"]);
+            value->type.base_type =
+                StringToBaseTypeIr(FlexToString(attr_map["type"]));
+            if (ev->attributes.Add(attr_name, value)) delete value;
+          }
+        }
+        if (enum_def->is_union && value_map["union_type"].IsMap()) {
+          if (!build_type(value_map["union_type"].AsMap(), &ev->union_type)) {
+            file_being_parsed_ = previous_file;
+            return false;
+          }
+        }
+        if (evb.AcceptEnumerator(value_name).Check()) {
+          file_being_parsed_ = previous_file;
+          return false;
+        }
+      }
+    }
+  }
+
+  auto reorder_struct_vector = [&](std::vector<StructDef*>& vec) {
+    std::vector<StructDef*> ordered;
+    ordered.reserve(definition_keys.size());
+    for (const auto& name : definition_keys) {
+      auto struct_it = structs_.dict.find(name);
+      if (struct_it == structs_.dict.end()) continue;
+      StructDef* def = struct_it->second;
+      if (PosixPath(def->file) != schema_source_posix) continue;
+      ordered.push_back(def);
+    }
+    if (ordered.empty()) return;
+    vec.erase(std::remove_if(vec.begin(), vec.end(),
+                             [&](StructDef* def) {
+                               return PosixPath(def->file) == schema_source_posix;
+                             }),
+              vec.end());
+    vec.insert(vec.end(), ordered.begin(), ordered.end());
+  };
+  reorder_struct_vector(structs_.vec);
+
+  auto reorder_enum_vector = [&](std::vector<EnumDef*>& vec) {
+    std::vector<EnumDef*> ordered;
+    ordered.reserve(definition_keys.size());
+    for (const auto& name : definition_keys) {
+      auto enum_it = enums_.dict.find(name);
+      if (enum_it == enums_.dict.end()) continue;
+      EnumDef* def = enum_it->second;
+      if (PosixPath(def->file) != schema_source_posix) continue;
+      ordered.push_back(def);
+    }
+    if (ordered.empty()) return;
+    vec.erase(std::remove_if(vec.begin(), vec.end(),
+                             [&](EnumDef* def) {
+                               return PosixPath(def->file) == schema_source_posix;
+                             }),
+              vec.end());
+    vec.insert(vec.end(), ordered.begin(), ordered.end());
+  };
+  reorder_enum_vector(enums_.vec);
+
+  if (!pending_root_type.empty() && root_struct_def_ == nullptr) {
+    if (!SetRootType(pending_root_type.c_str())) {
+      file_being_parsed_ = previous_file;
+      return false;
+    }
+  }
+
+  file_being_parsed_ = previous_file;
+  return true;
 }
 
 std::ptrdiff_t Parser::BytesConsumed() const {

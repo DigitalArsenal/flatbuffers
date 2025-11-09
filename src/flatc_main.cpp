@@ -123,7 +123,12 @@ int main(int argc, const char* argv[]) {
 
   flatc.RegisterCodeGenerator(
       flatbuffers::FlatCOption{"", "jsonschema", "", "Generate Json schema"},
-      flatbuffers::NewJsonSchemaCodeGenerator());
+      flatbuffers::CreateJsonSchemaCodeGenerator());
+
+  flatc.RegisterCodeGenerator(
+      flatbuffers::FlatCOption{"", "jsonschema-ir", "",
+                               "Generate Json schema (IR preserving)"},
+      flatbuffers::CreateJsonSchemaIrCodeGenerator());
 
   flatc.RegisterCodeGenerator(
       flatbuffers::FlatCOption{"", "kotlin", "",

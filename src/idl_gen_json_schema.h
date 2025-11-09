@@ -24,8 +24,11 @@
 
 namespace flatbuffers {
 
-// Constructs a new JsonSchema Code generator.
-std::unique_ptr<CodeGenerator> NewJsonSchemaCodeGenerator();
+// Constructs a JsonSchema Code generator.
+std::unique_ptr<CodeGenerator> CreateJsonSchemaCodeGenerator();
+
+// Constructs an IR-preserving JsonSchema generator.
+std::unique_ptr<CodeGenerator> CreateJsonSchemaIrCodeGenerator();
 
 }  // namespace flatbuffers
 

@@ -969,6 +969,7 @@ class Parser : public ParserState {
         opts(options),
         uses_flexbuffers_(false),
         has_warning_(false),
+        suppress_json_schema_ir_metadata_(false),
         advanced_features_(0),
         source_(nullptr),
         anonymous_counter_(0),
@@ -1042,6 +1043,13 @@ class Parser : public ParserState {
              const char* source_filename = nullptr);
 
   bool ParseJson(const char* json, const char* json_filename = nullptr);
+  bool ImportJsonSchema(const std::string& schema_json,
+                        const char* schema_filename = nullptr,
+                        bool allow_canonical_fallback = true);
+
+  bool ShouldEmitJsonSchemaIrMetadata() const {
+    return !suppress_json_schema_ir_metadata_;
+  }
 
   // Returns the number of characters were consumed when parsing a JSON string.
   std::ptrdiff_t BytesConsumed() const;
@@ -1229,12 +1237,15 @@ class Parser : public ParserState {
   std::map<uint64_t, std::string> included_files_;
   std::map<std::string, std::set<IncludedFile>> files_included_per_file_;
   std::vector<std::string> native_included_files_;
+  std::set<std::string> imported_json_schema_files_;
+  std::map<std::string, std::string> imported_json_schema_sources_;
 
   std::map<std::string, bool> known_attributes_;
 
   IDLOptions opts;
   bool uses_flexbuffers_;
   bool has_warning_;
+  bool suppress_json_schema_ir_metadata_;
 
   uint64_t advanced_features_;
 

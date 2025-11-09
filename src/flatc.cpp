@@ -23,6 +23,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <unordered_set>
 
 #include "annotated_binary_text_gen.h"
 #include "binary_annotator.h"
@@ -189,6 +190,8 @@ const static FlatCOption flatc_options[] = {
      "interrupted."},
     {"", "grpc", "", "Generate GRPC interfaces for the specified languages."},
     {"", "schema", "", "Serialize schemas instead of JSON (use with -b)."},
+    {"", "schema-in", "FILE",
+     "Treat FILE as a JSON Schema IR input (use with --jsonschema-ir)."},
     {"", "bfbs-filenames", "PATH",
      "Sets the root path where reflection filenames in reflection.fbs are "
      "relative to. The 'root' is denoted with  `//`. E.g. if PATH=/a/b/c "
@@ -613,6 +616,16 @@ FlatCOptions FlatCompiler::ParseFromCommandLineArguments(int argc,
           Error("unknown case style: " + std::string(argv[argi]), true);
       } else if (arg == "--schema") {
         options.schema_binary = true;
+      } else if (arg == "--schema-in") {
+        if (++argi >= argc) Error("missing schema path following: " + arg, true);
+        std::string path = flatbuffers::PosixPath(argv[argi]);
+        options.schema_in_filenames.push_back(path);
+        options.filenames.push_back(path);
+      } else if (arg.rfind("--schema-in=", 0) == 0) {
+        std::string path =
+            flatbuffers::PosixPath(arg.substr(std::strlen("--schema-in=")));
+        options.schema_in_filenames.push_back(path);
+        options.filenames.push_back(path);
       } else if (arg == "-M") {
         options.print_make_rules = true;
       } else if (arg == "--version") {
@@ -874,6 +887,11 @@ std::unique_ptr<Parser> FlatCompiler::GenerateCode(const FlatCOptions& options,
   std::unique_ptr<Parser> parser =
       std::unique_ptr<Parser>(new Parser(options.opts));
 
+  std::unordered_set<std::string> json_schema_inputs;
+  for (const auto& schema_path : options.schema_in_filenames) {
+    json_schema_inputs.insert(flatbuffers::PosixPath(schema_path));
+  }
+
   for (auto file_it = options.filenames.begin();
        file_it != options.filenames.end(); ++file_it) {
     IDLOptions opts = options.opts;
@@ -886,7 +904,10 @@ std::unique_ptr<Parser> FlatCompiler::GenerateCode(const FlatCOptions& options,
     bool is_binary = static_cast<size_t>(file_it - options.filenames.begin()) >=
                      options.binary_files_from;
     auto ext = flatbuffers::GetExtension(filename);
-    const bool is_schema = ext == "fbs" || ext == "proto";
+    const std::string normalized_filename = flatbuffers::PosixPath(filename);
+    const bool is_json_ir_schema =
+        json_schema_inputs.count(normalized_filename) != 0;
+    const bool is_schema = is_json_ir_schema || ext == "fbs" || ext == "proto";
     if (is_schema && opts.project_root.empty()) {
       opts.project_root = StripFileName(filename);
     }
@@ -930,7 +951,13 @@ std::unique_ptr<Parser> FlatCompiler::GenerateCode(const FlatCOptions& options,
       }
       // Try to parse the file contents (binary schema/flexbuffer/textual
       // schema)
-      if (is_binary_schema) {
+      if (is_json_ir_schema) {
+        parser.reset(new Parser(opts));
+        if (!parser->ImportJsonSchema(contents, filename.c_str())) {
+          Error("unable to import JSON schema from " + filename + ": " +
+                parser->error_);
+        }
+      } else if (is_binary_schema) {
         LoadBinarySchema(*parser, filename, contents);
       } else if (opts.use_flexbuffers) {
         if (opts.lang_to_generate == IDLOptions::kJson) {

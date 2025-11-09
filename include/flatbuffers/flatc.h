@@ -59,6 +59,8 @@ struct FlatCOptions {
   bool file_names_only = false;
   bool preserve_case = false;
 
+  std::vector<std::string> schema_in_filenames;
+
   std::vector<std::shared_ptr<CodeGenerator>> generators;
 };
 

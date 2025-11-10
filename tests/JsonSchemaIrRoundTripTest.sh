@@ -5,10 +5,20 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_dir="$(cd "${script_dir}/.." && pwd)"
 flatc="${repo_dir}/flatc"
 canonical="${script_dir}/monster_test.schema.json"
-feature_matrix=$'Root schema declaration|"$schema": "https://json-schema.org/draft/2019-09/schema"\nMonster docstring preserved|monster object\nUnion any_unique coverage|"any_unique"\nUnion ambiguity coverage|"any_ambiguous"\nArray of tables present|"testarrayoftables"\nNested flatbuffer vector|"testnestedflatbuffer"\n64-bit integer bounds|9223372036854775807\nSigned enum property|"signed_enum"\nBoolean property|"testbool"\nType aliases definition|"MyGame_Example_TypeAliases"\nNegative infinity default|"negative_infinity_default"\nVector of enums|"vector_of_enums"\n'
+feature_matrix=$'Root schema declaration|"$schema": "https://json-schema.org/draft/2019-09/schema"\nMonster docstring preserved|monster object\nUnion any_unique coverage|"any_unique"\nUnion ambiguity coverage|"any_ambiguous"\nArray of tables present|"testarrayoftables"\nNested flatbuffer vector|"testnestedflatbuffer"\nParent-namespace reference|"MyGame_InParentNamespace"\n64-bit integer bounds|9223372036854775807\nSigned enum property|"signed_enum"\nBoolean property|"testbool"\nType aliases definition|"MyGame_Example_TypeAliases"\nNegative infinity default|"negative_infinity_default"\nVector of enums|"vector_of_enums"\nSorted struct array|"testarrayofsortedstruct"\n'
 
 log_step() {
   printf '\n== %s ==\n' "$1"
+}
+
+require_flag() {
+  local flag="$1"
+  local description="$2"
+
+  if ! "${flatc}" --help | grep -q -- "${flag}"; then
+    echo "flatc at ${flatc} is missing ${description} (${flag}). Rebuild flatc from this branch." >&2
+    exit 1
+  fi
 }
 
 feature_check() {
@@ -81,11 +91,6 @@ if [[ ! -x "${flatc}" ]]; then
   exit 0
 fi
 
-if ! "${flatc}" --help | grep -q -- '--schema-in'; then
-  echo "flatc at ${flatc} does not expose --schema-in; build flatc from this branch to run the JSON Schema IR test." >&2
-  exit 1
-fi
-
 if [[ ! -f "${canonical}" ]]; then
   echo "Missing canonical schema at ${canonical}" >&2
   exit 1
@@ -95,6 +100,8 @@ log_step "Tooling"
 printf 'flatc: %s\n' "${flatc}"
 "${flatc}" --version
 command -v python3 >/dev/null || { echo "python3 is required for schema summaries" >&2; exit 1; }
+require_flag '--schema-in' '--schema-in support'
+require_flag '--jsonschema-ir' '--jsonschema-ir support'
 
 log_step "Canonical schema stats"
 python_summary stats "${canonical}" "canonical source"

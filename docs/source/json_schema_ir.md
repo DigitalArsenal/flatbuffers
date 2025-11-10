@@ -28,10 +28,11 @@ These switches are available once you build `flatc` from the repository (for
 example, `cmake -G Ninja -S . -B build && cmake --build build && cp build/flatc .`).
 Running an older release (e.g., `flatc` from a package manager) will not work
 and reports `unknown commandline argument: --schema-in`. You can verify support
-with:
+for the JSON Schema importer/exporter pair with:
 
 ```sh
 ./flatc --help | grep -- '--schema-in'
+./flatc --help | grep -- '--jsonschema-ir'
 ```
 
 ---
@@ -303,6 +304,11 @@ root:
 ```sh
 sh tests/JsonSchemaIrRoundTripTest.sh
 ```
+
+The script prints a verbose report: tooling diagnostics, SHA256/size checks for
+the canonical and regenerated schemas, field breakdowns for
+`MyGame_Example_Monster`, and a feature matrix that confirms unions, vectors,
+sorted structs, and parent-namespace references all survive the round trip.
 
 ---
 

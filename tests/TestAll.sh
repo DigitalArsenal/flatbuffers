@@ -55,3 +55,7 @@ echo "************************ Swift:"
 cd FlatBuffers.Test.Swift
 sh SwiftTest.sh
 cd ..
+
+echo "************************ JSON Schema IR:"
+
+sh JsonSchemaIrRoundTripTest.sh

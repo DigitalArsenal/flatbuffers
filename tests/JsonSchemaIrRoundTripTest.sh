@@ -81,6 +81,11 @@ if [[ ! -x "${flatc}" ]]; then
   exit 0
 fi
 
+if ! "${flatc}" --help | grep -q -- '--schema-in'; then
+  echo "flatc at ${flatc} does not expose --schema-in; build flatc from this branch to run the JSON Schema IR test." >&2
+  exit 1
+fi
+
 if [[ ! -f "${canonical}" ]]; then
   echo "Missing canonical schema at ${canonical}" >&2
   exit 1

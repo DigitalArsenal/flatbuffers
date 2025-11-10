@@ -17,6 +17,23 @@ rehydrated, and where the automated tests live.
 All snippets are taken from `tests/monster_test.fbs`, the schema used by the
 JSON Schema tests in the repository.
 
+## Prerequisites
+
+The commands below rely on two FlatBuffers CLI flags introduced by this branch:
+
+* `--jsonschema-ir` – exports the lossless IR dialect.
+* `--schema-in <file>` – imports a canonical JSON Schema or IR document.
+
+These switches are available once you build `flatc` from the repository (for
+example, `cmake -G Ninja -S . -B build && cmake --build build && cp build/flatc .`).
+Running an older release (e.g., `flatc` from a package manager) will not work
+and reports `unknown commandline argument: --schema-in`. You can verify support
+with:
+
+```sh
+./flatc --help | grep -- '--schema-in'
+```
+
 ---
 
 ## Canonical JSON Schema (`flatc --jsonschema`)
@@ -261,7 +278,7 @@ payload), it synthesizes the IR on the fly:
 4. Emit an in-memory `$defs` map with the same structure as the IR dialect and
    feed that back into the IR importer.
 
-This makes `flatc --jsonschema --schema-in tests/monster_test.schema.json`
+This makes `./flatc --jsonschema --schema-in tests/monster_test.schema.json`
 produce a schema identical to the input file, even though the input only
 contained canonical JSON. The process is lossless for the full
 `tests/monster_test.fbs` schema, including unions and 64-bit numeric fields.
@@ -291,11 +308,13 @@ sh tests/JsonSchemaIrRoundTripTest.sh
 
 ## CLI summary
 
-* `flatc --jsonschema …` – canonical JSON Schema (unchanged from upstream).
-* `flatc --jsonschema-ir …` – JSON Schema IR dialect with `$defs/$file` metadata.
-* `flatc --jsonschema --schema-in <file>` – accepts both the canonical form and
+* `./flatc --jsonschema …` – canonical JSON Schema (unchanged from upstream).
+* `./flatc --jsonschema-ir …` – JSON Schema IR dialect with `$defs/$file` metadata.
+* `./flatc --jsonschema --schema-in <file>` – accepts both the canonical form and
   the IR dialect. If `$defs` are missing it rehydrates the IR heuristically
   using the process described above.
+* `./flatc --schema-in <file>` is only recognized by locally built binaries that
+  include the JSON Schema IR importer.
 
 Both generators support the usual include flags (`-I`, `--schema`), so you can
 mix-and-match with existing build pipelines.

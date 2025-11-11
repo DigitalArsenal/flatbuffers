@@ -292,11 +292,16 @@ The repository includes two kinds of tests:
 
 * `tests/JsonSchemaTest.sh` – verifies the canonical generator by comparing
   output to `tests/monster_test.schema.json` (and the companion arrays schema).
-* `tests/JsonSchemaIrRoundTripTest.sh` – exercises the canonical fallback:
-  it reads the canonical schema at `tests/monster_test.schema.json`, imports it
-  with `flatc --jsonschema --schema-in …`, and ensures the resulting
-  `monster_test.schema.schema.json` matches the canonical source byte-for-byte.
-  The test runs automatically when invoking `tests/TestAll.sh`.
+* `tests/JsonSchemaIrRoundTripTest.sh` – exercises both directions:
+  it reads the canonical schema at `tests/monster_test.schema.json`,
+  re-exports JSON Schema via `flatc --jsonschema --schema-in …`, and ensures the
+  result matches byte-for-byte. It also exports JSON Schema IR from
+  `tests/monster_test.fbs` (plus the include fixtures), feeds that IR back into
+  `flatc --jsonschema` to confirm the canonical form is reproduced (ignoring the
+  `$defs` payload), and runs
+  `flatc --conform tests/monster_test.fbs --schema-in <monster_test.ir.schema.json>`
+  to prove the `$defs` metadata can reconstruct the IDL. The test runs
+  automatically when invoking `tests/TestAll.sh`.
 
 You can run the round-trip check directly after building `flatc` in the repo
 root:
@@ -308,7 +313,10 @@ sh tests/JsonSchemaIrRoundTripTest.sh
 The script prints a verbose report: tooling diagnostics, SHA256/size checks for
 the canonical and regenerated schemas, field breakdowns for
 `MyGame_Example_Monster`, and a feature matrix that confirms unions, vectors,
-sorted structs, and parent-namespace references all survive the round trip.
+sorted structs, and parent-namespace references all survive the round trip. It
+also shows the IR export hash, the canonical JSON regenerated from that IR, and
+the `flatc --conform` result against `tests/monster_test.fbs`, so you can see
+JSON-with-`$defs` driving a full IDL comparison.
 
 ---
 

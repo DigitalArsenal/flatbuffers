@@ -29,6 +29,7 @@
 #include "flatbuffers/code_generator.h"
 #include "flatbuffers/idl.h"
 #include "flatbuffers/util.h"
+#include "json_schema_importer.h"
 
 namespace flatbuffers {
 
@@ -198,6 +199,9 @@ const static FlatCOption flatc_options[] = {
     {"", "bfbs-absolute-paths", "",
      "Uses absolute paths instead of relative paths in the BFBS output."},
     {"", "bfbs-comments", "", "Add doc comments to the binary schema files."},
+    {"", "from-jsonschema", "",
+     "Import Draft 2019-09 JSON Schemas (produced by --jsonschema) instead of "
+     "parsing .fbs files."},
     {"", "bfbs-builtins", "",
      "Add builtin attributes to the binary schema files."},
     {"", "bfbs-gen-embed", "",
@@ -625,6 +629,8 @@ FlatCOptions FlatCompiler::ParseFromCommandLineArguments(int argc,
         options.grpc_enabled = true;
       } else if (arg == "--bfbs-comments") {
         opts.binary_schema_comments = true;
+      } else if (arg == "--from-jsonschema") {
+        options.from_json_schema = true;
       } else if (arg == "--bfbs-builtins") {
         opts.binary_schema_builtins = true;
       } else if (arg == "--bfbs-gen-embed") {
@@ -886,11 +892,15 @@ std::unique_ptr<Parser> FlatCompiler::GenerateCode(const FlatCOptions& options,
     bool is_binary = static_cast<size_t>(file_it - options.filenames.begin()) >=
                      options.binary_files_from;
     auto ext = flatbuffers::GetExtension(filename);
+    const bool is_binary_schema = ext == reflection::SchemaExtension();
     const bool is_schema = ext == "fbs" || ext == "proto";
-    if (is_schema && opts.project_root.empty()) {
+    const bool is_json_schema =
+        options.from_json_schema && !is_binary && ext == "json";
+    const bool is_text_schema = is_schema || is_json_schema;
+    const bool treat_as_schema = is_text_schema || is_binary_schema;
+    if (is_text_schema && opts.project_root.empty()) {
       opts.project_root = StripFileName(filename);
     }
-    const bool is_binary_schema = ext == reflection::SchemaExtension();
     if (is_binary) {
       parser->builder_.Clear();
       parser->builder_.PushFlatBuffer(
@@ -922,7 +932,7 @@ std::unique_ptr<Parser> FlatCompiler::GenerateCode(const FlatCOptions& options,
           contents.length() != strlen(contents.c_str())) {
         Error("input file appears to be binary: " + filename, true);
       }
-      if (is_schema || is_binary_schema) {
+      if (treat_as_schema) {
         // If we're processing multiple schemas, make sure to start each
         // one from scratch. If it depends on previous schemas it must do
         // so explicitly using an include.
@@ -930,7 +940,15 @@ std::unique_ptr<Parser> FlatCompiler::GenerateCode(const FlatCOptions& options,
       }
       // Try to parse the file contents (binary schema/flexbuffer/textual
       // schema)
-      if (is_binary_schema) {
+      if (is_json_schema) {
+        std::string import_error;
+        if (!ImportJsonSchema(contents, filename, parser.get(),
+                              &import_error)) {
+          Error("unable to import JSON schema \"" + filename +
+                    "\": " + import_error,
+                false);
+        }
+      } else if (is_binary_schema) {
         LoadBinarySchema(*parser, filename, contents);
       } else if (opts.use_flexbuffers) {
         if (opts.lang_to_generate == IDLOptions::kJson) {
@@ -954,7 +972,7 @@ std::unique_ptr<Parser> FlatCompiler::GenerateCode(const FlatCOptions& options,
                 true);
         }
       }
-      if ((is_schema || is_binary_schema) &&
+      if (treat_as_schema &&
           !options.conform_to_schema.empty()) {
         auto err = parser->ConformTo(conform_parser);
         if (!err.empty()) Error("schemas don\'t conform: " + err, false);
@@ -1008,8 +1026,8 @@ std::unique_ptr<Parser> FlatCompiler::GenerateCode(const FlatCOptions& options,
                   " using bfbs generator.");
           }
         } else {
-          if ((!code_generator->IsSchemaOnly() ||
-               (is_schema || is_binary_schema)) &&
+      if ((!code_generator->IsSchemaOnly() ||
+               treat_as_schema) &&
               code_generator->GenerateCode(*parser, options.output_path,
                                            filebase) !=
                   CodeGenerator::Status::OK) {

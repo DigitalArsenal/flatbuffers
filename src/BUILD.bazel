@@ -141,6 +141,8 @@ cc_library(
         "idl_gen_ts.cpp",
         "idl_gen_ts.h",
         "idl_namer.h",
+        "json_schema_importer.cpp",
+        "json_schema_importer.h",
         "namer.h",
         "util.cpp",
     ],

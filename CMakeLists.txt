@@ -174,6 +174,8 @@ set(FlatBuffers_Compiler_SRCS
   src/idl_gen_grpc.cpp
   src/idl_gen_json_schema.cpp
   src/idl_gen_swift.cpp
+  src/json_schema_importer.h
+  src/json_schema_importer.cpp
   src/file_name_saving_file_manager.cpp
   src/file_binary_writer.cpp
   src/file_writer.cpp

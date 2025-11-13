@@ -153,6 +153,7 @@ nav:
   - Advanced:
     - FlatBuffers Internals: "internals.md"
     - Intermediate Representation: "intermediate_representation.md"
+    - JSON Schema Workflow: "json_schema_workflow.md"
     - Annotating Buffers (.afb): "annotation.md"
     - Benchmarks: "benchmarks.md"
   - FlexBuffers (Schema-less version): "flexbuffers.md"

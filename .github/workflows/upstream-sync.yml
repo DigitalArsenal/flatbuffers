@@ -1,0 +1,41 @@
+name: Sync Upstream Master
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "upstream-sync-bot"
+          git config user.email "actions@github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/google/flatbuffers.git
+          git fetch upstream master
+
+      - name: Fast-forward master
+        run: |
+          git checkout master
+          git merge --ff-only upstream/master || {
+            echo "Local changes prevent fast-forward; skipping push.";
+            exit 0;
+          }
+
+      - name: Push updated master
+        run: |
+          git push origin master

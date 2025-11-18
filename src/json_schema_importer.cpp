@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <memory>
 #include <set>
 #include <sstream>
 #include <string>
@@ -110,9 +111,37 @@ struct ServiceSchema {
   std::string declaration_file;
 };
 
+struct LoadedSchema {
+  std::string abs_path;
+  std::string directory;
+  std::string schema_id;
+  std::string source_fbs_path;
+  bool parsed = false;
+  bool processed = false;
+  bool is_root = false;
+  std::vector<uint8_t> buffer;
+  flexbuffers::Map root = flexbuffers::Map::EmptyMap();
+  flexbuffers::Map defs = flexbuffers::Map::EmptyMap();
+};
+
 uint32_t BaseTypeSize(reflection::BaseType type) {
   return static_cast<uint32_t>(
       SizeOf(static_cast<BaseType>(static_cast<int>(type))));
+}
+
+bool IsAbsolutePath(const std::string& path) {
+#if defined(_WIN32)
+  if (path.size() > 1 && path[1] == ':') return true;
+  return path.size() > 1 && path[0] == '\\' && path[1] == '\\';
+#else
+  return !path.empty() && path[0] == '/';
+#endif
+}
+
+std::string NormalizeAbsolutePath(const std::string& path) {
+  auto absolute = flatbuffers::AbsolutePath(path);
+  if (absolute.empty()) absolute = path;
+  return flatbuffers::PosixPath(absolute);
 }
 
 std::vector<std::string> SplitDescription(const std::string& description) {
@@ -161,13 +190,19 @@ class JsonSchemaImporterImpl {
   using CommentVisitor =
       std::function<bool(const flexbuffers::Map& map, std::string* error)>;
 
-  bool ParseDocument(const std::string& json_schema, std::string* error);
-  bool ParseTopLevelMetadata(std::string* error);
-  bool ParseScalars(std::string* error);
-  bool ParseEnums(std::string* error);
-  bool ParseFields(std::string* error);
-  bool ParseTypes(std::string* error);
-  bool ParseServices(std::string* error);
+  bool ParseDocument(LoadedSchema* doc, const std::string& json_schema,
+                     std::string* error);
+  bool ParseTopLevelMetadata(const LoadedSchema& doc, std::string* error);
+  bool ParseScalars(const flexbuffers::Map& defs, std::string* error);
+  bool ParseEnums(const flexbuffers::Map& defs, const LoadedSchema& doc,
+                  std::string* error);
+  bool ParseFields(const flexbuffers::Map& defs, const LoadedSchema& doc,
+                   std::string* error);
+  bool ParseTypes(const flexbuffers::Map& defs, const LoadedSchema& doc,
+                  std::string* error);
+  bool ParseServices(const flexbuffers::Map& defs, const LoadedSchema& doc,
+                     std::string* error);
+  bool ProcessSchema(LoadedSchema* doc, std::string* error);
   bool BuildReflection(std::string* error);
 
   bool VisitCommentMap(const std::string& comment_json,
@@ -180,13 +215,21 @@ class JsonSchemaImporterImpl {
   std::string QualifiedName(const std::vector<std::string>& components,
                             const std::string& name) const;
   bool ParseFieldType(const flexbuffers::Map& schema, FieldTypeDesc* type,
-                      std::string* error);
+                      const LoadedSchema& doc, std::string* error);
   bool ParseTypeRef(const std::string& ref, FieldTypeDesc* type,
-                    bool is_element, std::string* error);
+                    bool is_element, const LoadedSchema& doc,
+                    std::string* error);
   bool ParseArrayType(const flexbuffers::Map& schema, FieldTypeDesc* type,
-                      std::string* error);
+                      const LoadedSchema& doc, std::string* error);
+  bool ResolveReference(const LoadedSchema& doc, const std::string& ref,
+                        LoadedSchema** target_doc, std::string* fragment,
+                        std::string* error);
+  bool ParseLocalRef(const std::string& fragment, FieldTypeDesc* type,
+                     bool is_element, const LoadedSchema& doc,
+                     std::string* error);
   bool ExpectRefCategory(const std::string& ref, const std::string& category,
-                         std::string* target) const;
+                         const LoadedSchema& doc, std::string* target,
+                         std::string* error) const;
   reflection::AdvancedFeatures AdvancedFeaturesMask() const;
   Offset<reflection::Type> CreateTypeOffset(
       const FieldTypeDesc& type_desc,
@@ -201,12 +244,17 @@ class JsonSchemaImporterImpl {
   flatbuffers::Offset<
       flatbuffers::Vector<flatbuffers::Offset<reflection::KeyValue>>>
   CreateAttributes(const AttributeList& attrs, FlatBufferBuilder* builder);
-  flexbuffers::Map RootMap() const;
-  flexbuffers::Map DefsMap() const;
+  LoadedSchema* LoadSchemaFromContent(const std::string& path,
+                                      const std::string& json, bool is_root,
+                                      std::string* error);
+  LoadedSchema* LoadSchemaFromFile(const std::string& path,
+                                   std::string* error);
 
   Parser* parser_;
   std::string filename_;
-  std::vector<uint8_t> document_storage_;
+  std::unordered_map<std::string, std::unique_ptr<LoadedSchema>> schemas_;
+  std::vector<LoadedSchema*> schema_order_;
+  LoadedSchema* root_schema_ = nullptr;
 
   std::string root_type_ref_;
   std::string file_identifier_;
@@ -225,40 +273,64 @@ class JsonSchemaImporterImpl {
 
 bool JsonSchemaImporterImpl::Import(const std::string& json_schema,
                                     std::string* error) {
-  if (!ParseDocument(json_schema, error)) return false;
-  if (!ParseTopLevelMetadata(error)) return false;
-  if (!ParseScalars(error)) return false;
-  if (!ParseEnums(error)) return false;
-  if (!ParseFields(error)) return false;
-  if (!ParseTypes(error)) return false;
-  if (!ParseServices(error)) return false;
+  auto* root_doc =
+      LoadSchemaFromContent(filename_, json_schema, /*is_root=*/true, error);
+  if (!root_doc) return false;
+  if (!ParseTopLevelMetadata(*root_doc, error)) return false;
+  for (size_t i = 0; i < schema_order_.size(); ++i) {
+    if (!ProcessSchema(schema_order_[i], error)) return false;
+  }
   if (!BuildReflection(error)) return false;
   return true;
 }
 
-bool JsonSchemaImporterImpl::ParseDocument(const std::string& json_schema,
+bool JsonSchemaImporterImpl::ParseDocument(LoadedSchema* doc,
+                                           const std::string& json_schema,
                                            std::string* error) {
+  if (doc == nullptr) {
+    if (error) *error = "Internal error: null schema handle.";
+    return false;
+  }
+  if (doc->parsed) return true;
   flatbuffers::Parser schema_parser;
   flexbuffers::Builder builder;
-  if (!schema_parser.ParseFlexBuffer(json_schema.c_str(), filename_.c_str(),
+  const char* context_name =
+      doc->abs_path.empty() ? filename_.c_str() : doc->abs_path.c_str();
+  if (!schema_parser.ParseFlexBuffer(json_schema.c_str(), context_name,
                                      &builder)) {
     if (error) *error = schema_parser.error_;
     return false;
   }
   const auto& buffer = builder.GetBuffer();
-  document_storage_.assign(buffer.begin(), buffer.end());
-  auto root_map = flexbuffers::GetRoot(document_storage_).AsMap();
-  auto defs = root_map["$defs"];
+  doc->buffer.assign(buffer.begin(), buffer.end());
+  doc->root = flexbuffers::GetRoot(doc->buffer).AsMap();
+  auto defs = doc->root["$defs"];
   if (!defs.IsMap()) {
     if (error) *error = "JSON schema missing $defs section.";
     return false;
   }
+  doc->defs = defs.AsMap();
+  auto id = doc->root["$id"];
+  if (id.IsString()) doc->schema_id = id.AsString().str();
+  auto comment_ref = doc->root["$comment"];
+  if (comment_ref.IsString()) {
+    const auto visitor = [doc](const flexbuffers::Map& map,
+                               std::string* /*err*/) -> bool {
+      auto source = map["source"];
+      if (source.IsString()) doc->source_fbs_path = source.AsString().str();
+      return true;
+    };
+    VisitCommentMap(comment_ref.AsString().str(), doc->abs_path, visitor,
+                    nullptr);
+  }
+  doc->parsed = true;
+  doc->processed = false;
   return true;
 }
 
-bool JsonSchemaImporterImpl::ParseTopLevelMetadata(std::string* error) {
-  auto root_map = RootMap();
-  auto comment_ref = root_map["$comment"];
+bool JsonSchemaImporterImpl::ParseTopLevelMetadata(
+    const LoadedSchema& doc, std::string* error) {
+  auto comment_ref = doc.root["$comment"];
   if (!comment_ref.IsString()) {
     if (error) *error = "JSON schema missing $comment metadata.";
     return false;
@@ -303,7 +375,7 @@ bool JsonSchemaImporterImpl::ParseTopLevelMetadata(std::string* error) {
   };
   if (!VisitCommentMap(comment, "$comment", visitor, error)) return false;
 
-  auto ref = root_map["$ref"];
+  auto ref = doc.root["$ref"];
   if (!ref.IsString()) {
     if (error) *error = "JSON schema missing $ref root pointer.";
     return false;
@@ -312,14 +384,15 @@ bool JsonSchemaImporterImpl::ParseTopLevelMetadata(std::string* error) {
   return true;
 }
 
-bool JsonSchemaImporterImpl::ParseScalars(std::string* error) {
-  auto defs_map = DefsMap();
-  auto scalars_ref = defs_map["scalars"];
+bool JsonSchemaImporterImpl::ParseScalars(const flexbuffers::Map& defs,
+                                          std::string* error) {
+  auto scalars_ref = defs["scalars"];
   if (!scalars_ref.IsMap()) return true;
   auto scalars_map = scalars_ref.AsMap();
   auto keys = scalars_map.Keys();
   for (size_t i = 0; i < keys.size(); ++i) {
     const std::string name = keys[i].AsKey();
+    if (scalars_.find(name) != scalars_.end()) continue;
     auto meta = scalars_map[name];
     auto comment = meta.AsMap()["$comment"];
     if (!comment.IsString()) continue;
@@ -337,9 +410,10 @@ bool JsonSchemaImporterImpl::ParseScalars(std::string* error) {
   return true;
 }
 
-bool JsonSchemaImporterImpl::ParseEnums(std::string* error) {
-  auto defs_map = DefsMap();
-  auto enums_ref = defs_map["enums"];
+bool JsonSchemaImporterImpl::ParseEnums(const flexbuffers::Map& defs,
+                                        const LoadedSchema& doc,
+                                        std::string* error) {
+  auto enums_ref = defs["enums"];
   if (!enums_ref.IsMap()) return true;
   auto enums_map = enums_ref.AsMap();
   auto keys = enums_map.Keys();
@@ -402,9 +476,10 @@ bool JsonSchemaImporterImpl::ParseEnums(std::string* error) {
   return true;
 }
 
-bool JsonSchemaImporterImpl::ParseFields(std::string* error) {
-  auto defs_map = DefsMap();
-  auto fields_ref = defs_map["fields"];
+bool JsonSchemaImporterImpl::ParseFields(const flexbuffers::Map& defs,
+                                         const LoadedSchema& doc,
+                                         std::string* error) {
+  auto fields_ref = defs["fields"];
   if (!fields_ref.IsMap()) return true;
   auto fields_map = fields_ref.AsMap();
   auto owners = fields_map.Keys();
@@ -468,7 +543,7 @@ bool JsonSchemaImporterImpl::ParseFields(std::string* error) {
                            owner + "." + field_name,
                            visitor, error))
         return false;
-      if (!ParseFieldType(field_obj, &schema.type, error)) return false;
+      if (!ParseFieldType(field_obj, &schema.type, doc, error)) return false;
       auto json_default = field_obj["default"];
       if (json_default.IsInt() || json_default.IsUInt()) {
         schema.default_integer = json_default.IsInt()
@@ -505,9 +580,10 @@ bool JsonSchemaImporterImpl::ParseFields(std::string* error) {
   return true;
 }
 
-bool JsonSchemaImporterImpl::ParseTypes(std::string* error) {
-  auto defs_map = DefsMap();
-  auto types_ref = defs_map["types"];
+bool JsonSchemaImporterImpl::ParseTypes(const flexbuffers::Map& defs,
+                                        const LoadedSchema& doc,
+                                        std::string* error) {
+  auto types_ref = defs["types"];
   if (!types_ref.IsMap()) return true;
   auto types_map = types_ref.AsMap();
   auto keys = types_map.Keys();
@@ -585,9 +661,10 @@ bool JsonSchemaImporterImpl::ParseTypes(std::string* error) {
   return true;
 }
 
-bool JsonSchemaImporterImpl::ParseServices(std::string* error) {
-  auto defs_map = DefsMap();
-  auto services_ref = defs_map["services"];
+bool JsonSchemaImporterImpl::ParseServices(const flexbuffers::Map& defs,
+                                           const LoadedSchema& doc,
+                                           std::string* error) {
+  auto services_ref = defs["services"];
   if (!services_ref.IsMap()) return true;
   auto services_map = services_ref.AsMap();
   auto service_keys = services_map.Keys();
@@ -656,8 +733,8 @@ bool JsonSchemaImporterImpl::ParseServices(std::string* error) {
           if (request.IsMap()) {
             auto ref = request.AsMap()["$ref"];
             if (ref.IsString() &&
-                !ExpectRefCategory(ref.AsString().str(), "types",
-                                   &call.request_type)) {
+                !ExpectRefCategory(ref.AsString().str(), "types", doc,
+                                   &call.request_type, error)) {
               if (error)
                 *error = std::string(
                              "Invalid request type reference in service ") +
@@ -669,8 +746,8 @@ bool JsonSchemaImporterImpl::ParseServices(std::string* error) {
           if (response.IsMap()) {
             auto ref = response.AsMap()["$ref"];
             if (ref.IsString() &&
-                !ExpectRefCategory(ref.AsString().str(), "types",
-                                   &call.response_type)) {
+                !ExpectRefCategory(ref.AsString().str(), "types", doc,
+                                   &call.response_type, error)) {
               if (error)
                 *error = std::string(
                              "Invalid response type reference in service ") +
@@ -687,14 +764,49 @@ bool JsonSchemaImporterImpl::ParseServices(std::string* error) {
   return true;
 }
 
-bool JsonSchemaImporterImpl::ExpectRefCategory(const std::string& ref,
-                                               const std::string& category,
-                                               std::string* target) const {
-  const std::string prefix = std::string("#/$defs/") + category + "/";
-  if (ref.compare(0, prefix.size(), prefix) != 0) {
+bool JsonSchemaImporterImpl::ProcessSchema(LoadedSchema* doc,
+                                           std::string* error) {
+  if (doc == nullptr) {
+    if (error) *error = "Internal error: null schema.";
     return false;
   }
-  *target = ref.substr(prefix.size());
+  if (doc->processed) return true;
+  if (!doc->parsed) {
+    if (error) *error = "Internal error: schema not parsed.";
+    return false;
+  }
+  if (!ParseScalars(doc->defs, error)) return false;
+  if (!ParseEnums(doc->defs, *doc, error)) return false;
+  if (!ParseFields(doc->defs, *doc, error)) return false;
+  if (!ParseTypes(doc->defs, *doc, error)) return false;
+  if (!ParseServices(doc->defs, *doc, error)) return false;
+  doc->processed = true;
+  return true;
+}
+
+bool JsonSchemaImporterImpl::ExpectRefCategory(const std::string& ref,
+                                               const std::string& category,
+                                               const LoadedSchema& doc,
+                                               std::string* target,
+                                               std::string* error) const {
+  LoadedSchema* target_doc = nullptr;
+  std::string fragment;
+  if (!const_cast<JsonSchemaImporterImpl*>(this)->ResolveReference(
+          doc, ref, &target_doc, &fragment, error)) {
+    return false;
+  }
+  (void)target_doc;
+  std::string local = fragment;
+  if (!local.empty() && local[0] == '#') local.erase(local.begin());
+  if (!local.empty() && local[0] == '/') local.erase(local.begin());
+  const std::string prefix = std::string("$defs/") + category + "/";
+  if (local.compare(0, prefix.size(), prefix) != 0) {
+    if (error)
+      *error = std::string("Expected reference to ") + category +
+               ", found " + ref;
+    return false;
+  }
+  *target = local.substr(prefix.size());
   return true;
 }
 
@@ -716,17 +828,6 @@ bool JsonSchemaImporterImpl::VisitCommentMap(const std::string& comment_json,
   std::vector<uint8_t> storage(buffer.begin(), buffer.end());
   auto map = flexbuffers::GetRoot(storage).AsMap();
   return visitor(map, error);
-}
-
-flexbuffers::Map JsonSchemaImporterImpl::RootMap() const {
-  return flexbuffers::GetRoot(document_storage_).AsMap();
-}
-
-flexbuffers::Map JsonSchemaImporterImpl::DefsMap() const {
-  auto root = RootMap();
-  auto defs = root["$defs"];
-  FLATBUFFERS_ASSERT(defs.IsMap());
-  return defs.AsMap();
 }
 
 bool JsonSchemaImporterImpl::ParseNamespace(
@@ -772,22 +873,116 @@ bool JsonSchemaImporterImpl::ParseAttributes(const flexbuffers::Map& map,
   return true;
 }
 
-bool JsonSchemaImporterImpl::ParseTypeRef(const std::string& ref,
-                                          FieldTypeDesc* type, bool is_element,
-                                          std::string* error) {
-  static const std::string prefix = "#/$defs/";
-  if (ref.compare(0, prefix.size(), prefix) != 0) {
-    if (error)
-      *error = std::string("Unsupported $ref format: ") + ref;
+LoadedSchema* JsonSchemaImporterImpl::LoadSchemaFromContent(
+    const std::string& path, const std::string& json, bool is_root,
+    std::string* error) {
+  std::string abs_path = NormalizeAbsolutePath(path);
+  auto it = schemas_.find(abs_path);
+  if (it != schemas_.end()) {
+    auto* existing = it->second.get();
+    if (!existing->parsed) {
+      if (!ParseDocument(existing, json, error)) return nullptr;
+    }
+    if (is_root) root_schema_ = existing;
+    return existing;
+  }
+  auto doc = std::unique_ptr<LoadedSchema>(new LoadedSchema());
+  auto* doc_ptr = doc.get();
+  doc_ptr->abs_path = abs_path;
+  doc_ptr->directory = flatbuffers::StripFileName(abs_path);
+  doc_ptr->is_root = is_root;
+  if (!ParseDocument(doc_ptr, json, error)) return nullptr;
+  schema_order_.push_back(doc_ptr);
+  schemas_.emplace(abs_path, std::move(doc));
+  if (is_root) root_schema_ = doc_ptr;
+  return doc_ptr;
+}
+
+LoadedSchema* JsonSchemaImporterImpl::LoadSchemaFromFile(
+    const std::string& path, std::string* error) {
+  std::string abs_path = NormalizeAbsolutePath(path);
+  auto it = schemas_.find(abs_path);
+  if (it != schemas_.end()) return it->second.get();
+  std::string contents;
+  if (!flatbuffers::LoadFile(abs_path.c_str(), true, &contents)) {
+    if (error) *error = std::string("Unable to load JSON schema: ") + abs_path;
+    return nullptr;
+  }
+  return LoadSchemaFromContent(abs_path, contents, false, error);
+}
+
+bool JsonSchemaImporterImpl::ResolveReference(const LoadedSchema& doc,
+                                              const std::string& ref,
+                                              LoadedSchema** target_doc,
+                                              std::string* fragment,
+                                              std::string* error) {
+  if (target_doc == nullptr || fragment == nullptr) {
+    if (error) *error = "Internal error: null $ref target.";
     return false;
   }
-  const auto rest = ref.substr(prefix.size());
+  std::string path;
+  std::string frag;
+  auto hash = ref.find('#');
+  if (hash == std::string::npos) {
+    path = ref;
+  } else {
+    path = ref.substr(0, hash);
+    frag = ref.substr(hash + 1);
+  }
+  LoadedSchema* resolved_doc = const_cast<LoadedSchema*>(&doc);
+  if (!path.empty()) {
+    std::string resolved = path;
+    if (!IsAbsolutePath(resolved)) {
+      resolved = flatbuffers::ConCatPathFileName(doc.directory, resolved);
+    }
+    auto loaded = LoadSchemaFromFile(resolved, error);
+    if (!loaded) return false;
+    resolved_doc = loaded;
+  }
+  if (frag.empty()) {
+    if (error)
+      *error = std::string("Missing fragment in $ref: ") + ref;
+    return false;
+  }
+  *target_doc = resolved_doc;
+  *fragment = frag;
+  return true;
+}
+
+bool JsonSchemaImporterImpl::ParseTypeRef(const std::string& ref,
+                                          FieldTypeDesc* type, bool is_element,
+                                          const LoadedSchema& doc,
+                                          std::string* error) {
+  LoadedSchema* target_doc = nullptr;
+  std::string fragment;
+  if (!ResolveReference(doc, ref, &target_doc, &fragment, error)) return false;
+  return ParseLocalRef(fragment, type, is_element, *target_doc, error);
+}
+
+bool JsonSchemaImporterImpl::ParseLocalRef(const std::string& fragment,
+                                           FieldTypeDesc* type,
+                                           bool is_element,
+                                           const LoadedSchema& doc,
+                                           std::string* error) {
+  (void)doc;
+  if (type == nullptr) {
+    if (error) *error = "Internal error: null FieldTypeDesc.";
+    return false;
+  }
+  std::string local = fragment;
+  if (!local.empty() && local[0] == '#') local.erase(local.begin());
+  if (!local.empty() && local[0] == '/') local.erase(local.begin());
+  const std::string defs_prefix = "$defs/";
+  if (local.compare(0, defs_prefix.size(), defs_prefix) != 0) {
+    if (error)
+      *error = std::string("Unsupported $ref format: #") + fragment;
+    return false;
+  }
+  const auto rest = local.substr(defs_prefix.size());
   const auto slash = rest.find('/');
   if (slash == std::string::npos) {
     if (error)
-      *error = std::string(
-                   "Incomplete $ref path (missing component): ") +
-               ref;
+      *error = std::string("Incomplete $ref path: #") + fragment;
     return false;
   }
   const auto category = rest.substr(0, slash);
@@ -796,7 +991,7 @@ bool JsonSchemaImporterImpl::ParseTypeRef(const std::string& ref,
     auto it = scalars_.find(target);
     if (it == scalars_.end()) {
       if (error)
-        *error = std::string("Unknown scalar reference: ") + ref;
+        *error = std::string("Unknown scalar reference: ") + target;
       return false;
     }
     if (is_element)
@@ -821,7 +1016,7 @@ bool JsonSchemaImporterImpl::ParseTypeRef(const std::string& ref,
     }
   } else {
     if (error)
-      *error = std::string("Unsupported $ref category: ") + ref;
+      *error = std::string("Unsupported $ref category: ") + category;
     return false;
   }
   return true;
@@ -829,6 +1024,7 @@ bool JsonSchemaImporterImpl::ParseTypeRef(const std::string& ref,
 
 bool JsonSchemaImporterImpl::ParseArrayType(const flexbuffers::Map& schema,
                                             FieldTypeDesc* type,
+                                            const LoadedSchema& doc,
                                             std::string* error) {
   auto items = schema["items"];
   if (!items.IsMap()) {
@@ -838,13 +1034,14 @@ bool JsonSchemaImporterImpl::ParseArrayType(const flexbuffers::Map& schema,
   auto items_map = items.AsMap();
   auto ref = items_map["$ref"];
   if (ref.IsString()) {
-    if (!ParseTypeRef(ref.AsString().str(), type, true, error)) return false;
+    if (!ParseTypeRef(ref.AsString().str(), type, true, doc, error))
+      return false;
   } else {
     auto all_of = items_map["allOf"];
     if (all_of.IsVector() && all_of.AsVector().size() > 0) {
       auto first = all_of.AsVector()[0].AsMap()["$ref"];
       if (first.IsString()) {
-        if (!ParseTypeRef(first.AsString().str(), type, true, error))
+        if (!ParseTypeRef(first.AsString().str(), type, true, doc, error))
           return false;
       }
     }
@@ -863,6 +1060,7 @@ bool JsonSchemaImporterImpl::ParseArrayType(const flexbuffers::Map& schema,
 
 bool JsonSchemaImporterImpl::ParseFieldType(const flexbuffers::Map& schema,
                                             FieldTypeDesc* type,
+                                            const LoadedSchema& doc,
                                             std::string* error) {
   auto any_of = schema["anyOf"];
   if (any_of.IsVector()) {
@@ -871,21 +1069,21 @@ bool JsonSchemaImporterImpl::ParseFieldType(const flexbuffers::Map& schema,
   }
   auto type_ref = schema["$ref"];
   if (type_ref.IsString()) {
-    return ParseTypeRef(type_ref.AsString().str(), type, false, error);
+    return ParseTypeRef(type_ref.AsString().str(), type, false, doc, error);
   }
   auto all_of = schema["allOf"];
   if (all_of.IsVector() && all_of.AsVector().size() > 0) {
     auto entry = all_of.AsVector()[0].AsMap();
     auto ref = entry["$ref"];
     if (ref.IsString()) {
-      return ParseTypeRef(ref.AsString().str(), type, false, error);
+      return ParseTypeRef(ref.AsString().str(), type, false, doc, error);
     }
   }
   auto type_string = schema["type"];
   if (type_string.IsString()) {
     const auto t = type_string.AsString().str();
     if (t == "array") {
-      return ParseArrayType(schema, type, error);
+      return ParseArrayType(schema, type, doc, error);
     } else if (t == "string") {
       type->base_type = reflection::String;
       return true;
@@ -1247,10 +1445,16 @@ bool JsonSchemaImporterImpl::BuildReflection(std::string* error) {
 
   Offset<reflection::Object> root_object = 0;
   std::string root_json_name;
-  if (!root_type_ref_.empty() &&
-      ExpectRefCategory(root_type_ref_, "types", &root_json_name)) {
+  if (!root_type_ref_.empty() && root_schema_ != nullptr &&
+      ExpectRefCategory(root_type_ref_, "types", *root_schema_,
+                        &root_json_name, error)) {
     auto it = object_offset_by_json.find(root_json_name);
-    if (it != object_offset_by_json.end()) root_object = it->second;
+    if (it != object_offset_by_json.end()) {
+      root_object = it->second;
+    } else if (error) {
+      *error = std::string("Unknown root object: ") + root_type_ref_;
+      return false;
+    }
   }
 
   auto schema_offset = reflection::CreateSchema(

@@ -18,6 +18,10 @@ echo "************************ TypeScript:"
 
 python3 ts/TypeScriptTest.py
 
+echo "************************ JSON Schema Workflow:"
+
+sh JsonSchemaWorkflowTest.sh
+
 echo "************************ C++:"
 
 ./CppTest.sh

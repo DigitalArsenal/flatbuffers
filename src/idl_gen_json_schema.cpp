@@ -22,6 +22,7 @@
 #include <map>
 #include <set>
 #include <sstream>
+#include <unordered_map>
 #include <vector>
 
 #include "flatbuffers/code_generators.h"
@@ -77,6 +78,35 @@ static std::string CommentFromBuilder(const JsonObjectBuilder& builder) {
 static std::string DefPath(const std::string& bucket, const std::string& name) {
   return "#/$defs/" + bucket + "/" + name;
 }
+
+static std::vector<std::string> SplitPathComponents(const std::string& path) {
+  std::vector<std::string> components;
+  std::stringstream ss(path);
+  std::string item;
+  while (std::getline(ss, item, '/')) {
+    if (!item.empty()) components.push_back(item);
+  }
+  return components;
+}
+
+static std::string JoinPathComponents(const std::vector<std::string>& comps) {
+  std::string joined;
+  for (size_t i = 0; i < comps.size(); ++i) {
+    if (i) joined.push_back('/');
+    joined += comps[i];
+  }
+  return joined;
+}
+
+struct SchemaDoc {
+  std::string normalized_fbs_path;
+  std::string schema_rel_path;
+  std::string schema_abs_path;
+  std::string schema_id;
+  std::vector<const StructDef*> structs;
+  std::vector<const EnumDef*> enums;
+  std::vector<const ServiceDef*> services;
+};
 
 static std::string BuildStringArrayLiteral(
     const std::vector<std::string>& values) {
@@ -179,26 +209,52 @@ static std::string GenFullName(const T* enum_def) {
 class JsonSchemaGenerator : public BaseGenerator {
  private:
   std::string code_;
-  std::string BuildScalarDefinitions() const;
-  std::string BuildEnumDefinitions();
-  std::string BuildFieldDefinitions();
-  std::string BuildTypeDefinitions();
-  std::string BuildServiceDefinitions();
-  std::string BuildTopLevelComment() const;
+  std::map<std::string, SchemaDoc> documents_;
+  const SchemaDoc* root_doc_ = nullptr;
+  std::unordered_map<const StructDef*, SchemaDoc*> struct_doc_lookup_;
+  std::unordered_map<const EnumDef*, SchemaDoc*> enum_doc_lookup_;
+  std::unordered_map<const ServiceDef*, SchemaDoc*> service_doc_lookup_;
+  std::string default_schema_file_;
+
+  bool BuildDocuments();
+  bool GenerateDocument(SchemaDoc& doc);
+  bool SaveDocument(const SchemaDoc& doc) const;
+
+  std::string BuildScalarDefinitions(const SchemaDoc& doc) const;
+  std::string BuildEnumDefinitions(const SchemaDoc& doc);
+  std::string BuildFieldDefinitions(const SchemaDoc& doc);
+  std::string BuildTypeDefinitions(const SchemaDoc& doc);
+  std::string BuildServiceDefinitions(const SchemaDoc& doc);
+  std::string BuildTopLevelComment(const SchemaDoc& doc) const;
   std::string BuildStructMetadata(const StructDef& structure) const;
   std::string BuildFieldMetadata(const FieldDef& field,
                                  uint16_t field_index) const;
-  std::vector<std::string> BuildTypeEntries(const Type& type) const;
+  std::vector<std::string> BuildTypeEntries(const Type& type,
+                                            const SchemaDoc& doc) const;
   std::string BuildDefaultLiteral(const FieldDef& field) const;
-  std::string BuildUnionAnyOf(const EnumDef& enum_def) const;
+  std::string BuildUnionAnyOf(const EnumDef& enum_def,
+                              const SchemaDoc& doc) const;
   std::string BuildEnumMetadata(const EnumDef& enum_def) const;
   std::string BuildServiceMetadata(const ServiceDef& service) const;
   std::string BuildCallMetadata(const RPCCall& call) const;
   std::string BuildAttributesArray(
       const SymbolTable<Value>& attributes) const;
   std::string BuildSchemaFilesMetadata() const;
-  std::string TypeReferenceLiteral(const Type& type) const;
+  std::string TypeReferenceLiteral(const Type& type,
+                                   const SchemaDoc& current_doc) const;
   std::string BuildAdvancedFeaturesArray() const;
+
+  const SchemaDoc* DocForStruct(const StructDef* def) const;
+  const SchemaDoc* DocForEnum(const EnumDef* def) const;
+  const SchemaDoc* DocForService(const ServiceDef* def) const;
+  SchemaDoc* GetOrCreateDoc(const std::string& normalized_path);
+  std::string NormalizeDeclarationFile(const std::string* decl) const;
+  std::string SchemaFileName(const std::string& normalized_path) const;
+  std::string RelativePathBetween(const std::string& from_file,
+                                  const std::string& to_file) const;
+  std::string BuildRef(const SchemaDoc& from, const SchemaDoc& to,
+                       const std::string& bucket,
+                       const std::string& name) const;
 
  public:
   JsonSchemaGenerator(const Parser& parser, const std::string& path,
@@ -208,12 +264,22 @@ class JsonSchemaGenerator : public BaseGenerator {
   explicit JsonSchemaGenerator(const BaseGenerator& base_generator)
       : BaseGenerator(base_generator) {}
 
-  std::string GeneratedFileName(const std::string& path,
-                                const std::string& file_name,
-                                const IDLOptions& options /* unused */) const {
-    (void)options;
-    return path + file_name + ".schema.json";
+  bool generate() {
+    if (parser_.root_struct_def_ == nullptr) {
+      std::cerr << "Error: Binary schema not generated, no root struct found\n";
+      return false;
+    }
+    if (!BuildDocuments()) return false;
+    for (auto& entry : documents_) {
+      if (!GenerateDocument(entry.second)) return false;
+      if (!SaveDocument(entry.second)) return false;
+    }
+    return true;
   }
+
+  bool save() const { return true; }
+
+  const std::string getJson() { return code_; }
 
   // If indentation is less than 0, that indicates we don't want any newlines
   // either.
@@ -258,52 +324,194 @@ class JsonSchemaGenerator : public BaseGenerator {
     }
     return "";
   }
+};
 
-  bool generate() {
-    code_.clear();
-    if (parser_.root_struct_def_ == nullptr) {
-      std::cerr << "Error: Binary schema not generated, no root struct found\n";
-      return false;
+bool JsonSchemaGenerator::BuildDocuments() {
+  documents_.clear();
+  struct_doc_lookup_.clear();
+  enum_doc_lookup_.clear();
+  service_doc_lookup_.clear();
+  root_doc_ = nullptr;
+
+  if (parser_.root_struct_def_ &&
+      parser_.root_struct_def_->declaration_file != nullptr) {
+    default_schema_file_ =
+        NormalizeDeclarationFile(parser_.root_struct_def_->declaration_file);
+  } else {
+    default_schema_file_ = file_name_ + ".fbs";
+  }
+
+  for (const auto* structure : parser_.structs_.vec) {
+    auto* doc = GetOrCreateDoc(
+        NormalizeDeclarationFile(structure->declaration_file));
+    doc->structs.push_back(structure);
+    struct_doc_lookup_[structure] = doc;
+  }
+
+  for (const auto* enum_def : parser_.enums_.vec) {
+    auto* doc =
+        GetOrCreateDoc(NormalizeDeclarationFile(enum_def->declaration_file));
+    doc->enums.push_back(enum_def);
+    enum_doc_lookup_[enum_def] = doc;
+  }
+
+  for (const auto* service : parser_.services_.vec) {
+    auto* doc =
+        GetOrCreateDoc(NormalizeDeclarationFile(service->declaration_file));
+    doc->services.push_back(service);
+    service_doc_lookup_[service] = doc;
+  }
+
+  if (parser_.root_struct_def_) {
+    root_doc_ = DocForStruct(parser_.root_struct_def_);
+  }
+  if (!root_doc_) {
+    root_doc_ = GetOrCreateDoc(default_schema_file_);
+  }
+  return true;
+}
+
+SchemaDoc* JsonSchemaGenerator::GetOrCreateDoc(
+    const std::string& normalized_path) {
+  const auto key =
+      normalized_path.empty() ? default_schema_file_ : normalized_path;
+  auto it = documents_.find(key);
+  if (it != documents_.end()) return &it->second;
+
+  SchemaDoc doc;
+  doc.normalized_fbs_path = key;
+  doc.schema_rel_path = SchemaFileName(key);
+  doc.schema_abs_path =
+      flatbuffers::ConCatPathFileName(path_, doc.schema_rel_path);
+  doc.schema_id = doc.schema_rel_path;
+  auto inserted = documents_.emplace(key, std::move(doc));
+  return &inserted.first->second;
+}
+
+const SchemaDoc* JsonSchemaGenerator::DocForStruct(
+    const StructDef* def) const {
+  auto it = struct_doc_lookup_.find(def);
+  if (it != struct_doc_lookup_.end()) return it->second;
+  return root_doc_;
+}
+
+const SchemaDoc* JsonSchemaGenerator::DocForEnum(const EnumDef* def) const {
+  auto it = enum_doc_lookup_.find(def);
+  if (it != enum_doc_lookup_.end()) return it->second;
+  return root_doc_;
+}
+
+const SchemaDoc* JsonSchemaGenerator::DocForService(
+    const ServiceDef* def) const {
+  auto it = service_doc_lookup_.find(def);
+  if (it != service_doc_lookup_.end()) return it->second;
+  return root_doc_;
+}
+
+std::string JsonSchemaGenerator::NormalizeDeclarationFile(
+    const std::string* decl) const {
+  if (decl != nullptr && !decl->empty()) {
+    std::string normalized = *decl;
+    if (normalized.compare(0, 2, "//") == 0) {
+      normalized = normalized.substr(2);
     }
-
-    const auto schema_file_name = file_name_ + ".schema.json";
-
-    code_ += "{" + NewLine();
-    code_ += Indent(1) +
-             "\"$schema\": \"https://json-schema.org/draft/2019-09/schema\"," +
-             NewLine();
-    code_ += Indent(1) + "\"$id\": " + QuoteString(schema_file_name) + "," +
-             NewLine();
-    code_ += Indent(1) + "\"$comment\": " + BuildTopLevelComment() + "," +
-             NewLine();
-    code_ += Indent(1) + "\"$defs\": {" + NewLine();
-
-    std::vector<std::string> sections = {
-        BuildScalarDefinitions(), BuildEnumDefinitions(),
-        BuildFieldDefinitions(),  BuildTypeDefinitions(),
-        BuildServiceDefinitions()};
-    for (size_t i = 0; i < sections.size(); ++i) {
-      code_ += sections[i];
-      code_ += (i + 1 < sections.size() ? "," : "") + NewLine();
+    normalized = flatbuffers::PosixPath(normalized);
+    while (!normalized.empty() && normalized.front() == '/') {
+      normalized.erase(normalized.begin());
     }
+    return normalized;
+  }
+  return default_schema_file_;
+}
 
-    code_ += Indent(1) + "}," + NewLine();
+std::string JsonSchemaGenerator::SchemaFileName(
+    const std::string& normalized_path) const {
+  std::string path =
+      normalized_path.empty() ? default_schema_file_ : normalized_path;
+  path = flatbuffers::PosixPath(path);
+  auto dot = path.find_last_of('.');
+  if (dot == std::string::npos) return path + ".schema.json";
+  return path.substr(0, dot) + ".schema.json";
+}
+
+std::string JsonSchemaGenerator::RelativePathBetween(
+    const std::string& from_file, const std::string& to_file) const {
+  auto from_dir = flatbuffers::StripFileName(from_file);
+  auto from_parts = SplitPathComponents(flatbuffers::PosixPath(from_dir));
+  auto to_parts = SplitPathComponents(flatbuffers::PosixPath(to_file));
+
+  size_t common = 0;
+  while (common < from_parts.size() && common < to_parts.size() &&
+         from_parts[common] == to_parts[common]) {
+    ++common;
+  }
+
+  std::vector<std::string> rel_parts;
+  for (size_t i = common; i < from_parts.size(); ++i) {
+    rel_parts.push_back("..");
+  }
+  for (size_t i = common; i < to_parts.size(); ++i) {
+    rel_parts.push_back(to_parts[i]);
+  }
+  if (rel_parts.empty()) return flatbuffers::StripPath(to_file);
+  return JoinPathComponents(rel_parts);
+}
+
+std::string JsonSchemaGenerator::BuildRef(const SchemaDoc& from,
+                                          const SchemaDoc& to,
+                                          const std::string& bucket,
+                                          const std::string& name) const {
+  if (&from == &to) {
+    return "\"$ref\": \"" + DefPath(bucket, name) + "\"";
+  }
+  auto rel = RelativePathBetween(from.schema_rel_path, to.schema_rel_path);
+  std::string target = rel.empty() ? to.schema_rel_path : rel;
+  return "\"$ref\": \"" + target + "#/$defs/" + bucket + "/" + name + "\"";
+}
+
+bool JsonSchemaGenerator::GenerateDocument(SchemaDoc& doc) {
+  code_.clear();
+  code_ += "{" + NewLine();
+  code_ += Indent(1) +
+           "\"$schema\": \"https://json-schema.org/draft/2019-09/schema\"," +
+           NewLine();
+  code_ += Indent(1) + "\"$id\": " + QuoteString(doc.schema_id) + "," +
+           NewLine();
+  code_ += Indent(1) + "\"$comment\": " + BuildTopLevelComment(doc) + "," +
+           NewLine();
+  code_ += Indent(1) + "\"$defs\": {" + NewLine();
+
+  std::vector<std::string> sections = {
+      BuildScalarDefinitions(doc), BuildEnumDefinitions(doc),
+      BuildFieldDefinitions(doc),  BuildTypeDefinitions(doc),
+      BuildServiceDefinitions(doc)};
+  for (size_t i = 0; i < sections.size(); ++i) {
+    code_ += sections[i];
+    code_ += (i + 1 < sections.size() ? "," : "") + NewLine();
+  }
+
+  code_ += Indent(1) + "}";
+  if (&doc == root_doc_) {
+    code_ += "," + NewLine();
     code_ += Indent(1) + "\"$ref\": \"" +
              DefPath("types", GenFullName(parser_.root_struct_def_)) + "\"" +
              NewLine();
-    code_ += "}" + NewLine();
-    return true;
+  } else {
+    code_ += NewLine();
   }
+  code_ += "}" + NewLine();
+  return true;
+}
 
-  bool save() const {
-    const auto file_path = GeneratedFileName(path_, file_name_, parser_.opts);
-    return SaveFile(file_path.c_str(), code_, false);
-  }
+bool JsonSchemaGenerator::SaveDocument(const SchemaDoc& doc) const {
+  auto directory = flatbuffers::StripFileName(doc.schema_abs_path);
+  flatbuffers::EnsureDirExists(directory);
+  return SaveFile(doc.schema_abs_path.c_str(), code_, false);
+}
 
-  const std::string getJson() { return code_; }
-};
-
-std::string JsonSchemaGenerator::BuildScalarDefinitions() const {
+std::string JsonSchemaGenerator::BuildScalarDefinitions(
+    const SchemaDoc& doc) const {
+  (void)doc;
   const std::vector<BaseType> scalar_types = {
       BASE_TYPE_BOOL,   BASE_TYPE_CHAR,  BASE_TYPE_UCHAR,
       BASE_TYPE_SHORT,  BASE_TYPE_USHORT, BASE_TYPE_INT,
@@ -331,11 +539,11 @@ std::string JsonSchemaGenerator::BuildScalarDefinitions() const {
   return section;
 }
 
-std::string JsonSchemaGenerator::BuildEnumDefinitions() {
+std::string JsonSchemaGenerator::BuildEnumDefinitions(const SchemaDoc& doc) {
   std::string section;
   section += Indent(2) + "\"enums\": {" + NewLine();
-  for (size_t i = 0; i < parser_.enums_.vec.size(); ++i) {
-    const auto* enum_def = parser_.enums_.vec[i];
+  for (size_t i = 0; i < doc.enums.size(); ++i) {
+    const auto* enum_def = doc.enums[i];
     const auto full_name = GenFullName(enum_def);
     section += Indent(3) + "\"" + full_name + "\": {" + NewLine();
     section += Indent(4) + "\"$anchor\": \"" + full_name + "\"," + NewLine();
@@ -356,18 +564,18 @@ std::string JsonSchemaGenerator::BuildEnumDefinitions() {
       section += Indent(4) + "\"description\": " + description;
     }
     section += NewLine() + Indent(3) + "}";
-    if (i + 1 < parser_.enums_.vec.size()) section += ",";
+    if (i + 1 < doc.enums.size()) section += ",";
     section += NewLine();
   }
   section += Indent(2) + "}";
   return section;
 }
 
-std::string JsonSchemaGenerator::BuildFieldDefinitions() {
+std::string JsonSchemaGenerator::BuildFieldDefinitions(const SchemaDoc& doc) {
   std::string section;
   section += Indent(2) + "\"fields\": {" + NewLine();
-  for (size_t i = 0; i < parser_.structs_.vec.size(); ++i) {
-    const auto* structure = parser_.structs_.vec[i];
+  for (size_t i = 0; i < doc.structs.size(); ++i) {
+    const auto* structure = doc.structs[i];
     const auto full_name = GenFullName(structure);
     section += Indent(3) + "\"" + full_name + "\": {" + NewLine();
     const auto& fields = structure->fields.vec;
@@ -378,7 +586,7 @@ std::string JsonSchemaGenerator::BuildFieldDefinitions() {
       entries.push_back("\"$comment\": " +
                         BuildFieldMetadata(*field,
                                            static_cast<uint16_t>(f)));
-      auto type_entries = BuildTypeEntries(field->value.type);
+      auto type_entries = BuildTypeEntries(field->value.type, doc);
       entries.insert(entries.end(), type_entries.begin(), type_entries.end());
       auto default_literal = BuildDefaultLiteral(*field);
       if (!default_literal.empty()) {
@@ -401,18 +609,18 @@ std::string JsonSchemaGenerator::BuildFieldDefinitions() {
       section += NewLine();
     }
     section += Indent(3) + "}";
-    if (i + 1 < parser_.structs_.vec.size()) section += ",";
+    if (i + 1 < doc.structs.size()) section += ",";
     section += NewLine();
   }
   section += Indent(2) + "}";
   return section;
 }
 
-std::string JsonSchemaGenerator::BuildTypeDefinitions() {
+std::string JsonSchemaGenerator::BuildTypeDefinitions(const SchemaDoc& doc) {
   std::string section;
   section += Indent(2) + "\"types\": {" + NewLine();
-  for (size_t i = 0; i < parser_.structs_.vec.size(); ++i) {
-    const auto* structure = parser_.structs_.vec[i];
+  for (size_t i = 0; i < doc.structs.size(); ++i) {
+    const auto* structure = doc.structs[i];
     const auto full_name = GenFullName(structure);
     section += Indent(3) + "\"" + full_name + "\": {" + NewLine();
     std::vector<std::string> entries;
@@ -460,18 +668,19 @@ std::string JsonSchemaGenerator::BuildTypeDefinitions() {
       section += NewLine();
     }
     section += Indent(3) + "}";
-    if (i + 1 < parser_.structs_.vec.size()) section += ",";
+    if (i + 1 < doc.structs.size()) section += ",";
     section += NewLine();
   }
   section += Indent(2) + "}";
   return section;
 }
 
-std::string JsonSchemaGenerator::BuildServiceDefinitions() {
+std::string JsonSchemaGenerator::BuildServiceDefinitions(
+    const SchemaDoc& doc) {
   std::string section;
   section += Indent(2) + "\"services\": {" + NewLine();
-  for (size_t i = 0; i < parser_.services_.vec.size(); ++i) {
-    const auto* service = parser_.services_.vec[i];
+  for (size_t i = 0; i < doc.services.size(); ++i) {
+    const auto* service = doc.services[i];
     const auto full_name = GenFullName(service);
     section += Indent(3) + "\"" + full_name + "\": {" + NewLine();
     std::vector<std::string> entries;
@@ -490,13 +699,17 @@ std::string JsonSchemaGenerator::BuildServiceDefinitions() {
       std::vector<std::string> call_entries;
       call_entries.push_back("\"$comment\": " + BuildCallMetadata(*call));
       call_entries.push_back("\"type\": \"object\"");
-      call_entries.push_back(
-          "\"properties\": {\"request\": { \"$ref\": \"" +
-          DefPath("types", GenFullName(call->request)) +
-          "\" }, \"response\": { \"$ref\": \"" +
-          DefPath("types", GenFullName(call->response)) + "\" }}");
-      call_entries.push_back(
-          "\"required\": [\"request\", \"response\"]");
+      const auto* request_doc = DocForStruct(call->request);
+      const auto* response_doc = DocForStruct(call->response);
+      std::string props = "\"properties\": {\"request\": { " +
+                          BuildRef(doc, *request_doc, "types",
+                                   GenFullName(call->request)) +
+                          " }, \"response\": { " +
+                          BuildRef(doc, *response_doc, "types",
+                                   GenFullName(call->response)) +
+                          " }}";
+      call_entries.push_back(props);
+      call_entries.push_back("\"required\": [\"request\", \"response\"]");
       call_entries.push_back("\"additionalProperties\": false");
       for (size_t ce = 0; ce < call_entries.size(); ++ce) {
         properties += Indent(6) + call_entries[ce];
@@ -517,19 +730,23 @@ std::string JsonSchemaGenerator::BuildServiceDefinitions() {
       section += NewLine();
     }
     section += Indent(3) + "}";
-    if (i + 1 < parser_.services_.vec.size()) section += ",";
+    if (i + 1 < doc.services.size()) section += ",";
     section += NewLine();
   }
   section += Indent(2) + "}";
   return section;
 }
 
-std::string JsonSchemaGenerator::BuildTopLevelComment() const {
+std::string JsonSchemaGenerator::BuildTopLevelComment(
+    const SchemaDoc& doc) const {
   JsonObjectBuilder meta;
-  meta.Add("file_ident", QuoteString(parser_.file_identifier_));
-  meta.Add("file_ext", QuoteString(parser_.file_extension_));
-  meta.Add("advanced_features", BuildAdvancedFeaturesArray());
-  meta.Add("fbs_files", BuildSchemaFilesMetadata());
+  meta.Add("source", QuoteString(doc.normalized_fbs_path));
+  if (&doc == root_doc_) {
+    meta.Add("file_ident", QuoteString(parser_.file_identifier_));
+    meta.Add("file_ext", QuoteString(parser_.file_extension_));
+    meta.Add("advanced_features", BuildAdvancedFeaturesArray());
+    meta.Add("fbs_files", BuildSchemaFilesMetadata());
+  }
   return CommentFromBuilder(meta);
 }
 
@@ -609,7 +826,7 @@ std::string JsonSchemaGenerator::BuildFieldMetadata(
 }
 
 std::vector<std::string> JsonSchemaGenerator::BuildTypeEntries(
-    const Type& type) const {
+    const Type& type, const SchemaDoc& doc) const {
   std::vector<std::string> entries;
   const bool is_vector =
       type.base_type == BASE_TYPE_VECTOR || type.base_type == BASE_TYPE_VECTOR64;
@@ -618,9 +835,10 @@ std::vector<std::string> JsonSchemaGenerator::BuildTypeEntries(
     const auto element_type = type.VectorType();
     if (element_type.base_type == BASE_TYPE_UNION) {
       entries.push_back("\"items\": { \"anyOf\": " +
-                        BuildUnionAnyOf(*element_type.enum_def) + " }");
+                        BuildUnionAnyOf(*element_type.enum_def, doc) + " }");
     } else {
-      entries.push_back("\"items\": " + TypeReferenceLiteral(element_type));
+      entries.push_back("\"items\": " +
+                        TypeReferenceLiteral(element_type, doc));
     }
     if (type.base_type == BASE_TYPE_ARRAY && type.fixed_length > 0) {
       const auto length = NumToString(type.fixed_length);
@@ -631,21 +849,25 @@ std::vector<std::string> JsonSchemaGenerator::BuildTypeEntries(
   }
 
   if (type.base_type == BASE_TYPE_UNION) {
-    entries.push_back("\"anyOf\": " + BuildUnionAnyOf(*type.enum_def));
+    entries.push_back("\"anyOf\": " + BuildUnionAnyOf(*type.enum_def, doc));
     return entries;
   }
 
   if (type.struct_def != nullptr) {
-    entries.push_back("\"allOf\": [{ \"$ref\": \"" +
-                      DefPath("types", GenFullName(type.struct_def)) +
-                      "\" }]");
+    const auto* target_doc = DocForStruct(type.struct_def);
+    entries.push_back("\"allOf\": [{ " +
+                      BuildRef(doc, *target_doc, "types",
+                               GenFullName(type.struct_def)) +
+                      " }]");
     return entries;
   }
 
   if (type.enum_def != nullptr) {
-    entries.push_back("\"allOf\": [{ \"$ref\": \"" +
-                      DefPath("enums", GenFullName(type.enum_def)) +
-                      "\" }]");
+    const auto* target_doc = DocForEnum(type.enum_def);
+    entries.push_back("\"allOf\": [{ " +
+                      BuildRef(doc, *target_doc, "enums",
+                               GenFullName(type.enum_def)) +
+                      " }]");
     return entries;
   }
 
@@ -695,15 +917,17 @@ std::string JsonSchemaGenerator::BuildDefaultLiteral(
 }
 
 std::string JsonSchemaGenerator::BuildUnionAnyOf(
-    const EnumDef& enum_def) const {
+    const EnumDef& enum_def, const SchemaDoc& doc) const {
   std::vector<std::string> options;
   for (const auto* enum_val : enum_def.Vals()) {
     const auto& union_type = enum_val->union_type;
     if (union_type.base_type == BASE_TYPE_NONE) continue;
     if (union_type.struct_def != nullptr) {
-      options.push_back("{ \"$ref\": \"" +
-                        DefPath("types", GenFullName(union_type.struct_def)) +
-                        "\" }");
+      const auto* target_doc = DocForStruct(union_type.struct_def);
+      options.push_back("{ " +
+                        BuildRef(doc, *target_doc, "types",
+                                 GenFullName(union_type.struct_def)) +
+                        " }");
     }
   }
   return BuildArrayLiteral(options);
@@ -806,17 +1030,23 @@ std::string JsonSchemaGenerator::BuildSchemaFilesMetadata() const {
   return BuildArrayLiteral(files);
 }
 
-std::string JsonSchemaGenerator::TypeReferenceLiteral(const Type& type) const {
+std::string JsonSchemaGenerator::TypeReferenceLiteral(
+    const Type& type, const SchemaDoc& current_doc) const {
   if (type.base_type == BASE_TYPE_UNION) {
-    return "{ \"anyOf\": " + BuildUnionAnyOf(*type.enum_def) + " }";
+    return "{ \"anyOf\": " + BuildUnionAnyOf(*type.enum_def, current_doc) +
+           " }";
   }
   if (type.struct_def != nullptr) {
-    return "{ \"$ref\": \"" + DefPath("types", GenFullName(type.struct_def)) +
-           "\" }";
+    const auto* target = DocForStruct(type.struct_def);
+    return "{ " + BuildRef(current_doc, *target, "types",
+                           GenFullName(type.struct_def)) +
+           " }";
   }
   if (type.enum_def != nullptr) {
-    return "{ \"$ref\": \"" + DefPath("enums", GenFullName(type.enum_def)) +
-           "\" }";
+    const auto* target = DocForEnum(type.enum_def);
+    return "{ " + BuildRef(current_doc, *target, "enums",
+                           GenFullName(type.enum_def)) +
+           " }";
   }
   const auto* base_name = reflection::EnumNameBaseType(
       static_cast<reflection::BaseType>(type.base_type));

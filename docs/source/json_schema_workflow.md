@@ -1,10 +1,8 @@
 # FlatBuffers JSON Schema Workflow {#json_schema_workflow}
 
 This page outlines the feature work that allows FlatBuffers developers to use a
-Draft 2019-09 JSON Schema as the source of truth instead of the `.fbs` IDL. The
-workflow is **one-directional today** (IR ➜ JSON Schema via
-`idl_gen_json_schema`). The feature described here makes it bidirectional by
-defining an encoding that preserves every detail of `reflection.fbs` using only
+Draft 2019-09 JSON Schema as the source of truth instead of the `.fbs` IDL. This feature
+defines an encoding that preserves every detail of `reflection.fbs` using only
 standard JSON Schema vocabulary (`$defs`, `$ref`, `$id`, `$anchor`, etc.) and
 meta-annotations such as `$comment`. Once implemented, any conformant JSON
 Schema document produced under these rules can be ingested back into FlatBuffers
@@ -60,7 +58,7 @@ Every compliant schema produced by the enhanced generator follows this skeleton:
 {
   "$schema": "https://json-schema.org/draft/2019-09/schema",
   "$id": "https://schemas.example.com/mygame/monster.schema.json",
-  "$comment": "{\"file_ident\":\"MONS\",\"file_ext\":\"bfbs\",\"advanced_features\":[\"OptionalScalars\"]}",
+  "$comment": "{\"source\":\"monsters.fbs\",\"file_ident\":\"MONS\",\"file_ext\":\"bfbs\",\"advanced_features\":[\"OptionalScalars\"]}",
   "$defs": {
     "types": {},
     "fields": {},
@@ -76,8 +74,11 @@ Key properties:
 
 - `$ref` still points at the root type definition just like the existing
   generator, so validators behave the same.
-- `$comment` carries IR-wide metadata as a JSON-encoded string. Validators
-  ignore `$comment` so the document stays valid.
+- `$comment` carries IR metadata as a JSON-encoded string. Validators ignore
+  `$comment` so the document stays valid. Non-root documents populate
+  `"source"` with the `.fbs` file they were generated from, while the root
+  additionally records file identifier, extension, include graph, and advanced
+  features.
 - `$defs` is partitioned to make importing deterministic: `types`, `fields`,
   `enums`, `services`, and common `scalars`.
 - `$id` may be any URI; we recommend aligning it with how users publish
@@ -97,6 +98,15 @@ The importer converts a JSON Schema back into FlatBuffers IR via:
 ```sh
 flatc --from-jsonschema build/jsonschema/monster.schema.json --cpp --rust
 ```
+
+When the original schema `include`s other `.fbs` files, `flatc --jsonschema`
+mirrors that tree by writing one `.schema.json` file per input file underneath
+the chosen output directory. The filenames remain relative, so a root schema
+such as `monster.fbs` produces `monster.schema.json` plus siblings like
+`include_test/include_test1.schema.json`. References between files become
+cross-document `$ref`s (for example,
+`"include_test/include_test1.schema.json#/$defs/types/TableA"`), and the
+importer automatically loads those documents as it resolves the include graph.
 
 ## Encoding Type Definitions
 
@@ -278,10 +288,13 @@ references.
 
 `reflection::Schema` keeps track of every `.fbs` file involved, their includes,
 and which advanced features were used. We encode this data at the root-level
-`$comment` JSON string so it is preserved without introducing vendor keywords:
+`$comment` JSON string so it is preserved without introducing vendor keywords.
+Additionally, each document stores the path to the `.fbs` file that produced it
+via `"source"`, which helps tooling round-trip include graphs:
 
 ```json
 "$comment": "{
+  \"source\": \"monsters.fbs\",
   \"file_ident\": \"MONS\",
   \"file_ext\": \"bfbs\",
   \"fbs_files\": [
@@ -300,8 +313,9 @@ Importers simply parse this JSON block and populate the corresponding fields in
 1. **Parse the JSON Schema** using any Draft 2019-09 compliant parser. The
    importer must preserve `$defs` ordering for reproducibility but functionally
    can treat them as unordered maps.
-2. **Resolve `$ref`s** relative to `$id`. Because every reference stays inside
-   the document, a lightweight resolver is sufficient.
+2. **Resolve `$ref`s** relative to `$id`. References may point at neighboring
+   documents (mirroring `include`), so the importer must load those files
+   lazily before interpreting the fragment.
 3. **Build lookup tables** for `$defs.types`, `$defs.fields`, `$defs.enums`,
    `$defs.services`, and `$defs.scalars`.
 4. **Reconstruct objects (tables/structs)**:
@@ -350,7 +364,7 @@ Below is an abbreviated but coherent sample demonstrating everything together.
 {
   "$schema": "https://json-schema.org/draft/2019-09/schema",
   "$id": "https://schemas.example.com/mygame/monster.schema.json",
-  "$comment": "{\"file_ident\":\"MONS\",\"file_ext\":\"bfbs\",\"advanced_features\":[]}",
+  "$comment": "{\"source\":\"monster_test.fbs\",\"file_ident\":\"MONS\",\"file_ext\":\"bfbs\",\"advanced_features\":[]}",
   "$defs": {
     "scalars": {
       "Int16": {

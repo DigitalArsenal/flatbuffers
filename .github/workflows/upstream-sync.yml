@@ -28,13 +28,16 @@ jobs:
           git remote add upstream https://github.com/google/flatbuffers.git
           git fetch upstream master
 
-      - name: Fast-forward master
+      - name: Merge upstream/master into master
         run: |
           git checkout master
-          git merge --ff-only upstream/master || {
-            echo "Local changes prevent fast-forward; skipping push.";
-            exit 0;
-          }
+          if git merge --no-edit upstream/master; then
+            echo "Merge successful."
+          else
+            echo "Merge conflict detected; aborting sync."
+            git merge --abort || true
+            exit 1
+          fi
 
       - name: Push updated master
         run: |

@@ -38,6 +38,21 @@ void FlatCompiler::ParseFile(
     flatbuffers::Parser& parser, const std::string& filename,
     const std::string& contents,
     const std::vector<const char*>& include_directories) const {
+  const bool is_json_schema =
+      filename.size() >= strlen(".schema.json") &&
+      filename.compare(filename.size() - strlen(".schema.json"),
+                       strlen(".schema.json"), ".schema.json") == 0;
+
+  if (is_json_schema) {
+    if (!parser.ParseJsonSchema(contents.c_str(), filename.c_str())) {
+      Error(parser.error_, false, false);
+    }
+    if (!parser.error_.empty()) {
+      Warn(parser.error_, false);
+    }
+    return;
+  }
+
   auto local_include_directory = flatbuffers::StripFileName(filename);
 
   std::vector<const char*> inc_directories;
@@ -260,6 +275,8 @@ const static FlatCOption flatc_options[] = {
     {"", "python-no-type-prefix-suffix", "",
      "Skip emission of Python functions that are prefixed with typenames"},
     {"", "preserve-case", "", "Preserve all property cases as defined in IDL"},
+    {"", "jsonschema-xflatbuffers", "",
+     "Include x-flatbuffers metadata in generated JSON Schema."},
     {"", "python-typing", "", "Generate Python type annotations"},
     {"", "python-version", "", "Generate code for the given Python version."},
     {"", "python-decode-obj-api-strings", "",
@@ -397,8 +414,9 @@ std::string FlatCompiler::GetUsageString(
   ss << "\n";
 
   std::string files_description =
-      "FILEs may be schemas (must end in .fbs), binary schemas (must end in "
-      ".bfbs) or JSON files (conforming to preceding schema). BINARY_FILEs "
+      "FILEs may be schemas (must end in .fbs, .proto, or .schema.json), "
+      "binary schemas (must end in .bfbs) or JSON files (conforming to "
+      "preceding schema). BINARY_FILEs "
       "after the -- must be binary flatbuffer format files. Output files are "
       "named using the base file name of the input, and written to the current "
       "directory or the path given by -o. example: " +
@@ -658,6 +676,8 @@ FlatCOptions FlatCompiler::ParseFromCommandLineArguments(int argc,
         opts.set_empty_vectors_to_null = false;
       } else if (arg == "--preserve-case") {
         options.preserve_case = true;
+      } else if (arg == "--jsonschema-xflatbuffers") {
+        opts.jsonschema_include_xflatbuffers = true;
       } else if (arg == "--java-primitive-has-method") {
         opts.java_primitive_has_method = true;
       } else if (arg == "--cs-gen-json-serializer") {
@@ -885,7 +905,11 @@ std::unique_ptr<Parser> FlatCompiler::GenerateCode(const FlatCOptions& options,
     bool is_binary = static_cast<size_t>(file_it - options.filenames.begin()) >=
                      options.binary_files_from;
     auto ext = flatbuffers::GetExtension(filename);
-    const bool is_schema = ext == "fbs" || ext == "proto";
+    const bool is_json_schema =
+        filename.size() >= strlen(".schema.json") &&
+        filename.compare(filename.size() - strlen(".schema.json"),
+                         strlen(".schema.json"), ".schema.json") == 0;
+    const bool is_schema = is_json_schema || ext == "fbs" || ext == "proto";
     if (is_schema && opts.project_root.empty()) {
       opts.project_root = StripFileName(filename);
     }
@@ -965,8 +989,13 @@ std::unique_ptr<Parser> FlatCompiler::GenerateCode(const FlatCOptions& options,
         parser->file_extension_ = reflection::SchemaExtension();
       }
     }
-    std::string filebase =
-        flatbuffers::StripPath(flatbuffers::StripExtension(filename));
+    std::string filebase = flatbuffers::StripPath(filename);
+    if (is_json_schema) {
+      filebase =
+          filebase.substr(0, filebase.size() - strlen(".schema.json"));
+    } else {
+      filebase = flatbuffers::StripExtension(filebase);
+    }
 
     // If one of the generators uses bfbs, serialize the parser and get
     // the serialized buffer and length.

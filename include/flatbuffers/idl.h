@@ -736,6 +736,7 @@ struct IDLOptions {
   bool no_leak_private_annotations;
   bool require_json_eof;
   bool keep_proto_id;
+  bool jsonschema_include_xflatbuffers;
 
   /********************************** Python **********************************/
   bool python_no_type_prefix_suffix;
@@ -880,6 +881,7 @@ struct IDLOptions {
         no_leak_private_annotations(false),
         require_json_eof(true),
         keep_proto_id(false),
+        jsonschema_include_xflatbuffers(false),
         python_no_type_prefix_suffix(false),
         python_typing(false),
         python_gen_numpy(true),
@@ -1070,6 +1072,11 @@ class Parser : public ParserState {
 
   bool ParseJson(const char* json, const char* json_filename = nullptr);
 
+  // Parse a JSON Schema (as produced by `flatc --jsonschema`) into the
+  // FlatBuffers schema IR.
+  bool ParseJsonSchema(const char* json_schema,
+                       const char* json_schema_filename = nullptr);
+
   // Returns the number of characters were consumed when parsing a JSON string.
   std::ptrdiff_t BytesConsumed() const;
 
@@ -1216,6 +1223,7 @@ class Parser : public ParserState {
                                     const char* source_filename,
                                     const char* include_filename);
   FLATBUFFERS_CHECKED_ERROR DoParseJson();
+  FLATBUFFERS_CHECKED_ERROR DoParseJsonSchema();
   FLATBUFFERS_CHECKED_ERROR CheckClash(std::vector<FieldDef*>& fields,
                                        StructDef* struct_def,
                                        const char* suffix, BaseType baseType);

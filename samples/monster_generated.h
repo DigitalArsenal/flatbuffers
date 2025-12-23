@@ -9,8 +9,8 @@
 // Ensure the included flatbuffers.h is the same version as when this file was
 // generated, otherwise it may not be compatible.
 static_assert(FLATBUFFERS_VERSION_MAJOR == 25 &&
-              FLATBUFFERS_VERSION_MINOR == 9 &&
-              FLATBUFFERS_VERSION_REVISION == 23,
+              FLATBUFFERS_VERSION_MINOR == 12 &&
+              FLATBUFFERS_VERSION_REVISION == 19,
              "Non-compatible flatbuffers version included");
 
 namespace MyGame {
@@ -328,6 +328,10 @@ struct Monster FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const MyGame::Sample::Weapon *equipped_as_Weapon() const {
     return equipped_type() == MyGame::Sample::Equipment_Weapon ? static_cast<const MyGame::Sample::Weapon *>(equipped()) : nullptr;
   }
+  template<typename T> T *mutable_equipped_as();
+  MyGame::Sample::Weapon *mutable_equipped_as_Weapon() {
+    return equipped_type() == MyGame::Sample::Equipment_Weapon ? static_cast<MyGame::Sample::Weapon *>(mutable_equipped()) : nullptr;
+  }
   void *mutable_equipped() {
     return GetPointer<void *>(VT_EQUIPPED);
   }
@@ -365,6 +369,10 @@ struct Monster FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
 
 template<> inline const MyGame::Sample::Weapon *Monster::equipped_as<MyGame::Sample::Weapon>() const {
   return equipped_as_Weapon();
+}
+
+template<> inline MyGame::Sample::Weapon *Monster::mutable_equipped_as<MyGame::Sample::Weapon>() {
+  return mutable_equipped_as_Weapon();
 }
 
 struct MonsterBuilder {

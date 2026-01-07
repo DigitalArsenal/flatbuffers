@@ -20,7 +20,8 @@ npm install flatc-wasm
 ## Table of Contents
 
 - [Quick Start](#quick-start)
-- [API Reference](#api-reference)
+- [FlatcRunner API](#flatcrunner-api) (Recommended)
+- [Low-Level API Reference](#low-level-api-reference)
   - [Module Initialization](#module-initialization)
   - [Schema Management](#schema-management)
   - [JSON/Binary Conversion](#jsonbinary-conversion)
@@ -38,39 +39,472 @@ npm install flatc-wasm
 
 ## Quick Start
 
+The recommended way to use flatc-wasm is through the `FlatcRunner` class, which provides a clean CLI-style interface:
+
+```javascript
+import { FlatcRunner } from 'flatc-wasm';
+
+// Initialize the runner
+const flatc = await FlatcRunner.init();
+
+// Check version
+console.log(flatc.version());  // "flatc version 25.x.x"
+
+// Define schema as a virtual file tree
+const schemaInput = {
+  entry: '/schemas/monster.fbs',
+  files: {
+    '/schemas/monster.fbs': `
+      namespace Game;
+      table Monster {
+        name: string;
+        hp: short = 100;
+      }
+      root_type Monster;
+    `
+  }
+};
+
+// Convert JSON to binary
+const binary = flatc.generateBinary(schemaInput, '{"name": "Orc", "hp": 150}');
+console.log('Binary size:', binary.length, 'bytes');
+
+// Convert binary back to JSON
+const json = flatc.generateJSON(schemaInput, {
+  path: '/data/monster.bin',
+  data: binary
+});
+console.log('JSON:', json);
+
+// Generate TypeScript code
+const code = flatc.generateCode(schemaInput, 'ts');
+console.log('Generated files:', Object.keys(code));
+```
+
+### Alternative: Low-Level Module API
+
+For advanced use cases, you can also use the raw WASM module directly:
+
 ```javascript
 import createFlatcWasm from 'flatc-wasm';
 
-// Initialize the module
 const flatc = await createFlatcWasm();
-
-// Check version
 console.log('FlatBuffers version:', flatc.getVersion());
 
-// Define a schema
-const schema = `
-namespace Game;
-
-table Monster {
-  name: string;
-  hp: int = 100;
-  mana: int = 50;
-}
-
-root_type Monster;
-`;
-
-// Add the schema
+// Add schema using Embind API
 const handle = flatc.createSchema('monster.fbs', schema);
 console.log('Schema ID:', handle.id());
-console.log('Schema name:', handle.name());
-
-// The schema is now ready for conversions
 ```
 
 ---
 
-## API Reference
+## FlatcRunner API
+
+The `FlatcRunner` class provides a high-level, type-safe API for all flatc operations. It wraps the flatc CLI with a virtual filesystem, making it easy to use in Node.js and browser environments.
+
+### Initialization
+
+```javascript
+import { FlatcRunner } from 'flatc-wasm';
+
+// Basic initialization
+const flatc = await FlatcRunner.init();
+
+// With custom options
+const flatc = await FlatcRunner.init({
+  print: (text) => console.log('[flatc]', text),
+  printErr: (text) => console.error('[flatc]', text),
+});
+
+// Check version
+console.log(flatc.version());  // "flatc version 25.x.x"
+
+// Get full help text
+console.log(flatc.help());
+```
+
+### Schema Input Format
+
+All operations use a schema input tree that represents virtual files:
+
+```javascript
+// Simple single-file schema
+const simpleSchema = {
+  entry: '/schema.fbs',
+  files: {
+    '/schema.fbs': `
+      table Message { text: string; }
+      root_type Message;
+    `
+  }
+};
+
+// Multi-file schema with includes
+const multiFileSchema = {
+  entry: '/schemas/game.fbs',
+  files: {
+    '/schemas/game.fbs': `
+      include "common.fbs";
+      namespace Game;
+      table Player {
+        id: uint64;
+        position: Common.Vec3;
+        name: string;
+      }
+      root_type Player;
+    `,
+    '/schemas/common.fbs': `
+      namespace Common;
+      struct Vec3 {
+        x: float;
+        y: float;
+        z: float;
+      }
+    `
+  }
+};
+```
+
+### Binary Generation (JSON → FlatBuffer)
+
+Convert JSON data to FlatBuffer binary format:
+
+```javascript
+const binary = flatc.generateBinary(schemaInput, jsonData, {
+  unknownJson: true,   // Allow unknown fields in JSON (default: true)
+  strictJson: false,   // Require strict JSON conformance (default: false)
+});
+
+// Example with actual data
+const schema = {
+  entry: '/player.fbs',
+  files: {
+    '/player.fbs': `
+      table Player { name: string; score: int; }
+      root_type Player;
+    `
+  }
+};
+
+const json = JSON.stringify({ name: 'Alice', score: 100 });
+const binary = flatc.generateBinary(schema, json);
+console.log('Binary size:', binary.length, 'bytes');  // ~32 bytes
+```
+
+### JSON Generation (FlatBuffer → JSON)
+
+Convert FlatBuffer binary back to JSON:
+
+```javascript
+const json = flatc.generateJSON(schemaInput, {
+  path: '/data/input.bin',  // Virtual path (filename used for output naming)
+  data: binaryData          // Uint8Array containing FlatBuffer binary
+}, {
+  strictJson: true,    // Output strict JSON format (default: true)
+  rawBinary: true,     // Allow binaries without file_identifier (default: true)
+  defaultsJson: false, // Include fields with default values (default: false)
+  encoding: 'utf8',    // Return as string; use null for Uint8Array
+});
+
+// Round-trip example
+const originalJson = '{"name": "Bob", "score": 250}';
+const binary = flatc.generateBinary(schema, originalJson);
+const recoveredJson = flatc.generateJSON(schema, {
+  path: '/player.bin',
+  data: binary
+});
+console.log(JSON.parse(recoveredJson));  // { name: 'Bob', score: 250 }
+```
+
+### Code Generation
+
+Generate source code for any supported language:
+
+```javascript
+const files = flatc.generateCode(schemaInput, language, options);
+```
+
+#### Supported Languages
+
+| Language    | Flag         | File Extension  |
+| ----------- | ------------ | --------------- |
+| C++         | `cpp`        | `.h`            |
+| C#          | `csharp`     | `.cs`           |
+| Dart        | `dart`       | `.dart`         |
+| Go          | `go`         | `.go`           |
+| Java        | `java`       | `.java`         |
+| Kotlin      | `kotlin`     | `.kt`           |
+| Kotlin KMP  | `kotlin-kmp` | `.kt`           |
+| Lobster     | `lobster`    | `.lobster`      |
+| Lua         | `lua`        | `.lua`          |
+| Nim         | `nim`        | `.nim`          |
+| PHP         | `php`        | `.php`          |
+| Python      | `python`     | `.py`           |
+| Rust        | `rust`       | `.rs`           |
+| Swift       | `swift`      | `.swift`        |
+| TypeScript  | `ts`         | `.ts`           |
+| JSON        | `json`       | `.json`         |
+| JSON Schema | `jsonschema` | `.schema.json`  |
+
+#### Code Generation Options
+
+```javascript
+const files = flatc.generateCode(schemaInput, 'cpp', {
+  // General options
+  genObjectApi: true,    // Generate object-based API (Pack/UnPack methods)
+  genOnefile: true,      // Generate all output in a single file
+  genMutable: true,      // Generate mutable accessors for tables
+  genCompare: true,      // Generate comparison operators
+  genNameStrings: true,  // Generate type name strings for enums
+  reflectNames: true,    // Add minimal reflection with field names
+  reflectTypes: true,    // Add full reflection with type info
+  genJsonEmit: true,     // Generate JSON emit helpers
+  noIncludes: true,      // Don't generate include statements
+  keepPrefix: true,      // Keep original prefix/namespace structure
+  noWarnings: true,      // Suppress warning messages
+  genAll: true,          // Generate code for all schemas (not just root)
+
+  // Language-specific options
+  pythonTyping: true,    // Python: Generate type hints (PEP 484)
+  tsFlexBuffers: true,   // TypeScript: Include FlexBuffers support
+  tsNoImportExt: true,   // TypeScript: Don't add .js to imports
+  goModule: 'mymodule',  // Go: Module path for generated code
+  goPackagePrefix: 'pkg' // Go: Package prefix for imports
+});
+
+// Result is a map of filename → content
+for (const [filename, content] of Object.entries(files)) {
+  console.log(`Generated: ${filename} (${content.length} bytes)`);
+  // Write to disk, upload, etc.
+}
+```
+
+#### Code Generation Examples
+
+```javascript
+// Generate TypeScript with object API
+const tsFiles = flatc.generateCode(schema, 'ts', { genObjectApi: true });
+
+// Generate Python with type hints
+const pyFiles = flatc.generateCode(schema, 'python', { pythonTyping: true });
+
+// Generate Rust
+const rsFiles = flatc.generateCode(schema, 'rust');
+
+// Generate C++ with all features
+const cppFiles = flatc.generateCode(schema, 'cpp', {
+  genObjectApi: true,
+  genMutable: true,
+  genCompare: true,
+});
+```
+
+### JSON Schema Support
+
+#### Export FlatBuffer Schema to JSON Schema
+
+```javascript
+const jsonSchema = flatc.generateJsonSchema(schemaInput);
+const parsed = JSON.parse(jsonSchema);
+console.log(parsed.$schema);  // "http://json-schema.org/draft-04/schema#"
+```
+
+#### Import JSON Schema
+
+You can use JSON Schema files as input to FlatcRunner:
+
+```javascript
+const jsonSchemaInput = {
+  entry: '/person.schema.json',
+  files: {
+    '/person.schema.json': JSON.stringify({
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "age": { "type": "integer" }
+      },
+      "required": ["name"]
+    })
+  }
+};
+
+// Generate code from JSON Schema
+const code = flatc.generateCode(jsonSchemaInput, 'typescript');
+```
+
+### Virtual Filesystem Operations
+
+The FlatcRunner provides direct access to the Emscripten virtual filesystem:
+
+```javascript
+// Mount a single file
+flatc.mountFile('/schemas/types.fbs', schemaContent);
+
+// Mount multiple files at once
+flatc.mountFiles([
+  { path: '/schemas/a.fbs', data: 'table A { x: int; }' },
+  { path: '/schemas/b.fbs', data: 'table B { y: int; }' },
+  { path: '/data/input.json', data: new Uint8Array([...]) },
+]);
+
+// Read a file back
+const content = flatc.readFile('/schemas/a.fbs', { encoding: 'utf8' });
+
+// Read as binary
+const binary = flatc.readFile('/data/output.bin');  // Returns Uint8Array
+
+// List directory contents
+const files = flatc.readdir('/schemas');  // ['a.fbs', 'b.fbs']
+
+// Recursively list all files
+const allFiles = flatc.listAllFiles('/schemas');
+
+// Delete files
+flatc.unlink('/data/input.json');
+flatc.rmdir('/data');
+```
+
+### Low-Level CLI Access
+
+For advanced use cases, you can run any flatc command directly:
+
+```javascript
+// Run arbitrary flatc commands
+const result = flatc.runCommand(['--help']);
+console.log(result.code);    // Exit code (0 = success)
+console.log(result.stdout);  // Standard output
+console.log(result.stderr);  // Standard error
+
+// Example: Generate binary schema (.bfbs)
+flatc.mountFile('/schema.fbs', schemaContent);
+const result = flatc.runCommand([
+  '--binary',
+  '--schema',
+  '-o', '/output',
+  '/schema.fbs'
+]);
+
+if (result.code === 0) {
+  const bfbs = flatc.readFile('/output/schema.bfbs');
+}
+
+// Example: Use specific flatc flags
+flatc.runCommand([
+  '--cpp',
+  '--gen-object-api',
+  '--gen-mutable',
+  '--scoped-enums',
+  '-o', '/output',
+  '/schema.fbs'
+]);
+```
+
+### Error Handling
+
+All FlatcRunner methods throw errors with descriptive messages:
+
+```javascript
+try {
+  const binary = flatc.generateBinary(schema, '{ invalid json }');
+} catch (error) {
+  console.error('Conversion failed:', error.message);
+  // "flatc binary generation failed (exit 0):
+  //  error: ... json parse error ..."
+}
+
+try {
+  const code = flatc.generateCode(schema, 'invalid-language');
+} catch (error) {
+  console.error('Code generation failed:', error.message);
+}
+
+// Check command results manually
+const result = flatc.runCommand(['--invalid-flag']);
+if (result.code !== 0 || result.stderr.includes('error:')) {
+  console.error('Command failed:', result.stderr);
+}
+```
+
+### Complete Example: Build Pipeline
+
+```javascript
+import { FlatcRunner } from 'flatc-wasm';
+import { writeFileSync } from 'fs';
+
+async function buildSchemas() {
+  const flatc = await FlatcRunner.init();
+
+  // Define your schemas
+  const schema = {
+    entry: '/schemas/game.fbs',
+    files: {
+      '/schemas/game.fbs': `
+        namespace Game;
+
+        enum ItemType : byte { Weapon, Armor, Potion }
+
+        table Item {
+          id: uint32;
+          name: string (required);
+          type: ItemType;
+          value: int = 0;
+        }
+
+        table Inventory {
+          items: [Item];
+          gold: int;
+        }
+
+        root_type Inventory;
+      `
+    }
+  };
+
+  // Generate code for multiple languages
+  const languages = ['typescript', 'python', 'rust', 'go'];
+
+  for (const lang of languages) {
+    const files = flatc.generateCode(schema, lang, {
+      genObjectApi: true,
+    });
+
+    for (const [filename, content] of Object.entries(files)) {
+      const outPath = `./generated/${lang}/${filename}`;
+      writeFileSync(outPath, content);
+      console.log(`Generated: ${outPath}`);
+    }
+  }
+
+  // Generate JSON Schema for documentation
+  const jsonSchema = flatc.generateJsonSchema(schema);
+  writeFileSync('./docs/inventory.schema.json', jsonSchema);
+
+  // Test conversion
+  const testData = {
+    items: [
+      { id: 1, name: 'Sword', type: 'Weapon', value: 100 },
+      { id: 2, name: 'Shield', type: 'Armor', value: 50 },
+    ],
+    gold: 500
+  };
+
+  const binary = flatc.generateBinary(schema, JSON.stringify(testData));
+  console.log(`Binary size: ${binary.length} bytes`);
+
+  const recovered = flatc.generateJSON(schema, {
+    path: '/inventory.bin',
+    data: binary
+  });
+  console.log('Round-trip successful:', JSON.parse(recovered));
+}
+
+buildSchemas().catch(console.error);
+```
+
+---
+
+## Low-Level API Reference
 
 ### Module Initialization
 

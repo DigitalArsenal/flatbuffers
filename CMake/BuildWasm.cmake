@@ -61,13 +61,21 @@ if(EMSCRIPTEN)
     src/idl_gen_fbs.cpp
     src/idl_gen_json_schema.cpp
     src/idl_gen_swift.cpp
+    src/idl_gen_grpc.cpp
     src/flatc.cpp
+    src/flatc_main.cpp
     src/bfbs_gen_lua.cpp
     src/bfbs_gen_nim.cpp
     src/code_generators.cpp
     src/binary_annotator.cpp
     src/annotated_binary_text_gen.cpp
     include/codegen/python.cc
+    grpc/src/compiler/cpp_generator.cc
+    grpc/src/compiler/go_generator.cc
+    grpc/src/compiler/java_generator.cc
+    grpc/src/compiler/python_generator.cc
+    grpc/src/compiler/swift_generator.cc
+    grpc/src/compiler/ts_generator.cc
     src/flatc_wasm.cpp
   )
 
@@ -123,12 +131,14 @@ if(EMSCRIPTEN)
     -sINITIAL_MEMORY=16MB
     -sMAXIMUM_MEMORY=256MB
     -sSTACK_SIZE=1MB
-    "-sEXPORTED_FUNCTIONS=[${EXPORTED_FUNCS_STR}]"
-    -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8
+    "-sEXPORTED_FUNCTIONS=[${EXPORTED_FUNCS_STR},_main]"
+    -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8,FS,PATH,callMain
     --bind
     -sENVIRONMENT=web,node
-    -sFILESYSTEM=0
+    -sFILESYSTEM=1
+    -sFORCE_FILESYSTEM=1
     -sNO_EXIT_RUNTIME=1
+    -sINVOKE_RUN=0
     $<$<CONFIG:Release>:-O3>
     $<$<CONFIG:Release>:-flto>
     $<$<CONFIG:Debug>:-g>
@@ -215,8 +225,15 @@ module.exports.default = createModule;
       COMMAND ${NODE_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tests/wasm/test_json_schema.mjs"
       COMMAND ${NODE_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tests/wasm/test_all_types.mjs"
       COMMAND ${NODE_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tests/wasm/test_io_methods.mjs"
+      COMMAND ${NODE_EXECUTABLE} "${CMAKE_SOURCE_DIR}/wasm/test/test_runner.mjs"
       WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
       COMMENT "Running all WASM tests..."
+    )
+    add_custom_target(flatc_wasm_test_parity
+      DEPENDS flatc_wasm flatc
+      COMMAND ${NODE_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tests/wasm/test_native_parity.mjs"
+      WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+      COMMENT "Running WASM vs native parity tests..."
     )
     add_custom_target(flatc_wasm_benchmark
       DEPENDS flatc_wasm
@@ -231,6 +248,12 @@ module.exports.default = createModule;
   message(STATUS "  flatc_wasm        - Separate .js/.wasm files -> ${WASM_OUTPUT_DIR}/")
   message(STATUS "  flatc_wasm_inline - Single file (inlined WASM) -> ${WASM_OUTPUT_DIR}/")
   message(STATUS "  flatc_wasm_npm    - NPM package -> ${WASM_NPM_DIR}/")
+  if(NODE_EXECUTABLE)
+    message(STATUS "  flatc_wasm_test   - Run basic tests")
+    message(STATUS "  flatc_wasm_test_all - Run all tests")
+    message(STATUS "  flatc_wasm_test_parity - Run WASM vs native parity tests")
+    message(STATUS "  flatc_wasm_benchmark - Run benchmarks")
+  endif()
   message(STATUS "")
 
   return()
@@ -340,8 +363,15 @@ if(NODE_EXECUTABLE)
     COMMAND ${NODE_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tests/wasm/test_json_schema.mjs"
     COMMAND ${NODE_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tests/wasm/test_all_types.mjs"
     COMMAND ${NODE_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tests/wasm/test_io_methods.mjs"
+    COMMAND ${NODE_EXECUTABLE} "${CMAKE_SOURCE_DIR}/wasm/test/test_runner.mjs"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     COMMENT "Running all WASM tests..."
+  )
+  add_custom_target(flatc_wasm_test_parity
+    DEPENDS flatc_wasm flatc
+    COMMAND ${NODE_EXECUTABLE} "${CMAKE_SOURCE_DIR}/tests/wasm/test_native_parity.mjs"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    COMMENT "Running WASM vs native parity tests..."
   )
   add_custom_target(flatc_wasm_benchmark
     DEPENDS flatc_wasm
@@ -359,6 +389,7 @@ message(STATUS "  flatc_wasm_npm    - Build npm package")
 if(NODE_EXECUTABLE)
   message(STATUS "  flatc_wasm_test   - Run basic tests")
   message(STATUS "  flatc_wasm_test_all - Run all tests")
+  message(STATUS "  flatc_wasm_test_parity - Run WASM vs native parity tests")
   message(STATUS "  flatc_wasm_benchmark - Run benchmarks")
 endif()
 message(STATUS "")

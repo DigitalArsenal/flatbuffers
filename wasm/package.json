@@ -1,19 +1,32 @@
 {
   "name": "flatc-wasm",
-  "version": "25.12.19",
+  "version": "25.12.20",
   "description": "FlatBuffers compiler (flatc) as a WebAssembly module - schema management, JSON/binary conversion, and code generation",
   "type": "module",
-  "main": "dist/flatc-wasm.js",
-  "module": "dist/flatc-wasm.js",
-  "types": "dist/flatc-wasm.d.ts",
+  "main": "src/index.mjs",
+  "module": "src/index.mjs",
+  "types": "src/index.d.ts",
   "exports": {
     ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.mjs",
+      "require": "./dist/flatc-wasm.cjs"
+    },
+    "./runner": {
+      "types": "./src/runner.d.ts",
+      "import": "./src/runner.mjs"
+    },
+    "./module": {
       "types": "./dist/flatc-wasm.d.ts",
       "import": "./dist/flatc-wasm.js",
       "require": "./dist/flatc-wasm.cjs"
     }
   },
   "files": [
+    "src/index.mjs",
+    "src/index.d.ts",
+    "src/runner.mjs",
+    "src/runner.d.ts",
     "dist/flatc-wasm.js",
     "dist/flatc-wasm.cjs",
     "dist/flatc-wasm.d.ts",
@@ -21,7 +34,7 @@
   ],
   "scripts": {
     "build": "cmake --build ../build/wasm --target flatc_wasm_npm -j",
-    "test": "node test/test_all.mjs",
+    "test": "node test/test_all.mjs && node test/test_runner.mjs",
     "prepublishOnly": "npm run build && npm test"
   },
   "repository": {

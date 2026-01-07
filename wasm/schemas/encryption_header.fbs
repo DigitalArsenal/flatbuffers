@@ -1,0 +1,64 @@
+// EncryptionHeader Schema
+//
+// This FlatBuffer type stores the ephemeral public key and metadata needed
+// to decrypt encrypted FlatBuffer fields using public key cryptography.
+//
+// The header should be transmitted out-of-band (separate from the encrypted
+// FlatBuffer) or prepended to the encrypted data in a known location.
+
+namespace flatbuffers.encryption;
+
+// Supported key exchange algorithms
+enum KeyExchangeAlgorithm : byte {
+  X25519 = 0,       // Curve25519 ECDH (RFC 7748)
+  Secp256k1 = 1,    // Bitcoin/Ethereum curve ECDH
+  P256 = 2          // NIST P-256/secp256r1 ECDH
+}
+
+// Supported symmetric encryption algorithms
+enum SymmetricAlgorithm : byte {
+  AES_256_CTR = 0   // AES-256 in CTR mode (size-preserving)
+}
+
+// Supported key derivation functions
+enum KeyDerivationFunction : byte {
+  HKDF_SHA256 = 0   // HKDF with SHA-256 (RFC 5869)
+}
+
+// The encryption header containing ephemeral key and algorithm metadata
+table EncryptionHeader {
+  // Version of the encryption header format
+  version: ubyte = 1;
+
+  // Key exchange algorithm used
+  key_exchange: KeyExchangeAlgorithm = X25519;
+
+  // Symmetric encryption algorithm
+  symmetric: SymmetricAlgorithm = AES_256_CTR;
+
+  // Key derivation function
+  kdf: KeyDerivationFunction = HKDF_SHA256;
+
+  // Ephemeral public key (32 bytes for X25519, 33 bytes compressed for secp256k1/P256)
+  ephemeral_public_key: [ubyte] (required);
+
+  // Optional: Recipient's public key identifier (e.g., first 8 bytes of public key hash)
+  // Helps recipient identify which private key to use for decryption
+  recipient_key_id: [ubyte];
+
+  // Optional: Additional context/info string for HKDF derivation
+  // Allows domain separation for different applications
+  context: string;
+
+  // Optional: Schema hash or identifier for the encrypted FlatBuffer
+  // Helps receiver know which schema to use for decryption
+  schema_hash: [ubyte];
+
+  // Optional: Root type name in the schema
+  root_type: string;
+
+  // Timestamp when encryption was performed (Unix epoch milliseconds)
+  timestamp: ulong;
+}
+
+root_type EncryptionHeader;

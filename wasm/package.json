@@ -16,6 +16,10 @@
       "types": "./src/runner.d.ts",
       "import": "./src/runner.mjs"
     },
+    "./encryption": {
+      "types": "./src/encryption.d.ts",
+      "import": "./src/encryption.mjs"
+    },
     "./module": {
       "types": "./dist/flatc-wasm.d.ts",
       "import": "./dist/flatc-wasm.js",
@@ -27,6 +31,8 @@
     "src/index.d.ts",
     "src/runner.mjs",
     "src/runner.d.ts",
+    "src/encryption.mjs",
+    "src/encryption.d.ts",
     "dist/flatc-wasm.js",
     "dist/flatc-wasm.cjs",
     "dist/flatc-wasm.d.ts",

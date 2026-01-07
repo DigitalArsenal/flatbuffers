@@ -4,6 +4,7 @@
  * This module exports:
  * - FlatcRunner: High-level wrapper with typed methods for schema operations
  * - createFlatcModule: Low-level factory for direct WASM module access
+ * - Encryption utilities for field-level encryption
  */
 
 export {
@@ -19,6 +20,19 @@ export {
   EmscriptenModule,
   EmscriptenFS,
 } from "./runner.js";
+
+// Encryption exports
+export {
+  EncryptionContext,
+  EncryptionFieldInfo,
+  EncryptionSchema,
+  encryptBytes,
+  decryptBytes,
+  encryptScalar,
+  encryptBuffer,
+  decryptBuffer,
+  parseSchemaForEncryption,
+} from "./encryption.js";
 
 /**
  * Options for creating the WASM module.

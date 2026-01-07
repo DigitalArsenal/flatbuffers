@@ -409,7 +409,7 @@ export class FlatcWasm {
         "number",
         ["number", "number"],
         [idsPtr, count]
-      );
+      ) as number;
 
       const schemas: SchemaInfo[] = [];
       for (let i = 0; i < actualCount; i++) {

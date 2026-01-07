@@ -661,6 +661,346 @@ export function x25519DeriveKey(sharedSecret, context) {
 }
 
 // =============================================================================
+// secp256k1 ECDH Implementation (Bitcoin/Ethereum curve)
+// =============================================================================
+
+/**
+ * secp256k1 curve parameters
+ * y^2 = x^3 + 7 (mod p)
+ */
+const SECP256K1_P = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn;
+const SECP256K1_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
+const SECP256K1_GX = 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798n;
+const SECP256K1_GY = 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8n;
+
+/**
+ * P-256 (secp256r1) curve parameters
+ * y^2 = x^3 - 3x + b (mod p)
+ */
+const P256_P = 0xffffffff00000001000000000000000000000000ffffffffffffffffffffffffn;
+const P256_N = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+const P256_A = P256_P - 3n; // a = -3 mod p
+const P256_B = 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604bn;
+const P256_GX = 0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296n;
+const P256_GY = 0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5n;
+
+/**
+ * Elliptic curve point class for Weierstrass curves
+ */
+class ECPoint {
+  constructor(x, y, infinity = false) {
+    this.x = x;
+    this.y = y;
+    this.infinity = infinity;
+  }
+
+  static infinity() {
+    return new ECPoint(0n, 0n, true);
+  }
+
+  isInfinity() {
+    return this.infinity;
+  }
+
+  equals(other) {
+    if (this.infinity && other.infinity) return true;
+    if (this.infinity || other.infinity) return false;
+    return this.x === other.x && this.y === other.y;
+  }
+}
+
+/**
+ * Point addition on Weierstrass curve
+ * @param {ECPoint} p1
+ * @param {ECPoint} p2
+ * @param {bigint} prime - Field prime
+ * @param {bigint} a - Curve parameter a (0 for secp256k1, -3 for P-256)
+ * @returns {ECPoint}
+ */
+function ecPointAdd(p1, p2, prime, a) {
+  if (p1.isInfinity()) return p2;
+  if (p2.isInfinity()) return p1;
+
+  const x1 = p1.x, y1 = p1.y;
+  const x2 = p2.x, y2 = p2.y;
+
+  let lambda;
+
+  if (x1 === x2) {
+    if (((y1 + y2) % prime + prime) % prime === 0n) {
+      return ECPoint.infinity();
+    }
+    // Point doubling: lambda = (3*x1^2 + a) / (2*y1)
+    const num = ((3n * x1 * x1 + a) % prime + prime) % prime;
+    const denom = (2n * y1 % prime + prime) % prime;
+    lambda = (num * modInverse(denom, prime)) % prime;
+  } else {
+    // Point addition: lambda = (y2 - y1) / (x2 - x1)
+    const num = ((y2 - y1) % prime + prime) % prime;
+    const denom = ((x2 - x1) % prime + prime) % prime;
+    lambda = (num * modInverse(denom, prime)) % prime;
+  }
+
+  const x3 = ((lambda * lambda - x1 - x2) % prime + prime) % prime;
+  const y3 = ((lambda * (x1 - x3) - y1) % prime + prime) % prime;
+
+  return new ECPoint(x3, y3);
+}
+
+/**
+ * Scalar multiplication using double-and-add
+ * @param {bigint} k - Scalar
+ * @param {ECPoint} point - Base point
+ * @param {bigint} prime - Field prime
+ * @param {bigint} a - Curve parameter a
+ * @returns {ECPoint}
+ */
+function ecScalarMult(k, point, prime, a) {
+  if (k === 0n || point.isInfinity()) {
+    return ECPoint.infinity();
+  }
+
+  let result = ECPoint.infinity();
+  let addend = new ECPoint(point.x, point.y);
+
+  while (k > 0n) {
+    if (k & 1n) {
+      result = ecPointAdd(result, addend, prime, a);
+    }
+    addend = ecPointAdd(addend, addend, prime, a);
+    k >>= 1n;
+  }
+
+  return result;
+}
+
+/**
+ * Convert 32 bytes to BigInt (big-endian, as used by secp256k1/P-256)
+ */
+function bytes32ToBigInt(bytes) {
+  let result = 0n;
+  for (let i = 0; i < 32; i++) {
+    result = (result << 8n) | BigInt(bytes[i]);
+  }
+  return result;
+}
+
+/**
+ * Convert BigInt to 32 bytes (big-endian)
+ */
+function bigIntTo32Bytes(n) {
+  const bytes = new Uint8Array(32);
+  let val = n;
+  for (let i = 31; i >= 0; i--) {
+    bytes[i] = Number(val & 0xffn);
+    val >>= 8n;
+  }
+  return bytes;
+}
+
+/**
+ * Decompress a secp256k1/P-256 public key
+ * @param {Uint8Array} compressed - 33-byte compressed key (02/03 prefix + x)
+ * @param {bigint} prime - Field prime
+ * @param {bigint} a - Curve parameter a
+ * @param {bigint} b - Curve parameter b
+ * @returns {ECPoint}
+ */
+function decompressPublicKey(compressed, prime, a, b) {
+  if (compressed.length !== 33) {
+    throw new Error("Compressed public key must be 33 bytes");
+  }
+
+  const prefix = compressed[0];
+  if (prefix !== 0x02 && prefix !== 0x03) {
+    throw new Error("Invalid compressed public key prefix");
+  }
+
+  const x = bytes32ToBigInt(compressed.subarray(1));
+
+  // y^2 = x^3 + ax + b
+  const y2 = ((x * x * x + a * x + b) % prime + prime) % prime;
+
+  // Compute square root using Tonelli-Shanks (simplified for p ≡ 3 mod 4)
+  // For both secp256k1 and P-256, p ≡ 3 mod 4, so sqrt(y2) = y2^((p+1)/4)
+  const y = modPow(y2, (prime + 1n) / 4n, prime);
+
+  // Check which root matches the parity
+  const isOdd = (y & 1n) === 1n;
+  const needOdd = prefix === 0x03;
+
+  const finalY = isOdd === needOdd ? y : (prime - y);
+
+  return new ECPoint(x, finalY);
+}
+
+/**
+ * Compress an EC point to 33 bytes
+ * @param {ECPoint} point
+ * @returns {Uint8Array}
+ */
+function compressPublicKey(point) {
+  const compressed = new Uint8Array(33);
+  compressed[0] = (point.y & 1n) === 1n ? 0x03 : 0x02;
+  compressed.set(bigIntTo32Bytes(point.x), 1);
+  return compressed;
+}
+
+/**
+ * Modular exponentiation
+ */
+function modPow(base, exp, mod) {
+  let result = 1n;
+  base = ((base % mod) + mod) % mod;
+  while (exp > 0n) {
+    if (exp & 1n) {
+      result = (result * base) % mod;
+    }
+    exp >>= 1n;
+    base = (base * base) % mod;
+  }
+  return result;
+}
+
+// =============================================================================
+// secp256k1 Public API
+// =============================================================================
+
+/**
+ * Generate secp256k1 key pair
+ * @param {Uint8Array} [privateKey] - Optional 32-byte private key
+ * @returns {{privateKey: Uint8Array, publicKey: Uint8Array}} - publicKey is 33 bytes compressed
+ */
+export function secp256k1GenerateKeyPair(privateKey) {
+  if (!privateKey) {
+    privateKey = new Uint8Array(32);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(privateKey);
+    } else {
+      for (let i = 0; i < 32; i++) {
+        privateKey[i] = Math.floor(Math.random() * 256);
+      }
+    }
+  }
+
+  let k = bytes32ToBigInt(privateKey);
+  // Ensure private key is in valid range [1, n-1]
+  k = k % SECP256K1_N;
+  if (k === 0n) k = 1n;
+
+  const G = new ECPoint(SECP256K1_GX, SECP256K1_GY);
+  const pubPoint = ecScalarMult(k, G, SECP256K1_P, 0n);
+  const publicKey = compressPublicKey(pubPoint);
+
+  return { privateKey: bigIntTo32Bytes(k), publicKey };
+}
+
+/**
+ * Perform secp256k1 ECDH
+ * @param {Uint8Array} privateKey - 32-byte private key
+ * @param {Uint8Array} publicKey - 33-byte compressed public key
+ * @returns {Uint8Array} - 32-byte shared secret (x-coordinate of shared point)
+ */
+export function secp256k1SharedSecret(privateKey, publicKey) {
+  const k = bytes32ToBigInt(privateKey);
+  const pubPoint = decompressPublicKey(publicKey, SECP256K1_P, 0n, 7n);
+  const sharedPoint = ecScalarMult(k, pubPoint, SECP256K1_P, 0n);
+
+  if (sharedPoint.isInfinity()) {
+    throw new Error("Invalid ECDH result (point at infinity)");
+  }
+
+  return bigIntTo32Bytes(sharedPoint.x);
+}
+
+/**
+ * Derive symmetric key from secp256k1 shared secret using HKDF
+ * @param {Uint8Array} sharedSecret - 32-byte shared secret
+ * @param {Uint8Array} [context] - Optional context bytes
+ * @returns {Uint8Array} - 32-byte symmetric key
+ */
+export function secp256k1DeriveKey(sharedSecret, context) {
+  const infoStr = "flatbuffers-secp256k1";
+  const info = new Uint8Array(context ? context.length + infoStr.length : infoStr.length);
+  for (let i = 0; i < infoStr.length; i++) {
+    info[i] = infoStr.charCodeAt(i);
+  }
+  if (context) {
+    info.set(context, infoStr.length);
+  }
+  return hkdf(sharedSecret, new Uint8Array(0), info, 32);
+}
+
+// =============================================================================
+// P-256 (secp256r1) Public API
+// =============================================================================
+
+/**
+ * Generate P-256 key pair
+ * @param {Uint8Array} [privateKey] - Optional 32-byte private key
+ * @returns {{privateKey: Uint8Array, publicKey: Uint8Array}} - publicKey is 33 bytes compressed
+ */
+export function p256GenerateKeyPair(privateKey) {
+  if (!privateKey) {
+    privateKey = new Uint8Array(32);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(privateKey);
+    } else {
+      for (let i = 0; i < 32; i++) {
+        privateKey[i] = Math.floor(Math.random() * 256);
+      }
+    }
+  }
+
+  let k = bytes32ToBigInt(privateKey);
+  // Ensure private key is in valid range [1, n-1]
+  k = k % P256_N;
+  if (k === 0n) k = 1n;
+
+  const G = new ECPoint(P256_GX, P256_GY);
+  const pubPoint = ecScalarMult(k, G, P256_P, P256_A);
+  const publicKey = compressPublicKey(pubPoint);
+
+  return { privateKey: bigIntTo32Bytes(k), publicKey };
+}
+
+/**
+ * Perform P-256 ECDH
+ * @param {Uint8Array} privateKey - 32-byte private key
+ * @param {Uint8Array} publicKey - 33-byte compressed public key
+ * @returns {Uint8Array} - 32-byte shared secret (x-coordinate of shared point)
+ */
+export function p256SharedSecret(privateKey, publicKey) {
+  const k = bytes32ToBigInt(privateKey);
+  const pubPoint = decompressPublicKey(publicKey, P256_P, P256_A, P256_B);
+  const sharedPoint = ecScalarMult(k, pubPoint, P256_P, P256_A);
+
+  if (sharedPoint.isInfinity()) {
+    throw new Error("Invalid ECDH result (point at infinity)");
+  }
+
+  return bigIntTo32Bytes(sharedPoint.x);
+}
+
+/**
+ * Derive symmetric key from P-256 shared secret using HKDF
+ * @param {Uint8Array} sharedSecret - 32-byte shared secret
+ * @param {Uint8Array} [context] - Optional context bytes
+ * @returns {Uint8Array} - 32-byte symmetric key
+ */
+export function p256DeriveKey(sharedSecret, context) {
+  const infoStr = "flatbuffers-p256";
+  const info = new Uint8Array(context ? context.length + infoStr.length : infoStr.length);
+  for (let i = 0; i < infoStr.length; i++) {
+    info[i] = infoStr.charCodeAt(i);
+  }
+  if (context) {
+    info.set(context, infoStr.length);
+  }
+  return hkdf(sharedSecret, new Uint8Array(0), info, 32);
+}
+
+// =============================================================================
 // Key Exchange Algorithm Constants
 // =============================================================================
 
@@ -762,6 +1102,83 @@ export function computeKeyId(publicKey) {
   return sha256(publicKey).subarray(0, 8);
 }
 
+// EncryptionHeader schema for FlatBuffer serialization
+const ENCRYPTION_HEADER_SCHEMA = `
+namespace flatbuffers.encryption;
+
+enum KeyExchangeAlgorithm : byte {
+  X25519 = 0,
+  Secp256k1 = 1,
+  P256 = 2
+}
+
+enum SymmetricAlgorithm : byte {
+  AES_256_CTR = 0
+}
+
+enum KeyDerivationFunction : byte {
+  HKDF_SHA256 = 0
+}
+
+table EncryptionHeader {
+  version: ubyte = 1;
+  key_exchange: KeyExchangeAlgorithm = X25519;
+  symmetric: SymmetricAlgorithm = AES_256_CTR;
+  kdf: KeyDerivationFunction = HKDF_SHA256;
+  ephemeral_public_key: [ubyte] (required);
+  recipient_key_id: [ubyte];
+  context: string;
+  schema_hash: [ubyte];
+  root_type: string;
+  timestamp: ulong;
+}
+
+root_type EncryptionHeader;
+`;
+
+let _headerRunner = null;
+
+async function getHeaderRunner() {
+  if (!_headerRunner) {
+    // Dynamic import to avoid circular dependency
+    const { FlatcRunner } = await import("./runner.mjs");
+    _headerRunner = await FlatcRunner.init();
+  }
+  return _headerRunner;
+}
+
+/**
+ * Serialize EncryptionHeader to FlatBuffer binary
+ * @param {Object} header - EncryptionHeader object (from createEncryptionHeader or getHeader)
+ * @returns {Promise<Uint8Array>} - FlatBuffer binary
+ */
+export async function encryptionHeaderToBinary(header) {
+  const runner = await getHeaderRunner();
+  const schemaInput = {
+    entry: "/encryption_header.fbs",
+    files: { "/encryption_header.fbs": ENCRYPTION_HEADER_SCHEMA },
+  };
+  return runner.generateBinary(schemaInput, JSON.stringify(header));
+}
+
+/**
+ * Parse EncryptionHeader from FlatBuffer binary
+ * @param {Uint8Array} binary - FlatBuffer binary
+ * @returns {Promise<Object>} - EncryptionHeader object with Uint8Array fields
+ */
+export async function encryptionHeaderFromBinary(binary) {
+  const runner = await getHeaderRunner();
+  const schemaInput = {
+    entry: "/encryption_header.fbs",
+    files: { "/encryption_header.fbs": ENCRYPTION_HEADER_SCHEMA },
+  };
+  const json = runner.generateJSON(schemaInput, {
+    path: "/header.bin",
+    data: binary,
+  });
+  return encryptionHeaderFromJSON(json);
+}
+
 /**
  * Encryption context for FlatBuffer field encryption.
  * Supports both symmetric (shared secret) and asymmetric (public key) modes.
@@ -806,29 +1223,57 @@ export class EncryptionContext {
    * Generates an ephemeral key pair and derives a shared secret.
    * The ephemeral public key must be sent to the recipient out-of-band.
    *
-   * @param {Uint8Array} recipientPublicKey - Recipient's X25519 public key (32 bytes)
+   * @param {Uint8Array} recipientPublicKey - Recipient's public key
+   *   - X25519: 32 bytes
+   *   - secp256k1/P-256: 33 bytes (compressed)
    * @param {Object} [options] - Additional options for the header
+   * @param {number} [options.keyExchange=0] - Key exchange algorithm (KeyExchangeAlgorithm)
    * @param {string} [options.context] - HKDF context string
    * @param {Uint8Array} [options.schemaHash] - Schema hash
    * @param {string} [options.rootType] - Root type name
    * @returns {EncryptionContext} - Context ready for encryption
    */
   static forEncryption(recipientPublicKey, options = {}) {
-    if (!recipientPublicKey || recipientPublicKey.length !== 32) {
-      throw new Error("recipientPublicKey must be 32 bytes");
-    }
-
-    // Generate ephemeral key pair
-    const ephemeral = x25519GenerateKeyPair();
-
-    // Compute shared secret
-    const sharedSecret = x25519SharedSecret(ephemeral.privateKey, recipientPublicKey);
-
-    // Derive symmetric key from shared secret
+    const keyExchange = options.keyExchange ?? KeyExchangeAlgorithm.X25519;
     const contextBytes = options.context
       ? new TextEncoder().encode(options.context)
       : undefined;
-    const symmetricKey = x25519DeriveKey(sharedSecret, contextBytes);
+
+    let ephemeral;
+    let sharedSecret;
+    let symmetricKey;
+
+    switch (keyExchange) {
+      case KeyExchangeAlgorithm.X25519:
+        if (!recipientPublicKey || recipientPublicKey.length !== 32) {
+          throw new Error("X25519 recipientPublicKey must be 32 bytes");
+        }
+        ephemeral = x25519GenerateKeyPair();
+        sharedSecret = x25519SharedSecret(ephemeral.privateKey, recipientPublicKey);
+        symmetricKey = x25519DeriveKey(sharedSecret, contextBytes);
+        break;
+
+      case KeyExchangeAlgorithm.Secp256k1:
+        if (!recipientPublicKey || recipientPublicKey.length !== 33) {
+          throw new Error("secp256k1 recipientPublicKey must be 33 bytes (compressed)");
+        }
+        ephemeral = secp256k1GenerateKeyPair();
+        sharedSecret = secp256k1SharedSecret(ephemeral.privateKey, recipientPublicKey);
+        symmetricKey = secp256k1DeriveKey(sharedSecret, contextBytes);
+        break;
+
+      case KeyExchangeAlgorithm.P256:
+        if (!recipientPublicKey || recipientPublicKey.length !== 33) {
+          throw new Error("P-256 recipientPublicKey must be 33 bytes (compressed)");
+        }
+        ephemeral = p256GenerateKeyPair();
+        sharedSecret = p256SharedSecret(ephemeral.privateKey, recipientPublicKey);
+        symmetricKey = p256DeriveKey(sharedSecret, contextBytes);
+        break;
+
+      default:
+        throw new Error(`Unsupported key exchange algorithm: ${keyExchange}`);
+    }
 
     // Create context
     const ctx = new EncryptionContext(symmetricKey);
@@ -837,7 +1282,7 @@ export class EncryptionContext {
     // Build header for later retrieval
     ctx.#header = createEncryptionHeader({
       ephemeralPublicKey: ephemeral.publicKey,
-      keyExchange: KeyExchangeAlgorithm.X25519,
+      keyExchange: keyExchange,
       recipientKeyId: computeKeyId(recipientPublicKey),
       context: options.context,
       schemaHash: options.schemaHash,
@@ -851,9 +1296,10 @@ export class EncryptionContext {
    * Create an EncryptionContext for decrypting FROM a sender.
    * Uses the recipient's private key and the sender's ephemeral public key.
    *
-   * @param {Uint8Array} recipientPrivateKey - Recipient's X25519 private key (32 bytes)
+   * @param {Uint8Array} recipientPrivateKey - Recipient's private key (32 bytes)
    * @param {Uint8Array|Object} headerOrEphemeralKey - EncryptionHeader object or ephemeral public key
    * @param {Object} [options] - Additional options (only used if headerOrEphemeralKey is a public key)
+   * @param {number} [options.keyExchange=0] - Key exchange algorithm (required if passing raw ephemeral key)
    * @param {string} [options.context] - HKDF context string (must match encryption context)
    * @returns {EncryptionContext} - Context ready for decryption
    */
@@ -864,11 +1310,13 @@ export class EncryptionContext {
 
     let ephemeralPublicKey;
     let context;
+    let keyExchange;
 
     if (headerOrEphemeralKey instanceof Uint8Array) {
       // Direct ephemeral public key
       ephemeralPublicKey = headerOrEphemeralKey;
       context = options.context;
+      keyExchange = options.keyExchange ?? KeyExchangeAlgorithm.X25519;
     } else if (typeof headerOrEphemeralKey === 'object') {
       // EncryptionHeader object
       ephemeralPublicKey = headerOrEphemeralKey.ephemeralPublicKey
@@ -876,22 +1324,48 @@ export class EncryptionContext {
           ? new Uint8Array(headerOrEphemeralKey.ephemeral_public_key)
           : null);
       context = headerOrEphemeralKey.context;
+      keyExchange = headerOrEphemeralKey.keyExchange
+        ?? headerOrEphemeralKey.key_exchange
+        ?? KeyExchangeAlgorithm.X25519;
     } else {
       throw new Error("headerOrEphemeralKey must be Uint8Array or EncryptionHeader object");
     }
 
-    if (!ephemeralPublicKey || ephemeralPublicKey.length !== 32) {
-      throw new Error("ephemeralPublicKey must be 32 bytes");
-    }
-
-    // Compute shared secret (same as sender computed)
-    const sharedSecret = x25519SharedSecret(recipientPrivateKey, ephemeralPublicKey);
-
-    // Derive symmetric key from shared secret
     const contextBytes = context
       ? new TextEncoder().encode(context)
       : undefined;
-    const symmetricKey = x25519DeriveKey(sharedSecret, contextBytes);
+
+    let sharedSecret;
+    let symmetricKey;
+
+    switch (keyExchange) {
+      case KeyExchangeAlgorithm.X25519:
+        if (!ephemeralPublicKey || ephemeralPublicKey.length !== 32) {
+          throw new Error("X25519 ephemeralPublicKey must be 32 bytes");
+        }
+        sharedSecret = x25519SharedSecret(recipientPrivateKey, ephemeralPublicKey);
+        symmetricKey = x25519DeriveKey(sharedSecret, contextBytes);
+        break;
+
+      case KeyExchangeAlgorithm.Secp256k1:
+        if (!ephemeralPublicKey || ephemeralPublicKey.length !== 33) {
+          throw new Error("secp256k1 ephemeralPublicKey must be 33 bytes");
+        }
+        sharedSecret = secp256k1SharedSecret(recipientPrivateKey, ephemeralPublicKey);
+        symmetricKey = secp256k1DeriveKey(sharedSecret, contextBytes);
+        break;
+
+      case KeyExchangeAlgorithm.P256:
+        if (!ephemeralPublicKey || ephemeralPublicKey.length !== 33) {
+          throw new Error("P-256 ephemeralPublicKey must be 33 bytes");
+        }
+        sharedSecret = p256SharedSecret(recipientPrivateKey, ephemeralPublicKey);
+        symmetricKey = p256DeriveKey(sharedSecret, contextBytes);
+        break;
+
+      default:
+        throw new Error(`Unsupported key exchange algorithm: ${keyExchange}`);
+    }
 
     return new EncryptionContext(symmetricKey);
   }
@@ -926,6 +1400,14 @@ export class EncryptionContext {
    */
   getHeaderJSON() {
     return this.#header ? encryptionHeaderToJSON(this.#header) : null;
+  }
+
+  /**
+   * Get the encryption header as FlatBuffer binary (only available for encryption contexts)
+   * @returns {Promise<Uint8Array|null>} - FlatBuffer binary or null
+   */
+  async getHeaderBinary() {
+    return this.#header ? encryptionHeaderToBinary(this.#header) : null;
   }
 
   /**
@@ -1289,6 +1771,9 @@ export function encryptBuffer(buffer, schema, key, rootType) {
  */
 export const decryptBuffer = encryptBuffer;
 
+// Export sha256 for use in header_store and other modules
+export { sha256 };
+
 export default {
   EncryptionContext,
   encryptBytes,
@@ -1301,11 +1786,23 @@ export default {
   x25519GenerateKeyPair,
   x25519SharedSecret,
   x25519DeriveKey,
+  // secp256k1 ECDH functions
+  secp256k1GenerateKeyPair,
+  secp256k1SharedSecret,
+  secp256k1DeriveKey,
+  // P-256 ECDH functions
+  p256GenerateKeyPair,
+  p256SharedSecret,
+  p256DeriveKey,
   // EncryptionHeader functions
   createEncryptionHeader,
   encryptionHeaderToJSON,
   encryptionHeaderFromJSON,
+  encryptionHeaderToBinary,
+  encryptionHeaderFromBinary,
   computeKeyId,
+  // Hash functions
+  sha256,
   // Constants
   KeyExchangeAlgorithm,
   SymmetricAlgorithm,

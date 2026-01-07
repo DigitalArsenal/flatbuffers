@@ -7,6 +7,7 @@
 - A `--preserve-case` flag to prevent IDL name mangling
 - JSON Schema schema import/export (`--jsonschema`, `*.schema.json`)
 - Optional lossless JSON Schema round-tripping via `--jsonschema-xflatbuffers` metadata
+- WebAssembly build of `flatc` available as [`flatc-wasm`](https://www.npmjs.com/package/flatc-wasm) npm package
 
 ## Fork Features
 
@@ -132,6 +133,29 @@ tests/JsonSchemaTest.sh
 tests/JsonSchemaImportTest.sh
 ```
 
+### WebAssembly Build (`flatc-wasm`)
+
+This fork includes a WebAssembly build of the `flatc` compiler, published as the [`flatc-wasm`](https://www.npmjs.com/package/flatc-wasm) npm package. It provides:
+
+- Full `flatc` CLI functionality in the browser and Node.js
+- Code generation for all supported languages (TypeScript, Python, Go, Rust, C++, etc.)
+- JSON ↔ FlatBuffer binary conversion
+- JSON Schema export
+- Virtual filesystem for schema includes
+
+Quick example:
+
+```javascript
+import { FlatcRunner } from "flatc-wasm";
+
+const runner = await FlatcRunner.init();
+const code = runner.generateCode(
+  { entry: "/schema.fbs", files: { "/schema.fbs": schemaContent } },
+  "ts"
+);
+```
+
+For full documentation, API reference, and build instructions, see [`wasm/README.md`](wasm/README.md).
 
 ![logo](https://flatbuffers.dev/assets/flatbuffers_logo.svg) FlatBuffers
 ===========

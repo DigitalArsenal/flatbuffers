@@ -37,65 +37,8 @@
 #include "idl_gen_ts.h"
 #include "idl_gen_php.h"
 
-// ============================================================================
-// Stub implementations for dependencies not needed in WASM
-// ============================================================================
-
-namespace flatbuffers {
-
-// These are referenced by code generators but not actually used for
-// GenerateCodeString() which is the only codegen API we expose in WASM.
-// Full implementations exist in flatc_main.cpp for the CLI.
-
-void LogCompilerWarn(const std::string& /*warn*/) {
-  // No-op in WASM - we don't have a console to log to
-}
-
-void LogCompilerError(const std::string& /*err*/) {
-  // No-op in WASM - errors are returned via wasm_get_last_error()
-}
-
-// GRPC code generation stubs - GRPC is not supported in WASM
-// These are referenced by the language generators but only called
-// when grpc_enabled is set in options (which we don't do).
-
-bool GenerateCppGRPC(const Parser& /*parser*/,
-                     const std::string& /*path*/,
-                     const std::string& /*file_name*/) {
-  return false;
-}
-
-bool GenerateGoGRPC(const Parser& /*parser*/,
-                    const std::string& /*path*/,
-                    const std::string& /*file_name*/) {
-  return false;
-}
-
-bool GenerateJavaGRPC(const Parser& /*parser*/,
-                      const std::string& /*path*/,
-                      const std::string& /*file_name*/) {
-  return false;
-}
-
-bool GenerateTSGRPC(const Parser& /*parser*/,
-                    const std::string& /*path*/,
-                    const std::string& /*file_name*/) {
-  return false;
-}
-
-bool GenerateSwiftGRPC(const Parser& /*parser*/,
-                       const std::string& /*path*/,
-                       const std::string& /*file_name*/) {
-  return false;
-}
-
-bool GeneratePythonGRPC(const Parser& /*parser*/,
-                        const std::string& /*path*/,
-                        const std::string& /*file_name*/) {
-  return false;
-}
-
-}  // namespace flatbuffers
+// Note: LogCompilerWarn/LogCompilerError and GRPC generators are provided
+// by flatc_main.cpp and grpc/src/compiler/*.cc which are linked into WASM.
 
 namespace flatbuffers {
 namespace wasm {

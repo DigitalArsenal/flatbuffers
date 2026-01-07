@@ -1,0 +1,51 @@
+{
+  "name": "flatc-wasm",
+  "version": "25.12.19",
+  "description": "FlatBuffers compiler (flatc) as a WebAssembly module - schema management, JSON/binary conversion, and code generation",
+  "type": "module",
+  "main": "dist/flatc-wasm.js",
+  "module": "dist/flatc-wasm.js",
+  "types": "dist/flatc-wasm.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/flatc-wasm.d.ts",
+      "import": "./dist/flatc-wasm.js",
+      "require": "./dist/flatc-wasm.cjs"
+    }
+  },
+  "files": [
+    "dist/flatc-wasm.js",
+    "dist/flatc-wasm.cjs",
+    "dist/flatc-wasm.d.ts",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "cmake --build ../build/wasm --target flatc_wasm_npm -j",
+    "test": "node test/test_all.mjs",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/google/flatbuffers.git",
+    "directory": "wasm"
+  },
+  "keywords": [
+    "flatbuffers",
+    "flatc",
+    "wasm",
+    "webassembly",
+    "serialization",
+    "schema",
+    "compiler",
+    "codegen"
+  ],
+  "author": "The FlatBuffers project",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/google/flatbuffers/issues"
+  },
+  "homepage": "https://flatbuffers.dev/",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

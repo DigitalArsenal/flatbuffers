@@ -1,0 +1,225 @@
+// all_types.fbs - Comprehensive schema testing all FlatBuffer types
+// Used for WASM module testing
+
+namespace TestTypes;
+
+// Enums with different underlying types
+enum Color : ubyte { Red = 0, Green, Blue }
+enum Size : byte { Small = -1, Medium = 0, Large = 1 }
+enum Permission : ushort { None = 0, Read = 1, Write = 2, Execute = 4 }
+enum Status : int { Unknown = -1, Pending = 0, Active = 1, Done = 2 }
+enum BigEnum : ulong { Zero = 0, One = 1, Max = 18446744073709551615 }
+
+// Bit flags enum
+enum Flags : uint (bit_flags) {
+  FlagA = 0,  // 1
+  FlagB,      // 2
+  FlagC,      // 4
+  FlagD = 4,  // 16
+}
+
+// Union types
+table Cat { meows: int; }
+table Dog { barks: int; }
+table Fish { bubbles: int; }
+
+union Pet { Cat, Dog, Fish }
+union AliasedPet { Kitty: Cat, Doggo: Dog, Fishy: Fish }
+
+// Simple struct (inline, fixed size)
+struct Vec2 {
+  x: float;
+  y: float;
+}
+
+struct Vec3 {
+  x: float;
+  y: float;
+  z: float;
+}
+
+// Struct with alignment
+struct AlignedStruct (force_align: 16) {
+  a: double;
+  b: int;
+  c: short;
+}
+
+// Nested structs
+struct Color3f {
+  r: float;
+  g: float;
+  b: float;
+}
+
+struct Vertex {
+  pos: Vec3;
+  color: Color3f;
+  uv: Vec2;
+}
+
+// Struct with all scalar types
+struct AllScalars {
+  b: bool;
+  i8: byte;
+  u8: ubyte;
+  i16: short;
+  u16: ushort;
+  i32: int;
+  u32: uint;
+  i64: long;
+  u64: ulong;
+  f32: float;
+  f64: double;
+}
+
+// Table with all scalar types and defaults
+table ScalarTypes {
+  // Boolean
+  bool_val: bool = true;
+
+  // Signed integers
+  int8_val: byte = -128;
+  int16_val: short = -32768;
+  int32_val: int = -2147483648;
+  int64_val: long = -9223372036854775808;
+
+  // Unsigned integers
+  uint8_val: ubyte = 255;
+  uint16_val: ushort = 65535;
+  uint32_val: uint = 4294967295;
+  uint64_val: ulong = 18446744073709551615;
+
+  // Floats
+  float32_val: float = 3.14159;
+  float64_val: double = 2.718281828459045;
+
+  // Special float values
+  nan_val: float = nan;
+  inf_val: float = inf;
+  neg_inf_val: float = -inf;
+}
+
+// Table with string types
+table StringTypes {
+  simple_string: string;
+  required_string: string (required);
+  string_with_default: string = "default value";
+}
+
+// Table with vector types
+table VectorTypes {
+  // Scalar vectors
+  bool_vec: [bool];
+  int8_vec: [byte];
+  uint8_vec: [ubyte];
+  int16_vec: [short];
+  uint16_vec: [ushort];
+  int32_vec: [int];
+  uint32_vec: [uint];
+  int64_vec: [long];
+  uint64_vec: [ulong];
+  float32_vec: [float];
+  float64_vec: [double];
+
+  // String vector
+  string_vec: [string];
+
+  // Struct vector
+  struct_vec: [Vec3];
+
+  // Enum vector
+  enum_vec: [Color];
+}
+
+// Table with nested tables
+table NestedTable {
+  name: string;
+  value: int;
+}
+
+table ContainerTable {
+  nested: NestedTable;
+  nested_vec: [NestedTable];
+}
+
+// Table with union
+table PetOwner {
+  name: string;
+  pet: Pet;
+  aliased_pet: AliasedPet;
+}
+
+// Table with optional fields (null by default)
+table OptionalFields {
+  opt_bool: bool = null;
+  opt_int: int = null;
+  opt_float: float = null;
+  opt_string: string;
+  opt_struct: Vec3;
+  opt_table: NestedTable;
+}
+
+// Table with deprecated field
+table DeprecatedFields {
+  current_field: int;
+  old_field: int (deprecated);
+  another_current: string;
+}
+
+// Table with key field (for sorting)
+table KeyedRecord {
+  id: uint (key);
+  name: string;
+  score: float;
+}
+
+// Table with nested flatbuffer
+table NestedBuffer {
+  name: string;
+  data: [ubyte] (nested_flatbuffer: "NestedTable");
+}
+
+// Comprehensive test table with everything
+table AllTypes {
+  // Scalars
+  scalars: ScalarTypes;
+
+  // Strings
+  strings: StringTypes;
+
+  // Vectors
+  vectors: VectorTypes;
+
+  // Nested
+  container: ContainerTable;
+
+  // Union
+  pet_owner: PetOwner;
+
+  // Struct (inline)
+  vertex: Vertex;
+  all_scalars_struct: AllScalars;
+
+  // Enums
+  color: Color = Green;
+  size: Size = Medium;
+  permission: Permission;
+  status: Status = Pending;
+  flags: Flags;
+
+  // Direct fields
+  name: string (required);
+  id: ulong;
+  enabled: bool = true;
+
+  // Vector of keyed records (sortable)
+  records: [KeyedRecord];
+
+  // Optional
+  optional: OptionalFields;
+}
+
+root_type AllTypes;
+file_identifier "TEST";
+file_extension "test";

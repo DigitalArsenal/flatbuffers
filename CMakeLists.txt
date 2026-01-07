@@ -716,6 +716,9 @@ endif()
 
 include(CMake/BuildFlatBuffers.cmake)
 
+# WASM build support (requires Emscripten)
+include(CMake/BuildWasm.cmake)
+
 if(UNIX)
     # Use of CPack only supported on Linux systems.
     if(FLATBUFFERS_PACKAGE_DEBIAN)

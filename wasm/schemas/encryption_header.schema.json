@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://flatbuffers.dev/schemas/encryption_header.schema.json",
+  "title": "EncryptionHeader",
+  "description": "FlatBuffer encryption header containing ephemeral public key and algorithm metadata for hybrid encryption. This header should be transmitted out-of-band or prepended to encrypted data.",
+  "x-flatbuffer-namespace": "flatbuffers.encryption",
+  "x-flatbuffer-root-type": "EncryptionHeader",
+  "type": "object",
+  "required": ["ephemeral_public_key"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255,
+      "default": 1,
+      "description": "Version of the encryption header format",
+      "x-flatbuffer-type": "ubyte"
+    },
+    "key_exchange": {
+      "type": "string",
+      "enum": ["X25519", "Secp256k1", "P256"],
+      "default": "X25519",
+      "description": "Key exchange algorithm used for ECDH",
+      "x-flatbuffer-type": "enum",
+      "x-flatbuffer-enum-type": "byte",
+      "x-flatbuffer-enum-values": {
+        "X25519": {
+          "value": 0,
+          "description": "Curve25519 ECDH (RFC 7748) - 32-byte public keys"
+        },
+        "Secp256k1": {
+          "value": 1,
+          "description": "Bitcoin/Ethereum secp256k1 ECDH - 33-byte compressed public keys"
+        },
+        "P256": {
+          "value": 2,
+          "description": "NIST P-256/secp256r1 ECDH - 33-byte compressed public keys"
+        }
+      }
+    },
+    "symmetric": {
+      "type": "string",
+      "enum": ["AES_256_CTR"],
+      "default": "AES_256_CTR",
+      "description": "Symmetric encryption algorithm",
+      "x-flatbuffer-type": "enum",
+      "x-flatbuffer-enum-type": "byte",
+      "x-flatbuffer-enum-values": {
+        "AES_256_CTR": {
+          "value": 0,
+          "description": "AES-256 in CTR mode - size-preserving encryption"
+        }
+      }
+    },
+    "kdf": {
+      "type": "string",
+      "enum": ["HKDF_SHA256"],
+      "default": "HKDF_SHA256",
+      "description": "Key derivation function",
+      "x-flatbuffer-type": "enum",
+      "x-flatbuffer-enum-type": "byte",
+      "x-flatbuffer-enum-values": {
+        "HKDF_SHA256": {
+          "value": 0,
+          "description": "HKDF with SHA-256 per RFC 5869"
+        }
+      }
+    },
+    "ephemeral_public_key": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+      },
+      "minItems": 32,
+      "maxItems": 65,
+      "description": "Ephemeral public key bytes. Size depends on algorithm: 32 bytes for X25519, 33 bytes compressed for secp256k1/P256, or 65 bytes uncompressed.",
+      "x-flatbuffer-type": "[ubyte]",
+      "x-flatbuffer-required": true
+    },
+    "recipient_key_id": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+      },
+      "maxItems": 32,
+      "description": "Optional recipient public key identifier (e.g., first 8 bytes of SHA-256 hash of recipient's public key). Helps recipient identify which private key to use when they have multiple keys.",
+      "x-flatbuffer-type": "[ubyte]"
+    },
+    "context": {
+      "type": "string",
+      "maxLength": 256,
+      "description": "Optional context/info string for HKDF derivation. Provides domain separation for different applications using this encryption scheme.",
+      "x-flatbuffer-type": "string"
+    },
+    "schema_hash": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+      },
+      "maxItems": 32,
+      "description": "Optional SHA-256 hash of the FlatBuffer schema used. Helps receiver identify which schema to use for field-level decryption.",
+      "x-flatbuffer-type": "[ubyte]"
+    },
+    "root_type": {
+      "type": "string",
+      "maxLength": 256,
+      "description": "Optional root type name in the FlatBuffer schema. Required for field-level decryption to locate encrypted fields.",
+      "x-flatbuffer-type": "string"
+    },
+    "timestamp": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Optional Unix epoch timestamp in milliseconds when encryption was performed. Useful for key rotation policies and audit trails.",
+      "x-flatbuffer-type": "ulong"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "version": 1,
+      "key_exchange": "X25519",
+      "symmetric": "AES_256_CTR",
+      "kdf": "HKDF_SHA256",
+      "ephemeral_public_key": [
+        4, 113, 195, 67, 27, 253, 85, 143, 45, 128, 183, 93, 133, 58, 119, 221,
+        28, 203, 61, 55, 118, 85, 219, 203, 157, 157, 102, 228, 158, 68, 50, 89
+      ],
+      "context": "my-application-v1",
+      "root_type": "UserProfile",
+      "timestamp": 1704672000000
+    }
+  ]
+}

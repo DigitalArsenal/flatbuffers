@@ -147,6 +147,8 @@ set(FlatBuffers_Library_SRCS
   include/flatbuffers/vector.h
   include/flatbuffers/vector_downward.h
   include/flatbuffers/verifier.h
+  include/flatbuffers/encryption.h
+  src/encryption.cpp
   src/file_manager.cpp
   src/file_name_manager.cpp
   src/idl_parser.cpp

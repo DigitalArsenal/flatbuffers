@@ -1041,6 +1041,10 @@ class Parser : public ParserState {
     // An attribute added to a vector field to indicate that it uses 64-bit
     // addressing and it has a 64-bit length.
     known_attributes_["vector64"] = true;
+
+    // An attribute added to a field to indicate it should be encrypted.
+    // Used by the encryption API (flatbuffers/encryption.h).
+    known_attributes_["encrypted"] = true;
   }
 
   // Copying is not allowed

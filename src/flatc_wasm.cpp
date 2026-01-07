@@ -312,7 +312,7 @@ int32_t wasm_schema_add(const char* name, uint32_t name_len,
 
   // Create parser with default options
   IDLOptions opts;
-  opts.strict_json = true;
+  opts.strict_json = false;  // Allow FlatBuffers relaxed JSON (unquoted keys)
   opts.output_default_scalars_in_json = true;
 
   auto parser = std::make_unique<Parser>(opts);
@@ -522,7 +522,7 @@ const char* wasm_binary_to_json(int32_t schema_id,
     return nullptr;
   }
 
-  const Parser& parser = *it->second.parser;
+  Parser& parser = *it->second.parser;
 
   // Basic sanity check on buffer size
   if (binary_len < 8) {
@@ -531,10 +531,18 @@ const char* wasm_binary_to_json(int32_t schema_id,
     return nullptr;
   }
 
+  // Temporarily enable strict_json for output (to generate standard JSON)
+  bool original_strict_json = parser.opts.strict_json;
+  parser.opts.strict_json = true;
+
   // Generate JSON text
   // Note: GenText will fail gracefully if the buffer is invalid
   std::string json_output;
   const char* err = GenText(parser, binary, &json_output);
+
+  // Restore original setting
+  parser.opts.strict_json = original_strict_json;
+
   if (err) {
     SetError(std::string("JSON generation error: ") + err);
     *out_len = 0;

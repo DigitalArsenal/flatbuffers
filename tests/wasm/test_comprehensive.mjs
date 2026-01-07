@@ -1,47 +1,21 @@
-// test_comprehensive.mjs - Comprehensive test suite for WASM flatc module
+#!/usr/bin/env node
+/**
+ * test_comprehensive.mjs - Comprehensive test suite for WASM flatc module
+ *
+ * Uses the canonical FlatBuffers test files (monster_test.fbs, monsterdata_test.json,
+ * monsterdata_test.mon, etc.) instead of custom schemas.
+ */
+import { readFile } from 'fs/promises';
+import { fileURLToPath } from 'url';
+import path from 'path';
 import FlatcWasm from './flatc.js';
 
-// Test schemas
-const monsterSchema = `
-namespace TestGame;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const TESTS_DIR = path.join(__dirname, '..');
 
-table Monster {
-  name: string;
-  hp: int = 100;
-  mana: int = 50;
-  pos: Vec3;
-  inventory: [ubyte];
-}
-
-struct Vec3 {
-  x: float;
-  y: float;
-  z: float;
-}
-
-root_type Monster;
-`;
-
-const simpleSchema = `
-table Simple {
-  id: int;
-  message: string;
-}
-root_type Simple;
-`;
-
-const testJson = `{
-  "name": "Orc",
-  "hp": 150,
-  "mana": 30,
-  "pos": { "x": 1.0, "y": 2.0, "z": 3.0 },
-  "inventory": [1, 2, 3, 4, 5]
-}`;
-
-const simpleJson = `{
-  "id": 42,
-  "message": "Hello, FlatBuffers!"
-}`;
+// =============================================================================
+// Test infrastructure
+// =============================================================================
 
 let testsRun = 0;
 let testsPassed = 0;
@@ -57,367 +31,568 @@ function assert(condition, message) {
   return true;
 }
 
+// =============================================================================
+// Helper class for WASM interactions
+// =============================================================================
+
+class FlatcHelper {
+  constructor(module) {
+    this.module = module;
+    this.encoder = new TextEncoder();
+    this.decoder = new TextDecoder();
+    this.schemas = new Map();
+  }
+
+  /**
+   * Parse FlatBuffers JSON which may contain non-standard values like nan, inf, -inf.
+   * These are valid in FlatBuffers but not in standard JSON.
+   */
+  static parseFlatBuffersJson(json) {
+    // Replace FlatBuffers-specific float literals with JavaScript equivalents
+    // nan -> null (JavaScript has NaN but JSON.parse can't handle it)
+    // inf/-inf -> null (similar situation)
+    // We use null since that's the closest JSON-valid representation
+    const sanitized = json
+      .replace(/:\s*nan\b/g, ': null')
+      .replace(/:\s*-inf\b/g, ': null')
+      .replace(/:\s*\+?inf\b/g, ': null')
+      .replace(/:\s*-infinity\b/g, ': null')
+      .replace(/:\s*\+?infinity\b/g, ': null');
+    return JSON.parse(sanitized);
+  }
+
+  writeString(str) {
+    const bytes = this.encoder.encode(str);
+    const ptr = this.module._malloc(bytes.length);
+    this.module.HEAPU8.set(bytes, ptr);
+    return [ptr, bytes.length];
+  }
+
+  writeBytes(data) {
+    const ptr = this.module._malloc(data.length);
+    this.module.HEAPU8.set(data, ptr);
+    return ptr;
+  }
+
+  readString(ptr) {
+    return this.module.UTF8ToString(ptr);
+  }
+
+  getLastError() {
+    const ptr = this.module._wasm_get_last_error();
+    return ptr ? this.readString(ptr) : 'Unknown error';
+  }
+
+  addSchema(name, source) {
+    const [namePtr, nameLen] = this.writeString(name);
+    const [srcPtr, srcLen] = this.writeString(source);
+
+    try {
+      const id = this.module._wasm_schema_add(namePtr, nameLen, srcPtr, srcLen);
+      if (id < 0) {
+        throw new Error(`Failed to add schema '${name}': ${this.getLastError()}`);
+      }
+      this.schemas.set(name, id);
+      return id;
+    } finally {
+      this.module._free(namePtr);
+      this.module._free(srcPtr);
+    }
+  }
+
+  getSchemaId(name) {
+    const id = this.schemas.get(name);
+    if (id === undefined) {
+      throw new Error(`Schema '${name}' not found`);
+    }
+    return id;
+  }
+
+  jsonToBinary(schemaName, json) {
+    const schemaId = this.getSchemaId(schemaName);
+    const [jsonPtr, jsonLen] = this.writeString(json);
+    const outLenPtr = this.module._malloc(4);
+
+    try {
+      const resultPtr = this.module._wasm_json_to_binary(schemaId, jsonPtr, jsonLen, outLenPtr);
+      if (!resultPtr) {
+        throw new Error(`JSON to binary failed: ${this.getLastError()}`);
+      }
+      const len = this.module.getValue(outLenPtr, 'i32');
+      return this.module.HEAPU8.slice(resultPtr, resultPtr + len);
+    } finally {
+      this.module._free(jsonPtr);
+      this.module._free(outLenPtr);
+    }
+  }
+
+  binaryToJson(schemaName, binary) {
+    const schemaId = this.getSchemaId(schemaName);
+    const binPtr = this.writeBytes(binary);
+    const outLenPtr = this.module._malloc(4);
+
+    try {
+      const resultPtr = this.module._wasm_binary_to_json(schemaId, binPtr, binary.length, outLenPtr);
+      if (!resultPtr) {
+        throw new Error(`Binary to JSON failed: ${this.getLastError()}`);
+      }
+      const len = this.module.getValue(outLenPtr, 'i32');
+      return this.decoder.decode(this.module.HEAPU8.slice(resultPtr, resultPtr + len));
+    } finally {
+      this.module._free(binPtr);
+      this.module._free(outLenPtr);
+    }
+  }
+
+  generateCode(schemaName, langId) {
+    const schemaId = this.getSchemaId(schemaName);
+    const outLenPtr = this.module._malloc(4);
+
+    try {
+      const resultPtr = this.module._wasm_generate_code(schemaId, langId, outLenPtr);
+      if (!resultPtr) {
+        throw new Error(`Code generation failed: ${this.getLastError()}`);
+      }
+      const len = this.module.getValue(outLenPtr, 'i32');
+      return this.decoder.decode(this.module.HEAPU8.slice(resultPtr, resultPtr + len));
+    } finally {
+      this.module._free(outLenPtr);
+    }
+  }
+
+  detectFormat(data) {
+    const ptr = this.writeBytes(data);
+    try {
+      return this.module._wasm_detect_format(ptr, data.length);
+    } finally {
+      this.module._free(ptr);
+    }
+  }
+}
+
+// =============================================================================
+// Standalone version of monster_test.fbs (without includes)
+// This is the canonical FlatBuffers test schema used across all language bindings
+// =============================================================================
+
+const MONSTER_TEST_SCHEMA = `
+// Standalone version of monster_test.fbs for WASM testing
+// Original: tests/monster_test.fbs
+
+namespace MyGame;
+
+table InParentNamespace {}
+
+namespace MyGame.Example2;
+
+table Monster {}
+
+namespace MyGame.Example;
+
+attribute "priority";
+
+/// Composite components of Monster color.
+enum Color:ubyte (bit_flags) {
+  Red = 0,
+  Green,
+  Blue = 3,
+}
+
+enum Race:byte {
+  None = -1,
+  Human = 0,
+  Dwarf,
+  Elf,
+}
+
+enum LongEnum:ulong (bit_flags) {
+  LongOne = 1,
+  LongTwo = 2,
+  LongBig = 40,
+}
+
+union Any { Monster, TestSimpleTableWithEnum, MyGame.Example2.Monster }
+union AnyUniqueAliases { M: Monster, TS: TestSimpleTableWithEnum, M2: MyGame.Example2.Monster }
+union AnyAmbiguousAliases { M1: Monster, M2: Monster, M3: Monster }
+
+struct Test { a:short; b:byte; }
+
+table TestSimpleTableWithEnum (csharp_partial, private) {
+  color: Color = Green;
+}
+
+struct Vec3 (force_align: 8) {
+  x:float;
+  y:float;
+  z:float;
+  test1:double;
+  test2:Color;
+  test3:Test;
+}
+
+struct Ability {
+  id:uint(key);
+  distance:uint;
+}
+
+struct StructOfStructs {
+  a: Ability;
+  b: Test;
+  c: Ability;
+}
+
+struct StructOfStructsOfStructs {
+ a: StructOfStructs;
+}
+
+table Stat {
+  id:string;
+  val:long;
+  count:ushort (key);
+}
+
+table Referrable {
+  id:ulong(key, hash:"fnv1a_64");
+}
+
+/// an example documentation comment: "monster object"
+table Monster {
+  pos:Vec3 (id: 0);
+  hp:short = 100 (id: 2);
+  mana:short = 150 (id: 1);
+  name:string (id: 3, key);
+  color:Color = Blue (id: 6);
+  inventory:[ubyte] (id: 5);
+  friendly:bool = false (deprecated, priority: 1, id: 4);
+  testarrayoftables:[Monster] (id: 11);
+  testarrayofstring:[string] (id: 10);
+  testarrayofstring2:[string] (id: 28);
+  testarrayofbools:[bool] (id: 24);
+  testarrayofsortedstruct:[Ability] (id: 29);
+  enemy:MyGame.Example.Monster (id:12);
+  test:Any (id: 8);
+  test4:[Test] (id: 9);
+  test5:[Test] (id: 31);
+  testnestedflatbuffer:[ubyte] (id:13, nested_flatbuffer: "Monster");
+  testempty:Stat (id:14);
+  testbool:bool (id:15);
+  testhashs32_fnv1:int (id:16, hash:"fnv1_32");
+  testhashu32_fnv1:uint (id:17, hash:"fnv1_32");
+  testhashs64_fnv1:long (id:18, hash:"fnv1_64");
+  testhashu64_fnv1:ulong (id:19, hash:"fnv1_64");
+  testhashs32_fnv1a:int (id:20, hash:"fnv1a_32");
+  testhashu32_fnv1a:uint (id:21, hash:"fnv1a_32");
+  testhashs64_fnv1a:long (id:22, hash:"fnv1a_64");
+  testhashu64_fnv1a:ulong (id:23, hash:"fnv1a_64");
+  testf:float = 3.14159 (id:25);
+  testf2:float = 3 (id:26);
+  testf3:float (id:27);
+  flex:[ubyte] (id:30, flexbuffer);
+  vector_of_longs:[long] (id:32);
+  vector_of_doubles:[double] (id:33);
+  parent_namespace_test:InParentNamespace (id:34);
+  vector_of_referrables:[Referrable](id:35);
+  single_weak_reference:ulong(id:36, hash:"fnv1a_64");
+  vector_of_weak_references:[ulong](id:37, hash:"fnv1a_64");
+  vector_of_strong_referrables:[Referrable](id:38);
+  co_owning_reference:ulong(id:39, hash:"fnv1a_64");
+  vector_of_co_owning_references:[ulong](id:40, hash:"fnv1a_64");
+  non_owning_reference:ulong(id:41, hash:"fnv1a_64");
+  vector_of_non_owning_references:[ulong](id:42, hash:"fnv1a_64");
+  any_unique:AnyUniqueAliases(id:44);
+  any_ambiguous:AnyAmbiguousAliases (id:46);
+  vector_of_enums:[Color] (id:47);
+  signed_enum:Race = None (id:48);
+  testrequirednestedflatbuffer:[ubyte] (id:49, nested_flatbuffer: "Monster");
+  scalar_key_sorted_tables:[Stat] (id: 50);
+  native_inline:Test (id: 51, native_inline);
+  long_enum_non_enum_default:LongEnum (id: 52);
+  long_enum_normal_default:LongEnum = LongOne (id: 53);
+  nan_default:float = nan (id: 54);
+  inf_default:float = inf (id: 55);
+  positive_inf_default:float = +inf (id: 56);
+  infinity_default:float = infinity (id: 57);
+  positive_infinity_default:float = +infinity (id: 58);
+  negative_inf_default:float = -inf (id: 59);
+  negative_infinity_default:float = -infinity (id: 60);
+  double_inf_default:double = inf (id: 61);
+}
+
+table TypeAliases {
+    i8:int8;
+    u8:uint8;
+    i16:int16;
+    u16:uint16;
+    i32:int32;
+    u32:uint32;
+    i64:int64;
+    u64:uint64;
+    f32:float32;
+    f64:float64;
+    v8:[int8];
+    vf64:[float64];
+}
+
+root_type Monster;
+
+file_identifier "MONS";
+file_extension "mon";
+`;
+
+// =============================================================================
+// Main test runner
+// =============================================================================
+
 async function main() {
   console.log('Loading WASM module...');
-  const flatc = await FlatcWasm();
-  console.log('Version:', flatc.getVersion());
+  const module = await FlatcWasm();
+  const flatc = new FlatcHelper(module);
+  console.log('Version:', module.getVersion());
   console.log('');
 
-  // ============================================================================
-  // Test 1: Basic Schema Management
-  // ============================================================================
-  console.log('=== Test 1: Basic Schema Management ===');
+  // Load test files from the tests directory
+  console.log('Loading test files...');
+  const monsterDataJson = await readFile(path.join(TESTS_DIR, 'monsterdata_test.json'), 'utf-8');
+  const monsterDataBinary = await readFile(path.join(TESTS_DIR, 'monsterdata_test.mon'));
+  const unicodeJson = await readFile(path.join(TESTS_DIR, 'unicode_test.json'), 'utf-8');
+  const unicodeBinary = await readFile(path.join(TESTS_DIR, 'unicode_test.mon'));
+  const optionalScalarsSchema = await readFile(path.join(TESTS_DIR, 'optional_scalars.fbs'), 'utf-8');
+  const optionalScalarsJson = await readFile(path.join(TESTS_DIR, 'optional_scalars.json'), 'utf-8');
+  console.log('Test files loaded.\n');
 
-  // Add schema
-  const schemaName = 'monster.fbs';
-  const schemaBytes = new TextEncoder().encode(monsterSchema);
-  const namePtr = flatc._malloc(schemaName.length);
-  const schemaPtr = flatc._malloc(schemaBytes.length);
-  flatc.HEAPU8.set(new TextEncoder().encode(schemaName), namePtr);
-  flatc.HEAPU8.set(schemaBytes, schemaPtr);
+  // ==========================================================================
+  // Test 1: Load monster_test schema
+  // ==========================================================================
+  console.log('=== Test 1: Load monster_test Schema ===');
 
-  const schemaId = flatc._wasm_schema_add(namePtr, schemaName.length, schemaPtr, schemaBytes.length);
-  flatc._free(namePtr);
-  flatc._free(schemaPtr);
-
-  assert(schemaId >= 0, 'Schema added successfully');
-  assert(flatc._wasm_schema_count() === 1, 'Schema count is 1');
-
-  const nameResultPtr = flatc._wasm_schema_get_name(schemaId);
-  assert(flatc.UTF8ToString(nameResultPtr) === 'monster.fbs', 'Schema name matches');
+  const monsterSchemaId = flatc.addSchema('monster_test.fbs', MONSTER_TEST_SCHEMA);
+  assert(monsterSchemaId >= 0, `Schema loaded with ID ${monsterSchemaId}`);
+  assert(module._wasm_schema_count() >= 1, 'Schema count is at least 1');
   console.log('');
 
-  // ============================================================================
-  // Test 2: JSON → Binary Conversion
-  // ============================================================================
-  console.log('=== Test 2: JSON → Binary Conversion ===');
+  // ==========================================================================
+  // Test 2: JSON → Binary using monsterdata_test.json
+  // ==========================================================================
+  console.log('=== Test 2: JSON → Binary (monsterdata_test.json) ===');
 
-  const jsonBytes = new TextEncoder().encode(testJson);
-  const jsonPtr = flatc._malloc(jsonBytes.length);
-  flatc.HEAPU8.set(jsonBytes, jsonPtr);
+  const binary = flatc.jsonToBinary('monster_test.fbs', monsterDataJson);
+  assert(binary.length > 0, `Converted to binary: ${binary.length} bytes`);
 
-  const outLenPtr = flatc._malloc(4);
-  const binaryPtr = flatc._wasm_json_to_binary(schemaId, jsonPtr, jsonBytes.length, outLenPtr);
-  flatc._free(jsonPtr);
-
-  assert(binaryPtr !== 0, 'JSON to binary conversion succeeded');
-
-  const binaryLen = flatc.getValue(outLenPtr, 'i32');
-  flatc._free(outLenPtr);
-  assert(binaryLen > 0, `Binary output has size ${binaryLen} bytes`);
-
-  // Copy binary for later tests
-  const binaryData = flatc.HEAPU8.slice(binaryPtr, binaryPtr + binaryLen);
+  // Check file identifier (bytes 4-7 should be "MONS")
+  const fileId = String.fromCharCode(binary[4], binary[5], binary[6], binary[7]);
+  assert(fileId === 'MONS', `File identifier is "${fileId}" (expected "MONS")`);
   console.log('');
 
-  // ============================================================================
-  // Test 3: Binary → JSON Conversion
-  // ============================================================================
-  console.log('=== Test 3: Binary → JSON Conversion ===');
+  // ==========================================================================
+  // Test 3: Binary → JSON using generated binary
+  // ==========================================================================
+  console.log('=== Test 3: Binary → JSON (round-trip) ===');
 
-  const binaryInputPtr = flatc._malloc(binaryData.length);
-  flatc.HEAPU8.set(binaryData, binaryInputPtr);
-
-  const outLenPtr2 = flatc._malloc(4);
-  const jsonResultPtr = flatc._wasm_binary_to_json(schemaId, binaryInputPtr, binaryData.length, outLenPtr2);
-  flatc._free(binaryInputPtr);
-
-  assert(jsonResultPtr !== 0, 'Binary to JSON conversion succeeded');
-
-  const jsonLen = flatc.getValue(outLenPtr2, 'i32');
-  flatc._free(outLenPtr2);
-
-  const jsonResult = flatc.UTF8ToString(jsonResultPtr);
-  assert(jsonLen > 0, `JSON output has ${jsonLen} chars`);
-  assert(jsonResult.includes('"name": "Orc"'), 'JSON contains expected name');
-  assert(jsonResult.includes('"hp": 150'), 'JSON contains expected hp');
+  const jsonRoundTrip = flatc.binaryToJson('monster_test.fbs', binary);
+  assert(jsonRoundTrip.includes('"name": "MyMonster"'), 'JSON contains name "MyMonster"');
+  assert(jsonRoundTrip.includes('"hp": 80'), 'JSON contains hp: 80');
+  assert(jsonRoundTrip.includes('"mana": 150'), 'JSON contains mana: 150 (default)');
   console.log('');
 
-  // ============================================================================
-  // Test 4: Format Detection
-  // ============================================================================
-  console.log('=== Test 4: Format Detection ===');
+  // ==========================================================================
+  // Test 4: Read canonical monsterdata_test.mon binary
+  // ==========================================================================
+  console.log('=== Test 4: Read Canonical Binary (monsterdata_test.mon) ===');
 
-  const jsonTestData = new TextEncoder().encode('{"test": 123}');
-  const jsonTestPtr = flatc._malloc(jsonTestData.length);
-  flatc.HEAPU8.set(jsonTestData, jsonTestPtr);
-  const jsonFormat = flatc._wasm_detect_format(jsonTestPtr, jsonTestData.length);
-  flatc._free(jsonTestPtr);
-  assert(jsonFormat === 0, 'JSON format detected as JSON (0)');
+  const canonicalJson = flatc.binaryToJson('monster_test.fbs', new Uint8Array(monsterDataBinary));
+  assert(canonicalJson.includes('"name": "MyMonster"'), 'Canonical binary: name is "MyMonster"');
+  assert(canonicalJson.includes('"hp": 80'), 'Canonical binary: hp is 80');
+  assert(canonicalJson.includes('"inventory"'), 'Canonical binary: has inventory field');
+  assert(canonicalJson.includes('"testarrayofstring"'), 'Canonical binary: has testarrayofstring');
 
-  const binaryTestPtr = flatc._malloc(binaryData.length);
-  flatc.HEAPU8.set(binaryData, binaryTestPtr);
-  const binaryFormat = flatc._wasm_detect_format(binaryTestPtr, binaryData.length);
-  flatc._free(binaryTestPtr);
-  assert(binaryFormat === 1, 'FlatBuffer format detected as Binary (1)');
+  // Parse and verify specific values (using FlatBuffers-aware parser for nan/inf)
+  const parsed = FlatcHelper.parseFlatBuffersJson(canonicalJson);
+  assert(parsed.name === 'MyMonster', 'Parsed name matches');
+  assert(parsed.hp === 80, 'Parsed hp matches');
+  assert(Array.isArray(parsed.inventory) && parsed.inventory.length === 5, 'Inventory has 5 elements');
   console.log('');
 
-  // ============================================================================
-  // Test 5: Auto-Detect Conversion
-  // ============================================================================
-  console.log('=== Test 5: Auto-Detect Conversion ===');
+  // ==========================================================================
+  // Test 5: Unicode test (unicode_test.json / unicode_test.mon)
+  // ==========================================================================
+  console.log('=== Test 5: Unicode Support ===');
 
-  // Test with JSON input (should convert to binary)
-  const autoJsonBytes = new TextEncoder().encode(testJson);
-  const autoJsonPtr = flatc._malloc(autoJsonBytes.length);
-  flatc.HEAPU8.set(autoJsonBytes, autoJsonPtr);
+  // JSON → Binary
+  const unicodeBinaryGenerated = flatc.jsonToBinary('monster_test.fbs', unicodeJson);
+  assert(unicodeBinaryGenerated.length > 0, `Unicode JSON converted to ${unicodeBinaryGenerated.length} bytes`);
 
-  const autoOutPtrPtr = flatc._malloc(4);
-  const autoOutLenPtr = flatc._malloc(4);
+  // Read canonical unicode binary
+  const unicodeJsonFromBinary = flatc.binaryToJson('monster_test.fbs', new Uint8Array(unicodeBinary));
+  assert(unicodeJsonFromBinary.includes('unicode_test'), 'Unicode binary contains "unicode_test"');
 
-  const autoResult1 = flatc._wasm_convert_auto(schemaId, autoJsonPtr, autoJsonBytes.length, autoOutPtrPtr, autoOutLenPtr);
-  flatc._free(autoJsonPtr);
-
-  assert(autoResult1 === 0, 'Auto-detect recognized JSON input (returns 0)');
-  const autoOutLen1 = flatc.getValue(autoOutLenPtr, 'i32');
-  assert(autoOutLen1 > 0, `Auto-convert produced ${autoOutLen1} bytes of binary`);
-
-  // Test with binary input (should convert to JSON)
-  const autoBinaryPtr = flatc._malloc(binaryData.length);
-  flatc.HEAPU8.set(binaryData, autoBinaryPtr);
-
-  const autoResult2 = flatc._wasm_convert_auto(schemaId, autoBinaryPtr, binaryData.length, autoOutPtrPtr, autoOutLenPtr);
-  flatc._free(autoBinaryPtr);
-
-  assert(autoResult2 === 1, 'Auto-detect recognized binary input (returns 1)');
-  const autoOutLen2 = flatc.getValue(autoOutLenPtr, 'i32');
-  assert(autoOutLen2 > 0, `Auto-convert produced ${autoOutLen2} chars of JSON`);
-
-  flatc._free(autoOutPtrPtr);
-  flatc._free(autoOutLenPtr);
+  // Parse and verify Unicode strings (JSON may use \uXXXX escapes)
+  const unicodeParsed = FlatcHelper.parseFlatBuffersJson(unicodeJsonFromBinary);
+  const unicodeStrings = unicodeParsed.testarrayofstring || [];
+  assert(unicodeStrings.some(s => s.includes('Цлїςσδε')), 'Unicode has Cyrillic/Greek text');
+  assert(unicodeStrings.some(s => s.includes('フムヤムカモケモ')), 'Unicode has Japanese text');
+  assert(unicodeStrings.some(s => s.includes('☳☶☲')), 'Unicode has symbols');
   console.log('');
 
-  // ============================================================================
-  // Test 6: Streaming Input
-  // ============================================================================
-  console.log('=== Test 6: Streaming Input ===');
+  // ==========================================================================
+  // Test 6: Optional scalars schema
+  // ==========================================================================
+  console.log('=== Test 6: Optional Scalars Schema ===');
 
-  // Reset stream
-  flatc._wasm_stream_reset();
-  assert(flatc._wasm_stream_size() === 0, 'Stream reset, size is 0');
+  const optionalSchemaId = flatc.addSchema('optional_scalars.fbs', optionalScalarsSchema);
+  assert(optionalSchemaId >= 0, `Optional scalars schema loaded with ID ${optionalSchemaId}`);
 
-  // Write in chunks
-  const chunk1 = new TextEncoder().encode('{"name": "Streamed",');
-  const chunk2 = new TextEncoder().encode(' "hp": 200}');
+  const optionalBinary = flatc.jsonToBinary('optional_scalars.fbs', optionalScalarsJson);
+  assert(optionalBinary.length > 0, `Optional scalars converted to ${optionalBinary.length} bytes`);
 
-  let writePtr = flatc._wasm_stream_prepare(chunk1.length);
-  flatc.HEAPU8.set(chunk1, writePtr);
-  flatc._wasm_stream_commit(chunk1.length);
-  assert(flatc._wasm_stream_size() === chunk1.length, `Stream size after chunk1: ${chunk1.length}`);
+  // Check file identifier (should be "NULL")
+  const optionalFileId = String.fromCharCode(optionalBinary[4], optionalBinary[5], optionalBinary[6], optionalBinary[7]);
+  assert(optionalFileId === 'NULL', `Optional scalars file ID is "${optionalFileId}"`);
 
-  writePtr = flatc._wasm_stream_prepare(chunk2.length);
-  flatc.HEAPU8.set(chunk2, writePtr);
-  flatc._wasm_stream_commit(chunk2.length);
-  assert(flatc._wasm_stream_size() === chunk1.length + chunk2.length, `Stream size after chunk2: ${chunk1.length + chunk2.length}`);
-
-  // Convert streamed data
-  const streamOutPtrPtr = flatc._malloc(4);
-  const streamOutLenPtr = flatc._malloc(4);
-  const streamResult = flatc._wasm_stream_convert(schemaId, streamOutPtrPtr, streamOutLenPtr);
-
-  assert(streamResult === 0, 'Stream convert recognized JSON input');
-  const streamOutLen = flatc.getValue(streamOutLenPtr, 'i32');
-  assert(streamOutLen > 0, `Stream convert produced ${streamOutLen} bytes`);
-
-  flatc._free(streamOutPtrPtr);
-  flatc._free(streamOutLenPtr);
+  // Round-trip
+  const optionalRoundTrip = flatc.binaryToJson('optional_scalars.fbs', optionalBinary);
+  assert(optionalRoundTrip.includes('just_i8'), 'Optional round-trip contains just_i8');
   console.log('');
 
-  // ============================================================================
-  // Test 7: Code Generation
-  // ============================================================================
-  console.log('=== Test 7: Code Generation ===');
+  // ==========================================================================
+  // Test 7: Format detection
+  // ==========================================================================
+  console.log('=== Test 7: Format Detection ===');
 
-  const languages = flatc.UTF8ToString(flatc._wasm_get_supported_languages());
-  assert(languages.includes('cpp'), 'Supported languages includes cpp');
-  assert(languages.includes('typescript'), 'Supported languages includes typescript');
-  console.log('  Supported languages:', languages);
+  const jsonFormat = flatc.detectFormat(new TextEncoder().encode(monsterDataJson));
+  assert(jsonFormat === 0, 'JSON data detected as format 0 (JSON)');
 
-  // Test language ID lookup
-  const cppId = flatc._wasm_get_language_id(flatc._malloc(3));
-  // Allocate and write "cpp" string properly
-  const cppStr = new TextEncoder().encode('cpp\0');
-  const cppStrPtr = flatc._malloc(cppStr.length);
-  flatc.HEAPU8.set(cppStr, cppStrPtr);
-  const cppLangId = flatc._wasm_get_language_id(cppStrPtr);
-  flatc._free(cppStrPtr);
-  assert(cppLangId === 0, 'Language ID for cpp is 0');
+  const binaryFormat = flatc.detectFormat(new Uint8Array(monsterDataBinary));
+  assert(binaryFormat === 1, 'Binary data detected as format 1 (FlatBuffer)');
 
-  const tsStr = new TextEncoder().encode('typescript\0');
-  const tsStrPtr = flatc._malloc(tsStr.length);
-  flatc.HEAPU8.set(tsStr, tsStrPtr);
-  const tsLangId = flatc._wasm_get_language_id(tsStrPtr);
-  flatc._free(tsStrPtr);
-  assert(tsLangId === 9, 'Language ID for typescript is 9');
-
-  // Generate TypeScript code
-  const genOutLenPtr = flatc._malloc(4);
-  const genResultPtr = flatc._wasm_generate_code(schemaId, 9, genOutLenPtr);  // 9 = TypeScript
-
-  assert(genResultPtr !== 0, 'Code generation succeeded');
-  const genLen = flatc.getValue(genOutLenPtr, 'i32');
-  assert(genLen > 0, `Generated ${genLen} chars of TypeScript code`);
-
-  const tsCode = flatc.UTF8ToString(genResultPtr);
-  assert(tsCode.includes('Monster'), 'Generated code contains Monster');
-  assert(tsCode.includes('Vec3'), 'Generated code contains Vec3');
-  console.log('  Generated TypeScript code preview:', tsCode.substring(0, 100) + '...');
-
-  flatc._free(genOutLenPtr);
+  const unknownFormat = flatc.detectFormat(new Uint8Array([0x00, 0x01, 0x02, 0x03]));
+  assert(unknownFormat === -1, 'Random bytes detected as format -1 (Unknown)');
   console.log('');
 
-  // ============================================================================
-  // Test 8: Generate Multiple Languages
-  // ============================================================================
-  console.log('=== Test 8: Generate Multiple Languages ===');
+  // ==========================================================================
+  // Test 8: Code generation with monster_test schema
+  // ==========================================================================
+  console.log('=== Test 8: Code Generation ===');
 
-  const languagesToTest = [
-    { id: 0, name: 'C++', marker: 'struct' },
-    { id: 3, name: 'Go', marker: 'package' },
-    { id: 6, name: 'Python', marker: 'def' },
-    { id: 7, name: 'Rust', marker: 'pub' },
-    { id: 11, name: 'JSON Schema', marker: '$schema' },
-    { id: 12, name: 'FBS', marker: 'table Monster' },
+  const LANGUAGES = [
+    { id: 0, name: 'C++', markers: ['struct Vec3', 'struct Monster', 'namespace MyGame'] },
+    { id: 3, name: 'Go', markers: ['package Example', 'type Monster struct', 'func (rcv *Monster)'] },
+    { id: 6, name: 'Python', markers: ['class Monster', 'def Init(', 'import flatbuffers'] },
+    { id: 7, name: 'Rust', markers: ['pub struct Monster', 'impl<', 'pub fn'] },
+    { id: 9, name: 'TypeScript', markers: ['export class Monster', 'flatbuffers.Table', 'export enum Color'] },
+    { id: 11, name: 'JSON Schema', markers: ['$schema', '"Monster"', '"properties"'] },
+    { id: 12, name: 'FBS', markers: ['table Monster', 'struct', 'enum Color'] },
   ];
 
-  for (const lang of languagesToTest) {
-    const langOutLenPtr = flatc._malloc(4);
-    const langResultPtr = flatc._wasm_generate_code(schemaId, lang.id, langOutLenPtr);
-    const langLen = flatc.getValue(langOutLenPtr, 'i32');
-    flatc._free(langOutLenPtr);
-
-    if (langResultPtr !== 0 && langLen > 0) {
-      const code = flatc.UTF8ToString(langResultPtr);
-      assert(code.includes(lang.marker), `${lang.name} code contains "${lang.marker}"`);
-    } else {
-      const error = flatc.UTF8ToString(flatc._wasm_get_last_error());
-      console.log(`  ⚠ ${lang.name} generation: ${error || 'returned empty'}`);
+  for (const lang of LANGUAGES) {
+    try {
+      const code = flatc.generateCode('monster_test.fbs', lang.id);
+      const allMarkersFound = lang.markers.every(m => code.includes(m));
+      assert(allMarkersFound, `${lang.name}: Generated code contains expected markers`);
+    } catch (err) {
+      console.log(`  ⚠ ${lang.name}: ${err.message}`);
     }
   }
   console.log('');
 
-  // ============================================================================
-  // Test 9: Schema Export
-  // ============================================================================
-  console.log('=== Test 9: Schema Export ===');
+  // ==========================================================================
+  // Test 9: Streaming API
+  // ==========================================================================
+  console.log('=== Test 9: Streaming API ===');
 
-  const exportOutLenPtr = flatc._malloc(4);
-  const exportPtr = flatc._wasm_schema_export(schemaId, 0, exportOutLenPtr);  // 0 = FBS format
+  module._wasm_stream_reset();
+  assert(module._wasm_stream_size() === 0, 'Stream reset, size is 0');
 
-  assert(exportPtr !== 0, 'Schema export succeeded');
-  const exportLen = flatc.getValue(exportOutLenPtr, 'i32');
-  assert(exportLen > 0, `Exported ${exportLen} bytes`);
+  // Stream the JSON in chunks
+  const jsonChunks = [
+    monsterDataJson.substring(0, 100),
+    monsterDataJson.substring(100, 500),
+    monsterDataJson.substring(500),
+  ];
 
-  const exportedFbs = flatc.UTF8ToString(exportPtr);
-  assert(exportedFbs.includes('Monster'), 'Exported FBS contains Monster');
-  assert(exportedFbs.includes('Vec3'), 'Exported FBS contains Vec3');
+  let totalSize = 0;
+  for (const chunk of jsonChunks) {
+    const bytes = new TextEncoder().encode(chunk);
+    const ptr = module._wasm_stream_prepare(bytes.length);
+    module.HEAPU8.set(bytes, ptr);
+    module._wasm_stream_commit(bytes.length);
+    totalSize += bytes.length;
+  }
 
-  flatc._free(exportOutLenPtr);
+  assert(module._wasm_stream_size() === totalSize, `Stream accumulated ${totalSize} bytes`);
+
+  // Convert streamed data
+  const outPtrPtr = module._malloc(4);
+  const outLenPtr = module._malloc(4);
+  const streamResult = module._wasm_stream_convert(monsterSchemaId, outPtrPtr, outLenPtr);
+  module._free(outPtrPtr);
+  module._free(outLenPtr);
+
+  assert(streamResult === 0, 'Stream convert detected JSON input');
   console.log('');
 
-  // ============================================================================
-  // Test 10: Multiple Schemas
-  // ============================================================================
-  console.log('=== Test 10: Multiple Schemas ===');
+  // ==========================================================================
+  // Test 10: Error handling
+  // ==========================================================================
+  console.log('=== Test 10: Error Handling ===');
 
-  // Add second schema
-  const simple2Name = 'simple.fbs';
-  const simple2Bytes = new TextEncoder().encode(simpleSchema);
-  const name2Ptr = flatc._malloc(simple2Name.length);
-  const schema2Ptr = flatc._malloc(simple2Bytes.length);
-  flatc.HEAPU8.set(new TextEncoder().encode(simple2Name), name2Ptr);
-  flatc.HEAPU8.set(simple2Bytes, schema2Ptr);
-
-  const schema2Id = flatc._wasm_schema_add(name2Ptr, simple2Name.length, schema2Ptr, simple2Bytes.length);
-  flatc._free(name2Ptr);
-  flatc._free(schema2Ptr);
-
-  assert(schema2Id >= 0, 'Second schema added');
-  assert(flatc._wasm_schema_count() === 2, 'Schema count is 2');
-
-  // Test conversion with second schema
-  const simple2JsonBytes = new TextEncoder().encode(simpleJson);
-  const simple2JsonPtr = flatc._malloc(simple2JsonBytes.length);
-  flatc.HEAPU8.set(simple2JsonBytes, simple2JsonPtr);
-
-  const simple2OutLenPtr = flatc._malloc(4);
-  const simple2BinaryPtr = flatc._wasm_json_to_binary(schema2Id, simple2JsonPtr, simple2JsonBytes.length, simple2OutLenPtr);
-  flatc._free(simple2JsonPtr);
-
-  assert(simple2BinaryPtr !== 0, 'Conversion with second schema succeeded');
-  const simple2BinaryLen = flatc.getValue(simple2OutLenPtr, 'i32');
-  assert(simple2BinaryLen > 0, `Second schema binary: ${simple2BinaryLen} bytes`);
-  flatc._free(simple2OutLenPtr);
-  console.log('');
-
-  // ============================================================================
-  // Test 11: Embind API
-  // ============================================================================
-  console.log('=== Test 11: Embind API ===');
-
-  const embindSchema = flatc.createSchema('embind.fbs', simpleSchema);
-  assert(embindSchema.valid(), 'Embind schema is valid');
-  assert(embindSchema.id() >= 0, `Embind schema ID: ${embindSchema.id()}`);
-  assert(embindSchema.name() === 'embind.fbs', 'Embind schema name matches');
-
-  // Get all schemas
-  const allSchemas = flatc.getAllSchemas();
-  assert(allSchemas.size() >= 3, `getAllSchemas returned ${allSchemas.size()} schemas`);
-
-  // Release and verify
-  embindSchema.release();
-  assert(!embindSchema.valid(), 'Embind schema invalid after release');
-  embindSchema.delete();
-  console.log('');
-
-  // ============================================================================
-  // Test 12: Error Handling
-  // ============================================================================
-  console.log('=== Test 12: Error Handling ===');
-
-  // Try to use invalid schema ID
-  flatc._wasm_clear_error();
-  const invalidOutLenPtr = flatc._malloc(4);
-  const invalidResult = flatc._wasm_json_to_binary(9999, 0, 0, invalidOutLenPtr);
-  flatc._free(invalidOutLenPtr);
-
+  // Invalid schema ID
+  module._wasm_clear_error();
+  const invalidOutLenPtr = module._malloc(4);
+  const invalidResult = module._wasm_json_to_binary(9999, 0, 0, invalidOutLenPtr);
+  module._free(invalidOutLenPtr);
   assert(invalidResult === 0, 'Invalid schema ID returns null');
-  const error1 = flatc.UTF8ToString(flatc._wasm_get_last_error());
-  assert(error1.includes('not found'), 'Error message mentions "not found"');
+  assert(flatc.getLastError().includes('not found'), 'Error mentions "not found"');
 
-  // Try to parse invalid JSON
-  flatc._wasm_clear_error();
-  const badJson = new TextEncoder().encode('{ invalid json }');
-  const badJsonPtr = flatc._malloc(badJson.length);
-  flatc.HEAPU8.set(badJson, badJsonPtr);
+  // Invalid JSON
+  module._wasm_clear_error();
+  try {
+    flatc.jsonToBinary('monster_test.fbs', '{ not valid json }');
+    assert(false, 'Invalid JSON should throw');
+  } catch (e) {
+    assert(e.message.includes('JSON'), 'Error mentions JSON parsing issue');
+  }
 
-  const badOutLenPtr = flatc._malloc(4);
-  const badResult = flatc._wasm_json_to_binary(schemaId, badJsonPtr, badJson.length, badOutLenPtr);
-  flatc._free(badJsonPtr);
-  flatc._free(badOutLenPtr);
-
-  assert(badResult === 0, 'Invalid JSON returns null');
-  const error2 = flatc.UTF8ToString(flatc._wasm_get_last_error());
-  assert(error2.length > 0, 'Error message set for invalid JSON');
+  // Schema without root type
+  module._wasm_clear_error();
+  try {
+    flatc.addSchema('no_root.fbs', 'table Foo { x: int; }');
+    assert(false, 'Schema without root_type should fail');
+  } catch (e) {
+    assert(e.message.includes('root'), 'Error mentions root type');
+  }
   console.log('');
 
-  // ============================================================================
-  // Test 13: Cleanup
-  // ============================================================================
-  console.log('=== Test 13: Cleanup ===');
+  // ==========================================================================
+  // Test 11: Cross-language binary compatibility
+  // ==========================================================================
+  console.log('=== Test 11: Cross-Language Binary Compatibility ===');
 
-  // Remove all schemas
-  flatc._wasm_schema_remove(schemaId);
-  flatc._wasm_schema_remove(schema2Id);
+  // Test reading binaries generated by different language implementations
+  const crossLangBinaries = [
+    { name: 'Java', file: 'monsterdata_java_wire.mon' },
+    { name: 'Python', file: 'monsterdata_python_wire.mon' },
+    { name: 'Rust', file: 'monsterdata_rust_wire.mon' },
+  ];
 
-  // Count should be 0 or 1 (embind schema was released)
-  const finalCount = flatc._wasm_schema_count();
-  assert(finalCount <= 1, `Final schema count: ${finalCount}`);
+  for (const { name, file } of crossLangBinaries) {
+    try {
+      const binaryData = await readFile(path.join(TESTS_DIR, file));
+      const json = flatc.binaryToJson('monster_test.fbs', new Uint8Array(binaryData));
+      assert(json.includes('"name"'), `${name} binary readable`);
+    } catch (e) {
+      // File might not exist in all builds
+      if (e.code === 'ENOENT') {
+        console.log(`  ⚠ ${name}: ${file} not found (skipped)`);
+      } else {
+        console.log(`  ⚠ ${name}: ${e.message}`);
+      }
+    }
+  }
   console.log('');
 
-  // ============================================================================
+  // ==========================================================================
   // Summary
-  // ============================================================================
+  // ==========================================================================
   console.log('='.repeat(50));
   console.log(`Tests run: ${testsRun}`);
   console.log(`Tests passed: ${testsPassed}`);

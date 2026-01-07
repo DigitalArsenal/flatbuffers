@@ -1,0 +1,16 @@
+# Don't include test files in npm package
+test/
+*.test.js
+*.test.mjs
+*.spec.js
+
+# Don't include source maps
+*.map
+
+# Don't include TypeScript source (only declarations)
+*.ts
+!*.d.ts
+
+# Don't include build artifacts
+.cache/
+.parcel-cache/

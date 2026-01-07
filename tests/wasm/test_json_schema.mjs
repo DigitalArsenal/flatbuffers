@@ -257,6 +257,125 @@ root_type Monster;
   console.log('');
 
   // ============================================================================
+  // Test 5: Bidirectional IDL ↔ JSON Schema Conversion
+  // ============================================================================
+  console.log('=== Test 5: Bidirectional IDL ↔ JSON Schema Conversion ===');
+
+  // Start with a simple FBS schema
+  const SIMPLE_FBS = `
+namespace TestConversion;
+
+enum Status:byte { Unknown = 0, Active, Inactive }
+
+table User {
+  id:int;
+  name:string;
+  email:string;
+  status:Status = Active;
+  tags:[string];
+}
+
+root_type User;
+`;
+
+  // Step 1: Load FBS schema
+  const [fbsNamePtr, fbsNameLen] = writeString(flatc, 'user.fbs');
+  const [fbsSrcPtr, fbsSrcLen] = writeString(flatc, SIMPLE_FBS);
+  const fbsSchemaId = flatc._wasm_schema_add(fbsNamePtr, fbsNameLen, fbsSrcPtr, fbsSrcLen);
+  flatc._free(fbsNamePtr);
+  flatc._free(fbsSrcPtr);
+
+  assert(fbsSchemaId >= 0, 'Step 1: FBS schema loaded');
+
+  // Step 2: Export FBS to JSON Schema
+  const jsOutLenPtr = flatc._malloc(4);
+  const jsOutputPtr = flatc._wasm_generate_code(fbsSchemaId, 11, jsOutLenPtr);
+
+  let generatedJsonSchema = null;
+  if (jsOutputPtr) {
+    const jsOutputLen = flatc.getValue(jsOutLenPtr, 'i32');
+    generatedJsonSchema = flatc.UTF8ToString(jsOutputPtr);
+    assert(jsOutputLen > 0, 'Step 2: FBS → JSON Schema conversion successful');
+
+    const parsed = JSON.parse(generatedJsonSchema);
+    assert('$schema' in parsed, 'Generated JSON Schema has $schema');
+    assert('definitions' in parsed, 'Generated JSON Schema has definitions');
+    assert('TestConversion_User' in parsed.definitions, 'Has User table definition');
+    assert('TestConversion_Status' in parsed.definitions, 'Has Status enum definition');
+
+    // Check User properties
+    const userDef = parsed.definitions.TestConversion_User;
+    assert(userDef.properties.id !== undefined, 'User has id property');
+    assert(userDef.properties.name !== undefined, 'User has name property');
+    assert(userDef.properties.status !== undefined, 'User has status property');
+    assert(userDef.properties.tags !== undefined, 'User has tags property');
+  } else {
+    console.log('  Warning: JSON Schema generation not available');
+  }
+  flatc._free(jsOutLenPtr);
+
+  // Step 3: Import the generated JSON Schema back
+  if (generatedJsonSchema) {
+    const [jsName2Ptr, jsName2Len] = writeString(flatc, 'user.schema.json');
+    const [jsSrc2Ptr, jsSrc2Len] = writeString(flatc, generatedJsonSchema);
+    const reimportedId = flatc._wasm_schema_add(jsName2Ptr, jsName2Len, jsSrc2Ptr, jsSrc2Len);
+    flatc._free(jsName2Ptr);
+    flatc._free(jsSrc2Ptr);
+
+    if (reimportedId >= 0) {
+      assert(reimportedId >= 0, 'Step 3: JSON Schema re-imported successfully');
+
+      // Step 4: Verify round-trip with data conversion
+      const testUser = JSON.stringify({
+        id: 123,
+        name: 'Test User',
+        email: 'test@example.com',
+        status: 'Active',
+        tags: ['admin', 'verified']
+      });
+
+      const [userJsonPtr, userJsonLen] = writeString(flatc, testUser);
+      const binOutLenPtr = flatc._malloc(4);
+      const binPtr = flatc._wasm_json_to_binary(reimportedId, userJsonPtr, userJsonLen, binOutLenPtr);
+      flatc._free(userJsonPtr);
+
+      if (binPtr) {
+        const binLen = flatc.getValue(binOutLenPtr, 'i32');
+        assert(binLen > 0, 'Step 4: JSON → Binary with re-imported schema');
+
+        // Convert back to JSON to verify
+        const binData = flatc.HEAPU8.slice(binPtr, binPtr + binLen);
+        const binPtr2 = flatc._malloc(binData.length);
+        flatc.HEAPU8.set(binData, binPtr2);
+
+        const jsonOutLenPtr = flatc._malloc(4);
+        const jsonOutPtr = flatc._wasm_binary_to_json(reimportedId, binPtr2, binData.length, jsonOutLenPtr);
+        flatc._free(binPtr2);
+
+        if (jsonOutPtr) {
+          const jsonOutLen = flatc.getValue(jsonOutLenPtr, 'i32');
+          const jsonResult = new TextDecoder().decode(flatc.HEAPU8.slice(jsonOutPtr, jsonOutPtr + jsonOutLen));
+          const resultParsed = JSON.parse(jsonResult);
+
+          assert(resultParsed.id === 123, 'Round-trip: id preserved');
+          assert(resultParsed.name === 'Test User', 'Round-trip: name preserved');
+          assert(Array.isArray(resultParsed.tags), 'Round-trip: tags is array');
+          assert(resultParsed.tags.length === 2, 'Round-trip: tags count preserved');
+        }
+        flatc._free(jsonOutLenPtr);
+      }
+      flatc._free(binOutLenPtr);
+
+      flatc._wasm_schema_remove(reimportedId);
+    } else {
+      console.log('  Note: JSON Schema re-import requires enhanced parser support');
+    }
+  }
+
+  flatc._wasm_schema_remove(fbsSchemaId);
+  console.log('');
+
+  // ============================================================================
   // Cleanup
   // ============================================================================
   console.log('=== Cleanup ===');

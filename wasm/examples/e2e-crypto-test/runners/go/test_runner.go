@@ -522,6 +522,9 @@ func main() {
 	}
 	fmt.Println()
 	fmt.Println()
+	fmt.Println("Mode: TRANSPARENT ENCRYPTION")
+	fmt.Println("Schema: tests/monster_test.fbs (upstream)")
+	fmt.Println()
 
 	ctx := context.Background()
 

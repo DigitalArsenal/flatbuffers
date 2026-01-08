@@ -23,7 +23,7 @@ import (
 )
 
 // WasmPath is the path to the encryption WASM module
-const WasmPath = "../../../../build/wasm/wasm/flatc-encryption.wasm"
+const WasmPath = "../../../../../build/wasm/wasm/flatc-encryption.wasm"
 
 // EncryptionKeys holds the derived encryption keys for each chain
 type EncryptionKeys map[string]struct {
@@ -397,11 +397,11 @@ func NewEncryptionModule(ctx context.Context, wasmBytes []byte) (*EncryptionModu
 		ctx:          ctx,
 		malloc:       mod.ExportedFunction("malloc"),
 		free:         mod.ExportedFunction("free"),
-		encryptBytes: mod.ExportedFunction("encrypt_bytes"),
-		decryptBytes: mod.ExportedFunction("decrypt_bytes"),
-		sha256:       mod.ExportedFunction("sha256"),
-		getVersion:   mod.ExportedFunction("get_version"),
-		hasCryptopp:  mod.ExportedFunction("has_cryptopp"),
+		encryptBytes: mod.ExportedFunction("wasi_encrypt_bytes"),
+		decryptBytes: mod.ExportedFunction("wasi_decrypt_bytes"),
+		sha256:       mod.ExportedFunction("wasi_sha256"),
+		getVersion:   mod.ExportedFunction("wasi_get_version"),
+		hasCryptopp:  mod.ExportedFunction("wasi_has_cryptopp"),
 	}, nil
 }
 

@@ -8,7 +8,7 @@ All cryptographic operations are performed by a single C++ implementation using 
 
 - **Single auditable implementation** - One codebase in C++/Crypto++
 - **Battle-tested crypto** - Crypto++ has 30 years of production use
-- **Cross-platform** - Works in Go, Node.js, Browser, Python, Rust via WASM
+- **Cross-platform** - Works in Go, Node.js, Browser, Python, Rust, Java, C#, Swift via WASM
 - **Full feature set** - AES-256-CTR, X25519, secp256k1, P-256, Ed25519, ECDSA
 
 ## Features
@@ -32,13 +32,27 @@ All cryptographic operations are performed by a single C++ implementation using 
 
 ## Integration Examples
 
-| Directory | Language | Description |
-|-----------|----------|-------------|
-| [go-wasi/](go-wasi/) | **Go** | Full WASI example using wazero runtime |
-| [node-encryption/](node-encryption/) | **Node.js** | Node.js with WASM module |
-| [browser-encryption/](browser-encryption/) | **Browser** | Interactive web demo |
-| [public-key-encryption/](public-key-encryption/) | **Multi** | Hybrid encryption with ECDH |
-| [cross-language-test/](cross-language-test/) | **Multi** | Cross-language compatibility tests |
+### WASM-Based (via Crypto++)
+
+All these examples use the same Crypto++ WASM module, ensuring identical cryptographic behavior across languages:
+
+| Directory | Language | Runtime | Description |
+|-----------|----------|---------|-------------|
+| [go-wasi/](go-wasi/) | **Go** | wazero | Full WASI example using wazero runtime |
+| [python-wasi/](python-wasi/) | **Python** | wasmer | Python using wasmer-python |
+| [rust-wasi/](rust-wasi/) | **Rust** | wasmer | Rust using wasmer crate |
+| [java-wasi/](java-wasi/) | **Java** | Chicory | Java using pure-Java Chicory runtime |
+| [csharp-wasi/](csharp-wasi/) | **C#** | Wasmtime | C#/.NET using Wasmtime |
+| [swift-wasi/](swift-wasi/) | **Swift** | WasmKit | Swift using WasmKit runtime |
+| [node-encryption/](node-encryption/) | **Node.js** | V8 | Node.js with native WASM |
+| [browser-encryption/](browser-encryption/) | **Browser** | V8/SpiderMonkey | Interactive web demo |
+
+### Multi-Language Examples
+
+| Directory | Description |
+|-----------|-------------|
+| [public-key-encryption/](public-key-encryption/) | Hybrid encryption with ECDH |
+| [cross-language-test/](cross-language-test/) | Cross-language compatibility tests |
 
 ## Quick Start (Node.js)
 
@@ -189,6 +203,46 @@ cmake --build build/wasm --target flatc_wasm_wasi
 cd go-wasi
 go mod tidy
 go test -v
+```
+
+### Python (WASI)
+
+```bash
+cd python-wasi
+pip install -r requirements.txt
+python test_encryption.py
+```
+
+### Rust (WASI)
+
+```bash
+cd rust-wasi
+cargo run --bin encryption_demo
+```
+
+### Java (WASI)
+
+```bash
+cd java-wasi
+mvn compile exec:java
+# Or run tests:
+mvn test
+```
+
+### C# (WASI)
+
+```bash
+cd csharp-wasi
+dotnet run
+```
+
+### Swift (WASI)
+
+```bash
+cd swift-wasi
+swift run encryption-demo
+# Or run tests:
+swift test
 ```
 
 ### Node.js

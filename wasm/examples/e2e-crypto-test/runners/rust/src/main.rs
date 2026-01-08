@@ -398,7 +398,7 @@ impl EncryptionModule {
             self.write_bytes(data_ptr, data);
         }
 
-        let sha256_fn: TypedFunction<(u32, u32, u32), ()> = self.instance.exports.get_typed_function(&self.store, "sha256")?;
+        let sha256_fn: TypedFunction<(u32, u32, u32), ()> = self.instance.exports.get_typed_function(&self.store, "wasi_sha256")?;
         sha256_fn.call(&mut self.store, data_ptr, data.len() as u32, hash_ptr)?;
 
         let hash = self.read_bytes(hash_ptr, SHA256_SIZE);
@@ -416,8 +416,8 @@ impl EncryptionModule {
         self.write_bytes(iv_ptr, iv);
         self.write_bytes(data_ptr, data);
 
-        let encrypt_fn: TypedFunction<(u32, u32, u32, u32), ()> = self.instance.exports.get_typed_function(&self.store, "encrypt_bytes")?;
-        encrypt_fn.call(&mut self.store, key_ptr, iv_ptr, data_ptr, data.len() as u32)?;
+        let encrypt_fn: TypedFunction<(u32, u32, u32, u32), i32> = self.instance.exports.get_typed_function(&self.store, "wasi_encrypt_bytes")?;
+        let _ = encrypt_fn.call(&mut self.store, key_ptr, iv_ptr, data_ptr, data.len() as u32)?;
 
         let encrypted = self.read_bytes(data_ptr, data.len());
         self.deallocate(key_ptr);
@@ -435,8 +435,8 @@ impl EncryptionModule {
         self.write_bytes(iv_ptr, iv);
         self.write_bytes(data_ptr, data);
 
-        let decrypt_fn: TypedFunction<(u32, u32, u32, u32), ()> = self.instance.exports.get_typed_function(&self.store, "decrypt_bytes")?;
-        decrypt_fn.call(&mut self.store, key_ptr, iv_ptr, data_ptr, data.len() as u32)?;
+        let decrypt_fn: TypedFunction<(u32, u32, u32, u32), i32> = self.instance.exports.get_typed_function(&self.store, "wasi_decrypt_bytes")?;
+        let _ = decrypt_fn.call(&mut self.store, key_ptr, iv_ptr, data_ptr, data.len() as u32)?;
 
         let decrypted = self.read_bytes(data_ptr, data.len());
         self.deallocate(key_ptr);
@@ -481,25 +481,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", "=".repeat(60));
     println!();
 
+    // Get directory containing the source file
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
+
+    // Try multiple relative paths from exe and current dir
     let wasm_paths = [
-        "../../../../build/wasm/wasm/flatc-encryption.wasm",
         "../../../../../build/wasm/wasm/flatc-encryption.wasm",
         "../../../../../../build/wasm/wasm/flatc-encryption.wasm",
+        "../../../../../../../build/wasm/wasm/flatc-encryption.wasm",
     ];
 
-    let wasm_path = wasm_paths.iter().find(|p| Path::new(p).exists())
-        .ok_or("WASM module not found")?;
+    let cwd = std::env::current_dir().unwrap();
 
-    println!("Loading WASM module: {}", wasm_path);
-    let mut em = EncryptionModule::from_file(wasm_path)?;
+    // Canonicalize CWD to resolve symlinks and ..
+    let cwd_canon = cwd.canonicalize().unwrap_or(cwd.clone());
+
+    let wasm_path = wasm_paths.iter()
+        .filter_map(|p| cwd_canon.join(p).canonicalize().ok())
+        .find(|p| p.exists())
+        .ok_or_else(|| format!("WASM module not found. CWD: {:?}", cwd_canon))?;
+
+    println!("Loading WASM module: {}", wasm_path.display());
+    let mut em = EncryptionModule::from_file(&wasm_path)?;
     println!();
 
-    let vectors_dir = Path::new("../../vectors");
+    let vectors_dir = cwd.join("../../vectors");
+    let keys_path = vectors_dir.join("encryption_keys.json");
+    println!("Loading keys from: {}", keys_path.display());
     let encryption_keys: HashMap<String, EncryptionKey> = serde_json::from_str(
-        &fs::read_to_string(vectors_dir.join("encryption_keys.json"))?
-    )?;
-    let _monster_data: MonsterData = serde_json::from_str(
-        &fs::read_to_string(vectors_dir.join("monster_data.json"))?
+        &fs::read_to_string(&keys_path).map_err(|e| format!("Failed to read {:?}: {}", keys_path, e))?
     )?;
 
     let mut results = Vec::new();

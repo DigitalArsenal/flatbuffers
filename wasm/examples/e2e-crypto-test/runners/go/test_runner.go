@@ -653,7 +653,7 @@ func main() {
 		results = append(results, result.Summary())
 	}
 
-	// Test 3: Read Node.js generated binaries (if available)
+	// Test 3: Read Node.js generated binaries and verify decryption
 	fmt.Println("\nTest 3: Cross-Language Binary Verification")
 	fmt.Println("----------------------------------------")
 	{
@@ -671,17 +671,46 @@ func main() {
 			} else {
 				result.Pass(fmt.Sprintf("Read unencrypted binary: %d bytes", len(unencryptedData)))
 
-				// Try reading an encrypted binary
-				for chain := range encryptionKeys {
+				// Verify FlatBuffer file identifier "MONS" at offset 4-7
+				if len(unencryptedData) >= 8 {
+					fileIdent := string(unencryptedData[4:8])
+					if fileIdent == "MONS" {
+						result.Pass("FlatBuffer file identifier: MONS")
+					} else {
+						result.Fail(fmt.Sprintf("Unexpected file identifier: %s", fileIdent), nil)
+					}
+				}
+
+				// Decrypt each chain's encrypted binary and compare
+				for chain, keys := range encryptionKeys {
 					encryptedPath := filepath.Join(binaryDir, fmt.Sprintf("monster_encrypted_%s.bin", chain))
-					if _, err := os.Stat(encryptedPath); err == nil {
-						encryptedData, err := os.ReadFile(encryptedPath)
-						if err != nil {
-							result.Fail(fmt.Sprintf("Read %s encrypted binary", chain), err)
-						} else {
-							result.Pass(fmt.Sprintf("Read %s encrypted binary: %d bytes", chain, len(encryptedData)))
-						}
-						break
+					encryptedData, err := os.ReadFile(encryptedPath)
+					if err != nil {
+						// Skip if file doesn't exist
+						continue
+					}
+
+					key, _ := hex.DecodeString(keys.KeyHex)
+					iv, _ := hex.DecodeString(keys.IVHex)
+
+					// Decrypt
+					decrypted := make([]byte, len(encryptedData))
+					copy(decrypted, encryptedData)
+					if err := em.DecryptBytes(key, iv, decrypted); err != nil {
+						result.Fail(fmt.Sprintf("Decrypt %s binary", chain), err)
+						continue
+					}
+
+					// Verify decrypted matches unencrypted
+					if hex.EncodeToString(decrypted) == hex.EncodeToString(unencryptedData) {
+						result.Pass(fmt.Sprintf("Decrypted %s matches original", chain))
+					} else {
+						result.Fail(fmt.Sprintf("Decrypted %s mismatch", chain), nil)
+					}
+
+					// Verify file identifier survived decryption
+					if len(decrypted) >= 8 && string(decrypted[4:8]) == "MONS" {
+						result.Pass(fmt.Sprintf("Decrypted %s: MONS identifier intact", chain))
 					}
 				}
 			}

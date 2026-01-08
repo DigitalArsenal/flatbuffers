@@ -26,8 +26,34 @@ binary, not to specific fields in the schema.
 ## Schema Usage
 
 This test framework uses the **upstream FlatBuffers test schemas** - no custom schemas:
-- `tests/monster_test.fbs` - Standard Monster schema
-- `tests/monsterdata_test.json` - Standard test data
+
+| File | Purpose |
+|------|---------|
+| `tests/monster_test.fbs` | Main schema with unions, structs, enums, gRPC |
+| `tests/monsterdata_test.json` | Standard test data with all field types |
+| `tests/unicode_test.json` | Unicode edge cases (Cyrillic, CJK, surrogate pairs) |
+| `tests/optional_scalars.fbs` | Optional/nullable scalar fields |
+| `tests/optional_scalars.json` | Test data for null vs zero vs default |
+| `tests/monster_extra.fbs` | NaN and Infinity floating-point values |
+| `tests/monsterdata_extra.json` | NaN/Inf test data |
+| `tests/monsterdata_test.mon` | Golden binary for wire compatibility |
+| `tests/nested_union_test.fbs` | Nested unions with bit_flags enum |
+| `tests/more_defaults.fbs` | Additional default vector/string tests |
+| `tests/nan_inf_test.fbs` | NaN/Inf as DEFAULT values in schema |
+| `tests/required_strings.fbs` | Required field attribute |
+| `tests/alignment_test.fbs` | Struct alignment edge cases |
+| `tests/alignment_test.json` | Alignment test data |
+| `tests/alignment_test_before_fix.bin` | Pre-fix alignment binary |
+| `tests/alignment_test_after_fix.bin` | Post-fix alignment binary |
+| `tests/arrays_test.fbs` | Fixed-size array syntax |
+| `tests/default_vectors_strings_test.fbs` | Empty default vectors |
+| `tests/unicode_test.mon` | Unicode golden binary |
+| `tests/monsterdata_java_wire.mon` | Java wire format binary |
+| `tests/monsterdata_java_wire_sp.mon` | Java single-precision binary |
+| `tests/monsterdata_python_wire.mon` | Python wire format binary |
+| `tests/monsterdata_rust_wire.mon` | Rust wire format binary |
+| `tests/javatest.bin` | Additional Java test binary |
+| `tests/gold_flexbuffer_example.bin` | FlexBuffer format binary |
 
 ## Supported Cryptocurrency Key Types
 
@@ -139,23 +165,258 @@ Other language runners read these files to verify cross-language compatibility.
 
 ## What Each Test Validates
 
-### Test 1: SHA-256 Hash
+### Test 1a: Unencrypted FlatBuffer (monsterdata_test.json)
+
+Generates a FlatBuffer using the upstream `monsterdata_test.json` and verifies ALL data types
+and edge cases survive the binary round-trip:
+
+| Edge Case | Field | Value | Why It Matters |
+|-----------|-------|-------|----------------|
+| Basic string | `name` | `"MyMonster"` | Simple string field |
+| Numeric scalar | `hp` | `80` | 16-bit integer |
+| Nested struct | `pos` | `{x:1, y:2, z:3}` | Struct with multiple fields |
+| Sub-struct | `pos.test3` | `{a:5, b:6}` | Struct nested inside struct |
+| Enum in struct | `pos.test2` | `"Green"` | Enum value in nested context |
+| Byte array | `inventory` | `[0,1,2,3,4]` | Vector of ubyte |
+| Long array | `vector_of_longs` | `[1,100,...,100000000]` | Vector of 64-bit integers |
+| **Extreme doubles** | `vector_of_doubles` | `[±1.79e+308, 0]` | Near DBL_MAX/DBL_MIN values |
+| Union type | `test_type` + `test` | `Monster{name:"Fred"}` | Union with nested table |
+| Struct array | `test4`, `test5` | `[{a:10,b:20},...]` | Vector of structs |
+| String array | `testarrayofstring` | `["test1","test2"]` | Vector of strings |
+| Nested table | `enemy` | `{name:"Fred"}` | Table reference |
+| Boolean array | `testarrayofbools` | `[true,false,true]` | Vector of bools |
+| Boolean scalar | `testbool` | `true` | Single boolean |
+| Sorted struct array | `testarrayofsortedstruct` | Sorted by `id` | Binary search support |
+| Sorted table array | `scalar_key_sorted_tables` | 2 entries | Keyed table lookup |
+| Native inline | `native_inline` | `{a:1, b:2}` | Inline struct optimization |
+| FNV hash fields | `testhashs32_fnv1` | hash value | String-to-hash conversion |
+
+### Test 1b: Unicode Strings (unicode_test.json)
+
+Verifies multi-byte UTF-8 encoding edge cases:
+
+| Unicode Category | Example | Bytes | Why It Matters |
+|------------------|---------|-------|----------------|
+| Cyrillic/Greek | `Цлїςσδε` | 2-byte UTF-8 | Non-ASCII European scripts |
+| Half-width Katakana | `ﾌﾑｱﾑｶﾓｹﾓ` | 3-byte UTF-8 | Japanese text |
+| Full-width Katakana | `フムヤムカモケモ` | 3-byte UTF-8 | Japanese text variant |
+| CJK Circled | `㊀㊁㊂㊃㊄` | 3-byte UTF-8 | Enclosed CJK characters |
+| I Ching Trigrams | `☳☶☲` | 3-byte UTF-8 | Symbols |
+| **Surrogate Pairs** | `𡇙𝌆` | **4-byte UTF-8** | Characters > U+FFFF |
+
+### Test 1c: Optional Scalars (optional_scalars.json)
+
+Tests null-capable scalar fields:
+
+| Edge Case | Fields | Why It Matters |
+|-----------|--------|----------------|
+| Required fields | `just_i8`, `just_i16`, etc. | Always-present scalars |
+| Optional with zero | `maybe_u8 = 0` | Distinguishes zero from null |
+| Default override | `default_u8 = 0` | Override non-zero default with zero |
+| Optional enum | `maybe_enum = One` | Enum with null capability |
+| Optional bool | `maybe_bool = null` | Boolean null handling |
+
+### Test 1d: NaN/Infinity (monsterdata_extra.json)
+
+Tests IEEE 754 special floating-point values:
+
+| Edge Case | Field | Value | Why It Matters |
+|-----------|-------|-------|----------------|
+| NaN double | `d3` | `nan` | Not-a-Number handling |
+| +Infinity double | `d1` | `+inf` | Positive infinity |
+| -Infinity double | `d2` | `-inf` | Negative infinity |
+| NaN float | `f0`, `f1` | `nan` | Single-precision NaN |
+| +/- Inf float | `f2`, `f3` | `±inf` | Single-precision infinity |
+| Vector with NaN | `dvec`, `fvec` | Mixed special values | Array of special floats |
+
+### Test 1e: Golden Binary Wire Compatibility
+
+Verifies wire format compatibility with pre-generated binaries:
+
+- `monsterdata_test.mon` - Official golden binary (600 bytes)
+- Verifies file identifier `"MONS"` at offset 4-7
+- Compares generated binary size to golden reference
+- Ensures backwards compatibility with existing FlatBuffers
+
+### Test 1f: gRPC/RPC Service Schema
+
+Verifies the schema parser handles `rpc_service` definitions:
+
+| Service | Method | Streaming |
+|---------|--------|-----------|
+| `MonsterStorage` | `Store(Monster):Stat` | none |
+| `MonsterStorage` | `Retrieve(Stat):Monster` | server |
+| `MonsterStorage` | `GetMaxHitPoint(Monster):Stat` | client |
+| `MonsterStorage` | `GetMinMaxHitPoints(Monster):Stat` | bidi |
+
+### Test 1g: Struct Alignment (alignment_test.json)
+
+Tests memory alignment edge cases:
+
+- `BadAlignmentSmall` - 12-byte struct with 4-byte alignment
+- `BadAlignmentLarge` - 8-byte struct with 8-byte alignment
+- `EvenSmallStruct` - 2-byte struct with 1-byte alignment
+- `OddSmallStruct` - 3-byte struct with 1-byte alignment
+- Verifies struct padding survives binary round-trip
+
+### Test 1h: Fixed-Size Arrays (arrays_test.fbs)
+
+Verifies fixed-size array syntax in structs:
+
+| Syntax | Description |
+|--------|-------------|
+| `[int:2]` | Fixed 2-element int array |
+| `[int:0xF]` | Fixed 15-element array (hex size) |
+| `[NestedStruct:2]` | Fixed array of structs |
+| `[TestEnum:2]` | Fixed array of enums |
+| `[int64:2]` | Fixed array of 64-bit integers |
+
+### Test 1i: Default Vectors/Strings (default_vectors_strings_test.fbs)
+
+Tests empty default values:
+
+| Feature | Example |
+|---------|---------|
+| Empty int vector | `int_vec:[int] = []` |
+| Empty string vector | `string_vec:[string] = []` |
+| Empty string | `empty_string:string = ""` |
+| Default string | `some_string:string = "some"` |
+| Empty struct vector | `struct_vec:[MyStruct] = []` |
+| 64-bit vectors | `offset64`, `vector64` attributes |
+
+### Test 1j: Cross-Language Wire Format
+
+Verifies binaries from other FlatBuffers implementations:
+
+| Language | File | Size |
+|----------|------|------|
+| Java | `monsterdata_java_wire.mon` | 312 bytes |
+| Python | `monsterdata_python_wire.mon` | 344 bytes |
+| Rust | `monsterdata_rust_wire.mon` | 408 bytes |
+
+Each binary is parsed and verified to ensure cross-language wire format compatibility.
+
+### Test 1k: Unicode Golden Binary
+
+Verifies the pre-generated `unicode_test.mon` golden binary:
+
+- 6 unicode string edge cases preserved
+- 4-byte UTF-8 surrogate pairs verified
+- Cross-language unicode compatibility
+
+### Test 1l: FlexBuffer Binary
+
+Verifies FlexBuffer format compatibility:
+
+- `gold_flexbuffer_example.bin` (166 bytes)
+- FlexBuffers are a schema-less self-describing format
+- Different binary format from FlatBuffers
+
+### Test 1m: Nested Union (nested_union_test.fbs)
+
+Tests union types with tables and advanced enum attributes:
+
+| Feature | Example | Why It Matters |
+|---------|---------|----------------|
+| bit_flags enum | `enum Color (bit_flags)` | Bitmask enum values |
+| Multiple attributes | `(csharp_partial, private)` | Language-specific hints |
+| Union with tables | `union Any { Vec3, TestSimpleTableWithEnum }` | Complex union variants |
+| Union round-trip | Vec3 and enum variants | Full union preservation |
+
+### Test 1n: More Defaults (more_defaults.fbs)
+
+Tests additional default value edge cases:
+
+| Feature | Example | Why It Matters |
+|---------|---------|----------------|
+| Empty int vector | `ints: [int] = []` | Default empty vector |
+| Whitespace in default | `floats: [float] = [     ]` | Parser tolerance |
+| Empty enum vector | `abcs: [ABC] = []` | Enum vector defaults |
+| Empty bool vector | `bools: [bool] = []` | Boolean vector defaults |
+| Default string | `some_string = "some"` | String default value |
+
+### Test 1o: NaN/Inf Schema Defaults (nan_inf_test.fbs)
+
+Tests NaN and Infinity as **schema default values** (not just data):
+
+| Feature | Schema Syntax | Why It Matters |
+|---------|---------------|----------------|
+| NaN default | `default_nan:double = nan` | Parser handles NaN |
+| +Inf default | `default_inf:double = inf` | Parser handles +Infinity |
+| -Inf default | `default_ninf:double = -inf` | Parser handles -Infinity |
+
+### Test 1p: Alignment Binary Comparison
+
+Tests struct alignment padding correctness:
+
+| Binary | Size | Purpose |
+|--------|------|---------|
+| `alignment_test_before_fix.bin` | 32 bytes | Pre-fix alignment |
+| `alignment_test_after_fix.bin` | 32 bytes | Post-fix alignment |
+
+Verifies that alignment padding bytes differ between pre/post fix versions.
+
+### Test 1q: Java Wire Format SP (Single Precision)
+
+Tests Java-generated FlatBuffer with single-precision floats:
+
+| Feature | Value | Why It Matters |
+|---------|-------|----------------|
+| File identifier | `MONS` | Same schema as double-precision |
+| Binary size | 312 bytes | Different from double-precision |
+| Monster data | name, hp, etc. | Full round-trip |
+
+### Test 1r: Java Test Binary (javatest.bin)
+
+Tests additional Java-generated binary:
+
+| Feature | Value | Why It Matters |
+|---------|-------|----------------|
+| Binary size | 512 bytes | Larger test case |
+| Root offset | 168 | Valid FlatBuffer structure |
+| Schema compatibility | monster_test.fbs | Cross-language wire format |
+
+### Test 1s: Required Strings (required_strings.fbs)
+
+Tests the `(required)` field attribute:
+
+| Feature | Example | Why It Matters |
+|---------|---------|----------------|
+| Required string | `str_a:string (required)` | Must be present |
+| Required string | `str_b:string (required)` | Must be present |
+| Round-trip | Both fields preserved | Required validation |
+
+### Test 2: SHA-256 Hash
 Verifies SHA-256 produces identical output across all WASM runtimes:
 - `SHA256("hello")` = `2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824`
 
-### Test 2: Transparent Encryption
-For each of the 10 chains:
+### Test 3: Transparent Encryption (Per-Chain)
+
+For each of the 10 cryptocurrency chains:
 1. Generate FlatBuffer binary from upstream schema/data
-2. Encrypt **entire binary** with chain-specific AES key
+2. Encrypt **entire binary** with chain-specific AES-256-CTR key
 3. Verify encrypted data differs from original
 4. Decrypt entire binary
-5. Verify decrypted binary matches original exactly
-6. Parse decrypted data to verify it's valid
+5. Verify decrypted binary matches original exactly (byte-for-byte)
+6. Verify critical edge cases after decryption:
+   - Basic fields (`name`, `hp`)
+   - Extreme double values (`±1.79e+308`)
+   - Nested structures (`pos.test3`, `enemy`)
+   - Array integrity (`inventory`, `testarrayofbools`)
 
-### Test 3: Cross-Language Verification
-1. Read binary files generated by Node.js
-2. Verify other languages can read/decrypt the same files
-3. Confirm all languages interoperate
+### Test 4: Crypto Operations
+
+- Ed25519 keypair generation (Solana, SUI, Cardano, Tezos, NEAR, Aptos)
+- Ed25519 sign/verify
+- secp256k1 keypair generation (Bitcoin, Ethereum, Cosmos)
+- secp256k1 sign/verify
+
+### Test 5: Cross-Language Verification
+
+1. Read binary files generated by Node.js reference implementation
+2. Decrypt using same chain keys
+3. Verify decrypted bytes match unencrypted reference
+4. Confirm FlatBuffer file identifier (`"MONS"`) is intact
 
 ## Architecture
 

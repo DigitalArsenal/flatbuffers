@@ -256,6 +256,122 @@ module.exports.default = createModule;
   endif()
   message(STATUS "")
 
+  # =============================================================================
+  # WASI Target: Standalone WASM module for use with WASI runtimes (Go, Rust, etc.)
+  # =============================================================================
+
+  # Source files for WASI encryption module (minimal, no Emscripten dependencies)
+  set(FlatBuffers_WASI_SRCS
+    ${CMAKE_SOURCE_DIR}/src/encryption.cpp
+    ${CMAKE_SOURCE_DIR}/src/encryption_wasi.cpp
+  )
+
+  # Exported functions for WASI - comprehensive crypto API
+  set(WASI_EXPORTED_FUNCTIONS
+    # Memory management
+    "_malloc"
+    "_free"
+    "_wasi_alloc"
+    "_wasi_dealloc"
+    # Module info
+    "_wasi_get_version"
+    "_wasi_has_cryptopp"
+    # Symmetric encryption (AES-256-CTR)
+    "_wasi_encryption_create"
+    "_wasi_encryption_destroy"
+    "_wasi_encrypt_bytes"
+    "_wasi_decrypt_bytes"
+    "_wasi_derive_field_key"
+    "_wasi_derive_field_iv"
+    # Hash functions
+    "_wasi_sha256"
+    "_wasi_hkdf"
+    # X25519 key exchange
+    "_wasi_x25519_generate_keypair"
+    "_wasi_x25519_shared_secret"
+    # secp256k1 (Bitcoin/Ethereum)
+    "_wasi_secp256k1_generate_keypair"
+    "_wasi_secp256k1_shared_secret"
+    "_wasi_secp256k1_sign"
+    "_wasi_secp256k1_verify"
+    # P-256 (NIST)
+    "_wasi_p256_generate_keypair"
+    "_wasi_p256_shared_secret"
+    "_wasi_p256_sign"
+    "_wasi_p256_verify"
+    # Ed25519 signatures
+    "_wasi_ed25519_generate_keypair"
+    "_wasi_ed25519_sign"
+    "_wasi_ed25519_verify"
+    # Key derivation
+    "_wasi_derive_symmetric_key"
+  )
+  string(JOIN "," WASI_EXPORTED_FUNCS_STR ${WASI_EXPORTED_FUNCTIONS})
+
+  # Check if Crypto++ is available for WASM build
+  # For WASM builds, we need to fetch cryptopp-cmake ourselves if not already done
+  if(NOT TARGET cryptopp)
+    message(STATUS "Fetching Crypto++ for WASM build...")
+    include(FetchContent)
+    FetchContent_Declare(
+      cryptopp-cmake
+      GIT_REPOSITORY https://github.com/abdes/cryptopp-cmake.git
+      GIT_TAG        CRYPTOPP_8_9_0
+    )
+    set(CRYPTOPP_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(CRYPTOPP_INSTALL OFF CACHE BOOL "" FORCE)
+    set(CRYPTOPP_USE_INTERMEDIATE_OBJECTS_TARGET OFF CACHE BOOL "" FORCE)
+    # Disable assembly for WASM
+    set(CRYPTOPP_DISABLE_ASM ON CACHE BOOL "" FORCE)
+    set(CRYPTOPP_DISABLE_SSSE3 ON CACHE BOOL "" FORCE)
+    set(CRYPTOPP_DISABLE_AESNI ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(cryptopp-cmake)
+  endif()
+
+  # Target: flatc_wasm_wasi (standalone WASI module)
+  add_executable(flatc_wasm_wasi ${FlatBuffers_WASI_SRCS})
+  target_compile_features(flatc_wasm_wasi PRIVATE cxx_std_17)
+  set_target_properties(flatc_wasm_wasi PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+    OUTPUT_NAME "flatc-encryption"
+    SUFFIX ".wasm"
+    RUNTIME_OUTPUT_DIRECTORY "${WASM_OUTPUT_DIR}"
+  )
+  target_include_directories(flatc_wasm_wasi PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+  )
+  target_compile_definitions(flatc_wasm_wasi PRIVATE
+    FLATBUFFERS_WASI=1
+    FLATBUFFERS_USE_CRYPTOPP=1
+  )
+  # Enable exception catching (to handle Crypto++ exceptions) but disable throwing
+  # This allows try/catch to work but uncaught exceptions will abort
+  target_compile_options(flatc_wasm_wasi PRIVATE
+    -fexceptions
+  )
+  target_link_libraries(flatc_wasm_wasi PRIVATE cryptopp)
+  target_link_options(flatc_wasm_wasi PRIVATE
+    -sSTANDALONE_WASM=1
+    -sPURE_WASI=1
+    -sWASM=1
+    -sERROR_ON_UNDEFINED_SYMBOLS=0
+    "-sEXPORTED_FUNCTIONS=[${WASI_EXPORTED_FUNCS_STR}]"
+    -sALLOW_MEMORY_GROWTH=1
+    -sINITIAL_MEMORY=16MB
+    -sMAXIMUM_MEMORY=256MB
+    -sSTACK_SIZE=1MB
+    -fexceptions
+    -sDISABLE_EXCEPTION_THROWING=0
+    --no-entry
+    $<$<CONFIG:Release>:-O3>
+    $<$<CONFIG:Release>:-flto>
+    $<$<CONFIG:Debug>:-g>
+  )
+
+  message(STATUS "  flatc_wasm_wasi   - WASI standalone module (with Crypto++) -> ${WASM_OUTPUT_DIR}/")
+
   return()
 endif()
 
@@ -348,6 +464,12 @@ add_custom_target(flatc_wasm_npm
   USES_TERMINAL
 )
 
+add_custom_target(flatc_wasm_wasi
+  COMMAND bash "${WASM_BUILD_SCRIPT}" flatc_wasm_wasi
+  COMMENT "Building WASI standalone module..."
+  USES_TERMINAL
+)
+
 # Test targets
 find_program(NODE_EXECUTABLE node)
 if(NODE_EXECUTABLE)
@@ -386,6 +508,7 @@ message(STATUS "WASM targets configured (via build script):")
 message(STATUS "  flatc_wasm        - Build WASM module (separate files)")
 message(STATUS "  flatc_wasm_inline - Build WASM module (single file)")
 message(STATUS "  flatc_wasm_npm    - Build npm package")
+message(STATUS "  flatc_wasm_wasi   - Build WASI standalone module")
 if(NODE_EXECUTABLE)
   message(STATUS "  flatc_wasm_test   - Run basic tests")
   message(STATUS "  flatc_wasm_test_all - Run all tests")

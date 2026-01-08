@@ -21,17 +21,45 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <array>
 
 #include "flatbuffers/flatbuffers.h"
 #include "flatbuffers/reflection.h"
 
 namespace flatbuffers {
 
+// =============================================================================
+// Constants
+// =============================================================================
+
 // Key size for AES-256
 constexpr size_t kEncryptionKeySize = 32;
 
 // IV/Nonce size for AES-CTR
 constexpr size_t kEncryptionIVSize = 16;
+
+// X25519/Ed25519 key sizes
+constexpr size_t kX25519PrivateKeySize = 32;
+constexpr size_t kX25519PublicKeySize = 32;
+constexpr size_t kX25519SharedSecretSize = 32;
+
+// Ed25519 signature sizes
+constexpr size_t kEd25519PrivateKeySize = 64;  // seed + public key
+constexpr size_t kEd25519PublicKeySize = 32;
+constexpr size_t kEd25519SignatureSize = 64;
+
+// secp256k1/P-256 key sizes
+constexpr size_t kSecp256k1PrivateKeySize = 32;
+constexpr size_t kSecp256k1PublicKeySize = 33;   // compressed
+constexpr size_t kSecp256k1SignatureSize = 64;   // r + s
+
+constexpr size_t kP256PrivateKeySize = 32;
+constexpr size_t kP256PublicKeySize = 33;        // compressed
+constexpr size_t kP256SignatureSize = 64;        // r + s
+
+// =============================================================================
+// Error handling
+// =============================================================================
 
 /**
  * Error codes for encryption operations
@@ -44,6 +72,8 @@ enum class EncryptionError {
   kFieldNotFound,
   kUnsupportedType,
   kCryptoError,
+  kSignatureInvalid,
+  kKeyGenerationFailed,
 };
 
 /**
@@ -63,6 +93,52 @@ struct EncryptionResult {
     return {err, msg};
   }
 };
+
+// =============================================================================
+// Key types
+// =============================================================================
+
+/**
+ * Supported key exchange algorithms
+ */
+enum class KeyExchangeAlgorithm {
+  X25519 = 0,      // Curve25519 ECDH (RFC 7748)
+  Secp256k1 = 1,   // Bitcoin/Ethereum curve ECDH
+  P256 = 2,        // NIST P-256/secp256r1 ECDH
+};
+
+/**
+ * Supported signature algorithms
+ */
+enum class SignatureAlgorithm {
+  Ed25519 = 0,         // EdDSA with Curve25519
+  Secp256k1_ECDSA = 1, // ECDSA with secp256k1 (Bitcoin/Ethereum)
+  P256_ECDSA = 2,      // ECDSA with P-256 (NIST)
+};
+
+/**
+ * Generic key pair structure
+ */
+struct KeyPair {
+  std::vector<uint8_t> private_key;
+  std::vector<uint8_t> public_key;
+
+  bool valid() const { return !private_key.empty() && !public_key.empty(); }
+};
+
+/**
+ * Digital signature
+ */
+struct Signature {
+  std::vector<uint8_t> data;
+  SignatureAlgorithm algorithm;
+
+  bool valid() const { return !data.empty(); }
+};
+
+// =============================================================================
+// Encryption Context (symmetric encryption)
+// =============================================================================
 
 /**
  * Encryption context holding the key and derived values
@@ -121,6 +197,10 @@ class EncryptionContext {
   EncryptionContext& operator=(const EncryptionContext&) = delete;
 };
 
+// =============================================================================
+// Symmetric Encryption (AES-256-CTR)
+// =============================================================================
+
 /**
  * Encrypt a FlatBuffer in-place using field annotations
  *
@@ -143,13 +223,6 @@ EncryptionResult EncryptBuffer(
 
 /**
  * Decrypt a FlatBuffer in-place
- *
- * @param buffer Pointer to the encrypted FlatBuffer data (modified in-place)
- * @param buffer_size Size of the buffer
- * @param schema Compiled binary schema (.bfbs) with encrypted field markers
- * @param schema_size Size of the schema
- * @param ctx Encryption context with the key
- * @return Result indicating success or error
  */
 EncryptionResult DecryptBuffer(
     uint8_t* buffer,
@@ -174,7 +247,6 @@ void EncryptBytes(uint8_t* data, size_t size,
 
 /**
  * Decrypt specific bytes using AES-CTR
- *
  * Same as EncryptBytes (AES-CTR is symmetric)
  */
 inline void DecryptBytes(uint8_t* data, size_t size,
@@ -184,68 +256,221 @@ inline void DecryptBytes(uint8_t* data, size_t size,
 
 /**
  * Encrypt a single scalar value
- *
- * @param value Pointer to the scalar value (modified in-place)
- * @param size Size of the scalar (1, 2, 4, or 8 bytes)
- * @param ctx Encryption context
- * @param field_id Field ID for key derivation
  */
 void EncryptScalar(uint8_t* value, size_t size,
                    const EncryptionContext& ctx, uint16_t field_id);
 
 /**
  * Encrypt a string value (the content, not the length prefix)
- *
- * @param str Pointer to the string data (after length prefix)
- * @param length Length of the string
- * @param ctx Encryption context
- * @param field_id Field ID for key derivation
  */
 void EncryptString(uint8_t* str, size_t length,
                    const EncryptionContext& ctx, uint16_t field_id);
 
 /**
  * Encrypt a vector of scalars
- *
- * @param data Pointer to the vector data (after length prefix)
- * @param element_size Size of each element
- * @param count Number of elements
- * @param ctx Encryption context
- * @param field_id Field ID for key derivation
  */
 void EncryptVector(uint8_t* data, size_t element_size, size_t count,
                    const EncryptionContext& ctx, uint16_t field_id);
 
+// =============================================================================
+// Key Exchange (ECDH)
+// =============================================================================
+
+/**
+ * Generate a key pair for the specified algorithm
+ *
+ * @param algorithm The key exchange algorithm
+ * @return KeyPair with private and public keys, or empty on error
+ */
+KeyPair GenerateKeyPair(KeyExchangeAlgorithm algorithm);
+
+/**
+ * Generate X25519 key pair
+ */
+KeyPair X25519GenerateKeyPair();
+
+/**
+ * Generate secp256k1 key pair
+ */
+KeyPair Secp256k1GenerateKeyPair();
+
+/**
+ * Generate P-256 key pair
+ */
+KeyPair P256GenerateKeyPair();
+
+/**
+ * Compute shared secret using ECDH
+ *
+ * @param algorithm The key exchange algorithm
+ * @param private_key Our private key
+ * @param public_key Their public key
+ * @param shared_secret Output buffer for shared secret (32 bytes)
+ * @return true on success
+ */
+bool ComputeSharedSecret(
+    KeyExchangeAlgorithm algorithm,
+    const uint8_t* private_key, size_t private_key_size,
+    const uint8_t* public_key, size_t public_key_size,
+    uint8_t* shared_secret);
+
+/**
+ * X25519 ECDH key exchange
+ */
+bool X25519SharedSecret(
+    const uint8_t* private_key,
+    const uint8_t* public_key,
+    uint8_t* shared_secret);
+
+/**
+ * secp256k1 ECDH key exchange
+ */
+bool Secp256k1SharedSecret(
+    const uint8_t* private_key,
+    const uint8_t* public_key, size_t public_key_size,
+    uint8_t* shared_secret);
+
+/**
+ * P-256 ECDH key exchange
+ */
+bool P256SharedSecret(
+    const uint8_t* private_key,
+    const uint8_t* public_key, size_t public_key_size,
+    uint8_t* shared_secret);
+
+// =============================================================================
+// Digital Signatures
+// =============================================================================
+
+/**
+ * Generate a signing key pair
+ *
+ * @param algorithm The signature algorithm
+ * @return KeyPair with private and public keys, or empty on error
+ */
+KeyPair GenerateSigningKeyPair(SignatureAlgorithm algorithm);
+
+/**
+ * Sign data with the specified algorithm
+ *
+ * @param algorithm The signature algorithm
+ * @param private_key The signing private key
+ * @param data Data to sign
+ * @param data_size Size of data
+ * @return Signature, or empty on error
+ */
+Signature Sign(
+    SignatureAlgorithm algorithm,
+    const uint8_t* private_key, size_t private_key_size,
+    const uint8_t* data, size_t data_size);
+
+/**
+ * Verify a signature
+ *
+ * @param algorithm The signature algorithm
+ * @param public_key The verification public key
+ * @param data Original data that was signed
+ * @param data_size Size of data
+ * @param signature The signature to verify
+ * @return true if signature is valid
+ */
+bool Verify(
+    SignatureAlgorithm algorithm,
+    const uint8_t* public_key, size_t public_key_size,
+    const uint8_t* data, size_t data_size,
+    const uint8_t* signature, size_t signature_size);
+
+/**
+ * Ed25519 sign
+ */
+Signature Ed25519Sign(
+    const uint8_t* private_key,
+    const uint8_t* data, size_t data_size);
+
+/**
+ * Ed25519 verify
+ */
+bool Ed25519Verify(
+    const uint8_t* public_key,
+    const uint8_t* data, size_t data_size,
+    const uint8_t* signature);
+
+/**
+ * secp256k1 ECDSA sign
+ */
+Signature Secp256k1Sign(
+    const uint8_t* private_key,
+    const uint8_t* data, size_t data_size);
+
+/**
+ * secp256k1 ECDSA verify
+ */
+bool Secp256k1Verify(
+    const uint8_t* public_key, size_t public_key_size,
+    const uint8_t* data, size_t data_size,
+    const uint8_t* signature, size_t signature_size);
+
+/**
+ * P-256 ECDSA sign
+ */
+Signature P256Sign(
+    const uint8_t* private_key,
+    const uint8_t* data, size_t data_size);
+
+/**
+ * P-256 ECDSA verify
+ */
+bool P256Verify(
+    const uint8_t* public_key, size_t public_key_size,
+    const uint8_t* data, size_t data_size,
+    const uint8_t* signature, size_t signature_size);
+
+// =============================================================================
+// Utility functions
+// =============================================================================
+
+/**
+ * SHA-256 hash
+ */
+void SHA256(const uint8_t* data, size_t size, uint8_t* hash);
+
+/**
+ * HKDF-SHA256 key derivation
+ */
+void HKDF(const uint8_t* ikm, size_t ikm_size,
+          const uint8_t* salt, size_t salt_size,
+          const uint8_t* info, size_t info_size,
+          uint8_t* okm, size_t okm_size);
+
+/**
+ * Derive symmetric key from shared secret
+ */
+void DeriveSymmetricKey(
+    const uint8_t* shared_secret, size_t shared_secret_size,
+    const uint8_t* context, size_t context_size,
+    uint8_t* key);
+
 /**
  * Check if a field has the "encrypted" attribute
- *
- * @param field Field definition from reflection schema
- * @return true if the field should be encrypted
  */
 bool IsFieldEncrypted(const reflection::Field* field);
 
 /**
  * Get list of encrypted field IDs from a schema
- *
- * @param schema Compiled binary schema
- * @param schema_size Size of schema
- * @param root_type_name Name of the root type (optional, uses schema default)
- * @return Vector of field IDs that are marked encrypted
  */
 std::vector<uint16_t> GetEncryptedFieldIds(
     const uint8_t* schema,
     size_t schema_size,
     const char* root_type_name = nullptr);
 
-// ============================================================================
+// =============================================================================
 // Internal implementation details
-// ============================================================================
+// =============================================================================
 
 namespace internal {
 
 /**
- * Simple HKDF-like key derivation (SHA-256 based)
- * For production use, consider using a proper crypto library
+ * Key derivation
  */
 void DeriveKey(const uint8_t* master_key, size_t master_key_size,
                const uint8_t* info, size_t info_size,
@@ -253,7 +478,6 @@ void DeriveKey(const uint8_t* master_key, size_t master_key_size,
 
 /**
  * AES block cipher (single block)
- * This is a minimal implementation for the CTR mode keystream
  */
 void AESEncryptBlock(const uint8_t* key, const uint8_t* input, uint8_t* output);
 

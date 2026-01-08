@@ -1,44 +1,93 @@
 # FlatBuffers Encryption Examples
 
-This directory contains integration examples showing how to use flatc-wasm's field-level encryption from various languages and environments.
+This directory contains integration examples showing how to use FlatBuffers field-level encryption powered by **Crypto++** via WASM.
 
-## Overview
+## Architecture
 
-Field-level encryption allows you to encrypt specific fields in a FlatBuffer while maintaining binary compatibility. The encrypted buffer:
+All cryptographic operations are performed by a single C++ implementation using Crypto++, compiled to WebAssembly. This provides:
 
-- Remains a valid FlatBuffer (parseable structure)
-- Has only marked field values encrypted
-- Can be decrypted in any language using the same key
+- **Single auditable implementation** - One codebase in C++/Crypto++
+- **Battle-tested crypto** - Crypto++ has 30 years of production use
+- **Cross-platform** - Works in Go, Node.js, Browser, Python, Rust via WASM
+- **Full feature set** - AES-256-CTR, X25519, secp256k1, P-256, Ed25519, ECDSA
 
-## Quick Start
+## Features
 
-```javascript
-// Node.js / Browser
-import { FlatcRunner, encryptBuffer, decryptBuffer } from 'flatc-wasm';
+### Symmetric Encryption
 
-const flatc = await FlatcRunner.init();
-const key = crypto.getRandomValues(new Uint8Array(32));
+- **AES-256-CTR** - Size-preserving stream cipher
+- **HKDF-SHA256** - Key derivation for field-specific keys/IVs
 
-// Create buffer from JSON
-const buffer = flatc.generateBinary(schema, jsonData);
+### Key Exchange (ECDH)
 
-// Encrypt fields marked with (encrypted)
-encryptBuffer(buffer, schemaContent, key, 'RootType');
+- **X25519** - Modern Curve25519 (RFC 7748)
+- **secp256k1** - Bitcoin/Ethereum compatible
+- **P-256** - NIST standard (secp256r1)
 
-// Later: decrypt
-decryptBuffer(buffer, schemaContent, key, 'RootType');
-```
+### Digital Signatures
+
+- **Ed25519** - EdDSA with Curve25519
+- **ECDSA secp256k1** - Bitcoin/Ethereum transaction signing
+- **ECDSA P-256** - NIST standard signatures
 
 ## Integration Examples
 
-| Language | Directory | Description |
-|----------|-----------|-------------|
-| **Node.js** | [node-encryption/](node-encryption/) | Full Node.js example with tests |
-| **Python** | [python-encryption/](python-encryption/) | Python implementation (compatible) |
-| **Browser** | [browser-encryption/](browser-encryption/) | Interactive web demo |
-| **Go** | [go-encryption/](go-encryption/) | Go implementation with tests |
-| **Rust** | [rust-encryption/](rust-encryption/) | Rust crate with tests |
-| **Deno** | [deno-encryption/](deno-encryption/) | TypeScript for Deno runtime |
+| Directory | Language | Description |
+|-----------|----------|-------------|
+| [go-wasi/](go-wasi/) | **Go** | Full WASI example using wazero runtime |
+| [node-encryption/](node-encryption/) | **Node.js** | Node.js with WASM module |
+| [browser-encryption/](browser-encryption/) | **Browser** | Interactive web demo |
+| [public-key-encryption/](public-key-encryption/) | **Multi** | Hybrid encryption with ECDH |
+| [cross-language-test/](cross-language-test/) | **Multi** | Cross-language compatibility tests |
+
+## Quick Start (Node.js)
+
+```javascript
+import { FlatcRunner } from 'flatc-wasm';
+import { initEncryption, encryptBytes, decryptBytes } from 'flatc-wasm/encryption';
+
+// Initialize WASM module
+const flatc = await FlatcRunner.init();
+initEncryption(flatc.wasmInstance);
+
+// Generate key and IV
+const key = crypto.getRandomValues(new Uint8Array(32));
+const iv = crypto.getRandomValues(new Uint8Array(16));
+
+// Encrypt/decrypt
+const data = new TextEncoder().encode('secret message');
+encryptBytes(data, key, iv);
+// data is now encrypted
+decryptBytes(data, key, iv);
+// data is restored
+```
+
+## Quick Start (Go)
+
+```go
+import (
+    "context"
+    "os"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Load WASM module
+    wasmBytes, _ := os.ReadFile("flatc-encryption.wasm")
+    em, _ := NewEncryptionModule(ctx, wasmBytes)
+    defer em.Close(ctx)
+
+    // X25519 key exchange
+    alicePriv, alicePub, _ := em.X25519GenerateKeypair(ctx)
+    bobPriv, bobPub, _ := em.X25519GenerateKeypair(ctx)
+
+    secret, _ := em.X25519SharedSecret(ctx, alicePriv, bobPub)
+
+    // Encrypt with shared secret
+    em.EncryptBytes(ctx, secret[:32], iv, data)
+}
+```
 
 ## Schema Syntax
 
@@ -65,71 +114,93 @@ root_type SensorData;
 
 | Type | Encryption | Notes |
 |------|------------|-------|
-| `bool`, `byte`, `ubyte` | ✅ | 1-byte XOR |
-| `short`, `ushort` | ✅ | 2-byte XOR |
-| `int`, `uint`, `float` | ✅ | 4-byte XOR |
-| `long`, `ulong`, `double` | ✅ | 8-byte XOR |
-| `string` | ✅ | Content encrypted, length visible |
-| `[ubyte]`, `[byte]` | ✅ | Content encrypted |
-| `[scalar]` | ✅ | All elements encrypted |
-| `struct` | ✅ | All bytes encrypted (inline) |
-| Nested tables | ⚠️ | Encrypt fields inside table |
-| `union` | ❌ | Encrypt union member fields instead |
+| `bool`, `byte`, `ubyte` | Yes | 1-byte XOR |
+| `short`, `ushort` | Yes | 2-byte XOR |
+| `int`, `uint`, `float` | Yes | 4-byte XOR |
+| `long`, `ulong`, `double` | Yes | 8-byte XOR |
+| `string` | Yes | Content encrypted, length visible |
+| `[ubyte]`, `[byte]` | Yes | Content encrypted |
+| `[scalar]` | Yes | All elements encrypted |
+| `struct` | Yes | All bytes encrypted (inline) |
+| Nested tables | Partial | Encrypt fields inside table |
+| `union` | No | Encrypt union member fields instead |
 
 ## Cross-Language Compatibility
 
-All implementations use the same encryption algorithm:
+All implementations use the same WASM module with Crypto++:
 
-- **Algorithm**: AES-256-CTR
-- **Key size**: 256 bits (32 bytes)
-- **Key derivation**: HKDF-like per-field derivation
-- **IV derivation**: HKDF-like per-field derivation
+- **Symmetric**: AES-256-CTR (size-preserving, no auth tag)
+- **Key Exchange**: X25519, secp256k1, P-256
+- **Signatures**: Ed25519, ECDSA secp256k1, ECDSA P-256
+- **Key Derivation**: HKDF-SHA256
 
-Data encrypted in one language can be decrypted in any other:
+Data encrypted/signed in one language can be verified in any other:
 
 ```
-Python encrypt → Store on IPFS → Node.js decrypt ✅
-Browser encrypt → Send via WebSocket → Go decrypt ✅
-Node.js encrypt → Store in DB → Python decrypt ✅
+Go encrypt → Store on IPFS → Node.js decrypt
+Browser encrypt → WebSocket → Python decrypt
+Node.js sign → Store in DB → Rust verify
 ```
 
 ## Security Notes
 
 ### What's Protected
-- ✅ Field values (content)
-- ✅ String content
-- ✅ Binary blob content
-- ✅ Numeric values
+
+- Field values (content)
+- String content
+- Binary blob content
+- Numeric values
 
 ### What's NOT Protected
-- ❌ Schema structure (visible)
-- ❌ String/vector lengths (visible)
-- ❌ Which fields are present (visible)
-- ❌ Number of elements in vectors (visible)
+
+- Schema structure (visible)
+- String/vector lengths (visible)
+- Which fields are present (visible)
+- Number of elements in vectors (visible)
 
 ### Recommendations
 
 1. **Use strong keys**: Generate 256-bit keys cryptographically
 2. **Secure key storage**: Never commit keys to version control
-3. **Consider signing**: Encryption provides confidentiality, not integrity
+3. **Sign important data**: Encryption provides confidentiality, use signatures for integrity
 4. **Rotate keys**: Don't reuse keys across many buffers
+
+## Building the WASM Module
+
+```bash
+# From flatbuffers root
+cmake -B build -S . -DFLATBUFFERS_BUILD_WASM=ON
+cmake --build build --target flatc
+
+source build/_deps/emsdk-src/emsdk_env.sh
+cmake -B build/wasm -S . \
+  -DFLATBUFFERS_BUILD_WASM=ON \
+  -DCMAKE_TOOLCHAIN_FILE=build/_deps/emsdk-src/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake
+cmake --build build/wasm --target flatc_wasm_wasi
+
+# Output: build/wasm/wasm/flatc-encryption.wasm
+```
 
 ## Running Tests
 
+### Go (WASI)
+
+```bash
+cd go-wasi
+go mod tidy
+go test -v
+```
+
 ### Node.js
+
 ```bash
 cd node-encryption
 npm install
 npm test
 ```
 
-### Python
-```bash
-cd python-encryption
-python test_encryption.py
-```
-
 ### Browser
+
 ```bash
 cd browser-encryption
 npx serve .

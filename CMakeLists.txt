@@ -57,6 +57,9 @@ option(FLATBUFFERS_SKIP_MONSTER_EXTRA
 option(FLATBUFFERS_STRICT_MODE
       "Build flatbuffers with all warnings as errors (-Werror or /WX)."
       OFF)
+option(FLATBUFFERS_USE_CRYPTOPP
+      "Use Crypto++ library for encryption (replaces custom crypto implementation)."
+      OFF)
 
 if(NOT DEFINED FLATBUFFERS_CPP_STD)
   set(FLATBUFFERS_CPP_STD 11)
@@ -116,6 +119,23 @@ if(NOT WIN32)
   if(NOT HAVE_REALPATH)
     add_definitions(-DFLATBUFFERS_NO_ABSOLUTE_PATH_RESOLUTION)
   endif()
+endif()
+
+# =============================================================================
+# Crypto++ library for encryption (optional, replaces custom implementation)
+# =============================================================================
+if(FLATBUFFERS_USE_CRYPTOPP)
+  include(FetchContent)
+  FetchContent_Declare(
+    cryptopp-cmake
+    GIT_REPOSITORY https://github.com/abdes/cryptopp-cmake.git
+    GIT_TAG        CRYPTOPP_8_9_0
+  )
+  set(CRYPTOPP_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+  set(CRYPTOPP_INSTALL OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(cryptopp-cmake)
+  add_definitions(-DFLATBUFFERS_USE_CRYPTOPP=1)
+  message(STATUS "Using Crypto++ for encryption")
 endif()
 
 set(FlatBuffers_Library_SRCS
@@ -450,6 +470,11 @@ if(FLATBUFFERS_BUILD_FLATLIB)
   )
   target_link_libraries(flatbuffers PRIVATE $<BUILD_INTERFACE:ProjectConfig>)
 
+  # Link Crypto++ if enabled
+  if(FLATBUFFERS_USE_CRYPTOPP)
+    target_link_libraries(flatbuffers PUBLIC cryptopp)
+  endif()
+
   if(FLATBUFFERS_ENABLE_PCH)
     add_pch_to_target(flatbuffers include/flatbuffers/pch/pch.h)
   endif()
@@ -465,6 +490,11 @@ if(FLATBUFFERS_BUILD_FLATC)
   endif()
 
   target_link_libraries(flatc PRIVATE $<BUILD_INTERFACE:ProjectConfig>)
+
+  # Link Crypto++ if enabled
+  if(FLATBUFFERS_USE_CRYPTOPP)
+    target_link_libraries(flatc PRIVATE cryptopp)
+  endif()
 
   target_compile_options(flatc
     PRIVATE
@@ -497,6 +527,10 @@ endif()
 if(FLATBUFFERS_BUILD_SHAREDLIB)
   add_library(flatbuffers_shared SHARED ${FlatBuffers_Library_SRCS})
   target_link_libraries(flatbuffers_shared PRIVATE $<BUILD_INTERFACE:ProjectConfig>)
+  # Link Crypto++ if enabled
+  if(FLATBUFFERS_USE_CRYPTOPP)
+    target_link_libraries(flatbuffers_shared PUBLIC cryptopp)
+  endif()
   # FlatBuffers use calendar-based versioning and do not provide any ABI
   # stability guarantees. Therefore, always use the full version as SOVERSION
   # in order to avoid breaking reverse dependencies on upgrades.

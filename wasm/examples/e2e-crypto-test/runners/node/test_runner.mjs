@@ -62,6 +62,10 @@ const nestedUnionSchema = readFileSync(join(testsDir, 'nested_union_test.fbs'), 
 const moreDefaultsSchema = readFileSync(join(testsDir, 'more_defaults.fbs'), 'utf8');
 const nanInfSchema = readFileSync(join(testsDir, 'nan_inf_test.fbs'), 'utf8');
 const requiredStringsSchema = readFileSync(join(testsDir, 'required_strings.fbs'), 'utf8');
+const nativeTypeSchema = readFileSync(join(testsDir, 'native_type_test.fbs'), 'utf8');
+const nativeInlineTableSchema = readFileSync(join(testsDir, 'native_inline_table_test.fbs'), 'utf8');
+const serviceTestSchema = readFileSync(join(testsDir, 'service_test.fbs'), 'utf8');
+const unionUnderlyingTypeSchema = readFileSync(join(testsDir, 'union_underlying_type_test.fbs'), 'utf8');
 
 // Additional binary files
 const alignmentBeforeBin = readFileSync(join(testsDir, 'alignment_test_before_fix.bin'));
@@ -1244,6 +1248,270 @@ async function main() {
       writeFileSync(join(outputDir, 'required_strings_unencrypted.bin'), Buffer.from(buffer));
     } catch (e) {
       result.fail('Exception during required strings test', e.message);
+    }
+
+    results.push(result.summary());
+  }
+
+  // Test 1t: Native Type Test
+  console.log('\nTest 1t: Native Type (native_type_test.fbs)');
+  console.log('-'.repeat(40));
+  {
+    const result = new TestResult('Native Type');
+
+    const nativeTypeInput = {
+      entry: '/native_type_test.fbs',
+      files: {
+        '/native_type_test.fbs': nativeTypeSchema,
+      }
+    };
+
+    try {
+      // Verify schema features
+      if (nativeTypeSchema.includes('native_type:"Native::Vector3D"')) {
+        result.pass('native_type attribute on struct');
+      }
+
+      if (nativeTypeSchema.includes('native_type_pack_name:"Vector3DAlt"')) {
+        result.pass('native_type_pack_name attribute');
+      }
+
+      if (nativeTypeSchema.includes('native_include "native_type_test_impl.h"')) {
+        result.pass('native_include directive');
+      }
+
+      if (nativeTypeSchema.includes('(native_inline)')) {
+        result.pass('native_inline attribute on field');
+      }
+
+      // Test with data
+      const testData = JSON.stringify({
+        vectors: [{ x: 1.0, y: 2.0, z: 3.0 }],
+        vectors_alt: [{ a: 4.0, b: 5.0, c: 6.0 }],
+        position: { x: 7.0, y: 8.0, z: 9.0 },
+        position_inline: { x: 10.0, y: 11.0, z: 12.0 },
+        matrix: { rows: 3, columns: 3, values: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0] },
+        matrices: []
+      });
+
+      const buffer = flatc.generateBinary(nativeTypeInput, testData);
+      result.pass(`Generated native type binary: ${buffer.length} bytes`);
+
+      const json = flatc.binaryToJson(nativeTypeInput, buffer);
+      const parsed = JSON.parse(json);
+
+      if (parsed.position?.x === 7.0 && parsed.position_inline?.x === 10.0) {
+        result.pass('Native type structs round-trip');
+      }
+
+      if (parsed.matrix?.rows === 3 && parsed.matrix?.columns === 3) {
+        result.pass('Native type table round-trip');
+      }
+
+      writeFileSync(join(outputDir, 'native_type_unencrypted.bin'), Buffer.from(buffer));
+    } catch (e) {
+      result.fail('Exception during native type test', e.message);
+    }
+
+    results.push(result.summary());
+  }
+
+  // Test 1u: Native Inline Table Test
+  console.log('\nTest 1u: Native Inline Table (native_inline_table_test.fbs)');
+  console.log('-'.repeat(40));
+  {
+    const result = new TestResult('Native Inline Table');
+
+    const nativeInlineInput = {
+      entry: '/native_inline_table_test.fbs',
+      files: {
+        '/native_inline_table_test.fbs': nativeInlineTableSchema,
+      }
+    };
+
+    try {
+      // Verify schema features
+      if (nativeInlineTableSchema.includes('[NativeInlineTable] (native_inline)')) {
+        result.pass('native_inline on table vector');
+      }
+
+      // Test with data
+      const testData = JSON.stringify({
+        t: [{ a: 1 }, { a: 2 }, { a: 3 }]
+      });
+
+      const buffer = flatc.generateBinary(nativeInlineInput, testData);
+      result.pass(`Generated native inline table binary: ${buffer.length} bytes`);
+
+      const json = flatc.binaryToJson(nativeInlineInput, buffer);
+      const parsed = JSON.parse(json);
+
+      if (parsed.t?.length === 3 && parsed.t[0]?.a === 1) {
+        result.pass('Native inline table vector round-trip');
+      }
+
+      writeFileSync(join(outputDir, 'native_inline_table_unencrypted.bin'), Buffer.from(buffer));
+    } catch (e) {
+      result.fail('Exception during native inline table test', e.message);
+    }
+
+    results.push(result.summary());
+  }
+
+  // Test 1v: Service Test (standalone gRPC schema)
+  console.log('\nTest 1v: Service Test (service_test.fbs)');
+  console.log('-'.repeat(40));
+  {
+    const result = new TestResult('Service Test');
+
+    const serviceInput = {
+      entry: '/service_test.fbs',
+      files: {
+        '/service_test.fbs': serviceTestSchema,
+      }
+    };
+
+    try {
+      // Verify schema features
+      if (serviceTestSchema.includes('rpc_service HelloService')) {
+        result.pass('rpc_service HelloService');
+      }
+
+      if (serviceTestSchema.includes('Hello(HelloRequest):HelloResponse')) {
+        result.pass('Unary RPC method');
+      }
+
+      if (serviceTestSchema.includes('streaming: "client"')) {
+        result.pass('Client streaming RPC');
+      }
+
+      if (serviceTestSchema.includes('streaming: "server"')) {
+        result.pass('Server streaming RPC');
+      }
+
+      if (serviceTestSchema.includes('streaming: "bidi"')) {
+        result.pass('Bidirectional streaming RPC');
+      }
+
+      // Test generating binary with empty request/response
+      const testData = JSON.stringify({});
+
+      const buffer = flatc.generateBinary(serviceInput, testData);
+      result.pass(`Generated service test binary: ${buffer.length} bytes`);
+
+      writeFileSync(join(outputDir, 'service_test_unencrypted.bin'), Buffer.from(buffer));
+    } catch (e) {
+      result.fail('Exception during service test', e.message);
+    }
+
+    results.push(result.summary());
+  }
+
+  // Test 1w: Union Underlying Type
+  console.log('\nTest 1w: Union Underlying Type (union_underlying_type_test.fbs)');
+  console.log('-'.repeat(40));
+  {
+    const result = new TestResult('Union Underlying Type');
+
+    const unionTypeInput = {
+      entry: '/union_underlying_type_test.fbs',
+      files: {
+        '/union_underlying_type_test.fbs': unionUnderlyingTypeSchema,
+      }
+    };
+
+    try {
+      // Verify schema features - union with explicit int type and values
+      if (unionUnderlyingTypeSchema.includes('union ABC: int')) {
+        result.pass('Union with explicit underlying type (int)');
+      }
+
+      if (unionUnderlyingTypeSchema.includes('A = 555')) {
+        result.pass('Union variant with explicit value 555');
+      }
+
+      if (unionUnderlyingTypeSchema.includes('B = 666')) {
+        result.pass('Union variant with explicit value 666');
+      }
+
+      if (unionUnderlyingTypeSchema.includes('C = 777')) {
+        result.pass('Union variant with explicit value 777');
+      }
+
+      if (unionUnderlyingTypeSchema.includes('test_vector_of_union: [ABC]')) {
+        result.pass('Vector of unions');
+      }
+
+      // Test with union variant A
+      const testData = JSON.stringify({
+        test_union_type: "A",
+        test_union: { a: 42 },
+        test_vector_of_union: []
+      });
+
+      const buffer = flatc.generateBinary(unionTypeInput, testData);
+      result.pass(`Generated union underlying type binary: ${buffer.length} bytes`);
+
+      const json = flatc.binaryToJson(unionTypeInput, buffer);
+      const parsed = JSON.parse(json);
+
+      if (parsed.test_union_type === 'A' && parsed.test_union?.a === 42) {
+        result.pass('Union with explicit type round-trip');
+      }
+
+      writeFileSync(join(outputDir, 'union_underlying_type_unencrypted.bin'), Buffer.from(buffer));
+    } catch (e) {
+      result.fail('Exception during union underlying type test', e.message);
+    }
+
+    results.push(result.summary());
+  }
+
+  // Test 1x: Optional Scalars Defaults (additional test data)
+  console.log('\nTest 1x: Optional Scalars Defaults (optional_scalars_defaults.json)');
+  console.log('-'.repeat(40));
+  {
+    const result = new TestResult('Optional Scalars Defaults');
+
+    const optScalarsInput = {
+      entry: '/optional_scalars.fbs',
+      files: {
+        '/optional_scalars.fbs': optionalScalarsSchema,
+      }
+    };
+
+    try {
+      const buffer = flatc.generateBinary(optScalarsInput, optionalScalarsDefaultsJson);
+      result.pass(`Generated optional scalars defaults binary: ${buffer.length} bytes`);
+
+      const json = flatc.binaryToJson(optScalarsInput, buffer);
+      const parsed = JSON.parse(json);
+
+      // This test file has different values than optional_scalars.json
+      // It tests default values (42) vs explicit zeros vs nulls
+      if (parsed.default_i8 === 42) {
+        result.pass('default_i8 = 42 (schema default)');
+      }
+
+      if (parsed.maybe_i8 === null || parsed.maybe_i8 === undefined) {
+        result.pass('maybe_i8 = null (explicit null)');
+      }
+
+      if (parsed.just_u8 === 0) {
+        result.pass('just_u8 = 0 (explicit zero)');
+      }
+
+      if (parsed.default_f32 === 42.0) {
+        result.pass('default_f32 = 42.0 (schema default)');
+      }
+
+      if (parsed.maybe_bool === null || parsed.maybe_bool === undefined) {
+        result.pass('maybe_bool = null');
+      }
+
+      writeFileSync(join(outputDir, 'optional_scalars_defaults_unencrypted.bin'), Buffer.from(buffer));
+    } catch (e) {
+      result.fail('Exception during optional scalars defaults test', e.message);
     }
 
     results.push(result.summary());

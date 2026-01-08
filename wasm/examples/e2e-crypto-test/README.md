@@ -54,6 +54,11 @@ This test framework uses the **upstream FlatBuffers test schemas** - no custom s
 | `tests/monsterdata_rust_wire.mon` | Rust wire format binary |
 | `tests/javatest.bin` | Additional Java test binary |
 | `tests/gold_flexbuffer_example.bin` | FlexBuffer format binary |
+| `tests/native_type_test.fbs` | Native C++ type mapping |
+| `tests/native_inline_table_test.fbs` | native_inline on table vectors |
+| `tests/service_test.fbs` | Standalone gRPC service schema |
+| `tests/union_underlying_type_test.fbs` | Union with explicit underlying type |
+| `tests/optional_scalars_defaults.json` | Optional scalar default values |
 
 ## Supported Cryptocurrency Key Types
 
@@ -385,6 +390,62 @@ Tests the `(required)` field attribute:
 | Required string | `str_a:string (required)` | Must be present |
 | Required string | `str_b:string (required)` | Must be present |
 | Round-trip | Both fields preserved | Required validation |
+
+### Test 1t: Native Type (native_type_test.fbs)
+
+Tests C++ native type mapping attributes:
+
+| Feature | Example | Why It Matters |
+|---------|---------|----------------|
+| native_type | `(native_type:"Native::Vector3D")` | Maps to C++ type |
+| native_type_pack_name | `native_type_pack_name:"Vector3DAlt"` | Custom pack name |
+| native_include | `native_include "native_type_test_impl.h"` | Include directive |
+| native_inline | `position_inline:Vector3D (native_inline)` | Inline storage |
+| Matrix table | `rows`, `columns`, `values` | Table with native_type |
+
+### Test 1u: Native Inline Table (native_inline_table_test.fbs)
+
+Tests `native_inline` attribute on table vectors:
+
+| Feature | Example | Why It Matters |
+|---------|---------|----------------|
+| native_inline on vector | `t: [NativeInlineTable] (native_inline)` | Inline table storage |
+| Table in vector | Vector of tables | Memory layout optimization |
+
+### Test 1v: Service Test (service_test.fbs)
+
+Tests standalone gRPC service schema (separate from monster_test):
+
+| Service | Method | Streaming |
+|---------|--------|-----------|
+| HelloService | Hello | none (unary) |
+| HelloService | StreamClient | client |
+| HelloService | StreamServer | server |
+| HelloService | Stream | bidi |
+
+### Test 1w: Union Underlying Type (union_underlying_type_test.fbs)
+
+Tests unions with explicit underlying type and values:
+
+| Feature | Example | Why It Matters |
+|---------|---------|----------------|
+| Explicit type | `union ABC: int` | Union stored as int |
+| Explicit value | `A = 555` | Custom discriminant value |
+| Explicit value | `B = 666` | Non-sequential values |
+| Explicit value | `C = 777` | Sparse enum space |
+| Vector of unions | `test_vector_of_union: [ABC]` | Union array |
+
+### Test 1x: Optional Scalars Defaults (optional_scalars_defaults.json)
+
+Tests optional scalar fields with schema default values:
+
+| Feature | Value | Why It Matters |
+|---------|-------|----------------|
+| Schema default | `default_i8 = 42` | Non-zero default preserved |
+| Explicit null | `maybe_i8 = null` | Null vs missing |
+| Explicit zero | `just_u8 = 0` | Zero vs null vs default |
+| Float default | `default_f32 = 42.0` | Float precision |
+| Bool null | `maybe_bool = null` | Boolean null handling |
 
 ### Test 2: SHA-256 Hash
 Verifies SHA-256 produces identical output across all WASM runtimes:

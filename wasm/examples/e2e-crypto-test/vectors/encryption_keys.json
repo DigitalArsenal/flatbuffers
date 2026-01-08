@@ -1,0 +1,62 @@
+{
+  "bitcoin": {
+    "key_hex": "01a845a3decfe95cb28818f6f1fa6a9f121f6eaa46a975754c166bb6c4e47d2a",
+    "iv_hex": "0b24f2a482af7f09e5ff8f1a4d8874be",
+    "key_base64": "AahFo97P6VyyiBj28fpqnxIfbqpGqXV1TBZrtsTkfSo=",
+    "iv_base64": "CyTypIKvfwnl/48aTYh0vg=="
+  },
+  "ethereum": {
+    "key_hex": "c4632f23c1c106deba3a7fe852382d798d96bd37ceee6da4b58dca659766b68a",
+    "iv_hex": "ac920c39937a22d6c85ba0c8b5918d9f",
+    "key_base64": "xGMvI8HBBt66On/oUjgteY2WvTfO7m2ktY3KZZdmtoo=",
+    "iv_base64": "rJIMOZN6ItbIW6DItZGNnw=="
+  },
+  "solana": {
+    "key_hex": "9b54ab761e3bd5a38cccbdd81281787e2eb79e006b937ecc893af0c09ef9474a",
+    "iv_hex": "33494c9840684656dc3e3ccd345c35b7",
+    "key_base64": "m1Srdh471aOMzL3YEoF4fi63ngBrk37MiTrwwJ75R0o=",
+    "iv_base64": "M0lMmEBoRlbcPjzNNFw1tw=="
+  },
+  "sui": {
+    "key_hex": "ffecddeb713f56e0efb83840ec6c84af3409c8f7a49cfe944b55a35ff5c3f599",
+    "iv_hex": "f150fe92db177be4d4cda863b0587ac0",
+    "key_base64": "/+zd63E/VuDvuDhA7GyErzQJyPeknP6US1WjX/XD9Zk=",
+    "iv_base64": "8VD+ktsXe+TUzahjsFh6wA=="
+  },
+  "cosmos": {
+    "key_hex": "fdfa005ff13a657a8a5720cf1718de9042e9ced6e23d18ccc71e514e3f444390",
+    "iv_hex": "616312f41337c7033327b6e15caa25cc",
+    "key_base64": "/foAX/E6ZXqKVyDPFxjekELpztbiPRjMxx5RTj9EQ5A=",
+    "iv_base64": "YWMS9BM3xwMzJ7bhXKolzA=="
+  },
+  "polkadot": {
+    "key_hex": "e6f8b64c11b6874cd654d0da6af063dec774da23978d40cc5a725f5fd86a0afd",
+    "iv_hex": "88fd37384d2621af9416fdf20c100709",
+    "key_base64": "5vi2TBG2h0zWVNDaavBj3sd02iOXjUDMWnJfX9hqCv0=",
+    "iv_base64": "iP03OE0mIa+UFv3yDBAHCQ=="
+  },
+  "cardano": {
+    "key_hex": "84ffb7825fc4a3651e5adae4e93e9d784af66e8ef6b5e11ae3a2ae426143cd03",
+    "iv_hex": "0efeb5eb6d6d55a921c16cc87394a627",
+    "key_base64": "hP+3gl/Eo2UeWtrk6T6deEr2bo72teEa46KuQmFDzQM=",
+    "iv_base64": "Dv61621tVakhwWzIc5SmJw=="
+  },
+  "tezos": {
+    "key_hex": "2eb20bcc9ad66a4e76b14bd9ba53fb673450e450ff2e6de2edcad6bf185e978b",
+    "iv_hex": "9688a40a2769664b0fc3a208462ee768",
+    "key_base64": "LrILzJrWak52sUvZulP7ZzRQ5FD/Lm3i7crWvxhel4s=",
+    "iv_base64": "loikCidpZksPw6IIRi7naA=="
+  },
+  "near": {
+    "key_hex": "439574af4a096af8bd854b3b86d29af63d1ef181cf350453c57fbf726c72452a",
+    "iv_hex": "fef6a38b1165882456e5449c1ab194b6",
+    "key_base64": "Q5V0r0oJavi9hUs7htKa9j0e8YHPNQRTxX+/cmxyRSo=",
+    "iv_base64": "/vajixFliCRW5UScGrGUtg=="
+  },
+  "aptos": {
+    "key_hex": "94f9a9adad66a615b8e379e9fe31ae94b2daf562c21fd9c0f139bce71ad1b68b",
+    "iv_hex": "c42a50adb3ac8d5ba5ded12683013ecd",
+    "key_base64": "lPmpra1mphW443np/jGulLLa9WLCH9nA8Tm85xrRtos=",
+    "iv_base64": "xCpQrbOsjVul3tEmgwE+zQ=="
+  }
+}

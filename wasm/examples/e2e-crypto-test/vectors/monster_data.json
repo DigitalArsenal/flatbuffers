@@ -1,0 +1,56 @@
+{
+  "id": "monster-001",
+  "name": "Test Dragon",
+  "color": "Blue",
+  "pos": {
+    "x": 1.5,
+    "y": 2.5,
+    "z": 3.5
+  },
+  "created_at": 1704067200000,
+  "hp": 250,
+  "mana": 500,
+  "secret_location": {
+    "lat": 37.7749,
+    "lon": -122.4194
+  },
+  "inventory": [
+    0,
+    10,
+    20,
+    30,
+    40,
+    50,
+    60,
+    70,
+    80,
+    90
+  ],
+  "secret_notes": "This monster guards the treasure!",
+  "damage_multiplier": 1.5,
+  "experience": 123456.789,
+  "is_elite": true,
+  "loot_values": [
+    100,
+    200,
+    300,
+    500,
+    1000
+  ],
+  "secret_codes": [
+    222,
+    173,
+    190,
+    239
+  ],
+  "weapons": [
+    {
+      "name": "Fire Sword",
+      "damage": 50
+    },
+    {
+      "name": "Ice Staff",
+      "damage": 75
+    }
+  ]
+}

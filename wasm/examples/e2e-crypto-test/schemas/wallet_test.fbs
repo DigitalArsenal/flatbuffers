@@ -1,0 +1,112 @@
+// Wallet schema for testing with real crypto key formats
+// Tests encryption with Bitcoin, Ethereum, Solana, SUI, and other major crypto keys
+
+attribute "encrypted";
+
+namespace CryptoTest;
+
+// Key type identifiers
+enum KeyType: ubyte {
+  Unknown = 0,
+  Bitcoin_secp256k1,      // BTC: secp256k1 ECDSA
+  Ethereum_secp256k1,     // ETH: secp256k1 ECDSA (same curve as BTC)
+  Solana_ed25519,         // SOL: Ed25519
+  SUI_ed25519,            // SUI: Ed25519
+  Cosmos_secp256k1,       // ATOM: secp256k1 ECDSA
+  Polkadot_sr25519,       // DOT: Schnorrkel/Ristretto x25519
+  Cardano_ed25519,        // ADA: Ed25519 Extended
+  Tezos_ed25519,          // XTZ: Ed25519
+  Near_ed25519,           // NEAR: Ed25519
+  Aptos_ed25519,          // APT: Ed25519
+}
+
+// Signature scheme identifiers
+enum SignatureScheme: ubyte {
+  ECDSA_secp256k1 = 0,    // Bitcoin, Ethereum, Cosmos
+  ECDSA_p256,             // NIST P-256
+  Ed25519,                // Solana, SUI, Cardano, Tezos, Near, Aptos
+  Schnorr_secp256k1,      // Bitcoin Taproot
+  Sr25519,                // Polkadot Schnorrkel
+}
+
+// Wallet address (public)
+table WalletAddress {
+  chain: string;           // e.g., "bitcoin", "ethereum", "solana"
+  address: string;         // Human-readable address
+  key_type: KeyType;
+}
+
+// Encrypted key material
+table EncryptedKeyMaterial {
+  // Public metadata
+  key_type: KeyType;
+  scheme: SignatureScheme;
+  created_at: uint64;
+
+  // Encrypted fields - private key material
+  private_key: [ubyte] (encrypted);     // Raw private key bytes
+  seed_phrase: string (encrypted);       // BIP-39 mnemonic
+  derivation_path: string (encrypted);   // BIP-32/44 path
+}
+
+// Transaction to sign
+table Transaction {
+  // Public fields
+  tx_id: string;
+  chain: string;
+  timestamp: uint64;
+
+  // Encrypted transaction details
+  from_address: string (encrypted);
+  to_address: string (encrypted);
+  amount: uint64 (encrypted);           // In smallest unit (satoshi, wei, lamports)
+  fee: uint64 (encrypted);
+  memo: string (encrypted);
+  raw_tx_data: [ubyte] (encrypted);     // Chain-specific raw transaction
+}
+
+// Signed transaction result
+table SignedTransaction {
+  tx_id: string;
+  chain: string;
+
+  // Encrypted signature data
+  signature: [ubyte] (encrypted);        // Raw signature bytes
+  signed_tx_hex: string (encrypted);     // Full signed transaction
+  signer_public_key: [ubyte] (encrypted);
+}
+
+// Multi-chain wallet
+table MultiChainWallet {
+  // Public
+  wallet_id: string;
+  label: string;
+  created_at: uint64;
+
+  // Encrypted master key
+  master_seed: [ubyte] (encrypted);
+  master_key_encrypted: string (encrypted);
+
+  // Derived keys per chain (all encrypted)
+  bitcoin_key: EncryptedKeyMaterial;
+  ethereum_key: EncryptedKeyMaterial;
+  solana_key: EncryptedKeyMaterial;
+  sui_key: EncryptedKeyMaterial;
+  cosmos_key: EncryptedKeyMaterial;
+  polkadot_key: EncryptedKeyMaterial;
+  cardano_key: EncryptedKeyMaterial;
+  tezos_key: EncryptedKeyMaterial;
+  near_key: EncryptedKeyMaterial;
+  aptos_key: EncryptedKeyMaterial;
+
+  // Addresses (public)
+  addresses: [WalletAddress];
+
+  // Transaction history (encrypted)
+  pending_transactions: [Transaction];
+  signed_transactions: [SignedTransaction];
+}
+
+root_type MultiChainWallet;
+file_identifier "CWLT";
+file_extension "cwlt";

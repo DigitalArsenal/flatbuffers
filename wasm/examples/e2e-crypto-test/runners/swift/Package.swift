@@ -6,18 +6,29 @@ let package = Package(
     platforms: [
         .macOS(.v13)
     ],
-    dependencies: [
-        .package(url: "https://github.com/swiftwasm/WasmKit.git", from: "0.2.0"),
-    ],
     targets: [
+        // System library for Wasmtime C API
+        .systemLibrary(
+            name: "CWasmtime",
+            path: "CWasmtime",
+            pkgConfig: nil,
+            providers: []
+        ),
         .executableTarget(
             name: "E2ECryptoTest",
-            dependencies: [
-                .product(name: "WasmKit", package: "WasmKit"),
-                .product(name: "WasmKitWASI", package: "WasmKit"),
-            ],
+            dependencies: ["CWasmtime"],
             path: ".",
-            sources: ["TestRunner.swift"]
+            sources: ["TestRunner.swift"],
+            cSettings: [
+                .unsafeFlags(["-I", "wasmtime-c-api/include"]),
+            ],
+            swiftSettings: [
+                .unsafeFlags(["-I", "wasmtime-c-api/include"]),
+            ],
+            linkerSettings: [
+                .unsafeFlags(["-L", "wasmtime-c-api/lib"]),
+                .linkedLibrary("wasmtime"),
+            ]
         ),
     ]
 )

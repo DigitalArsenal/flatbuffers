@@ -74,7 +74,8 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | P-256 sign/verify | ✅ Done | `p256Sign()`, `p256Verify()` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries + ECDH headers |
 | Runtime code generation | ✅ Done | Calls native flatc binary |
-| **Full test suite** | ✅ Done | **18/18 test suites passing** |
+| FlatBuffer creation | ✅ Done | Creates SecureMessage using generated code |
+| **Full test suite** | ✅ Done | **19/19 test suites passing** |
 
 ### Python
 
@@ -95,7 +96,8 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | P-256 sign/verify | ✅ Done | `p256Sign()`, `p256Verify()` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries + ECDH headers |
 | Runtime code generation | ✅ Done | Calls native flatc binary |
-| **Full test suite** | ✅ Done | **17/17 test suites passing** |
+| FlatBuffer creation | ✅ Done | Creates SecureMessage using generated code |
+| **Full test suite** | ✅ Done | **18/18 test suites passing** |
 
 ### Rust
 
@@ -116,7 +118,8 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | P-256 sign/verify | ✅ Done | `p256Sign()`, `p256Verify()` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries + ECDH headers |
 | Runtime code generation | ✅ Done | Calls native flatc binary |
-| **Full test suite** | ✅ Done | **17/17 test suites passing** |
+| FlatBuffer creation | ✅ Done | Creates SecureMessage using generated code |
+| **Full test suite** | ✅ Done | **18/18 test suites passing** |
 
 ### Java
 
@@ -137,7 +140,8 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | P-256 sign/verify | ✅ Done | `p256Sign()`, `p256Verify()` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries + ECDH headers |
 | Runtime code generation | ✅ Done | Calls native flatc binary |
-| **Full test suite** | ✅ Done | **17/17 test suites passing** |
+| FlatBuffer creation | ✅ Done | Creates SecureMessage using generated code |
+| **Full test suite** | ✅ Done | **18/18 test suites passing** |
 
 ### C#
 
@@ -158,7 +162,8 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | P-256 sign/verify | ✅ Done | `P256Sign()`, `P256Verify()` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries + ECDH headers |
 | Runtime code generation | ✅ Done | Calls native flatc binary |
-| **Full test suite** | ✅ Done | **17/17 test suites passing** |
+| FlatBuffer creation | ✅ Done | Creates SecureMessage using generated code |
+| **Full test suite** | ✅ Done | **18/18 test suites passing** |
 
 ### Swift
 
@@ -179,6 +184,7 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | P-256 sign/verify | ✅ Done | `p256Sign()`, `p256Verify()` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries + ECDH headers |
 | Runtime code generation | ✅ Done | Calls native flatc binary |
+| FlatBuffer creation | ⏳ Pending | WasmKit API issues with Table type |
 | **Full test suite** | ✅ Done | **17/17 test suites passing** |
 
 **Note**: Swift runner required a patch to WasmKit to add `Table.getFunction(at:store:)` method for invoke_* trampolines to work. This enables calling functions from the indirect function table by index.
@@ -198,19 +204,20 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | Ed25519 sign/verify | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | secp256k1 sign/verify | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | P-256 sign/verify | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| FlatBuffer creation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⏳ |
 
-**Legend**: ✅ = Working
+**Legend**: ✅ = Working, ⏳ = Pending
 
 ## Test Files
 
 | File | Purpose | Status |
 |------|---------|--------|
 | `runners/node/test_runner.mjs` | Reference implementation | ✅ Complete (37/37) |
-| `runners/go/test_runner.go` | Go runner | ✅ Complete (18/18) |
-| `runners/python/test_runner.py` | Python runner | ✅ Complete (17/17) |
-| `runners/rust/src/main.rs` | Rust runner | ✅ Complete (17/17) |
-| `runners/java/src/.../TestRunner.java` | Java runner | ✅ Complete (17/17) |
-| `runners/csharp/TestRunner.cs` | C# runner | ✅ Complete (17/17) |
+| `runners/go/test_runner.go` | Go runner | ✅ Complete (19/19) |
+| `runners/python/test_runner.py` | Python runner | ✅ Complete (18/18) |
+| `runners/rust/src/main.rs` | Rust runner | ✅ Complete (18/18) |
+| `runners/java/src/.../TestRunner.java` | Java runner | ✅ Complete (18/18) |
+| `runners/csharp/TestRunner.cs` | C# runner | ✅ Complete (18/18) |
 | `runners/swift/TestRunner.swift` | Swift runner | ✅ Complete (17/17) |
 
 ## Generated Files
@@ -232,7 +239,7 @@ This document tracks the implementation status of the cross-language E2E encrypt
 6. ~~**Add HKDF-SHA256 to all runners** - Key derivation for ECDH~~ ✅ Done (all 7 runners)
 7. ~~**Add runtime code generation** - All languages generate code via native flatc~~ ✅ Done (all 7 runners)
 8. ~~**Add Ed25519/ECDSA signing to Go/Python/Rust/Java/C#/Swift**~~ ✅ Done (all 7 runners)
-9. **Add FlatBuffer creation** - Each language creates FlatBuffers using generated code
+9. ~~**Add FlatBuffer creation** - Each language creates FlatBuffers using generated code~~ ✅ Done (Go, Python, Rust, Java, C# - 5/6 runners, Swift skipped due to WasmKit API issues)
 10. **Full round-trip test** - Create → Encrypt → Transmit → Decrypt → Read
 
 ## Running Tests
@@ -268,9 +275,9 @@ cd runners/rust && cargo run
 | Language | Test Suites | Status |
 |----------|-------------|--------|
 | Node.js | 37/37 | ✅ All passing |
-| Go | 18/18 | ✅ All passing |
-| Python | 17/17 | ✅ All passing |
-| Rust | 17/17 | ✅ All passing |
-| Java | 17/17 | ✅ All passing |
-| C# | 17/17 | ✅ All passing |
-| Swift | 17/17 | ✅ All passing |
+| Go | 19/19 | ✅ All passing (includes FlatBuffer creation) |
+| Python | 18/18 | ✅ All passing (includes FlatBuffer creation) |
+| Rust | 18/18 | ✅ All passing (includes FlatBuffer creation) |
+| Java | 18/18 | ✅ All passing (includes FlatBuffer creation) |
+| C# | 18/18 | ✅ All passing (includes FlatBuffer creation) |
+| Swift | 17/17 | ✅ All passing (WasmKit API issues prevent FlatBuffer creation test) |

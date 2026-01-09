@@ -37,6 +37,13 @@ public class TestRunner {
     private final ExportFunction sha256Fn;
     private final ExportFunction encryptBytesFn;
     private final ExportFunction decryptBytesFn;
+    private final ExportFunction hkdfFn;
+    private final ExportFunction x25519GenerateFn;
+    private final ExportFunction x25519SharedFn;
+    private final ExportFunction secp256k1GenerateFn;
+    private final ExportFunction secp256k1SharedFn;
+    private final ExportFunction p256GenerateFn;
+    private final ExportFunction p256SharedFn;
 
     public TestRunner(File wasmFile) {
         var wasiOptions = WasiOptions.builder().build();
@@ -64,6 +71,13 @@ public class TestRunner {
         this.sha256Fn = instance.export("wasi_sha256");
         this.encryptBytesFn = instance.export("wasi_encrypt_bytes");
         this.decryptBytesFn = instance.export("wasi_decrypt_bytes");
+        this.hkdfFn = instance.export("wasi_hkdf");
+        this.x25519GenerateFn = instance.export("wasi_x25519_generate_keypair");
+        this.x25519SharedFn = instance.export("wasi_x25519_shared_secret");
+        this.secp256k1GenerateFn = instance.export("wasi_secp256k1_generate_keypair");
+        this.secp256k1SharedFn = instance.export("wasi_secp256k1_shared_secret");
+        this.p256GenerateFn = instance.export("wasi_p256_generate_keypair");
+        this.p256SharedFn = instance.export("wasi_p256_shared_secret");
 
         // Call _initialize if present
         try {
@@ -291,6 +305,119 @@ public class TestRunner {
         return decrypted;
     }
 
+    public byte[] hkdf(byte[] ikm, byte[] salt, byte[] info, int outputLen) {
+        int ikmPtr = allocate(Math.max(ikm.length, 1));
+        int saltPtr = allocate(Math.max(salt.length, 1));
+        int infoPtr = allocate(Math.max(info.length, 1));
+        int outPtr = allocate(outputLen);
+
+        if (ikm.length > 0) writeBytes(ikmPtr, ikm);
+        if (salt.length > 0) writeBytes(saltPtr, salt);
+        if (info.length > 0) writeBytes(infoPtr, info);
+
+        hkdfFn.apply(ikmPtr, ikm.length, saltPtr, salt.length, infoPtr, info.length, outPtr, outputLen);
+
+        byte[] output = readBytes(outPtr, outputLen);
+        deallocate(ikmPtr);
+        deallocate(saltPtr);
+        deallocate(infoPtr);
+        deallocate(outPtr);
+        return output;
+    }
+
+    static class KeyPair {
+        byte[] privateKey;
+        byte[] publicKey;
+        KeyPair(byte[] priv, byte[] pub) { privateKey = priv; publicKey = pub; }
+    }
+
+    public KeyPair x25519GenerateKeypair() {
+        int privPtr = allocate(32);
+        int pubPtr = allocate(32);
+
+        x25519GenerateFn.apply(privPtr, pubPtr);
+
+        byte[] priv = readBytes(privPtr, 32);
+        byte[] pub = readBytes(pubPtr, 32);
+        deallocate(privPtr);
+        deallocate(pubPtr);
+        return new KeyPair(priv, pub);
+    }
+
+    public byte[] x25519SharedSecret(byte[] privateKey, byte[] publicKey) {
+        int privPtr = allocate(32);
+        int pubPtr = allocate(32);
+        int sharedPtr = allocate(32);
+
+        writeBytes(privPtr, privateKey);
+        writeBytes(pubPtr, publicKey);
+        x25519SharedFn.apply(privPtr, pubPtr, sharedPtr);
+
+        byte[] shared = readBytes(sharedPtr, 32);
+        deallocate(privPtr);
+        deallocate(pubPtr);
+        deallocate(sharedPtr);
+        return shared;
+    }
+
+    public KeyPair secp256k1GenerateKeypair() {
+        int privPtr = allocate(32);
+        int pubPtr = allocate(33);
+
+        secp256k1GenerateFn.apply(privPtr, pubPtr);
+
+        byte[] priv = readBytes(privPtr, 32);
+        byte[] pub = readBytes(pubPtr, 33);
+        deallocate(privPtr);
+        deallocate(pubPtr);
+        return new KeyPair(priv, pub);
+    }
+
+    public byte[] secp256k1SharedSecret(byte[] privateKey, byte[] publicKey) {
+        int privPtr = allocate(32);
+        int pubPtr = allocate(publicKey.length);
+        int sharedPtr = allocate(32);
+
+        writeBytes(privPtr, privateKey);
+        writeBytes(pubPtr, publicKey);
+        secp256k1SharedFn.apply(privPtr, pubPtr, publicKey.length, sharedPtr);
+
+        byte[] shared = readBytes(sharedPtr, 32);
+        deallocate(privPtr);
+        deallocate(pubPtr);
+        deallocate(sharedPtr);
+        return shared;
+    }
+
+    public KeyPair p256GenerateKeypair() {
+        int privPtr = allocate(32);
+        int pubPtr = allocate(33);
+
+        p256GenerateFn.apply(privPtr, pubPtr);
+
+        byte[] priv = readBytes(privPtr, 32);
+        byte[] pub = readBytes(pubPtr, 33);
+        deallocate(privPtr);
+        deallocate(pubPtr);
+        return new KeyPair(priv, pub);
+    }
+
+    public byte[] p256SharedSecret(byte[] privateKey, byte[] publicKey) {
+        int privPtr = allocate(32);
+        int pubPtr = allocate(publicKey.length);
+        int sharedPtr = allocate(32);
+
+        writeBytes(privPtr, privateKey);
+        writeBytes(pubPtr, publicKey);
+        p256SharedFn.apply(privPtr, pubPtr, publicKey.length, sharedPtr);
+
+        byte[] shared = readBytes(sharedPtr, 32);
+        deallocate(privPtr);
+        deallocate(pubPtr);
+        deallocate(sharedPtr);
+        return shared;
+    }
+
     public static String toHex(byte[] bytes) {
         StringBuilder sb = new StringBuilder();
         for (byte b : bytes) sb.append(String.format("%02x", b));
@@ -303,6 +430,33 @@ public class TestRunner {
             bytes[i / 2] = (byte) Integer.parseInt(hex.substring(i, i + 2), 16);
         }
         return bytes;
+    }
+
+    static class ECDHHeader {
+        int version;
+        int key_exchange;
+        String ephemeral_public_key;
+        String context;
+        String session_key;
+        String session_iv;
+    }
+
+    static class ECDHCurve {
+        String name;
+        int pubKeySize;
+        int keyExchange;
+        java.util.function.Supplier<KeyPair> generate;
+        java.util.function.BiFunction<byte[], byte[], byte[]> shared;
+
+        ECDHCurve(String name, int pubKeySize, int keyExchange,
+                  java.util.function.Supplier<KeyPair> generate,
+                  java.util.function.BiFunction<byte[], byte[], byte[]> shared) {
+            this.name = name;
+            this.pubKeySize = pubKeySize;
+            this.keyExchange = keyExchange;
+            this.generate = generate;
+            this.shared = shared;
+        }
     }
 
     static class TestResult {
@@ -425,10 +579,10 @@ public class TestRunner {
         // Test 3: Cross-language verification
         System.out.println("\nTest 3: Cross-Language Verification");
         System.out.println("-".repeat(40));
+        Path binaryDir = vectorsDir.resolve("binary");
         {
             TestResult result = new TestResult("Cross-Language");
 
-            Path binaryDir = vectorsDir.resolve("binary");
             if (Files.exists(binaryDir)) {
                 Path unencryptedPath = binaryDir.resolve("monster_unencrypted.bin");
                 if (Files.exists(unencryptedPath)) {
@@ -454,6 +608,132 @@ public class TestRunner {
                 }
             } else {
                 result.fail("Binary directory not found - run Node.js test first");
+            }
+
+            results.add(result.summary());
+        }
+
+        // Test 4: ECDH Key Exchange Verification
+        System.out.println("\nTest 4: ECDH Key Exchange Verification");
+        System.out.println("-".repeat(40));
+
+        // Read unencrypted data for cross-language verification
+        byte[] unencryptedData = null;
+        try {
+            unencryptedData = Files.readAllBytes(binaryDir.resolve("monster_unencrypted.bin"));
+        } catch (Exception e) {
+            // Will be null if file doesn't exist
+        }
+
+        ECDHCurve[] ecdhCurves = {
+            new ECDHCurve("X25519", 32, 0, runner::x25519GenerateKeypair, runner::x25519SharedSecret),
+            new ECDHCurve("secp256k1", 33, 1, runner::secp256k1GenerateKeypair, runner::secp256k1SharedSecret),
+            new ECDHCurve("P-256", 33, 2, runner::p256GenerateKeypair, runner::p256SharedSecret)
+        };
+
+        for (ECDHCurve curve : ecdhCurves) {
+            TestResult result = new TestResult("ECDH " + curve.name);
+
+            try {
+                // Generate keypairs for Alice and Bob
+                KeyPair alice = curve.generate.get();
+                KeyPair bob = curve.generate.get();
+
+                if (alice.publicKey.length == curve.pubKeySize) {
+                    result.pass("Generated Alice keypair (pub: " + alice.publicKey.length + " bytes)");
+                } else {
+                    result.fail("Alice public key wrong size: " + alice.publicKey.length);
+                }
+
+                if (bob.publicKey.length == curve.pubKeySize) {
+                    result.pass("Generated Bob keypair (pub: " + bob.publicKey.length + " bytes)");
+                } else {
+                    result.fail("Bob public key wrong size: " + bob.publicKey.length);
+                }
+
+                // Compute shared secrets
+                byte[] aliceShared = curve.shared.apply(alice.privateKey, bob.publicKey);
+                byte[] bobShared = curve.shared.apply(bob.privateKey, alice.publicKey);
+
+                if (Arrays.equals(aliceShared, bobShared)) {
+                    result.pass("Shared secrets match (" + aliceShared.length + " bytes)");
+                } else {
+                    result.fail("Shared secrets DO NOT match!");
+                    result.fail("  Alice: " + toHex(aliceShared));
+                    result.fail("  Bob:   " + toHex(bobShared));
+                }
+
+                // Test HKDF key derivation from shared secret
+                byte[] sessionMaterial = runner.hkdf(aliceShared, "flatbuffers-encryption".getBytes(), "session-key-iv".getBytes(), 48);
+                byte[] sessionKey = Arrays.copyOfRange(sessionMaterial, 0, 32);
+                byte[] sessionIv = Arrays.copyOfRange(sessionMaterial, 32, 48);
+
+                if (sessionKey.length == 32 && sessionIv.length == 16) {
+                    result.pass("HKDF derived key (" + sessionKey.length + "B) + IV (" + sessionIv.length + "B)");
+                } else {
+                    result.fail("HKDF output wrong size");
+                }
+
+                // Full E2E: encrypt with derived key, decrypt with same key
+                String testData = "ECDH test data for " + curve.name + " encryption";
+                byte[] plaintext = testData.getBytes();
+                byte[] encrypted = runner.encrypt(sessionKey, sessionIv, plaintext);
+
+                if (!Arrays.equals(encrypted, plaintext)) {
+                    result.pass("Encryption with derived key modified data");
+                } else {
+                    result.fail("Encryption did not modify data");
+                }
+
+                byte[] decrypted = runner.decrypt(sessionKey, sessionIv, encrypted);
+                if (Arrays.equals(decrypted, plaintext)) {
+                    result.pass("Decryption with derived key restored original");
+                } else {
+                    result.fail("Decryption mismatch");
+                }
+
+                // Verify cross-language ECDH header if available
+                String headerName = curve.name.toLowerCase().replace("-", "");
+                Path headerPath = binaryDir.resolve("monster_ecdh_" + headerName + "_header.json");
+                if (Files.exists(headerPath)) {
+                    try {
+                        ECDHHeader header = gson.fromJson(Files.readString(headerPath), ECDHHeader.class);
+
+                        if (header.key_exchange == curve.keyExchange) {
+                            result.pass("Cross-language header has correct key_exchange: " + curve.keyExchange);
+                        } else {
+                            result.fail("Header key_exchange mismatch: " + header.key_exchange);
+                        }
+
+                        if (header.ephemeral_public_key != null && !header.ephemeral_public_key.isEmpty() &&
+                            header.session_key != null && !header.session_key.isEmpty() &&
+                            header.session_iv != null && !header.session_iv.isEmpty()) {
+                            result.pass("Header contains ephemeral_public_key, session_key, session_iv");
+
+                            // Decrypt the cross-language encrypted file using Node.js session key
+                            Path encryptedPath = binaryDir.resolve("monster_ecdh_" + headerName + "_encrypted.bin");
+                            if (Files.exists(encryptedPath) && unencryptedData != null) {
+                                byte[] nodeKey = fromHex(header.session_key);
+                                byte[] nodeIv = fromHex(header.session_iv);
+                                byte[] encryptedData = Files.readAllBytes(encryptedPath);
+                                byte[] decryptedData = runner.decrypt(nodeKey, nodeIv, encryptedData);
+
+                                if (Arrays.equals(decryptedData, unencryptedData)) {
+                                    result.pass("Decrypted Node.js " + curve.name + " data matches original");
+                                } else {
+                                    result.fail("Decrypted Node.js " + curve.name + " data mismatch");
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        result.fail("Error reading cross-language header: " + e.getMessage());
+                    }
+                } else {
+                    result.pass("(No cross-language header found at " + headerPath.getFileName() + ")");
+                }
+
+            } catch (Exception e) {
+                result.fail("Exception during " + curve.name + " test: " + e.getMessage());
             }
 
             results.add(result.summary());

@@ -30,6 +30,16 @@ struct MonsterData {
     other: HashMap<String, serde_json::Value>,
 }
 
+#[derive(Debug, Deserialize)]
+struct ECDHHeader {
+    version: u8,
+    key_exchange: u8,
+    ephemeral_public_key: String,
+    context: Option<String>,
+    session_key: String,
+    session_iv: String,
+}
+
 struct WasmEnv {
     memory: Option<Memory>,
     table: Option<Table>,
@@ -444,6 +454,131 @@ impl EncryptionModule {
         self.deallocate(data_ptr);
         Ok(decrypted)
     }
+
+    fn hkdf(&mut self, ikm: &[u8], salt: &[u8], info: &[u8], output_len: usize) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let ikm_ptr = self.allocate(ikm.len().max(1) as u32)?;
+        let salt_ptr = self.allocate(salt.len().max(1) as u32)?;
+        let info_ptr = self.allocate(info.len().max(1) as u32)?;
+        let out_ptr = self.allocate(output_len as u32)?;
+
+        if !ikm.is_empty() { self.write_bytes(ikm_ptr, ikm); }
+        if !salt.is_empty() { self.write_bytes(salt_ptr, salt); }
+        if !info.is_empty() { self.write_bytes(info_ptr, info); }
+
+        let hkdf_fn: TypedFunction<(u32, u32, u32, u32, u32, u32, u32, u32), ()> =
+            self.instance.exports.get_typed_function(&self.store, "wasi_hkdf")?;
+        hkdf_fn.call(&mut self.store, ikm_ptr, ikm.len() as u32, salt_ptr, salt.len() as u32,
+                     info_ptr, info.len() as u32, out_ptr, output_len as u32)?;
+
+        let output = self.read_bytes(out_ptr, output_len);
+        self.deallocate(ikm_ptr);
+        self.deallocate(salt_ptr);
+        self.deallocate(info_ptr);
+        self.deallocate(out_ptr);
+        Ok(output)
+    }
+
+    fn x25519_generate_keypair(&mut self) -> Result<(Vec<u8>, Vec<u8>), Box<dyn std::error::Error>> {
+        let priv_ptr = self.allocate(32)?;
+        let pub_ptr = self.allocate(32)?;
+
+        let gen_fn: TypedFunction<(u32, u32), i32> =
+            self.instance.exports.get_typed_function(&self.store, "wasi_x25519_generate_keypair")?;
+        gen_fn.call(&mut self.store, priv_ptr, pub_ptr)?;
+
+        let private_key = self.read_bytes(priv_ptr, 32);
+        let public_key = self.read_bytes(pub_ptr, 32);
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+        Ok((private_key, public_key))
+    }
+
+    fn x25519_shared_secret(&mut self, private_key: &[u8], public_key: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let priv_ptr = self.allocate(32)?;
+        let pub_ptr = self.allocate(32)?;
+        let shared_ptr = self.allocate(32)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        self.write_bytes(pub_ptr, public_key);
+
+        let shared_fn: TypedFunction<(u32, u32, u32), i32> =
+            self.instance.exports.get_typed_function(&self.store, "wasi_x25519_shared_secret")?;
+        shared_fn.call(&mut self.store, priv_ptr, pub_ptr, shared_ptr)?;
+
+        let shared = self.read_bytes(shared_ptr, 32);
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+        self.deallocate(shared_ptr);
+        Ok(shared)
+    }
+
+    fn secp256k1_generate_keypair(&mut self) -> Result<(Vec<u8>, Vec<u8>), Box<dyn std::error::Error>> {
+        let priv_ptr = self.allocate(32)?;
+        let pub_ptr = self.allocate(33)?;
+
+        let gen_fn: TypedFunction<(u32, u32), i32> =
+            self.instance.exports.get_typed_function(&self.store, "wasi_secp256k1_generate_keypair")?;
+        gen_fn.call(&mut self.store, priv_ptr, pub_ptr)?;
+
+        let private_key = self.read_bytes(priv_ptr, 32);
+        let public_key = self.read_bytes(pub_ptr, 33);
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+        Ok((private_key, public_key))
+    }
+
+    fn secp256k1_shared_secret(&mut self, private_key: &[u8], public_key: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let priv_ptr = self.allocate(32)?;
+        let pub_ptr = self.allocate(public_key.len() as u32)?;
+        let shared_ptr = self.allocate(32)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        self.write_bytes(pub_ptr, public_key);
+
+        let shared_fn: TypedFunction<(u32, u32, u32, u32), i32> =
+            self.instance.exports.get_typed_function(&self.store, "wasi_secp256k1_shared_secret")?;
+        shared_fn.call(&mut self.store, priv_ptr, pub_ptr, public_key.len() as u32, shared_ptr)?;
+
+        let shared = self.read_bytes(shared_ptr, 32);
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+        self.deallocate(shared_ptr);
+        Ok(shared)
+    }
+
+    fn p256_generate_keypair(&mut self) -> Result<(Vec<u8>, Vec<u8>), Box<dyn std::error::Error>> {
+        let priv_ptr = self.allocate(32)?;
+        let pub_ptr = self.allocate(33)?;
+
+        let gen_fn: TypedFunction<(u32, u32), i32> =
+            self.instance.exports.get_typed_function(&self.store, "wasi_p256_generate_keypair")?;
+        gen_fn.call(&mut self.store, priv_ptr, pub_ptr)?;
+
+        let private_key = self.read_bytes(priv_ptr, 32);
+        let public_key = self.read_bytes(pub_ptr, 33);
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+        Ok((private_key, public_key))
+    }
+
+    fn p256_shared_secret(&mut self, private_key: &[u8], public_key: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let priv_ptr = self.allocate(32)?;
+        let pub_ptr = self.allocate(public_key.len() as u32)?;
+        let shared_ptr = self.allocate(32)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        self.write_bytes(pub_ptr, public_key);
+
+        let shared_fn: TypedFunction<(u32, u32, u32, u32), i32> =
+            self.instance.exports.get_typed_function(&self.store, "wasi_p256_shared_secret")?;
+        shared_fn.call(&mut self.store, priv_ptr, pub_ptr, public_key.len() as u32, shared_ptr)?;
+
+        let shared = self.read_bytes(shared_ptr, 32);
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+        self.deallocate(shared_ptr);
+        Ok(shared)
+    }
 }
 
 struct TestResult {
@@ -602,6 +737,169 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         } else {
             result.fail("Binary directory not found - run Node.js test first");
+        }
+
+        results.push(result.summary());
+    }
+
+    // Test 4: ECDH Key Exchange Verification
+    println!("\nTest 4: ECDH Key Exchange Verification");
+    println!("{}", "-".repeat(40));
+
+    struct ECDHCurve<'a> {
+        name: &'a str,
+        pub_key_size: usize,
+        key_exchange: u8,
+    }
+
+    let ecdh_curves = [
+        ECDHCurve { name: "X25519", pub_key_size: 32, key_exchange: 0 },
+        ECDHCurve { name: "secp256k1", pub_key_size: 33, key_exchange: 1 },
+        ECDHCurve { name: "P-256", pub_key_size: 33, key_exchange: 2 },
+    ];
+
+    // Read unencrypted data for cross-language verification
+    let binary_dir = vectors_dir.join("binary");
+    let unencrypted_data = fs::read(binary_dir.join("monster_unencrypted.bin")).ok();
+
+    for curve in &ecdh_curves {
+        let mut result = TestResult::new(&format!("ECDH {}", curve.name));
+
+        // Generate keypairs for Alice and Bob
+        let (alice_priv, alice_pub, bob_priv, bob_pub) = match curve.name {
+            "X25519" => {
+                let (ap, apub) = em.x25519_generate_keypair()?;
+                let (bp, bpub) = em.x25519_generate_keypair()?;
+                (ap, apub, bp, bpub)
+            },
+            "secp256k1" => {
+                let (ap, apub) = em.secp256k1_generate_keypair()?;
+                let (bp, bpub) = em.secp256k1_generate_keypair()?;
+                (ap, apub, bp, bpub)
+            },
+            "P-256" => {
+                let (ap, apub) = em.p256_generate_keypair()?;
+                let (bp, bpub) = em.p256_generate_keypair()?;
+                (ap, apub, bp, bpub)
+            },
+            _ => continue,
+        };
+
+        if alice_pub.len() == curve.pub_key_size {
+            result.pass(&format!("Generated Alice keypair (pub: {} bytes)", alice_pub.len()));
+        } else {
+            result.fail(&format!("Alice public key wrong size: {}", alice_pub.len()));
+        }
+
+        if bob_pub.len() == curve.pub_key_size {
+            result.pass(&format!("Generated Bob keypair (pub: {} bytes)", bob_pub.len()));
+        } else {
+            result.fail(&format!("Bob public key wrong size: {}", bob_pub.len()));
+        }
+
+        // Compute shared secrets
+        let (alice_shared, bob_shared) = match curve.name {
+            "X25519" => {
+                let as_ = em.x25519_shared_secret(&alice_priv, &bob_pub)?;
+                let bs = em.x25519_shared_secret(&bob_priv, &alice_pub)?;
+                (as_, bs)
+            },
+            "secp256k1" => {
+                let as_ = em.secp256k1_shared_secret(&alice_priv, &bob_pub)?;
+                let bs = em.secp256k1_shared_secret(&bob_priv, &alice_pub)?;
+                (as_, bs)
+            },
+            "P-256" => {
+                let as_ = em.p256_shared_secret(&alice_priv, &bob_pub)?;
+                let bs = em.p256_shared_secret(&bob_priv, &alice_pub)?;
+                (as_, bs)
+            },
+            _ => continue,
+        };
+
+        if alice_shared == bob_shared {
+            result.pass(&format!("Shared secrets match ({} bytes)", alice_shared.len()));
+        } else {
+            result.fail("Shared secrets DO NOT match!");
+            result.fail(&format!("  Alice: {}", hex::encode(&alice_shared)));
+            result.fail(&format!("  Bob:   {}", hex::encode(&bob_shared)));
+        }
+
+        // Test HKDF key derivation from shared secret
+        let session_material = em.hkdf(&alice_shared, b"flatbuffers-encryption", b"session-key-iv", 48)?;
+        let session_key = &session_material[..32];
+        let session_iv = &session_material[32..48];
+
+        if session_key.len() == 32 && session_iv.len() == 16 {
+            result.pass(&format!("HKDF derived key ({}B) + IV ({}B)", session_key.len(), session_iv.len()));
+        } else {
+            result.fail("HKDF output wrong size");
+        }
+
+        // Full E2E: encrypt with derived key, decrypt with same key
+        let test_data = format!("ECDH test data for {} encryption", curve.name);
+        let plaintext = test_data.as_bytes();
+        let encrypted = em.encrypt_bytes(session_key, session_iv, plaintext)?;
+
+        if encrypted != plaintext {
+            result.pass("Encryption with derived key modified data");
+        } else {
+            result.fail("Encryption did not modify data");
+        }
+
+        let decrypted = em.decrypt_bytes(session_key, session_iv, &encrypted)?;
+        if decrypted == plaintext {
+            result.pass("Decryption with derived key restored original");
+        } else {
+            result.fail("Decryption mismatch");
+        }
+
+        // Verify cross-language ECDH header if available
+        let header_name = curve.name.to_lowercase().replace("-", "");
+        let header_path = binary_dir.join(format!("monster_ecdh_{}_header.json", header_name));
+        if header_path.exists() {
+            match fs::read_to_string(&header_path) {
+                Ok(header_json) => {
+                    match serde_json::from_str::<ECDHHeader>(&header_json) {
+                        Ok(header) => {
+                            if header.key_exchange == curve.key_exchange {
+                                result.pass(&format!("Cross-language header has correct key_exchange: {}", curve.key_exchange));
+                            } else {
+                                result.fail(&format!("Header key_exchange mismatch: {}", header.key_exchange));
+                            }
+
+                            if !header.ephemeral_public_key.is_empty() && !header.session_key.is_empty() && !header.session_iv.is_empty() {
+                                result.pass("Header contains ephemeral_public_key, session_key, session_iv");
+
+                                // Decrypt the cross-language encrypted file using Node.js session key
+                                let encrypted_path = binary_dir.join(format!("monster_ecdh_{}_encrypted.bin", header_name));
+                                if encrypted_path.exists() {
+                                    if let (Ok(node_key), Ok(node_iv)) = (hex::decode(&header.session_key), hex::decode(&header.session_iv)) {
+                                        if let Ok(encrypted_data) = fs::read(&encrypted_path) {
+                                            match em.decrypt_bytes(&node_key, &node_iv, &encrypted_data) {
+                                                Ok(decrypted_data) => {
+                                                    if let Some(ref unenc) = unencrypted_data {
+                                                        if decrypted_data == *unenc {
+                                                            result.pass(&format!("Decrypted Node.js {} data matches original", curve.name));
+                                                        } else {
+                                                            result.fail(&format!("Decrypted Node.js {} data mismatch", curve.name));
+                                                        }
+                                                    }
+                                                },
+                                                Err(e) => result.fail(&format!("Failed to decrypt: {}", e)),
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        Err(e) => result.fail(&format!("Error parsing header: {}", e)),
+                    }
+                },
+                Err(e) => result.fail(&format!("Error reading header: {}", e)),
+            }
+        } else {
+            result.pass(&format!("(No cross-language header found at {})", header_path.display()));
         }
 
         results.push(result.summary());

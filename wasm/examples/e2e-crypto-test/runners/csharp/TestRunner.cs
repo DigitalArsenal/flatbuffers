@@ -32,6 +32,13 @@ public class TestRunner : IDisposable
     private readonly Function _sha256;
     private readonly Function _encryptBytes;
     private readonly Function _decryptBytes;
+    private readonly Function _hkdf;
+    private readonly Function _x25519Generate;
+    private readonly Function _x25519Shared;
+    private readonly Function _secp256k1Generate;
+    private readonly Function _secp256k1Shared;
+    private readonly Function _p256Generate;
+    private readonly Function _p256Shared;
 
     private int _threwValue;
     private Table? _functionTable;
@@ -56,6 +63,13 @@ public class TestRunner : IDisposable
         _sha256 = GetFunction("wasi_sha256");
         _encryptBytes = GetFunction("wasi_encrypt_bytes");
         _decryptBytes = GetFunction("wasi_decrypt_bytes");
+        _hkdf = GetFunction("wasi_hkdf");
+        _x25519Generate = GetFunction("wasi_x25519_generate_keypair");
+        _x25519Shared = GetFunction("wasi_x25519_shared_secret");
+        _secp256k1Generate = GetFunction("wasi_secp256k1_generate_keypair");
+        _secp256k1Shared = GetFunction("wasi_secp256k1_shared_secret");
+        _p256Generate = GetFunction("wasi_p256_generate_keypair");
+        _p256Shared = GetFunction("wasi_p256_shared_secret");
 
         // Call _initialize if present (required for Emscripten modules)
         var initFunc = _instance.GetFunction("_initialize");
@@ -246,6 +260,120 @@ public class TestRunner : IDisposable
         return decrypted;
     }
 
+    public byte[] Hkdf(byte[] ikm, byte[] salt, byte[] info, int outputLen)
+    {
+        var ikmPtr = Allocate(Math.Max(ikm.Length, 1));
+        var saltPtr = Allocate(Math.Max(salt.Length, 1));
+        var infoPtr = Allocate(Math.Max(info.Length, 1));
+        var outPtr = Allocate(outputLen);
+
+        if (ikm.Length > 0) WriteBytes(_memory, ikmPtr, ikm);
+        if (salt.Length > 0) WriteBytes(_memory, saltPtr, salt);
+        if (info.Length > 0) WriteBytes(_memory, infoPtr, info);
+
+        _hkdf.Invoke(ikmPtr, ikm.Length, saltPtr, salt.Length, infoPtr, info.Length, outPtr, outputLen);
+
+        var output = ReadBytes(_memory, outPtr, outputLen);
+        Deallocate(ikmPtr);
+        Deallocate(saltPtr);
+        Deallocate(infoPtr);
+        Deallocate(outPtr);
+        return output;
+    }
+
+    public (byte[] privateKey, byte[] publicKey) X25519GenerateKeypair()
+    {
+        var privPtr = Allocate(32);
+        var pubPtr = Allocate(32);
+
+        _x25519Generate.Invoke(privPtr, pubPtr);
+
+        var priv = ReadBytes(_memory, privPtr, 32);
+        var pub = ReadBytes(_memory, pubPtr, 32);
+        Deallocate(privPtr);
+        Deallocate(pubPtr);
+        return (priv, pub);
+    }
+
+    public byte[] X25519SharedSecret(byte[] privateKey, byte[] publicKey)
+    {
+        var privPtr = Allocate(32);
+        var pubPtr = Allocate(32);
+        var sharedPtr = Allocate(32);
+
+        WriteBytes(_memory, privPtr, privateKey);
+        WriteBytes(_memory, pubPtr, publicKey);
+        _x25519Shared.Invoke(privPtr, pubPtr, sharedPtr);
+
+        var shared = ReadBytes(_memory, sharedPtr, 32);
+        Deallocate(privPtr);
+        Deallocate(pubPtr);
+        Deallocate(sharedPtr);
+        return shared;
+    }
+
+    public (byte[] privateKey, byte[] publicKey) Secp256k1GenerateKeypair()
+    {
+        var privPtr = Allocate(32);
+        var pubPtr = Allocate(33);
+
+        _secp256k1Generate.Invoke(privPtr, pubPtr);
+
+        var priv = ReadBytes(_memory, privPtr, 32);
+        var pub = ReadBytes(_memory, pubPtr, 33);
+        Deallocate(privPtr);
+        Deallocate(pubPtr);
+        return (priv, pub);
+    }
+
+    public byte[] Secp256k1SharedSecret(byte[] privateKey, byte[] publicKey)
+    {
+        var privPtr = Allocate(32);
+        var pubPtr = Allocate(publicKey.Length);
+        var sharedPtr = Allocate(32);
+
+        WriteBytes(_memory, privPtr, privateKey);
+        WriteBytes(_memory, pubPtr, publicKey);
+        _secp256k1Shared.Invoke(privPtr, pubPtr, publicKey.Length, sharedPtr);
+
+        var shared = ReadBytes(_memory, sharedPtr, 32);
+        Deallocate(privPtr);
+        Deallocate(pubPtr);
+        Deallocate(sharedPtr);
+        return shared;
+    }
+
+    public (byte[] privateKey, byte[] publicKey) P256GenerateKeypair()
+    {
+        var privPtr = Allocate(32);
+        var pubPtr = Allocate(33);
+
+        _p256Generate.Invoke(privPtr, pubPtr);
+
+        var priv = ReadBytes(_memory, privPtr, 32);
+        var pub = ReadBytes(_memory, pubPtr, 33);
+        Deallocate(privPtr);
+        Deallocate(pubPtr);
+        return (priv, pub);
+    }
+
+    public byte[] P256SharedSecret(byte[] privateKey, byte[] publicKey)
+    {
+        var privPtr = Allocate(32);
+        var pubPtr = Allocate(publicKey.Length);
+        var sharedPtr = Allocate(32);
+
+        WriteBytes(_memory, privPtr, privateKey);
+        WriteBytes(_memory, pubPtr, publicKey);
+        _p256Shared.Invoke(privPtr, pubPtr, publicKey.Length, sharedPtr);
+
+        var shared = ReadBytes(_memory, sharedPtr, 32);
+        Deallocate(privPtr);
+        Deallocate(pubPtr);
+        Deallocate(sharedPtr);
+        return shared;
+    }
+
     public void Dispose()
     {
         _store.Dispose();
@@ -254,6 +382,24 @@ public class TestRunner : IDisposable
 
     public static string ToHex(byte[] bytes) => Convert.ToHexString(bytes).ToLowerInvariant();
     public static byte[] FromHex(string hex) => Convert.FromHexString(hex);
+
+    class ECDHHeader
+    {
+        public int version { get; set; }
+        public int key_exchange { get; set; }
+        public string? ephemeral_public_key { get; set; }
+        public string? context { get; set; }
+        public string? session_key { get; set; }
+        public string? session_iv { get; set; }
+    }
+
+    record ECDHCurve(
+        string Name,
+        int PubKeySize,
+        int KeyExchange,
+        Func<(byte[] priv, byte[] pub)> Generate,
+        Func<byte[], byte[], byte[]> Shared
+    );
 
     class TestResult
     {
@@ -349,10 +495,10 @@ public class TestRunner : IDisposable
         // Test 3: Cross-language verification
         Console.WriteLine("\nTest 3: Cross-Language Verification");
         Console.WriteLine(new string('-', 40));
+        var binaryDir = Path.Combine(vectorsDir, "binary");
         {
             var result = new TestResult("Cross-Language");
 
-            var binaryDir = Path.Combine(vectorsDir, "binary");
             if (Directory.Exists(binaryDir))
             {
                 var unencryptedPath = Path.Combine(binaryDir, "monster_unencrypted.bin");
@@ -379,6 +525,137 @@ public class TestRunner : IDisposable
                 }
             }
             else result.Fail("Binary directory not found - run Node.js test first");
+
+            results.Add(result.Summary());
+        }
+
+        // Test 4: ECDH Key Exchange Verification
+        Console.WriteLine("\nTest 4: ECDH Key Exchange Verification");
+        Console.WriteLine(new string('-', 40));
+
+        // Read unencrypted data for cross-language verification
+        byte[]? unencryptedData = null;
+        try { unencryptedData = File.ReadAllBytes(Path.Combine(binaryDir, "monster_unencrypted.bin")); }
+        catch { /* Will be null if file doesn't exist */ }
+
+        var ecdhCurves = new ECDHCurve[]
+        {
+            new("X25519", 32, 0, runner.X25519GenerateKeypair, runner.X25519SharedSecret),
+            new("secp256k1", 33, 1, runner.Secp256k1GenerateKeypair, runner.Secp256k1SharedSecret),
+            new("P-256", 33, 2, runner.P256GenerateKeypair, runner.P256SharedSecret)
+        };
+
+        foreach (var curve in ecdhCurves)
+        {
+            var result = new TestResult($"ECDH {curve.Name}");
+
+            try
+            {
+                // Generate keypairs for Alice and Bob
+                var alice = curve.Generate();
+                var bob = curve.Generate();
+
+                if (alice.pub.Length == curve.PubKeySize)
+                    result.Pass($"Generated Alice keypair (pub: {alice.pub.Length} bytes)");
+                else
+                    result.Fail($"Alice public key wrong size: {alice.pub.Length}");
+
+                if (bob.pub.Length == curve.PubKeySize)
+                    result.Pass($"Generated Bob keypair (pub: {bob.pub.Length} bytes)");
+                else
+                    result.Fail($"Bob public key wrong size: {bob.pub.Length}");
+
+                // Compute shared secrets
+                var aliceShared = curve.Shared(alice.priv, bob.pub);
+                var bobShared = curve.Shared(bob.priv, alice.pub);
+
+                if (aliceShared.SequenceEqual(bobShared))
+                    result.Pass($"Shared secrets match ({aliceShared.Length} bytes)");
+                else
+                {
+                    result.Fail("Shared secrets DO NOT match!");
+                    result.Fail($"  Alice: {ToHex(aliceShared)}");
+                    result.Fail($"  Bob:   {ToHex(bobShared)}");
+                }
+
+                // Test HKDF key derivation from shared secret
+                var sessionMaterial = runner.Hkdf(aliceShared,
+                    Encoding.UTF8.GetBytes("flatbuffers-encryption"),
+                    Encoding.UTF8.GetBytes("session-key-iv"), 48);
+                var sessionKey = sessionMaterial[..32];
+                var sessionIv = sessionMaterial[32..48];
+
+                if (sessionKey.Length == 32 && sessionIv.Length == 16)
+                    result.Pass($"HKDF derived key ({sessionKey.Length}B) + IV ({sessionIv.Length}B)");
+                else
+                    result.Fail("HKDF output wrong size");
+
+                // Full E2E: encrypt with derived key, decrypt with same key
+                var testData = $"ECDH test data for {curve.Name} encryption";
+                var plaintext = Encoding.UTF8.GetBytes(testData);
+                var encrypted = runner.Encrypt(sessionKey, sessionIv, plaintext);
+
+                if (!encrypted.SequenceEqual(plaintext))
+                    result.Pass("Encryption with derived key modified data");
+                else
+                    result.Fail("Encryption did not modify data");
+
+                var decrypted = runner.Decrypt(sessionKey, sessionIv, encrypted);
+                if (decrypted.SequenceEqual(plaintext))
+                    result.Pass("Decryption with derived key restored original");
+                else
+                    result.Fail("Decryption mismatch");
+
+                // Verify cross-language ECDH header if available
+                var headerName = curve.Name.ToLowerInvariant().Replace("-", "");
+                var headerPath = Path.Combine(binaryDir, $"monster_ecdh_{headerName}_header.json");
+                if (File.Exists(headerPath))
+                {
+                    try
+                    {
+                        var header = JsonSerializer.Deserialize<ECDHHeader>(File.ReadAllText(headerPath))!;
+
+                        if (header.key_exchange == curve.KeyExchange)
+                            result.Pass($"Cross-language header has correct key_exchange: {curve.KeyExchange}");
+                        else
+                            result.Fail($"Header key_exchange mismatch: {header.key_exchange}");
+
+                        if (!string.IsNullOrEmpty(header.ephemeral_public_key) &&
+                            !string.IsNullOrEmpty(header.session_key) &&
+                            !string.IsNullOrEmpty(header.session_iv))
+                        {
+                            result.Pass("Header contains ephemeral_public_key, session_key, session_iv");
+
+                            // Decrypt the cross-language encrypted file using Node.js session key
+                            var encryptedPath = Path.Combine(binaryDir, $"monster_ecdh_{headerName}_encrypted.bin");
+                            if (File.Exists(encryptedPath) && unencryptedData != null)
+                            {
+                                var nodeKey = FromHex(header.session_key);
+                                var nodeIv = FromHex(header.session_iv);
+                                var encryptedFileData = File.ReadAllBytes(encryptedPath);
+                                var decryptedData = runner.Decrypt(nodeKey, nodeIv, encryptedFileData);
+
+                                if (decryptedData.SequenceEqual(unencryptedData))
+                                    result.Pass($"Decrypted Node.js {curve.Name} data matches original");
+                                else
+                                    result.Fail($"Decrypted Node.js {curve.Name} data mismatch");
+                            }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        result.Fail($"Error reading cross-language header: {e.Message}");
+                    }
+                }
+                else
+                {
+                    result.Pass($"(No cross-language header found at {Path.GetFileName(headerPath)})");
+                }
+            }
+            catch (Exception e)
+            {
+                result.Fail($"Exception during {curve.Name} test: {e.Message}");
+            }
 
             results.Add(result.Summary());
         }

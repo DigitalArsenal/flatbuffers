@@ -94,8 +94,17 @@ class WasmtimeEncryptionModule:
         self._encrypt = self.instance.exports(self.store)["wasi_encrypt_bytes"]
         self._decrypt = self.instance.exports(self.store)["wasi_decrypt_bytes"]
         self._sha256 = self.instance.exports(self.store)["wasi_sha256"]
+        self._hkdf = self.instance.exports(self.store)["wasi_hkdf"]
         self._get_version = self.instance.exports(self.store)["wasi_get_version"]
         self._has_cryptopp = self.instance.exports(self.store)["wasi_has_cryptopp"]
+
+        # ECDH functions
+        self._x25519_generate = self.instance.exports(self.store)["wasi_x25519_generate_keypair"]
+        self._x25519_shared = self.instance.exports(self.store)["wasi_x25519_shared_secret"]
+        self._secp256k1_generate = self.instance.exports(self.store)["wasi_secp256k1_generate_keypair"]
+        self._secp256k1_shared = self.instance.exports(self.store)["wasi_secp256k1_shared_secret"]
+        self._p256_generate = self.instance.exports(self.store)["wasi_p256_generate_keypair"]
+        self._p256_shared = self.instance.exports(self.store)["wasi_p256_shared_secret"]
 
         # Get indirect function table if available
         try:
@@ -260,6 +269,115 @@ class WasmtimeEncryptionModule:
             self._free(self.store, data_ptr)
             self._free(self.store, hash_ptr)
 
+    def hkdf(self, ikm: bytes, salt: bytes, info: bytes, output_len: int) -> bytes:
+        """Derive key using HKDF-SHA256."""
+        ikm_ptr = self._malloc(self.store, max(len(ikm), 1))
+        salt_ptr = self._malloc(self.store, max(len(salt), 1))
+        info_ptr = self._malloc(self.store, max(len(info), 1))
+        out_ptr = self._malloc(self.store, output_len)
+
+        try:
+            if len(ikm) > 0:
+                self._write_memory(ikm_ptr, ikm)
+            if len(salt) > 0:
+                self._write_memory(salt_ptr, salt)
+            if len(info) > 0:
+                self._write_memory(info_ptr, info)
+
+            self._hkdf(self.store, ikm_ptr, len(ikm), salt_ptr, len(salt),
+                      info_ptr, len(info), out_ptr, output_len)
+
+            return self._read_memory(out_ptr, output_len)
+        finally:
+            self._free(self.store, ikm_ptr)
+            self._free(self.store, salt_ptr)
+            self._free(self.store, info_ptr)
+            self._free(self.store, out_ptr)
+
+    def x25519_generate_keypair(self) -> tuple[bytes, bytes]:
+        """Generate X25519 keypair. Returns (private_key, public_key)."""
+        priv_ptr = self._malloc(self.store, 32)
+        pub_ptr = self._malloc(self.store, 32)
+
+        try:
+            self._x25519_generate(self.store, priv_ptr, pub_ptr)
+            return (self._read_memory(priv_ptr, 32), self._read_memory(pub_ptr, 32))
+        finally:
+            self._free(self.store, priv_ptr)
+            self._free(self.store, pub_ptr)
+
+    def x25519_shared_secret(self, private_key: bytes, public_key: bytes) -> bytes:
+        """Compute X25519 shared secret."""
+        priv_ptr = self._malloc(self.store, 32)
+        pub_ptr = self._malloc(self.store, 32)
+        shared_ptr = self._malloc(self.store, 32)
+
+        try:
+            self._write_memory(priv_ptr, private_key)
+            self._write_memory(pub_ptr, public_key)
+            self._x25519_shared(self.store, priv_ptr, pub_ptr, shared_ptr)
+            return self._read_memory(shared_ptr, 32)
+        finally:
+            self._free(self.store, priv_ptr)
+            self._free(self.store, pub_ptr)
+            self._free(self.store, shared_ptr)
+
+    def secp256k1_generate_keypair(self) -> tuple[bytes, bytes]:
+        """Generate secp256k1 keypair. Returns (private_key, public_key)."""
+        priv_ptr = self._malloc(self.store, 32)
+        pub_ptr = self._malloc(self.store, 33)  # Compressed public key
+
+        try:
+            self._secp256k1_generate(self.store, priv_ptr, pub_ptr)
+            return (self._read_memory(priv_ptr, 32), self._read_memory(pub_ptr, 33))
+        finally:
+            self._free(self.store, priv_ptr)
+            self._free(self.store, pub_ptr)
+
+    def secp256k1_shared_secret(self, private_key: bytes, public_key: bytes) -> bytes:
+        """Compute secp256k1 shared secret."""
+        priv_ptr = self._malloc(self.store, 32)
+        pub_ptr = self._malloc(self.store, len(public_key))
+        shared_ptr = self._malloc(self.store, 32)
+
+        try:
+            self._write_memory(priv_ptr, private_key)
+            self._write_memory(pub_ptr, public_key)
+            self._secp256k1_shared(self.store, priv_ptr, pub_ptr, len(public_key), shared_ptr)
+            return self._read_memory(shared_ptr, 32)
+        finally:
+            self._free(self.store, priv_ptr)
+            self._free(self.store, pub_ptr)
+            self._free(self.store, shared_ptr)
+
+    def p256_generate_keypair(self) -> tuple[bytes, bytes]:
+        """Generate P-256 keypair. Returns (private_key, public_key)."""
+        priv_ptr = self._malloc(self.store, 32)
+        pub_ptr = self._malloc(self.store, 33)  # Compressed public key
+
+        try:
+            self._p256_generate(self.store, priv_ptr, pub_ptr)
+            return (self._read_memory(priv_ptr, 32), self._read_memory(pub_ptr, 33))
+        finally:
+            self._free(self.store, priv_ptr)
+            self._free(self.store, pub_ptr)
+
+    def p256_shared_secret(self, private_key: bytes, public_key: bytes) -> bytes:
+        """Compute P-256 shared secret."""
+        priv_ptr = self._malloc(self.store, 32)
+        pub_ptr = self._malloc(self.store, len(public_key))
+        shared_ptr = self._malloc(self.store, 32)
+
+        try:
+            self._write_memory(priv_ptr, private_key)
+            self._write_memory(pub_ptr, public_key)
+            self._p256_shared(self.store, priv_ptr, pub_ptr, len(public_key), shared_ptr)
+            return self._read_memory(shared_ptr, 32)
+        finally:
+            self._free(self.store, priv_ptr)
+            self._free(self.store, pub_ptr)
+            self._free(self.store, shared_ptr)
+
 
 def main():
     print("=" * 60)
@@ -401,6 +519,142 @@ def main():
                     result.fail(f"Error decrypting {chain}", e)
 
     results.append(result.summary())
+
+    # Test 4: ECDH Key Exchange Verification
+    print("\nTest 4: ECDH Key Exchange Verification")
+    print("-" * 40)
+
+    # ECDH curves to test
+    ecdh_curves = [
+        {
+            "name": "X25519",
+            "generate": em.x25519_generate_keypair,
+            "shared": em.x25519_shared_secret,
+            "pub_key_size": 32,
+            "key_exchange": 0,
+        },
+        {
+            "name": "secp256k1",
+            "generate": em.secp256k1_generate_keypair,
+            "shared": em.secp256k1_shared_secret,
+            "pub_key_size": 33,
+            "key_exchange": 1,
+        },
+        {
+            "name": "P-256",
+            "generate": em.p256_generate_keypair,
+            "shared": em.p256_shared_secret,
+            "pub_key_size": 33,
+            "key_exchange": 2,
+        },
+    ]
+
+    for curve in ecdh_curves:
+        result = TestResult(f"ECDH {curve['name']}")
+
+        try:
+            # Generate keypairs for Alice and Bob
+            alice_priv, alice_pub = curve["generate"]()
+            bob_priv, bob_pub = curve["generate"]()
+
+            if len(alice_pub) == curve["pub_key_size"]:
+                result.pass_(f"Generated Alice keypair (pub: {len(alice_pub)} bytes)")
+            else:
+                result.fail(f"Alice public key wrong size: {len(alice_pub)}")
+
+            if len(bob_pub) == curve["pub_key_size"]:
+                result.pass_(f"Generated Bob keypair (pub: {len(bob_pub)} bytes)")
+            else:
+                result.fail(f"Bob public key wrong size: {len(bob_pub)}")
+
+            # Compute shared secrets
+            alice_shared = curve["shared"](alice_priv, bob_pub)
+            bob_shared = curve["shared"](bob_priv, alice_pub)
+
+            if alice_shared == bob_shared:
+                result.pass_(f"Shared secrets match ({len(alice_shared)} bytes)")
+            else:
+                result.fail(f"Shared secrets DO NOT match!")
+                result.fail(f"  Alice: {alice_shared.hex()}")
+                result.fail(f"  Bob:   {bob_shared.hex()}")
+
+            # Test HKDF key derivation from shared secret
+            session_material = em.hkdf(
+                ikm=alice_shared,
+                salt=b"flatbuffers-encryption",
+                info=b"session-key-iv",
+                output_len=48  # 32 bytes key + 16 bytes IV
+            )
+
+            session_key = session_material[:32]
+            session_iv = session_material[32:48]
+
+            if len(session_key) == 32 and len(session_iv) == 16:
+                result.pass_(f"HKDF derived key ({len(session_key)}B) + IV ({len(session_iv)}B)")
+            else:
+                result.fail(f"HKDF output wrong size")
+
+            # Full E2E: encrypt with derived key, decrypt with same key
+            test_data = f"ECDH test data for {curve['name']} encryption"
+            plaintext = test_data.encode('utf-8')
+            encrypted = bytearray(plaintext)
+            em.encrypt(session_key, session_iv, encrypted)
+
+            if bytes(encrypted) != plaintext:
+                result.pass_("Encryption with derived key modified data")
+            else:
+                result.fail("Encryption did not modify data")
+
+            decrypted = bytearray(encrypted)
+            em.decrypt(session_key, session_iv, decrypted)
+
+            if bytes(decrypted) == plaintext:
+                result.pass_("Decryption with derived key restored original")
+            else:
+                result.fail("Decryption mismatch")
+
+            # Verify cross-language ECDH header if available
+            header_path = binary_dir / f"monster_ecdh_{curve['name'].lower().replace('-', '')}_header.json"
+            if header_path.exists():
+                try:
+                    with open(header_path) as f:
+                        header = json.load(f)
+
+                    if header.get("key_exchange") == curve["key_exchange"]:
+                        result.pass_(f"Cross-language header has correct key_exchange: {curve['key_exchange']}")
+                    else:
+                        result.fail(f"Header key_exchange mismatch: {header.get('key_exchange')}")
+
+                    ephemeral_pub_hex = header.get("ephemeral_public_key", "")
+                    session_key_hex = header.get("session_key", "")
+                    session_iv_hex = header.get("session_iv", "")
+
+                    if ephemeral_pub_hex and session_key_hex and session_iv_hex:
+                        result.pass_(f"Header contains ephemeral_public_key, session_key, session_iv")
+
+                        # Decrypt the cross-language encrypted file using Node.js session key
+                        encrypted_path = binary_dir / f"monster_ecdh_{curve['name'].lower().replace('-', '')}_encrypted.bin"
+                        if encrypted_path.exists():
+                            node_key = bytes.fromhex(session_key_hex)
+                            node_iv = bytes.fromhex(session_iv_hex)
+                            encrypted_data = bytearray(encrypted_path.read_bytes())
+                            em.decrypt(node_key, node_iv, encrypted_data)
+
+                            # Should restore to original unencrypted data
+                            if bytes(encrypted_data) == unencrypted_data:
+                                result.pass_(f"Decrypted Node.js {curve['name']} data matches original")
+                            else:
+                                result.fail(f"Decrypted Node.js {curve['name']} data mismatch")
+
+                except Exception as e:
+                    result.fail(f"Error reading cross-language header", e)
+            else:
+                result.pass_(f"(No cross-language header found at {header_path.name})")
+
+        except Exception as e:
+            result.fail(f"Exception during {curve['name']} test", e)
+
+        results.append(result.summary())
 
     # Summary
     print()

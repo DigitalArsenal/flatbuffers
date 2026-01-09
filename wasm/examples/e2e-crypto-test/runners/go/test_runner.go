@@ -41,6 +41,19 @@ type CryptoKey struct {
 	Scheme        string `json:"scheme"`
 }
 
+// ECDHHeader stores ECDH header data for cross-language testing
+type ECDHHeader struct {
+	Version            int    `json:"version"`
+	KeyExchange        int    `json:"key_exchange"`
+	Symmetric          int    `json:"symmetric"`
+	Kdf                int    `json:"kdf"`
+	EphemeralPublicKey string `json:"ephemeral_public_key"`
+	Context            string `json:"context"`
+	Timestamp          int64  `json:"timestamp"`
+	SessionKey         string `json:"session_key"`
+	SessionIV          string `json:"session_iv"`
+}
+
 // TestResult tracks test outcomes
 type TestResult struct {
 	Name    string
@@ -85,8 +98,21 @@ type EncryptionModule struct {
 	encryptBytes api.Function
 	decryptBytes api.Function
 	sha256       api.Function
+	hkdf         api.Function
 	getVersion   api.Function
 	hasCryptopp  api.Function
+
+	// X25519 functions
+	x25519GenerateKeypair api.Function
+	x25519SharedSecret    api.Function
+
+	// secp256k1 functions
+	secp256k1GenerateKeypair api.Function
+	secp256k1SharedSecret    api.Function
+
+	// P-256 functions
+	p256GenerateKeypair api.Function
+	p256SharedSecret    api.Function
 }
 
 var wasmModule api.Module
@@ -392,16 +418,23 @@ func NewEncryptionModule(ctx context.Context, wasmBytes []byte) (*EncryptionModu
 	wasmModule = mod
 
 	return &EncryptionModule{
-		runtime:      r,
-		module:       mod,
-		ctx:          ctx,
-		malloc:       mod.ExportedFunction("malloc"),
-		free:         mod.ExportedFunction("free"),
-		encryptBytes: mod.ExportedFunction("wasi_encrypt_bytes"),
-		decryptBytes: mod.ExportedFunction("wasi_decrypt_bytes"),
-		sha256:       mod.ExportedFunction("wasi_sha256"),
-		getVersion:   mod.ExportedFunction("wasi_get_version"),
-		hasCryptopp:  mod.ExportedFunction("wasi_has_cryptopp"),
+		runtime:                  r,
+		module:                   mod,
+		ctx:                      ctx,
+		malloc:                   mod.ExportedFunction("malloc"),
+		free:                     mod.ExportedFunction("free"),
+		encryptBytes:             mod.ExportedFunction("wasi_encrypt_bytes"),
+		decryptBytes:             mod.ExportedFunction("wasi_decrypt_bytes"),
+		sha256:                   mod.ExportedFunction("wasi_sha256"),
+		hkdf:                     mod.ExportedFunction("wasi_hkdf"),
+		getVersion:               mod.ExportedFunction("wasi_get_version"),
+		hasCryptopp:              mod.ExportedFunction("wasi_has_cryptopp"),
+		x25519GenerateKeypair:    mod.ExportedFunction("wasi_x25519_generate_keypair"),
+		x25519SharedSecret:       mod.ExportedFunction("wasi_x25519_shared_secret"),
+		secp256k1GenerateKeypair: mod.ExportedFunction("wasi_secp256k1_generate_keypair"),
+		secp256k1SharedSecret:    mod.ExportedFunction("wasi_secp256k1_shared_secret"),
+		p256GenerateKeypair:      mod.ExportedFunction("wasi_p256_generate_keypair"),
+		p256SharedSecret:         mod.ExportedFunction("wasi_p256_shared_secret"),
 	}, nil
 }
 
@@ -508,6 +541,252 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// HKDF derives key material from input keying material
+func (em *EncryptionModule) HKDF(ikm, salt, info []byte, length int) ([]byte, error) {
+	if em.hkdf == nil {
+		return nil, fmt.Errorf("HKDF not available")
+	}
+
+	ikmPtr := em.alloc(uint32(max(len(ikm), 1)))
+	saltLen := len(salt)
+	if saltLen == 0 {
+		saltLen = 1
+	}
+	saltPtr := em.alloc(uint32(saltLen))
+	infoPtr := em.alloc(uint32(max(len(info), 1)))
+	outPtr := em.alloc(uint32(length))
+
+	defer func() {
+		em.dealloc(ikmPtr)
+		em.dealloc(saltPtr)
+		em.dealloc(infoPtr)
+		em.dealloc(outPtr)
+	}()
+
+	if len(ikm) > 0 {
+		em.memory().Write(ikmPtr, ikm)
+	}
+	if len(salt) > 0 {
+		em.memory().Write(saltPtr, salt)
+	}
+	if len(info) > 0 {
+		em.memory().Write(infoPtr, info)
+	}
+
+	actualSaltLen := uint32(len(salt))
+	_, err := em.hkdf.Call(em.ctx,
+		uint64(ikmPtr), uint64(len(ikm)),
+		uint64(saltPtr), uint64(actualSaltLen),
+		uint64(infoPtr), uint64(len(info)),
+		uint64(outPtr), uint64(length))
+	if err != nil {
+		return nil, err
+	}
+
+	out, ok := em.memory().Read(outPtr, uint32(length))
+	if !ok {
+		return nil, fmt.Errorf("failed to read HKDF output")
+	}
+	result := make([]byte, length)
+	copy(result, out)
+	return result, nil
+}
+
+// X25519GenerateKeypair generates an X25519 key pair
+func (em *EncryptionModule) X25519GenerateKeypair() (privateKey, publicKey []byte, err error) {
+	if em.x25519GenerateKeypair == nil {
+		return nil, nil, fmt.Errorf("X25519 not available")
+	}
+
+	privPtr := em.alloc(32)
+	pubPtr := em.alloc(32)
+
+	defer func() {
+		em.dealloc(privPtr)
+		em.dealloc(pubPtr)
+	}()
+
+	res, err := em.x25519GenerateKeypair.Call(em.ctx, uint64(privPtr), uint64(pubPtr))
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(res) > 0 && res[0] != 0 {
+		return nil, nil, fmt.Errorf("X25519 keypair generation failed")
+	}
+
+	priv, _ := em.memory().Read(privPtr, 32)
+	pub, _ := em.memory().Read(pubPtr, 32)
+
+	privateKey = make([]byte, 32)
+	publicKey = make([]byte, 32)
+	copy(privateKey, priv)
+	copy(publicKey, pub)
+	return privateKey, publicKey, nil
+}
+
+// X25519SharedSecret computes ECDH shared secret
+func (em *EncryptionModule) X25519SharedSecret(privateKey, publicKey []byte) ([]byte, error) {
+	if em.x25519SharedSecret == nil {
+		return nil, fmt.Errorf("X25519 not available")
+	}
+
+	privPtr := em.alloc(32)
+	pubPtr := em.alloc(32)
+	secretPtr := em.alloc(32)
+
+	defer func() {
+		em.dealloc(privPtr)
+		em.dealloc(pubPtr)
+		em.dealloc(secretPtr)
+	}()
+
+	em.memory().Write(privPtr, privateKey)
+	em.memory().Write(pubPtr, publicKey)
+
+	res, err := em.x25519SharedSecret.Call(em.ctx, uint64(privPtr), uint64(pubPtr), uint64(secretPtr))
+	if err != nil {
+		return nil, err
+	}
+	if len(res) > 0 && res[0] != 0 {
+		return nil, fmt.Errorf("X25519 ECDH failed")
+	}
+
+	secret, _ := em.memory().Read(secretPtr, 32)
+	result := make([]byte, 32)
+	copy(result, secret)
+	return result, nil
+}
+
+// Secp256k1GenerateKeypair generates a secp256k1 key pair
+func (em *EncryptionModule) Secp256k1GenerateKeypair() (privateKey, publicKey []byte, err error) {
+	if em.secp256k1GenerateKeypair == nil {
+		return nil, nil, fmt.Errorf("secp256k1 not available")
+	}
+
+	privPtr := em.alloc(32)
+	pubPtr := em.alloc(33) // compressed public key
+
+	defer func() {
+		em.dealloc(privPtr)
+		em.dealloc(pubPtr)
+	}()
+
+	res, err := em.secp256k1GenerateKeypair.Call(em.ctx, uint64(privPtr), uint64(pubPtr))
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(res) > 0 && res[0] != 0 {
+		return nil, nil, fmt.Errorf("secp256k1 keypair generation failed")
+	}
+
+	priv, _ := em.memory().Read(privPtr, 32)
+	pub, _ := em.memory().Read(pubPtr, 33)
+
+	privateKey = make([]byte, 32)
+	publicKey = make([]byte, 33)
+	copy(privateKey, priv)
+	copy(publicKey, pub)
+	return privateKey, publicKey, nil
+}
+
+// Secp256k1SharedSecret computes ECDH shared secret
+func (em *EncryptionModule) Secp256k1SharedSecret(privateKey, publicKey []byte) ([]byte, error) {
+	if em.secp256k1SharedSecret == nil {
+		return nil, fmt.Errorf("secp256k1 not available")
+	}
+
+	privPtr := em.alloc(32)
+	pubPtr := em.alloc(uint32(len(publicKey)))
+	secretPtr := em.alloc(32)
+
+	defer func() {
+		em.dealloc(privPtr)
+		em.dealloc(pubPtr)
+		em.dealloc(secretPtr)
+	}()
+
+	em.memory().Write(privPtr, privateKey)
+	em.memory().Write(pubPtr, publicKey)
+
+	res, err := em.secp256k1SharedSecret.Call(em.ctx, uint64(privPtr), uint64(pubPtr), uint64(len(publicKey)), uint64(secretPtr))
+	if err != nil {
+		return nil, err
+	}
+	if len(res) > 0 && res[0] != 0 {
+		return nil, fmt.Errorf("secp256k1 ECDH failed")
+	}
+
+	secret, _ := em.memory().Read(secretPtr, 32)
+	result := make([]byte, 32)
+	copy(result, secret)
+	return result, nil
+}
+
+// P256GenerateKeypair generates a P-256 key pair
+func (em *EncryptionModule) P256GenerateKeypair() (privateKey, publicKey []byte, err error) {
+	if em.p256GenerateKeypair == nil {
+		return nil, nil, fmt.Errorf("P-256 not available")
+	}
+
+	privPtr := em.alloc(32)
+	pubPtr := em.alloc(33) // compressed public key
+
+	defer func() {
+		em.dealloc(privPtr)
+		em.dealloc(pubPtr)
+	}()
+
+	res, err := em.p256GenerateKeypair.Call(em.ctx, uint64(privPtr), uint64(pubPtr))
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(res) > 0 && res[0] != 0 {
+		return nil, nil, fmt.Errorf("P-256 keypair generation failed")
+	}
+
+	priv, _ := em.memory().Read(privPtr, 32)
+	pub, _ := em.memory().Read(pubPtr, 33)
+
+	privateKey = make([]byte, 32)
+	publicKey = make([]byte, 33)
+	copy(privateKey, priv)
+	copy(publicKey, pub)
+	return privateKey, publicKey, nil
+}
+
+// P256SharedSecret computes ECDH shared secret
+func (em *EncryptionModule) P256SharedSecret(privateKey, publicKey []byte) ([]byte, error) {
+	if em.p256SharedSecret == nil {
+		return nil, fmt.Errorf("P-256 not available")
+	}
+
+	privPtr := em.alloc(32)
+	pubPtr := em.alloc(uint32(len(publicKey)))
+	secretPtr := em.alloc(32)
+
+	defer func() {
+		em.dealloc(privPtr)
+		em.dealloc(pubPtr)
+		em.dealloc(secretPtr)
+	}()
+
+	em.memory().Write(privPtr, privateKey)
+	em.memory().Write(pubPtr, publicKey)
+
+	res, err := em.p256SharedSecret.Call(em.ctx, uint64(privPtr), uint64(pubPtr), uint64(len(publicKey)), uint64(secretPtr))
+	if err != nil {
+		return nil, err
+	}
+	if len(res) > 0 && res[0] != 0 {
+		return nil, fmt.Errorf("P-256 ECDH failed")
+	}
+
+	secret, _ := em.memory().Read(secretPtr, 32)
+	result := make([]byte, 32)
+	copy(result, secret)
+	return result, nil
 }
 
 func main() {
@@ -715,6 +994,115 @@ func main() {
 				}
 			}
 		}
+
+		results = append(results, result.Summary())
+	}
+
+	// Test 4: ECDH Key Exchange Verification
+	// Verify we can decrypt Node.js ECDH-encrypted binaries using the header data
+	fmt.Println("\nTest 4: ECDH Key Exchange Verification")
+	fmt.Println("----------------------------------------")
+
+	ecdhCurves := []struct {
+		name        string
+		generate    func() ([]byte, []byte, error)
+		sharedFunc  func([]byte, []byte) ([]byte, error)
+		pubKeySize  int
+	}{
+		{"x25519", em.X25519GenerateKeypair, em.X25519SharedSecret, 32},
+		{"secp256k1", em.Secp256k1GenerateKeypair, em.Secp256k1SharedSecret, 33},
+		{"p256", em.P256GenerateKeypair, em.P256SharedSecret, 33},
+	}
+
+	for _, curve := range ecdhCurves {
+		result := &TestResult{Name: fmt.Sprintf("ECDH %s", curve.name)}
+
+		// Read the ECDH header from Node.js test
+		headerPath := filepath.Join("..", "..", "vectors", "binary", fmt.Sprintf("monster_ecdh_%s_header.json", curve.name))
+		headerData, err := os.ReadFile(headerPath)
+		if err != nil {
+			result.Fail(fmt.Sprintf("Read %s header", curve.name), err)
+			results = append(results, result.Summary())
+			continue
+		}
+
+		var header ECDHHeader
+		if err := json.Unmarshal(headerData, &header); err != nil {
+			result.Fail("Parse header", err)
+			results = append(results, result.Summary())
+			continue
+		}
+		result.Pass(fmt.Sprintf("Read %s header", curve.name))
+
+		// Read encrypted binary
+		encryptedPath := filepath.Join("..", "..", "vectors", "binary", fmt.Sprintf("monster_ecdh_%s.bin", curve.name))
+		encryptedData, err := os.ReadFile(encryptedPath)
+		if err != nil {
+			result.Fail("Read encrypted binary", err)
+			results = append(results, result.Summary())
+			continue
+		}
+		result.Pass(fmt.Sprintf("Read encrypted binary: %d bytes", len(encryptedData)))
+
+		// Use the session key from the header (for verification)
+		sessionKey, err := hex.DecodeString(header.SessionKey)
+		if err != nil {
+			result.Fail("Decode session key", err)
+			results = append(results, result.Summary())
+			continue
+		}
+
+		sessionIV, err := hex.DecodeString(header.SessionIV)
+		if err != nil {
+			result.Fail("Decode session IV", err)
+			results = append(results, result.Summary())
+			continue
+		}
+
+		// Decrypt using the session key
+		decrypted := make([]byte, len(encryptedData))
+		copy(decrypted, encryptedData)
+		if err := em.DecryptBytes(sessionKey, sessionIV, decrypted); err != nil {
+			result.Fail("Decrypt with session key", err)
+			results = append(results, result.Summary())
+			continue
+		}
+		result.Pass("Decrypted with session key")
+
+		// Verify FlatBuffer file identifier
+		if len(decrypted) >= 8 && string(decrypted[4:8]) == "MONS" {
+			result.Pass("FlatBuffer identifier MONS intact")
+		} else {
+			result.Fail("FlatBuffer identifier corrupted", nil)
+		}
+
+		// Test ECDH keypair generation
+		privKey, pubKey, err := curve.generate()
+		if err != nil {
+			result.Fail("Generate keypair", err)
+			results = append(results, result.Summary())
+			continue
+		}
+		result.Pass(fmt.Sprintf("Generated %s keypair (priv: %d, pub: %d)", curve.name, len(privKey), len(pubKey)))
+
+		// Test ECDH shared secret (with self)
+		shared, err := curve.sharedFunc(privKey, pubKey)
+		if err != nil {
+			result.Fail("Compute shared secret", err)
+			results = append(results, result.Summary())
+			continue
+		}
+		result.Pass(fmt.Sprintf("Computed shared secret: %d bytes", len(shared)))
+
+		// Test HKDF key derivation
+		context := fmt.Sprintf("flatbuffers-%s-encryption", curve.name)
+		keyMaterial, err := em.HKDF(shared, nil, []byte(context), 48)
+		if err != nil {
+			result.Fail("HKDF derivation", err)
+			results = append(results, result.Summary())
+			continue
+		}
+		result.Pass(fmt.Sprintf("HKDF derived %d bytes", len(keyMaterial)))
 
 		results = append(results, result.Summary())
 	}

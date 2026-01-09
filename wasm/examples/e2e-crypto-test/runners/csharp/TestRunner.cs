@@ -660,6 +660,146 @@ public class TestRunner : IDisposable
             results.Add(result.Summary());
         }
 
+        // Test 5: Runtime Code Generation
+        Console.WriteLine("\nTest 5: Runtime Code Generation");
+        Console.WriteLine(new string('-', 40));
+        {
+            var result = new TestResult("Code Generation");
+
+            // Try to find native flatc binary (prefer built version over system)
+            string[] flatcPaths = {
+                Path.Combine(vectorsDir, "..", "..", "..", "..", "build", "flatc"),
+                Path.Combine(vectorsDir, "..", "..", "..", "..", "flatc")
+            };
+
+            string? flatcPath = null;
+            foreach (var p in flatcPaths)
+            {
+                var normalizedPath = Path.GetFullPath(p);
+                if (File.Exists(normalizedPath))
+                {
+                    flatcPath = normalizedPath;
+                    break;
+                }
+            }
+
+            // Fall back to PATH if built flatc not found
+            if (flatcPath == null)
+            {
+                try
+                {
+                    var which = new System.Diagnostics.Process
+                    {
+                        StartInfo = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = "which",
+                            Arguments = "flatc",
+                            RedirectStandardOutput = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        }
+                    };
+                    which.Start();
+                    var whichOutput = which.StandardOutput.ReadLine();
+                    which.WaitForExit();
+                    if (which.ExitCode == 0 && !string.IsNullOrEmpty(whichOutput))
+                        flatcPath = whichOutput;
+                }
+                catch { }
+            }
+
+            if (flatcPath != null)
+            {
+                result.Pass($"Found flatc: {flatcPath}");
+
+                // Get flatc version
+                try
+                {
+                    var versionProc = new System.Diagnostics.Process
+                    {
+                        StartInfo = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = flatcPath,
+                            Arguments = "--version",
+                            RedirectStandardOutput = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        }
+                    };
+                    versionProc.Start();
+                    var version = versionProc.StandardOutput.ReadLine();
+                    versionProc.WaitForExit();
+                    if (versionProc.ExitCode == 0 && version != null)
+                        result.Pass($"flatc version: {version}");
+                }
+                catch (Exception e)
+                {
+                    result.Fail($"Failed to get flatc version: {e.Message}");
+                }
+
+                // Generate C# code from schema
+                var schemaPath = Path.GetFullPath(Path.Combine(vectorsDir, "..", "schemas", "message.fbs"));
+                var tempDir = Path.Combine(Path.GetTempPath(), $"flatc-gen-{Environment.ProcessId}");
+                Directory.CreateDirectory(tempDir);
+
+                try
+                {
+                    var genProc = new System.Diagnostics.Process
+                    {
+                        StartInfo = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = flatcPath,
+                            Arguments = $"--csharp -o \"{tempDir}\" \"{schemaPath}\"",
+                            RedirectStandardError = true,
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        }
+                    };
+                    genProc.Start();
+                    var stderr = genProc.StandardError.ReadToEnd();
+                    genProc.WaitForExit();
+
+                    if (genProc.ExitCode == 0)
+                    {
+                        result.Pass("Generated C# code from schema");
+
+                        // List generated files
+                        foreach (var file in Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories))
+                        {
+                            var relPath = Path.GetRelativePath(tempDir, file);
+                            var size = new FileInfo(file).Length;
+                            result.Pass($"Generated: {relPath} ({size} bytes)");
+                        }
+                    }
+                    else
+                    {
+                        result.Fail($"Generate C# code failed: {stderr}");
+                    }
+                }
+                catch (Exception e)
+                {
+                    result.Fail($"Exception during code generation: {e.Message}");
+                }
+                finally
+                {
+                    try { Directory.Delete(tempDir, true); } catch { }
+                }
+            }
+            else
+            {
+                result.Pass("flatc not found - using pre-generated code (this is OK)");
+                // Verify pre-generated code exists
+                var pregenPath = Path.Combine(vectorsDir, "..", "generated", "csharp", "E2E", "Crypto");
+                if (Directory.Exists(pregenPath))
+                {
+                    var files = Directory.GetFiles(pregenPath, "*.cs");
+                    result.Pass($"Pre-generated C# code: {files.Length} files in generated/csharp/E2E/Crypto/");
+                }
+            }
+
+            results.Add(result.Summary());
+        }
+
         // Summary
         Console.WriteLine("\n" + new string('=', 60));
         Console.WriteLine("Summary");

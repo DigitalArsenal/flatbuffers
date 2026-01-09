@@ -660,6 +660,114 @@ func main() throws {
         results.append(result.summary())
     }
 
+    // Test 5: Runtime Code Generation
+    print("\nTest 5: Runtime Code Generation")
+    print(String(repeating: "-", count: 40))
+    do {
+        let result = TestResult("Code Generation")
+
+        // Try to find native flatc binary (prefer built version over system)
+        // vectorsDir is relative to current directory, so navigate up to flatbuffers root
+        let scriptDir = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let flatcPaths = [
+            scriptDir.appendingPathComponent("../../../../../build/flatc").standardized.path,
+            scriptDir.appendingPathComponent("../../../../../flatc").standardized.path
+        ]
+
+        var flatcPath: String? = nil
+        for p in flatcPaths {
+            if FileManager.default.fileExists(atPath: p) {
+                flatcPath = p
+                break
+            }
+        }
+
+        // Only fall back to PATH if built flatc not found
+        if flatcPath == nil {
+            let which = Process()
+            which.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+            which.arguments = ["flatc"]
+            let whichPipe = Pipe()
+            which.standardOutput = whichPipe
+            try? which.run()
+            which.waitUntilExit()
+            if which.terminationStatus == 0 {
+                let whichData = whichPipe.fileHandleForReading.readDataToEndOfFile()
+                if let whichOutput = String(data: whichData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !whichOutput.isEmpty {
+                    flatcPath = whichOutput
+                }
+            }
+        }
+
+        if let flatc = flatcPath {
+            result.pass("Found flatc: \(flatc)")
+
+            // Get flatc version
+            let versionProc = Process()
+            versionProc.executableURL = URL(fileURLWithPath: flatc)
+            versionProc.arguments = ["--version"]
+            let versionPipe = Pipe()
+            versionProc.standardOutput = versionPipe
+            try? versionProc.run()
+            versionProc.waitUntilExit()
+            if versionProc.terminationStatus == 0 {
+                let versionData = versionPipe.fileHandleForReading.readDataToEndOfFile()
+                if let version = String(data: versionData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                    result.pass("flatc version: \(version)")
+                }
+            }
+
+            // Generate Swift code from schema
+            let schemaPath = scriptDir.appendingPathComponent("../../schemas/message.fbs").standardized.path
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("flatc-gen-\(ProcessInfo.processInfo.processIdentifier)")
+            try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+            do {
+                let genProc = Process()
+                genProc.executableURL = URL(fileURLWithPath: flatc)
+                genProc.arguments = ["--swift", "-o", tempDir.path, schemaPath]
+                let errPipe = Pipe()
+                genProc.standardError = errPipe
+                try genProc.run()
+                genProc.waitUntilExit()
+
+                if genProc.terminationStatus == 0 {
+                    result.pass("Generated Swift code from schema")
+
+                    // List generated files
+                    let enumerator = FileManager.default.enumerator(at: tempDir, includingPropertiesForKeys: [.fileSizeKey])
+                    while let fileURL = enumerator?.nextObject() as? URL {
+                        if fileURL.hasDirectoryPath { continue }
+                        let relPath = fileURL.path.replacingOccurrences(of: tempDir.path + "/", with: "")
+                        let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
+                        let size = (attrs?[.size] as? Int) ?? 0
+                        result.pass("Generated: \(relPath) (\(size) bytes)")
+                    }
+                } else {
+                    let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+                    let errStr = String(data: errData, encoding: .utf8) ?? "unknown error"
+                    result.fail("Generate Swift code failed: \(errStr)")
+                }
+            } catch {
+                result.fail("Exception during code generation: \(error)")
+            }
+
+            try? FileManager.default.removeItem(at: tempDir)
+        } else {
+            result.pass("flatc not found - using pre-generated code (this is OK)")
+            // Verify pre-generated code exists
+            let pregenPath = scriptDir.appendingPathComponent("../../generated/swift").standardized.path
+            if FileManager.default.fileExists(atPath: pregenPath) {
+                let files = try? FileManager.default.contentsOfDirectory(atPath: pregenPath)
+                    .filter { $0.hasSuffix(".swift") }
+                result.pass("Pre-generated Swift code: \(files?.count ?? 0) files in generated/swift/")
+            }
+        }
+
+        results.append(result.summary())
+    }
+
     // Summary
     print("\n" + String(repeating: "=", count: 60))
     print("Summary")

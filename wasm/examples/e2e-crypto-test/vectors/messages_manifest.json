@@ -1,0 +1,114 @@
+{
+  "created": "2026-01-09T02:38:21.675Z",
+  "schema": "schemas/message.fbs",
+  "messages": [
+    {
+      "name": "simple",
+      "file": "secure_message_simple.bin",
+      "size": 152,
+      "encrypted": false
+    },
+    {
+      "name": "nested",
+      "file": "secure_message_nested.bin",
+      "size": 224,
+      "encrypted": false
+    },
+    {
+      "name": "unicode",
+      "file": "secure_message_unicode.bin",
+      "size": 200,
+      "encrypted": false
+    },
+    {
+      "name": "binary_heavy",
+      "file": "secure_message_binary_heavy.bin",
+      "size": 400,
+      "encrypted": false
+    },
+    {
+      "name": "empty",
+      "file": "secure_message_empty.bin",
+      "size": 92,
+      "encrypted": false
+    },
+    {
+      "name": "max_values",
+      "file": "secure_message_max_values.bin",
+      "size": 160,
+      "encrypted": false
+    },
+    {
+      "name": "simple_x25519",
+      "file": "secure_message_simple_x25519.bin",
+      "size": 152,
+      "encrypted": true,
+      "curve": "x25519",
+      "header": "secure_message_simple_x25519_header.json"
+    },
+    {
+      "name": "nested_x25519",
+      "file": "secure_message_nested_x25519.bin",
+      "size": 224,
+      "encrypted": true,
+      "curve": "x25519",
+      "header": "secure_message_nested_x25519_header.json"
+    },
+    {
+      "name": "unicode_x25519",
+      "file": "secure_message_unicode_x25519.bin",
+      "size": 200,
+      "encrypted": true,
+      "curve": "x25519",
+      "header": "secure_message_unicode_x25519_header.json"
+    },
+    {
+      "name": "simple_secp256k1",
+      "file": "secure_message_simple_secp256k1.bin",
+      "size": 152,
+      "encrypted": true,
+      "curve": "secp256k1",
+      "header": "secure_message_simple_secp256k1_header.json"
+    },
+    {
+      "name": "nested_secp256k1",
+      "file": "secure_message_nested_secp256k1.bin",
+      "size": 224,
+      "encrypted": true,
+      "curve": "secp256k1",
+      "header": "secure_message_nested_secp256k1_header.json"
+    },
+    {
+      "name": "unicode_secp256k1",
+      "file": "secure_message_unicode_secp256k1.bin",
+      "size": 200,
+      "encrypted": true,
+      "curve": "secp256k1",
+      "header": "secure_message_unicode_secp256k1_header.json"
+    },
+    {
+      "name": "simple_p256",
+      "file": "secure_message_simple_p256.bin",
+      "size": 152,
+      "encrypted": true,
+      "curve": "p256",
+      "header": "secure_message_simple_p256_header.json"
+    },
+    {
+      "name": "nested_p256",
+      "file": "secure_message_nested_p256.bin",
+      "size": 224,
+      "encrypted": true,
+      "curve": "p256",
+      "header": "secure_message_nested_p256_header.json"
+    },
+    {
+      "name": "unicode_p256",
+      "file": "secure_message_unicode_p256.bin",
+      "size": 200,
+      "encrypted": true,
+      "curve": "p256",
+      "header": "secure_message_unicode_p256_header.json"
+    }
+  ]
+}

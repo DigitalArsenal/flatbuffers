@@ -3,9 +3,9 @@
   "key_exchange": 1,
   "symmetric": 0,
   "kdf": 0,
-  "ephemeral_public_key": "0275f260f01618d1824abe85960e3d0d7ce1c7747cdcee42607320e5cfa7c416ed",
+  "ephemeral_public_key": "0343c40c9a6b55dea066111e50ad01bf3384446b89e0592b09d2407759adedb6b9",
   "context": "flatbuffers-secp256k1-encryption",
-  "timestamp": 1767924558303,
-  "session_key": "238c6ddd6a752bd2d29acbd541fa2b17556194758fdcd2331e20ff35d881fa8d",
-  "session_iv": "684d9a53adfd17013fbcd252fdab6d95"
+  "timestamp": 1767960409350,
+  "session_key": "e11644d0988dfc2dba7bf89adf4a9ec0dc4591a94a76f5e420be311f36082c2e",
+  "session_iv": "8452b2f5084271ceeb0980d7902d935a"
 }

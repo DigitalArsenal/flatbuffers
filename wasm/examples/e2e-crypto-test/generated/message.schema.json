@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "definitions": {
+    "E2E_Crypto_Curve" : {
+      "type" : "string",
+      "enum": ["X25519", "Secp256k1", "P256"]
+    },
+    "E2E_Crypto_KeyExchangeAlgorithm" : {
+      "type" : "string",
+      "enum": ["ECDH"]
+    },
+    "E2E_Crypto_EncryptionAlgorithm" : {
+      "type" : "string",
+      "enum": ["AES_256_CTR"]
+    },
+    "E2E_Crypto_PublicKey" : {
+      "type" : "object",
+      "description" : "Public key for key exchange (as a table to support all languages)",
+      "properties" : {
+        "data" : {
+                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" :255},
+                "description" : "Key bytes (32 or 33 bytes depending on curve)"
+              },
+        "length" : {
+                "type" : "integer", "minimum" : 0, "maximum" :255,
+                "description" : "Length of valid key data (32 for X25519/P-256, 33 for secp256k1 compressed)"
+              }
+      },
+      "additionalProperties" : false
+    },
+    "E2E_Crypto_EncryptionHeader" : {
+      "type" : "object",
+      "description" : "Encryption header - sent out-of-band with encrypted message",
+      "properties" : {
+        "version" : {
+                "type" : "integer", "minimum" : 0, "maximum" : 65535,
+                "description" : "Protocol version"
+              },
+        "key_exchange" : {
+                "$ref" : "#/definitions/E2E_Crypto_KeyExchangeAlgorithm",
+                "description" : "Key exchange algorithm"
+              },
+        "curve" : {
+                "$ref" : "#/definitions/E2E_Crypto_Curve",
+                "description" : "Elliptic curve used"
+              },
+        "encryption" : {
+                "$ref" : "#/definitions/E2E_Crypto_EncryptionAlgorithm",
+                "description" : "Encryption algorithm"
+              },
+        "ephemeral_public_key" : {
+                "$ref" : "#/definitions/E2E_Crypto_PublicKey",
+                "description" : "Ephemeral public key from sender (for ECDH)"
+              },
+        "sender_id" : {
+                "type" : "string",
+                "description" : "Sender identifier (optional)"
+              },
+        "timestamp" : {
+                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615,
+                "description" : "Timestamp (Unix epoch seconds)"
+              }
+      },
+      "additionalProperties" : false
+    },
+    "E2E_Crypto_Payload" : {
+      "type" : "object",
+      "description" : "A simple payload for testing",
+      "properties" : {
+        "message" : {
+                "type" : "string",
+                "description" : "Message content"
+              },
+        "value" : {
+                "type" : "integer", "minimum" : -2147483648, "maximum" : 2147483647,
+                "description" : "Numeric value"
+              },
+        "data" : {
+                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" :255},
+                "description" : "Binary data"
+              },
+        "nested" : {
+                "type" : "array", "items" : {"$ref" : "#/definitions/E2E_Crypto_Payload"},
+                "description" : "Nested messages"
+              },
+        "is_encrypted" : {
+                "type" : "boolean",
+                "description" : "Boolean flag"
+              }
+      },
+      "additionalProperties" : false
+    },
+    "E2E_Crypto_SecureMessage" : {
+      "type" : "object",
+      "description" : "Wrapper for encrypted/unencrypted messages",
+      "properties" : {
+        "id" : {
+                "type" : "string",
+                "description" : "Unique message identifier"
+              },
+        "sender" : {
+                "type" : "string",
+                "description" : "Sender identifier"
+              },
+        "recipient" : {
+                "type" : "string",
+                "description" : "Recipient identifier"
+              },
+        "payload" : {
+                "$ref" : "#/definitions/E2E_Crypto_Payload",
+                "description" : "Message payload (can be encrypted)"
+              },
+        "timestamp" : {
+                "type" : "integer", "minimum" : 0, "maximum" : 18446744073709551615,
+                "description" : "Timestamp"
+              },
+        "signature" : {
+                "type" : "array", "items" : {"type" : "integer", "minimum" : 0, "maximum" :255},
+                "description" : "Signature (optional, for signed messages)"
+              }
+      },
+      "additionalProperties" : false
+    }
+  },
+  "$ref" : "#/definitions/E2E_Crypto_SecureMessage"
+}

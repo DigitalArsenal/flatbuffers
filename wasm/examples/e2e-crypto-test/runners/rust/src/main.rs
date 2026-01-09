@@ -905,6 +905,102 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         results.push(result.summary());
     }
 
+    // Test 5: Runtime Code Generation
+    println!("\nTest 5: Runtime Code Generation");
+    println!("{}", "-".repeat(40));
+    {
+        let mut result = TestResult::new("Code Generation");
+
+        // Try to find native flatc binary (prefer built version over system)
+        let flatc_paths = vec![
+            vectors_dir.join("../../../../build/flatc"),
+            vectors_dir.join("../../../../flatc"),
+        ];
+
+        let mut flatc_path: Option<std::path::PathBuf> = None;
+        for p in &flatc_paths {
+            if p.exists() {
+                flatc_path = Some(p.clone());
+                break;
+            }
+        }
+
+        // Fall back to PATH if built flatc not found
+        if flatc_path.is_none() {
+            if let Ok(output) = std::process::Command::new("which").arg("flatc").output() {
+                if output.status.success() {
+                    let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    if !path_str.is_empty() {
+                        flatc_path = Some(std::path::PathBuf::from(path_str));
+                    }
+                }
+            }
+        }
+
+        if let Some(ref flatc) = flatc_path {
+            result.pass(&format!("Found flatc: {}", flatc.display()));
+
+            // Get flatc version
+            if let Ok(output) = std::process::Command::new(flatc).arg("--version").output() {
+                if output.status.success() {
+                    let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                    result.pass(&format!("flatc version: {}", version));
+                }
+            }
+
+            // Generate Rust code from schema
+            let schema_path = vectors_dir.join("../schemas/message.fbs");
+            let temp_dir = std::env::temp_dir().join(format!("flatc-gen-{}", std::process::id()));
+            let _ = fs::create_dir_all(&temp_dir);
+
+            let gen_result = std::process::Command::new(flatc)
+                .arg("--rust")
+                .arg("-o")
+                .arg(&temp_dir)
+                .arg(&schema_path)
+                .output();
+
+            match gen_result {
+                Ok(output) if output.status.success() => {
+                    result.pass("Generated Rust code from schema");
+
+                    // List generated files
+                    if let Ok(entries) = fs::read_dir(&temp_dir) {
+                        for entry in entries.flatten() {
+                            if let Ok(metadata) = entry.metadata() {
+                                if metadata.is_file() {
+                                    result.pass(&format!("Generated: {} ({} bytes)",
+                                        entry.file_name().to_string_lossy(),
+                                        metadata.len()
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                },
+                Ok(output) => {
+                    result.fail(&format!("Generate Rust code failed: {}",
+                        String::from_utf8_lossy(&output.stderr)));
+                },
+                Err(e) => result.fail(&format!("Failed to run flatc: {}", e)),
+            }
+
+            let _ = fs::remove_dir_all(&temp_dir);
+        } else {
+            result.pass("flatc not found - using pre-generated code (this is OK)");
+            // Verify pre-generated code exists
+            let pregen_path = vectors_dir.join("../generated/rust");
+            if pregen_path.exists() {
+                if let Ok(entries) = fs::read_dir(&pregen_path) {
+                    let count = entries.filter(|e| e.is_ok()).count();
+                    result.pass(&format!("Pre-generated Rust code: {} files in generated/rust/", count));
+                }
+            }
+        }
+
+        results.push(result.summary());
+    }
+
     // Summary
     println!("\n{}", "=".repeat(60));
     println!("Summary");

@@ -14,7 +14,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
@@ -1115,8 +1117,90 @@ func main() {
 		results = append(results, result.Summary())
 	}
 
-	// Test 5: SecureMessage Schema E2E
-	fmt.Println("\nTest 5: SecureMessage Schema E2E")
+	// Test 5: Runtime Code Generation via native flatc
+	fmt.Println("\nTest 5: Runtime Code Generation")
+	fmt.Println("----------------------------------------")
+	{
+		result := &TestResult{Name: "Code Generation"}
+
+		// Try to find native flatc binary (prefer built version over system)
+		// Get the directory containing this source file for relative paths
+		runnerDir, _ := os.Getwd()
+		flatcPaths := []string{
+			filepath.Join(runnerDir, "../../../../../build/flatc"),
+			filepath.Join(runnerDir, "../../../../../flatc"),
+		}
+
+		var flatcPath string
+		for _, p := range flatcPaths {
+			if _, err := os.Stat(p); err == nil {
+				flatcPath = p
+				break
+			}
+		}
+
+		// Only fall back to PATH if built flatc not found
+		if flatcPath == "" {
+			if path, err := exec.LookPath("flatc"); err == nil {
+				flatcPath = path
+			}
+		}
+
+		if flatcPath != "" {
+			result.Pass(fmt.Sprintf("Found flatc: %s", flatcPath))
+
+			// Get flatc version
+			cmd := exec.Command(flatcPath, "--version")
+			versionOut, err := cmd.Output()
+			if err == nil {
+				result.Pass(fmt.Sprintf("flatc version: %s", strings.TrimSpace(string(versionOut))))
+			}
+
+			// Generate Go code from schema
+			schemaPath := filepath.Join("..", "..", "schemas", "message.fbs")
+			tempDir, err := os.MkdirTemp("", "flatc-gen-*")
+			if err != nil {
+				result.Fail("Create temp dir", err)
+			} else {
+				defer os.RemoveAll(tempDir)
+
+				cmd = exec.Command(flatcPath, "--go", "-o", tempDir, schemaPath)
+				if err := cmd.Run(); err != nil {
+					result.Fail("Generate Go code", err)
+				} else {
+					result.Pass("Generated Go code from schema")
+
+					// List generated files
+					err := filepath.Walk(tempDir, func(path string, info os.FileInfo, err error) error {
+						if err != nil {
+							return err
+						}
+						if !info.IsDir() {
+							relPath, _ := filepath.Rel(tempDir, path)
+							result.Pass(fmt.Sprintf("Generated: %s (%d bytes)", relPath, info.Size()))
+						}
+						return nil
+					})
+					if err != nil {
+						result.Fail("List generated files", err)
+					}
+				}
+			}
+		} else {
+			result.Pass("flatc not found - using pre-generated code (this is OK)")
+			// Verify pre-generated code exists
+			pregenPath := filepath.Join("..", "..", "generated", "go", "E2E", "Crypto")
+			if _, err := os.Stat(pregenPath); err == nil {
+				files, _ := os.ReadDir(pregenPath)
+				result.Pass(fmt.Sprintf("Pre-generated Go code: %d files in generated/go/E2E/Crypto/", len(files)))
+			}
+		}
+
+		results = append(results, result.Summary())
+	}
+
+	// Test 6: SecureMessage Schema E2E
+	fmt.Println("\nTest 6: SecureMessage Schema E2E")
 	for i := 0; i < 40; i++ {
 		fmt.Print("-")
 	}

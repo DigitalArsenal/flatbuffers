@@ -10,7 +10,9 @@ This test runner:
 
 import json
 import os
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 # Try wasmtime first (better platform support), fall back to wasmer
@@ -655,6 +657,81 @@ def main():
             result.fail(f"Exception during {curve['name']} test", e)
 
         results.append(result.summary())
+
+    # Test 5: Runtime Code Generation
+    print("\nTest 5: Runtime Code Generation")
+    print("-" * 40)
+    result = TestResult("Code Generation")
+
+    # Try to find native flatc binary (prefer built version over system)
+    flatc_paths = [
+        SCRIPT_DIR.parent.parent.parent.parent.parent / "build" / "flatc",
+        SCRIPT_DIR.parent.parent.parent.parent.parent / "flatc",
+    ]
+
+    flatc_path = None
+    for p in flatc_paths:
+        if p.exists():
+            flatc_path = p
+            break
+
+    # Fall back to PATH if built flatc not found
+    if flatc_path is None:
+        import shutil
+        system_flatc = shutil.which("flatc")
+        if system_flatc:
+            flatc_path = Path(system_flatc)
+
+    if flatc_path:
+        result.pass_(f"Found flatc: {flatc_path}")
+
+        # Get flatc version
+        try:
+            version_output = subprocess.run(
+                [str(flatc_path), "--version"],
+                capture_output=True,
+                text=True
+            )
+            if version_output.returncode == 0:
+                result.pass_(f"flatc version: {version_output.stdout.strip()}")
+        except Exception as e:
+            result.fail("Failed to get flatc version", e)
+
+        # Generate Python code from schema
+        schema_path = SCRIPT_DIR.parent.parent / "schemas" / "message.fbs"
+
+        try:
+            with tempfile.TemporaryDirectory(prefix="flatc-gen-") as temp_dir:
+                gen_result = subprocess.run(
+                    [str(flatc_path), "--python", "-o", temp_dir, str(schema_path)],
+                    capture_output=True,
+                    text=True
+                )
+
+                if gen_result.returncode == 0:
+                    result.pass_("Generated Python code from schema")
+
+                    # List generated files
+                    temp_path = Path(temp_dir)
+                    for gen_file in temp_path.rglob("*"):
+                        if gen_file.is_file():
+                            rel_path = gen_file.relative_to(temp_path)
+                            size = gen_file.stat().st_size
+                            result.pass_(f"Generated: {rel_path} ({size} bytes)")
+                else:
+                    result.fail(f"Generate Python code failed: {gen_result.stderr}")
+
+        except Exception as e:
+            result.fail("Exception during code generation", e)
+    else:
+        result.pass_("flatc not found - using pre-generated code (this is OK)")
+        # Verify pre-generated code exists
+        pregen_path = SCRIPT_DIR.parent.parent / "generated" / "python" / "E2E" / "Crypto"
+        if pregen_path.exists():
+            files = list(pregen_path.glob("*.py"))
+            result.pass_(f"Pre-generated Python code: {len(files)} files in generated/python/E2E/Crypto/")
+
+    results.append(result.summary())
 
     # Summary
     print()

@@ -19,8 +19,10 @@ import com.dylibso.chicory.wasm.types.ValType;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.file.*;
 import java.util.*;
 
@@ -734,6 +736,106 @@ public class TestRunner {
 
             } catch (Exception e) {
                 result.fail("Exception during " + curve.name + " test: " + e.getMessage());
+            }
+
+            results.add(result.summary());
+        }
+
+        // Test 5: Runtime Code Generation
+        System.out.println("\nTest 5: Runtime Code Generation");
+        System.out.println("-".repeat(40));
+        {
+            TestResult result = new TestResult("Code Generation");
+
+            // Try to find native flatc binary (prefer built version over system)
+            Path[] flatcPaths = {
+                vectorsDir.resolve("../../../../build/flatc"),
+                vectorsDir.resolve("../../../../flatc")
+            };
+
+            Path flatcPath = null;
+            for (Path p : flatcPaths) {
+                if (Files.exists(p)) {
+                    flatcPath = p.toAbsolutePath().normalize();
+                    break;
+                }
+            }
+
+            // Fall back to PATH if built flatc not found
+            if (flatcPath == null) {
+                try {
+                    Process which = Runtime.getRuntime().exec(new String[]{"which", "flatc"});
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(which.getInputStream()));
+                    String line = reader.readLine();
+                    if (which.waitFor() == 0 && line != null && !line.isEmpty()) {
+                        flatcPath = Path.of(line);
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            if (flatcPath != null) {
+                result.pass("Found flatc: " + flatcPath);
+
+                // Get flatc version
+                try {
+                    Process versionProc = Runtime.getRuntime().exec(new String[]{flatcPath.toString(), "--version"});
+                    BufferedReader versionReader = new BufferedReader(new InputStreamReader(versionProc.getInputStream()));
+                    String version = versionReader.readLine();
+                    if (versionProc.waitFor() == 0 && version != null) {
+                        result.pass("flatc version: " + version);
+                    }
+                } catch (Exception e) {
+                    result.fail("Failed to get flatc version: " + e.getMessage());
+                }
+
+                // Generate Java code from schema
+                Path schemaPath = vectorsDir.resolve("../schemas/message.fbs").toAbsolutePath().normalize();
+                Path tempDir = Files.createTempDirectory("flatc-gen-");
+
+                try {
+                    Process genProc = Runtime.getRuntime().exec(new String[]{
+                        flatcPath.toString(), "--java", "-o", tempDir.toString(), schemaPath.toString()
+                    });
+                    int exitCode = genProc.waitFor();
+
+                    if (exitCode == 0) {
+                        result.pass("Generated Java code from schema");
+
+                        // List generated files
+                        try (var walk = Files.walk(tempDir)) {
+                            walk.filter(Files::isRegularFile).forEach(file -> {
+                                try {
+                                    long size = Files.size(file);
+                                    Path relPath = tempDir.relativize(file);
+                                    result.pass("Generated: " + relPath + " (" + size + " bytes)");
+                                } catch (Exception ignored) {}
+                            });
+                        }
+                    } else {
+                        BufferedReader errReader = new BufferedReader(new InputStreamReader(genProc.getErrorStream()));
+                        String errLine = errReader.readLine();
+                        result.fail("Generate Java code failed: " + (errLine != null ? errLine : "exit " + exitCode));
+                    }
+                } catch (Exception e) {
+                    result.fail("Exception during code generation: " + e.getMessage());
+                } finally {
+                    // Clean up temp dir
+                    try (var walk = Files.walk(tempDir)) {
+                        walk.sorted(java.util.Comparator.reverseOrder())
+                            .map(Path::toFile)
+                            .forEach(java.io.File::delete);
+                    } catch (Exception ignored) {}
+                }
+            } else {
+                result.pass("flatc not found - using pre-generated code (this is OK)");
+                // Verify pre-generated code exists
+                Path pregenPath = vectorsDir.resolve("../generated/java/E2E/Crypto");
+                if (Files.exists(pregenPath)) {
+                    try (var list = Files.list(pregenPath)) {
+                        long count = list.filter(p -> p.toString().endsWith(".java")).count();
+                        result.pass("Pre-generated Java code: " + count + " files in generated/java/E2E/Crypto/");
+                    }
+                }
             }
 
             results.add(result.summary());

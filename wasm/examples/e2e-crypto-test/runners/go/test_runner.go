@@ -417,6 +417,14 @@ func NewEncryptionModule(ctx context.Context, wasmBytes []byte) (*EncryptionModu
 
 	wasmModule = mod
 
+	// Call _initialize if present (required for Emscripten modules)
+	if initFunc := mod.ExportedFunction("_initialize"); initFunc != nil {
+		if _, err := initFunc.Call(ctx); err != nil {
+			// Non-fatal - some modules don't need initialization
+			fmt.Printf("Warning: _initialize failed: %v\n", err)
+		}
+	}
+
 	return &EncryptionModule{
 		runtime:                  r,
 		module:                   mod,
@@ -1103,6 +1111,103 @@ func main() {
 			continue
 		}
 		result.Pass(fmt.Sprintf("HKDF derived %d bytes", len(keyMaterial)))
+
+		results = append(results, result.Summary())
+	}
+
+	// Test 5: SecureMessage Schema E2E
+	fmt.Println("\nTest 5: SecureMessage Schema E2E")
+	for i := 0; i < 40; i++ {
+		fmt.Print("-")
+	}
+	fmt.Println()
+	{
+		result := &TestResult{Name: "SecureMessage E2E"}
+		vectorsDir := filepath.Join("..", "..", "vectors")
+		binaryDir := filepath.Join(vectorsDir, "binary")
+
+		// Load ECDH message keys
+		ecdhMsgKeysPath := filepath.Join(vectorsDir, "ecdh_message_keys.json")
+		ecdhMsgKeysData, err := os.ReadFile(ecdhMsgKeysPath)
+		if err != nil {
+			result.Fail("Load ecdh_message_keys.json (run create_messages.mjs first)", err)
+		} else {
+			var ecdhMsgKeys map[string]struct {
+				Alice struct {
+					Private string `json:"private"`
+					Public  string `json:"public"`
+				} `json:"alice"`
+				Bob struct {
+					Private string `json:"private"`
+					Public  string `json:"public"`
+				} `json:"bob"`
+			}
+			if err := json.Unmarshal(ecdhMsgKeysData, &ecdhMsgKeys); err != nil {
+				result.Fail("Parse ecdh_message_keys.json", err)
+			} else {
+				// Test each curve
+				curves := []struct {
+					name       string
+					sharedFunc func(privKey, pubKey []byte) ([]byte, error)
+				}{
+					{"x25519", em.X25519SharedSecret},
+					{"secp256k1", em.Secp256k1SharedSecret},
+					{"p256", em.P256SharedSecret},
+				}
+
+				for _, curve := range curves {
+					// Read encrypted SecureMessage
+					encPath := filepath.Join(binaryDir, fmt.Sprintf("secure_message_simple_%s.bin", curve.name))
+					encData, err := os.ReadFile(encPath)
+					if err != nil {
+						result.Fail(fmt.Sprintf("Read secure_message_%s.bin", curve.name), err)
+						continue
+					}
+
+					keys := ecdhMsgKeys[curve.name]
+					bobPriv, _ := hex.DecodeString(keys.Bob.Private)
+					alicePub, _ := hex.DecodeString(keys.Alice.Public)
+
+					// Compute shared secret
+					sharedSecret, err := curve.sharedFunc(bobPriv, alicePub)
+					if err != nil {
+						result.Fail(fmt.Sprintf("ECDH shared secret %s", curve.name), err)
+						continue
+					}
+
+					// Derive session key + IV
+					keyMaterial, err := em.HKDF(sharedSecret, nil, []byte("E2E-Crypto-Test"), 48)
+					if err != nil {
+						result.Fail(fmt.Sprintf("HKDF %s", curve.name), err)
+						continue
+					}
+
+					sessionKey := keyMaterial[:32]
+					iv := keyMaterial[32:48]
+
+					// Decrypt
+					decrypted := make([]byte, len(encData))
+					copy(decrypted, encData)
+					if err := em.DecryptBytes(sessionKey, iv, decrypted); err != nil {
+						result.Fail(fmt.Sprintf("Decrypt %s", curve.name), err)
+						continue
+					}
+
+					// Verify FlatBuffer magic (SECM)
+					if len(decrypted) >= 8 {
+						// FlatBuffer identifier is at offset 4-7
+						identifier := string(decrypted[4:8])
+						if identifier == "SECM" {
+							result.Pass(fmt.Sprintf("SecureMessage %s: decrypted, identifier=SECM", curve.name))
+						} else {
+							result.Fail(fmt.Sprintf("SecureMessage %s: wrong identifier '%s'", curve.name, identifier), nil)
+						}
+					} else {
+						result.Fail(fmt.Sprintf("SecureMessage %s: too short (%d bytes)", curve.name, len(decrypted)), nil)
+					}
+				}
+			}
+		}
 
 		results = append(results, result.Summary())
 	}

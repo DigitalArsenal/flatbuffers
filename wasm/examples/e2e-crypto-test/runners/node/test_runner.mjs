@@ -2045,6 +2045,147 @@ async function main() {
     console.log('\n  Saved: vectors/ecdh_test_keys.json');
   }
 
+  // Test 7: SecureMessage Schema Tests
+  // Verifies the custom E2E schema (message.fbs) can be used for encrypted messages
+  console.log('\nTest 7: SecureMessage Schema E2E');
+  console.log('-'.repeat(40));
+  {
+    const result = new TestResult('SecureMessage E2E');
+
+    // Load the SecureMessage schema
+    const messageSchemaPath = join(__dirname, '../../schemas/message.fbs');
+    if (existsSync(messageSchemaPath)) {
+      try {
+        const messageSchema = readFileSync(messageSchemaPath, 'utf8');
+        const messageSchemaInput = {
+          entry: '/message.fbs',
+          files: { '/message.fbs': messageSchema }
+        };
+
+        // Test 7a: Read unencrypted SecureMessage
+        const unencryptedPath = join(outputDir, 'secure_message_simple.bin');
+        if (existsSync(unencryptedPath)) {
+          const unencryptedBin = readFileSync(unencryptedPath);
+          const json = flatc.generateJSON(messageSchemaInput, {
+            path: '/input.bin',
+            data: new Uint8Array(unencryptedBin)
+          });
+          const parsed = JSON.parse(json);
+
+          if (parsed.id === 'msg-001' && parsed.sender === 'alice' && parsed.recipient === 'bob') {
+            result.pass('Read SecureMessage simple: id=msg-001, alice->bob');
+          } else {
+            result.fail(`SecureMessage simple mismatch: ${JSON.stringify(parsed)}`);
+          }
+
+          if (parsed.payload?.message === 'Hello, World!' && parsed.payload?.value === 42) {
+            result.pass('SecureMessage payload: "Hello, World!", value=42');
+          } else {
+            result.fail(`Payload mismatch: ${JSON.stringify(parsed.payload)}`);
+          }
+        } else {
+          result.fail('secure_message_simple.bin not found (run create_messages.mjs first)');
+        }
+
+        // Test 7b: Read nested SecureMessage
+        const nestedPath = join(outputDir, 'secure_message_nested.bin');
+        if (existsSync(nestedPath)) {
+          const nestedBin = readFileSync(nestedPath);
+          const json = flatc.generateJSON(messageSchemaInput, {
+            path: '/input.bin',
+            data: new Uint8Array(nestedBin)
+          });
+          const parsed = JSON.parse(json);
+
+          if (parsed.payload?.nested?.length === 2) {
+            result.pass('SecureMessage nested: 2 child payloads');
+          } else {
+            result.fail(`Nested payload mismatch: ${parsed.payload?.nested?.length}`);
+          }
+        }
+
+        // Test 7c: Read unicode SecureMessage
+        const unicodePath = join(outputDir, 'secure_message_unicode.bin');
+        if (existsSync(unicodePath)) {
+          const unicodeBin = readFileSync(unicodePath);
+          const json = flatc.generateJSON(messageSchemaInput, {
+            path: '/input.bin',
+            data: new Uint8Array(unicodeBin)
+          });
+          const parsed = JSON.parse(json);
+
+          if (parsed.sender === 'alice-鍵' && parsed.recipient === 'bob-🔑') {
+            result.pass('SecureMessage unicode: alice-鍵 -> bob-🔑');
+          } else {
+            result.fail(`Unicode mismatch: ${parsed.sender} -> ${parsed.recipient}`);
+          }
+        }
+
+        // Test 7d: Decrypt and verify encrypted SecureMessage
+        if (encryptionAvailable) {
+          const ecdhMessageKeysPath = join(vectorsDir, 'ecdh_message_keys.json');
+          if (existsSync(ecdhMessageKeysPath)) {
+            const ecdhMsgKeys = JSON.parse(readFileSync(ecdhMessageKeysPath, 'utf8'));
+
+            for (const curveName of ['x25519', 'secp256k1', 'p256']) {
+              const encPath = join(outputDir, `secure_message_simple_${curveName}.bin`);
+              const headerPath = join(outputDir, `secure_message_simple_${curveName}_header.json`);
+
+              if (existsSync(encPath) && existsSync(headerPath)) {
+                const encryptedBin = new Uint8Array(readFileSync(encPath));
+                const header = JSON.parse(readFileSync(headerPath, 'utf8'));
+                const keys = ecdhMsgKeys[curveName];
+
+                // Bob derives the same session key using his private key and Alice's ephemeral public
+                const bobPriv = new Uint8Array(Buffer.from(keys.bob.private, 'hex'));
+                const alicePub = new Uint8Array(Buffer.from(keys.alice.public, 'hex'));
+
+                const sharedSecretFunc = curveName === 'x25519' ? encryption.x25519SharedSecret :
+                                         curveName === 'secp256k1' ? encryption.secp256k1SharedSecret :
+                                         encryption.p256SharedSecret;
+
+                const sharedSecret = sharedSecretFunc(bobPriv, alicePub);
+                const keyMaterial = encryption.hkdf(
+                  sharedSecret,
+                  new Uint8Array(0),
+                  new TextEncoder().encode('E2E-Crypto-Test'),
+                  48
+                );
+                const sessionKey = keyMaterial.slice(0, 32);
+                const iv = keyMaterial.slice(32, 48);
+
+                // Decrypt
+                encryption.decryptBytes(encryptedBin, sessionKey, iv);
+
+                // Verify decrypted content
+                const decryptedJson = flatc.generateJSON(messageSchemaInput, {
+                  path: '/input.bin',
+                  data: encryptedBin
+                });
+                const decrypted = JSON.parse(decryptedJson);
+
+                if (decrypted.id === 'msg-001' && decrypted.payload?.message === 'Hello, World!') {
+                  result.pass(`Decrypted SecureMessage ${curveName}: OK`);
+                } else {
+                  result.fail(`Decrypted SecureMessage ${curveName}: content mismatch`);
+                }
+              }
+            }
+          } else {
+            result.fail('ecdh_message_keys.json not found (run create_messages.mjs first)');
+          }
+        }
+
+      } catch (e) {
+        result.fail('Exception during SecureMessage test', e.message);
+      }
+    } else {
+      result.fail('schemas/message.fbs not found');
+    }
+
+    results.push(result.summary());
+  }
+
   // Summary
   console.log('\n' + '='.repeat(60));
   console.log('Summary');

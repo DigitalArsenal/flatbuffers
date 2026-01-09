@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "key_exchange": 0,
+  "symmetric": 0,
+  "kdf": 0,
+  "ephemeral_public_key": "5955ef235145e1b3f6c39f988b714cd4dacf9b98e958a96d389e6739871d785e",
+  "context": "flatbuffers-x25519-encryption",
+  "timestamp": 1767924558286,
+  "session_key": "0b4a6eebe8f6a2da624e16b68f4bb06208557cff99c2591bf6be7238d18c2afe",
+  "session_iv": "5f209710219757bddb9913b8547ddf84"
+}

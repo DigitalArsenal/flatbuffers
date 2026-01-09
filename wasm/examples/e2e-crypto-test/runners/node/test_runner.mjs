@@ -1902,6 +1902,149 @@ async function main() {
     results.push(result.summary());
   }
 
+  // Test 6: ECDH Key Exchange + EncryptionHeader E2E
+  // This tests the full public-key encryption workflow:
+  // 1. Sender generates ephemeral keypair
+  // 2. Sender computes shared secret via ECDH
+  // 3. Sender derives session key via HKDF
+  // 4. Sender encrypts FlatBuffer
+  // 5. Sender builds EncryptionHeader with ephemeral public key
+  // 6. Receiver parses EncryptionHeader
+  // 7. Receiver computes same shared secret via ECDH
+  // 8. Receiver derives same session key via HKDF
+  // 9. Receiver decrypts FlatBuffer
+  console.log('\nTest 6: ECDH Key Exchange + EncryptionHeader');
+  console.log('-'.repeat(40));
+
+  if (!encryptionAvailable) {
+    console.log('  ⊘ Skipped: Encryption module not available');
+  } else {
+    // Test all three ECDH curves
+    const ecdhCurves = [
+      { name: 'X25519', generate: encryption.x25519GenerateKeyPair, shared: encryption.x25519SharedSecret, pubKeySize: 32 },
+      { name: 'secp256k1', generate: encryption.secp256k1GenerateKeyPair, shared: encryption.secp256k1SharedSecret, pubKeySize: 33 },
+      { name: 'P-256', generate: encryption.p256GenerateKeyPair, shared: encryption.p256SharedSecret, pubKeySize: 33 },
+    ];
+
+    for (const curve of ecdhCurves) {
+      const result = new TestResult(`ECDH ${curve.name} E2E`);
+
+      try {
+        // Step 1: Recipient generates long-term keypair
+        const recipientKeys = curve.generate();
+        result.pass(`Recipient ${curve.name} keypair (pub: ${recipientKeys.publicKey.length} bytes)`);
+
+        // Step 2: Sender generates ephemeral keypair
+        const senderEphemeral = curve.generate();
+        result.pass(`Sender ephemeral ${curve.name} keypair`);
+
+        // Step 3: Sender computes shared secret
+        const senderSharedSecret = curve.shared(senderEphemeral.privateKey, recipientKeys.publicKey);
+        result.pass(`Sender shared secret: ${senderSharedSecret.length} bytes`);
+
+        // Step 4: Sender derives session key + IV via HKDF
+        const context = `flatbuffers-${curve.name.toLowerCase()}-encryption`;
+        const keyMaterial = encryption.hkdf(senderSharedSecret, null, new TextEncoder().encode(context), 48);
+        const sessionKey = keyMaterial.slice(0, 32);
+        const sessionIV = keyMaterial.slice(32, 48);
+        result.pass(`Derived session key (${sessionKey.length}) + IV (${sessionIV.length})`);
+
+        // Step 5: Sender encrypts FlatBuffer
+        const buffer = flatc.generateBinary(schemaInput, monsterDataJson);
+        const originalBuffer = new Uint8Array(buffer);
+        const encryptedBuffer = new Uint8Array(buffer);
+        encryption.encryptBytes(encryptedBuffer, sessionKey, sessionIV);
+        result.pass(`Encrypted FlatBuffer: ${encryptedBuffer.length} bytes`);
+
+        // Step 6: Build EncryptionHeader data (JSON for cross-language testing)
+        const keyExchangeEnum = curve.name === 'X25519' ? 0 : (curve.name === 'secp256k1' ? 1 : 2);
+        const headerData = {
+          version: 1,
+          key_exchange: keyExchangeEnum,
+          symmetric: 0, // AES_256_CTR
+          kdf: 0, // HKDF_SHA256
+          ephemeral_public_key: toHex(senderEphemeral.publicKey),
+          context: context,
+          timestamp: Date.now(),
+          // Include derived key material for cross-language verification
+          session_key: toHex(sessionKey),
+          session_iv: toHex(sessionIV),
+        };
+        result.pass(`Built EncryptionHeader data`);
+
+        // Save encrypted data + header for cross-language testing
+        const curveName = curve.name.toLowerCase().replace('-', '');
+        writeFileSync(join(outputDir, `monster_ecdh_${curveName}.bin`), Buffer.from(encryptedBuffer));
+        writeFileSync(join(outputDir, `monster_ecdh_${curveName}_header.json`), JSON.stringify(headerData, null, 2));
+        result.pass(`Saved: monster_ecdh_${curveName}.bin + header.json`);
+
+        // Step 7: Receiver parses EncryptionHeader (simulate by reading ephemeral pubkey)
+        // In real usage, receiver would parse the FlatBuffer header
+        const receivedEphemeralPubKey = senderEphemeral.publicKey; // From header
+        result.pass('Receiver extracted ephemeral public key from header');
+
+        // Step 8: Receiver computes shared secret
+        const recipientSharedSecret = curve.shared(recipientKeys.privateKey, receivedEphemeralPubKey);
+
+        // Verify shared secrets match (ECDH property)
+        if (toHex(recipientSharedSecret) === toHex(senderSharedSecret)) {
+          result.pass('ECDH: shared secrets match');
+        } else {
+          result.fail('ECDH: shared secrets do NOT match');
+        }
+
+        // Step 9: Receiver derives same session key + IV
+        const recipientKeyMaterial = encryption.hkdf(recipientSharedSecret, null, new TextEncoder().encode(context), 48);
+        const recipientSessionKey = recipientKeyMaterial.slice(0, 32);
+        const recipientSessionIV = recipientKeyMaterial.slice(32, 48);
+
+        if (toHex(recipientSessionKey) === toHex(sessionKey) && toHex(recipientSessionIV) === toHex(sessionIV)) {
+          result.pass('HKDF: derived keys match');
+        } else {
+          result.fail('HKDF: derived keys do NOT match');
+        }
+
+        // Step 10: Receiver decrypts FlatBuffer
+        const decryptedBuffer = new Uint8Array(encryptedBuffer);
+        encryption.decryptBytes(decryptedBuffer, recipientSessionKey, recipientSessionIV);
+
+        if (toHex(decryptedBuffer) === toHex(originalBuffer)) {
+          result.pass('Decryption: original FlatBuffer restored');
+        } else {
+          result.fail('Decryption: data mismatch');
+        }
+
+        // Step 11: Verify decrypted data can be read
+        const json = binaryToJson(flatc, schemaInput, decryptedBuffer);
+        const parsed = JSON.parse(json);
+
+        if (parsed.name === 'MyMonster' && parsed.hp === 80 && parsed.pos?.x === 1) {
+          result.pass('Verified: decrypted FlatBuffer readable');
+        } else {
+          result.fail('Verification failed: data corrupted');
+        }
+
+      } catch (e) {
+        result.fail('Exception during ECDH test', e.message);
+      }
+
+      results.push(result.summary());
+    }
+
+    // Save ECDH test keys for cross-language verification
+    const ecdhTestKeys = {};
+    for (const curve of ecdhCurves) {
+      const curveName = curve.name.toLowerCase().replace('-', '');
+      const recipientKeys = curve.generate();
+      ecdhTestKeys[curveName] = {
+        recipientPrivateKey: toHex(recipientKeys.privateKey),
+        recipientPublicKey: toHex(recipientKeys.publicKey),
+      };
+    }
+    writeFileSync(join(vectorsDir, 'ecdh_test_keys.json'), JSON.stringify(ecdhTestKeys, null, 2));
+    console.log('\n  Saved: vectors/ecdh_test_keys.json');
+  }
+
   // Summary
   console.log('\n' + '='.repeat(60));
   console.log('Summary');

@@ -22,6 +22,13 @@ class EncryptionModule {
     private let sha256Func: Function
     private let encryptBytesFunc: Function
     private let decryptBytesFunc: Function
+    private let hkdfFunc: Function
+    private let x25519GenerateFunc: Function
+    private let x25519SharedFunc: Function
+    private let secp256k1GenerateFunc: Function
+    private let secp256k1SharedFunc: Function
+    private let p256GenerateFunc: Function
+    private let p256SharedFunc: Function
 
     init(wasmPath: String) throws {
         let module = try parseWasm(filePath: FilePath(wasmPath))
@@ -49,6 +56,13 @@ class EncryptionModule {
         self.sha256Func = instance.exports[function: "wasi_sha256"]!
         self.encryptBytesFunc = instance.exports[function: "wasi_encrypt_bytes"]!
         self.decryptBytesFunc = instance.exports[function: "wasi_decrypt_bytes"]!
+        self.hkdfFunc = instance.exports[function: "wasi_hkdf"]!
+        self.x25519GenerateFunc = instance.exports[function: "wasi_x25519_generate_keypair"]!
+        self.x25519SharedFunc = instance.exports[function: "wasi_x25519_shared_secret"]!
+        self.secp256k1GenerateFunc = instance.exports[function: "wasi_secp256k1_generate_keypair"]!
+        self.secp256k1SharedFunc = instance.exports[function: "wasi_secp256k1_shared_secret"]!
+        self.p256GenerateFunc = instance.exports[function: "wasi_p256_generate_keypair"]!
+        self.p256SharedFunc = instance.exports[function: "wasi_p256_shared_secret"]!
 
         // Call _initialize if present (required for Emscripten modules)
         if let initFunc = instance.exports[function: "_initialize"] {
@@ -218,6 +232,127 @@ class EncryptionModule {
 
         return readBytes(dataPtr, data.count)
     }
+
+    func hkdf(ikm: [UInt8], salt: [UInt8], info: [UInt8], outputLen: Int) throws -> [UInt8] {
+        let ikmPtr = try allocate(max(ikm.count, 1))
+        let saltPtr = try allocate(max(salt.count, 1))
+        let infoPtr = try allocate(max(info.count, 1))
+        let outPtr = try allocate(outputLen)
+
+        defer {
+            try? deallocate(ikmPtr)
+            try? deallocate(saltPtr)
+            try? deallocate(infoPtr)
+            try? deallocate(outPtr)
+        }
+
+        if !ikm.isEmpty { writeBytes(ikmPtr, ikm) }
+        if !salt.isEmpty { writeBytes(saltPtr, salt) }
+        if !info.isEmpty { writeBytes(infoPtr, info) }
+
+        _ = try hkdfFunc([.i32(ikmPtr), .i32(UInt32(ikm.count)),
+                         .i32(saltPtr), .i32(UInt32(salt.count)),
+                         .i32(infoPtr), .i32(UInt32(info.count)),
+                         .i32(outPtr), .i32(UInt32(outputLen))])
+
+        return readBytes(outPtr, outputLen)
+    }
+
+    func x25519GenerateKeypair() throws -> (privateKey: [UInt8], publicKey: [UInt8]) {
+        let privPtr = try allocate(32)
+        let pubPtr = try allocate(32)
+
+        defer {
+            try? deallocate(privPtr)
+            try? deallocate(pubPtr)
+        }
+
+        _ = try x25519GenerateFunc([.i32(privPtr), .i32(pubPtr)])
+
+        return (readBytes(privPtr, 32), readBytes(pubPtr, 32))
+    }
+
+    func x25519SharedSecret(privateKey: [UInt8], publicKey: [UInt8]) throws -> [UInt8] {
+        let privPtr = try allocate(32)
+        let pubPtr = try allocate(32)
+        let sharedPtr = try allocate(32)
+
+        defer {
+            try? deallocate(privPtr)
+            try? deallocate(pubPtr)
+            try? deallocate(sharedPtr)
+        }
+
+        writeBytes(privPtr, privateKey)
+        writeBytes(pubPtr, publicKey)
+        _ = try x25519SharedFunc([.i32(privPtr), .i32(pubPtr), .i32(sharedPtr)])
+
+        return readBytes(sharedPtr, 32)
+    }
+
+    func secp256k1GenerateKeypair() throws -> (privateKey: [UInt8], publicKey: [UInt8]) {
+        let privPtr = try allocate(32)
+        let pubPtr = try allocate(33)
+
+        defer {
+            try? deallocate(privPtr)
+            try? deallocate(pubPtr)
+        }
+
+        _ = try secp256k1GenerateFunc([.i32(privPtr), .i32(pubPtr)])
+
+        return (readBytes(privPtr, 32), readBytes(pubPtr, 33))
+    }
+
+    func secp256k1SharedSecret(privateKey: [UInt8], publicKey: [UInt8]) throws -> [UInt8] {
+        let privPtr = try allocate(32)
+        let pubPtr = try allocate(publicKey.count)
+        let sharedPtr = try allocate(32)
+
+        defer {
+            try? deallocate(privPtr)
+            try? deallocate(pubPtr)
+            try? deallocate(sharedPtr)
+        }
+
+        writeBytes(privPtr, privateKey)
+        writeBytes(pubPtr, publicKey)
+        _ = try secp256k1SharedFunc([.i32(privPtr), .i32(pubPtr), .i32(UInt32(publicKey.count)), .i32(sharedPtr)])
+
+        return readBytes(sharedPtr, 32)
+    }
+
+    func p256GenerateKeypair() throws -> (privateKey: [UInt8], publicKey: [UInt8]) {
+        let privPtr = try allocate(32)
+        let pubPtr = try allocate(33)
+
+        defer {
+            try? deallocate(privPtr)
+            try? deallocate(pubPtr)
+        }
+
+        _ = try p256GenerateFunc([.i32(privPtr), .i32(pubPtr)])
+
+        return (readBytes(privPtr, 32), readBytes(pubPtr, 33))
+    }
+
+    func p256SharedSecret(privateKey: [UInt8], publicKey: [UInt8]) throws -> [UInt8] {
+        let privPtr = try allocate(32)
+        let pubPtr = try allocate(publicKey.count)
+        let sharedPtr = try allocate(32)
+
+        defer {
+            try? deallocate(privPtr)
+            try? deallocate(pubPtr)
+            try? deallocate(sharedPtr)
+        }
+
+        writeBytes(privPtr, privateKey)
+        writeBytes(pubPtr, publicKey)
+        _ = try p256SharedFunc([.i32(privPtr), .i32(pubPtr), .i32(UInt32(publicKey.count)), .i32(sharedPtr)])
+
+        return readBytes(sharedPtr, 32)
+    }
 }
 
 func toHex(_ bytes: [UInt8]) -> String {
@@ -235,6 +370,23 @@ func fromHex(_ hex: String) -> [UInt8] {
         index = nextIndex
     }
     return bytes
+}
+
+struct ECDHHeader: Codable {
+    let version: Int
+    let key_exchange: Int
+    let ephemeral_public_key: String
+    let context: String?
+    let session_key: String
+    let session_iv: String
+}
+
+struct ECDHCurve {
+    let name: String
+    let pubKeySize: Int
+    let keyExchange: Int
+    let generate: () throws -> (privateKey: [UInt8], publicKey: [UInt8])
+    let shared: ([UInt8], [UInt8]) throws -> [UInt8]
 }
 
 class TestResult {
@@ -372,6 +524,137 @@ func main() throws {
             }
         } else {
             result.fail("Binary directory not found - run Node.js test first")
+        }
+
+        results.append(result.summary())
+    }
+
+    // Test 4: ECDH Key Exchange Verification
+    print("\nTest 4: ECDH Key Exchange Verification")
+    print(String(repeating: "-", count: 40))
+
+    // Read unencrypted data for cross-language verification
+    let binaryDir = "\(vectorsDir)/binary"
+    var unencryptedData: Data? = nil
+    if FileManager.default.fileExists(atPath: "\(binaryDir)/monster_unencrypted.bin") {
+        unencryptedData = try? Data(contentsOf: URL(fileURLWithPath: "\(binaryDir)/monster_unencrypted.bin"))
+    }
+
+    let ecdhCurves: [ECDHCurve] = [
+        ECDHCurve(name: "X25519", pubKeySize: 32, keyExchange: 0,
+                  generate: em.x25519GenerateKeypair, shared: em.x25519SharedSecret),
+        ECDHCurve(name: "secp256k1", pubKeySize: 33, keyExchange: 1,
+                  generate: em.secp256k1GenerateKeypair, shared: em.secp256k1SharedSecret),
+        ECDHCurve(name: "P-256", pubKeySize: 33, keyExchange: 2,
+                  generate: em.p256GenerateKeypair, shared: em.p256SharedSecret)
+    ]
+
+    for curve in ecdhCurves {
+        let result = TestResult("ECDH \(curve.name)")
+
+        do {
+            // Generate keypairs for Alice and Bob
+            let alice = try curve.generate()
+            let bob = try curve.generate()
+
+            if alice.publicKey.count == curve.pubKeySize {
+                result.pass("Generated Alice keypair (pub: \(alice.publicKey.count) bytes)")
+            } else {
+                result.fail("Alice public key wrong size: \(alice.publicKey.count)")
+            }
+
+            if bob.publicKey.count == curve.pubKeySize {
+                result.pass("Generated Bob keypair (pub: \(bob.publicKey.count) bytes)")
+            } else {
+                result.fail("Bob public key wrong size: \(bob.publicKey.count)")
+            }
+
+            // Compute shared secrets
+            let aliceShared = try curve.shared(alice.privateKey, bob.publicKey)
+            let bobShared = try curve.shared(bob.privateKey, alice.publicKey)
+
+            if aliceShared == bobShared {
+                result.pass("Shared secrets match (\(aliceShared.count) bytes)")
+            } else {
+                result.fail("Shared secrets DO NOT match!")
+                result.fail("  Alice: \(toHex(aliceShared))")
+                result.fail("  Bob:   \(toHex(bobShared))")
+            }
+
+            // Test HKDF key derivation from shared secret
+            let sessionMaterial = try em.hkdf(
+                ikm: aliceShared,
+                salt: Array("flatbuffers-encryption".utf8),
+                info: Array("session-key-iv".utf8),
+                outputLen: 48
+            )
+            let sessionKey = Array(sessionMaterial[0..<32])
+            let sessionIv = Array(sessionMaterial[32..<48])
+
+            if sessionKey.count == 32 && sessionIv.count == 16 {
+                result.pass("HKDF derived key (\(sessionKey.count)B) + IV (\(sessionIv.count)B)")
+            } else {
+                result.fail("HKDF output wrong size")
+            }
+
+            // Full E2E: encrypt with derived key, decrypt with same key
+            let testData = "ECDH test data for \(curve.name) encryption"
+            let plaintext = Array(testData.utf8)
+            let encrypted = try em.encrypt(key: sessionKey, iv: sessionIv, data: plaintext)
+
+            if encrypted != plaintext {
+                result.pass("Encryption with derived key modified data")
+            } else {
+                result.fail("Encryption did not modify data")
+            }
+
+            let decrypted = try em.decrypt(key: sessionKey, iv: sessionIv, data: encrypted)
+            if decrypted == plaintext {
+                result.pass("Decryption with derived key restored original")
+            } else {
+                result.fail("Decryption mismatch")
+            }
+
+            // Verify cross-language ECDH header if available
+            let headerName = curve.name.lowercased().replacingOccurrences(of: "-", with: "")
+            let headerPath = "\(binaryDir)/monster_ecdh_\(headerName)_header.json"
+            if FileManager.default.fileExists(atPath: headerPath) {
+                do {
+                    let headerData = try Data(contentsOf: URL(fileURLWithPath: headerPath))
+                    let header = try JSONDecoder().decode(ECDHHeader.self, from: headerData)
+
+                    if header.key_exchange == curve.keyExchange {
+                        result.pass("Cross-language header has correct key_exchange: \(curve.keyExchange)")
+                    } else {
+                        result.fail("Header key_exchange mismatch: \(header.key_exchange)")
+                    }
+
+                    if !header.ephemeral_public_key.isEmpty && !header.session_key.isEmpty && !header.session_iv.isEmpty {
+                        result.pass("Header contains ephemeral_public_key, session_key, session_iv")
+
+                        // Decrypt the cross-language encrypted file using Node.js session key
+                        let encryptedPath = "\(binaryDir)/monster_ecdh_\(headerName)_encrypted.bin"
+                        if FileManager.default.fileExists(atPath: encryptedPath), let unenc = unencryptedData {
+                            let nodeKey = fromHex(header.session_key)
+                            let nodeIv = fromHex(header.session_iv)
+                            let encryptedFileData = try Data(contentsOf: URL(fileURLWithPath: encryptedPath))
+                            let decryptedData = try em.decrypt(key: nodeKey, iv: nodeIv, data: Array(encryptedFileData))
+
+                            if Data(decryptedData) == unenc {
+                                result.pass("Decrypted Node.js \(curve.name) data matches original")
+                            } else {
+                                result.fail("Decrypted Node.js \(curve.name) data mismatch")
+                            }
+                        }
+                    }
+                } catch {
+                    result.fail("Error reading cross-language header: \(error)")
+                }
+            } else {
+                result.pass("(No cross-language header found at monster_ecdh_\(headerName)_header.json)")
+            }
+        } catch {
+            result.fail("Exception during \(curve.name) test: \(error)")
         }
 
         results.append(result.summary())

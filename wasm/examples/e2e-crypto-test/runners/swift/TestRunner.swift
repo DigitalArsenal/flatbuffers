@@ -77,7 +77,8 @@ class EncryptionModule {
         imports.define(module: "env", name: "__cxa_uncaught_exceptions",
             Function(store: store, parameters: [], results: [.i32]) { _, _ in [.i32(0)] })
 
-        // invoke_* stubs - void variants
+        // invoke_* trampolines - void variants
+        // These call functions from the indirect function table
         let voidInvokes: [(String, Int)] = [
             ("invoke_v", 1), ("invoke_vi", 2), ("invoke_vii", 3),
             ("invoke_viii", 4), ("invoke_viiii", 5), ("invoke_viiiii", 6),
@@ -86,13 +87,28 @@ class EncryptionModule {
         for (name, params) in voidInvokes {
             let paramTypes = Array(repeating: ValueType.i32, count: params)
             imports.define(module: "env", name: name,
-                Function(store: store, parameters: paramTypes) { _, _ in
-                    // Stub - just return without throwing
+                Function(store: store, parameters: paramTypes) { caller, args in
+                    let tableIdx = Int(args[0].i32)
+                    guard let instance = caller.instance,
+                          let table = instance.exports[table: "__indirect_function_table"],
+                          let func_ = table.getFunction(at: tableIdx, store: caller.store) else {
+                        return []
+                    }
+                    // Build args (skip table index)
+                    var funcArgs: [Value] = []
+                    for i in 1..<args.count {
+                        funcArgs.append(args[i])
+                    }
+                    do {
+                        _ = try func_(funcArgs)
+                    } catch {
+                        // Exception caught - handled by Emscripten EH
+                    }
                     return []
                 })
         }
 
-        // invoke_* stubs - i32 return variants
+        // invoke_* trampolines - i32 return variants
         let i32Invokes: [(String, Int)] = [
             ("invoke_i", 1), ("invoke_ii", 2), ("invoke_iii", 3),
             ("invoke_iiii", 4), ("invoke_iiiii", 5), ("invoke_iiiiii", 6),
@@ -101,8 +117,26 @@ class EncryptionModule {
         for (name, params) in i32Invokes {
             let paramTypes = Array(repeating: ValueType.i32, count: params)
             imports.define(module: "env", name: name,
-                Function(store: store, parameters: paramTypes, results: [.i32]) { _, _ in
-                    // Stub - just return 0
+                Function(store: store, parameters: paramTypes, results: [.i32]) { caller, args in
+                    let tableIdx = Int(args[0].i32)
+                    guard let instance = caller.instance,
+                          let table = instance.exports[table: "__indirect_function_table"],
+                          let func_ = table.getFunction(at: tableIdx, store: caller.store) else {
+                        return [.i32(0)]
+                    }
+                    // Build args (skip table index)
+                    var funcArgs: [Value] = []
+                    for i in 1..<args.count {
+                        funcArgs.append(args[i])
+                    }
+                    do {
+                        let results = try func_(funcArgs)
+                        if !results.isEmpty {
+                            return [results[0]]
+                        }
+                    } catch {
+                        // Exception caught - handled by Emscripten EH
+                    }
                     return [.i32(0)]
                 })
         }

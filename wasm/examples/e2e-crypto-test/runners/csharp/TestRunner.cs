@@ -53,9 +53,13 @@ public class TestRunner : IDisposable
 
         _malloc = GetFunction("malloc");
         _free = GetFunction("free");
-        _sha256 = GetFunction("sha256");
-        _encryptBytes = GetFunction("encrypt_bytes");
-        _decryptBytes = GetFunction("decrypt_bytes");
+        _sha256 = GetFunction("wasi_sha256");
+        _encryptBytes = GetFunction("wasi_encrypt_bytes");
+        _decryptBytes = GetFunction("wasi_decrypt_bytes");
+
+        // Call _initialize if present (required for Emscripten modules)
+        var initFunc = _instance.GetFunction("_initialize");
+        initFunc?.Invoke();
     }
 
     private Function GetFunction(string name) =>
@@ -94,9 +98,25 @@ public class TestRunner : IDisposable
         _linker.DefineFunction("wasi_snapshot_preview1", "random_get", (Caller c, int buf, int len) =>
         {
             var mem = c.GetMemory("memory");
-            mem?.Write(buf, RandomNumberGenerator.GetBytes(len));
+            if (mem != null)
+            {
+                var bytes = RandomNumberGenerator.GetBytes(len);
+                WriteBytes(mem, buf, bytes);
+            }
             return 0;
         });
+    }
+
+    private static void WriteBytes(Memory mem, int offset, byte[] data)
+    {
+        var span = mem.GetSpan(offset, data.Length);
+        data.CopyTo(span);
+    }
+
+    private static byte[] ReadBytes(Memory mem, int offset, int length)
+    {
+        var span = mem.GetSpan(offset, length);
+        return span.ToArray();
     }
 
     private void DefineEmscriptenImports()
@@ -116,41 +136,28 @@ public class TestRunner : IDisposable
 
     private void DefineInvokeTrampolines()
     {
-        _linker.DefineFunction("env", "invoke_v", (Caller c, int idx) => InvokeTable(idx));
-        _linker.DefineFunction("env", "invoke_vi", (Caller c, int idx, int a) => InvokeTable(idx, a));
-        _linker.DefineFunction("env", "invoke_vii", (Caller c, int idx, int a, int b) => InvokeTable(idx, a, b));
-        _linker.DefineFunction("env", "invoke_viii", (Caller c, int idx, int a, int b, int cc) => InvokeTable(idx, a, b, cc));
-        _linker.DefineFunction("env", "invoke_viiii", (Caller c, int idx, int a, int b, int cc, int d) => InvokeTable(idx, a, b, cc, d));
-        _linker.DefineFunction("env", "invoke_viiiii", (Caller c, int idx, int a, int b, int cc, int d, int e) => InvokeTable(idx, a, b, cc, d, e));
-        _linker.DefineFunction("env", "invoke_viiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e, int f) => InvokeTable(idx, a, b, cc, d, e, f));
-        _linker.DefineFunction("env", "invoke_viiiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e, int f, int g) => InvokeTable(idx, a, b, cc, d, e, f, g));
-        _linker.DefineFunction("env", "invoke_viiiiiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e, int f, int g, int h, int i) => InvokeTable(idx, a, b, cc, d, e, f, g, h, i));
+        _linker.DefineFunction("env", "invoke_v", (Caller c, int idx) => InvokeTableVoid(c, idx));
+        _linker.DefineFunction("env", "invoke_vi", (Caller c, int idx, int a) => InvokeTableVoid(c, idx, a));
+        _linker.DefineFunction("env", "invoke_vii", (Caller c, int idx, int a, int b) => InvokeTableVoid(c, idx, a, b));
+        _linker.DefineFunction("env", "invoke_viii", (Caller c, int idx, int a, int b, int cc) => InvokeTableVoid(c, idx, a, b, cc));
+        _linker.DefineFunction("env", "invoke_viiii", (Caller c, int idx, int a, int b, int cc, int d) => InvokeTableVoid(c, idx, a, b, cc, d));
+        _linker.DefineFunction("env", "invoke_viiiii", (Caller c, int idx, int a, int b, int cc, int d, int e) => InvokeTableVoid(c, idx, a, b, cc, d, e));
+        _linker.DefineFunction("env", "invoke_viiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e, int f) => InvokeTableVoid(c, idx, a, b, cc, d, e, f));
+        _linker.DefineFunction("env", "invoke_viiiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e, int f, int g) => InvokeTableVoid(c, idx, a, b, cc, d, e, f, g));
+        _linker.DefineFunction("env", "invoke_viiiiiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e, int f, int g, int h, int ii) => InvokeTableVoid(c, idx, a, b, cc, d, e, f, g, h, ii));
 
-        _linker.DefineFunction("env", "invoke_i", (Caller c, int idx) => InvokeTableInt(idx));
-        _linker.DefineFunction("env", "invoke_ii", (Caller c, int idx, int a) => InvokeTableInt(idx, a));
-        _linker.DefineFunction("env", "invoke_iii", (Caller c, int idx, int a, int b) => InvokeTableInt(idx, a, b));
-        _linker.DefineFunction("env", "invoke_iiii", (Caller c, int idx, int a, int b, int cc) => InvokeTableInt(idx, a, b, cc));
-        _linker.DefineFunction("env", "invoke_iiiii", (Caller c, int idx, int a, int b, int cc, int d) => InvokeTableInt(idx, a, b, cc, d));
-        _linker.DefineFunction("env", "invoke_iiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e) => InvokeTableInt(idx, a, b, cc, d, e));
-        _linker.DefineFunction("env", "invoke_iiiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e, int f) => InvokeTableInt(idx, a, b, cc, d, e, f));
-        _linker.DefineFunction("env", "invoke_iiiiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e, int f, int g) => InvokeTableInt(idx, a, b, cc, d, e, f, g));
-        _linker.DefineFunction("env", "invoke_iiiiiiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e, int f, int g, int h, int i) => InvokeTableInt(idx, a, b, cc, d, e, f, g, h, i));
+        _linker.DefineFunction("env", "invoke_i", (Caller c, int idx) => InvokeTableInt(c, idx));
+        _linker.DefineFunction("env", "invoke_ii", (Caller c, int idx, int a) => InvokeTableInt(c, idx, a));
+        _linker.DefineFunction("env", "invoke_iii", (Caller c, int idx, int a, int b) => InvokeTableInt(c, idx, a, b));
+        _linker.DefineFunction("env", "invoke_iiii", (Caller c, int idx, int a, int b, int cc) => InvokeTableInt(c, idx, a, b, cc));
+        _linker.DefineFunction("env", "invoke_iiiii", (Caller c, int idx, int a, int b, int cc, int d) => InvokeTableInt(c, idx, a, b, cc, d));
+        _linker.DefineFunction("env", "invoke_iiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e) => InvokeTableInt(c, idx, a, b, cc, d, e));
+        _linker.DefineFunction("env", "invoke_iiiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e, int f) => InvokeTableInt(c, idx, a, b, cc, d, e, f));
+        _linker.DefineFunction("env", "invoke_iiiiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e, int f, int g) => InvokeTableInt(c, idx, a, b, cc, d, e, f, g));
+        _linker.DefineFunction("env", "invoke_iiiiiiiiii", (Caller c, int idx, int a, int b, int cc, int d, int e, int f, int g, int h, int ii) => InvokeTableInt(c, idx, a, b, cc, d, e, f, g, h, ii));
     }
 
-    private void InvokeTable(int idx, params object[] args)
-    {
-        try
-        {
-            if (_functionTable != null && idx < (int)_functionTable.GetSize())
-            {
-                var func = _functionTable.GetElement((uint)idx) as Function;
-                func?.Invoke(args);
-            }
-        }
-        catch { _threwValue = 1; }
-    }
-
-    private int InvokeTableInt(int idx, params object[] args)
+    private void InvokeTableVoid(Caller caller, int idx, params int[] args)
     {
         try
         {
@@ -159,7 +166,25 @@ public class TestRunner : IDisposable
                 var func = _functionTable.GetElement((uint)idx) as Function;
                 if (func != null)
                 {
-                    var result = func.Invoke(args);
+                    var boxedArgs = args.Select(a => (ValueBox)a).ToArray();
+                    func.Invoke(boxedArgs);
+                }
+            }
+        }
+        catch { _threwValue = 1; }
+    }
+
+    private int InvokeTableInt(Caller caller, int idx, params int[] args)
+    {
+        try
+        {
+            if (_functionTable != null && idx < (int)_functionTable.GetSize())
+            {
+                var func = _functionTable.GetElement((uint)idx) as Function;
+                if (func != null)
+                {
+                    var boxedArgs = args.Select(a => (ValueBox)a).ToArray();
+                    var result = func.Invoke(boxedArgs);
                     if (result is int i) return i;
                 }
             }
@@ -176,10 +201,10 @@ public class TestRunner : IDisposable
         var dataPtr = Allocate(Math.Max(data.Length, 1));
         var hashPtr = Allocate(Sha256Size);
 
-        if (data.Length > 0) _memory.Write(dataPtr, data);
+        if (data.Length > 0) WriteBytes(_memory, dataPtr, data);
         _sha256.Invoke(dataPtr, data.Length, hashPtr);
 
-        var hash = _memory.Read(dataPtr: hashPtr, Sha256Size).ToArray();
+        var hash = ReadBytes(_memory, hashPtr, Sha256Size);
         Deallocate(dataPtr);
         Deallocate(hashPtr);
         return hash;
@@ -191,12 +216,12 @@ public class TestRunner : IDisposable
         var ivPtr = Allocate(AesIvSize);
         var dataPtr = Allocate(data.Length);
 
-        _memory.Write(keyPtr, key);
-        _memory.Write(ivPtr, iv);
-        _memory.Write(dataPtr, data);
+        WriteBytes(_memory, keyPtr, key);
+        WriteBytes(_memory, ivPtr, iv);
+        WriteBytes(_memory, dataPtr, data);
         _encryptBytes.Invoke(keyPtr, ivPtr, dataPtr, data.Length);
 
-        var encrypted = _memory.Read(dataPtr, data.Length).ToArray();
+        var encrypted = ReadBytes(_memory, dataPtr, data.Length);
         Deallocate(keyPtr);
         Deallocate(ivPtr);
         Deallocate(dataPtr);
@@ -209,12 +234,12 @@ public class TestRunner : IDisposable
         var ivPtr = Allocate(AesIvSize);
         var dataPtr = Allocate(data.Length);
 
-        _memory.Write(keyPtr, key);
-        _memory.Write(ivPtr, iv);
-        _memory.Write(dataPtr, data);
+        WriteBytes(_memory, keyPtr, key);
+        WriteBytes(_memory, ivPtr, iv);
+        WriteBytes(_memory, dataPtr, data);
         _decryptBytes.Invoke(keyPtr, ivPtr, dataPtr, data.Length);
 
-        var decrypted = _memory.Read(dataPtr, data.Length).ToArray();
+        var decrypted = ReadBytes(_memory, dataPtr, data.Length);
         Deallocate(keyPtr);
         Deallocate(ivPtr);
         Deallocate(dataPtr);

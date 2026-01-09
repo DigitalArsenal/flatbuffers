@@ -108,27 +108,32 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | Feature | Status | Notes |
 |---------|--------|-------|
 | WASM encryption loading | ✅ Done | Using Chicory 1.5.3 (pure Java) |
-| invoke_* trampolines | ⚠️ Partial | Stubs exist, need table.ref() fix |
+| invoke_* trampolines | ✅ Done | Using `instance.getMachine().call()` |
 | Exception handling stubs | ✅ Done | `__cxa_*` functions |
-| AES-256-CTR encryption | ⚠️ Partial | Returns zeros without invoke fix |
-| SHA-256 | ⚠️ Partial | Returns zeros without invoke fix |
+| AES-256-CTR encryption | ✅ Done | Calls WASM `wasi_encrypt_bytes` |
+| AES-256-CTR decryption | ✅ Done | Calls WASM (CTR symmetric) |
+| SHA-256 | ✅ Done | Calls WASM `wasi_sha256` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries |
-| **Test Status** | ⚠️ | **1/12 passing (Cross-Language only)** |
-| Runtime code generation | ❌ Not done | |
-| FlatBuffer creation | ❌ Not done | |
+| **Full test suite** | ✅ Done | **12/12 test suites passing** |
+| **Runtime code generation** | ❌ Not done | Need to call WASM flatc |
+| **FlatBuffer creation** | ❌ Not done | Need generated Java code |
+| **Full round-trip** | ❌ Not done | Create → Encrypt → Transmit → Decrypt → Read |
 
 ### C#
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| WASM encryption loading | ❌ Stub only | Need wasmtime-dotnet |
-| invoke_* trampolines | ❌ Not done | |
-| Exception handling stubs | ❌ Not done | |
-| AES-256-CTR encryption | ❌ Not done | |
-| SHA-256 | ❌ Not done | |
-| Cross-language verification | ❌ Not done | |
-| Runtime code generation | ❌ Not done | |
-| FlatBuffer creation | ❌ Not done | |
+| WASM encryption loading | ✅ Done | Using Wasmtime 22.0 (.NET 9) |
+| invoke_* trampolines | ✅ Done | Using function table lookups |
+| Exception handling stubs | ✅ Done | `__cxa_*` functions |
+| AES-256-CTR encryption | ✅ Done | Calls WASM `wasi_encrypt_bytes` |
+| AES-256-CTR decryption | ✅ Done | Calls WASM (CTR symmetric) |
+| SHA-256 | ✅ Done | Calls WASM `wasi_sha256` |
+| Cross-language verification | ✅ Done | Reads Node.js binaries |
+| **Full test suite** | ✅ Done | **12/12 test suites passing** |
+| **Runtime code generation** | ❌ Not done | Need to call WASM flatc |
+| **FlatBuffer creation** | ❌ Not done | Need generated C# code |
+| **Full round-trip** | ❌ Not done | Create → Encrypt → Transmit → Decrypt → Read |
 
 ### Swift
 
@@ -147,9 +152,9 @@ This document tracks the implementation status of the cross-language E2E encrypt
 
 | Operation | Node.js | Go | Python | Rust | Java | C# | Swift |
 |-----------|---------|-----|--------|------|------|-----|-------|
-| AES-256-CTR encrypt | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| AES-256-CTR decrypt | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
-| SHA-256 | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| AES-256-CTR encrypt | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| AES-256-CTR decrypt | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| SHA-256 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | HKDF-SHA256 | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Ed25519 keygen | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Ed25519 sign/verify | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -167,8 +172,8 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | `runners/go/test_runner.go` | Go runner | ✅ Complete (12/12) |
 | `runners/python/test_runner.py` | Python runner | ✅ Complete (12/12) |
 | `runners/rust/src/main.rs` | Rust runner | ✅ Complete (12/12) |
-| `runners/java/TestRunner.java` | Java runner | ❌ Stub only |
-| `runners/csharp/TestRunner.cs` | C# runner | ❌ Stub only |
+| `runners/java/src/.../TestRunner.java` | Java runner | ✅ Complete (12/12) |
+| `runners/csharp/TestRunner.cs` | C# runner | ✅ Complete (12/12) |
 | `runners/swift/TestRunner.swift` | Swift runner | ❌ Stub only |
 
 ## Generated Files
@@ -227,6 +232,6 @@ cd runners/rust && cargo run
 | Go | 12/12 | ✅ All passing |
 | Python | 12/12 | ✅ All passing |
 | Rust | 12/12 | ✅ All passing |
-| Java | 1/12 | ⚠️ Needs invoke_* fix |
-| C# | - | ❌ Not implemented |
+| Java | 12/12 | ✅ All passing |
+| C# | 12/12 | ✅ All passing |
 | Swift | - | ❌ Not implemented |

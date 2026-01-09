@@ -172,16 +172,22 @@ public class TestRunner {
             FunctionType.of(params, List.of()),
             (inst, args) -> {
                 // Invoke trampolines call functions from the indirect function table
-                // For now, we use stubs - the exception handling will catch failures
                 try {
-                    int idx = (int) args[0];
+                    int tableIdx = (int) args[0];
                     var table = inst.table(0);
                     if (table != null) {
-                        // Chicory table.ref() returns int (raw funcref), use instance.export instead
-                        // This is a simplified implementation that may not handle all cases
+                        // Get the function index from the table
+                        int funcIdx = table.ref(tableIdx);
+                        // Build args array for the function (skip the table index)
+                        long[] funcArgs = new long[nArgs];
+                        for (int i = 0; i < nArgs; i++) {
+                            funcArgs[i] = args[i + 1];
+                        }
+                        // Call the function through the machine
+                        inst.getMachine().call(funcIdx, funcArgs);
                     }
                 } catch (Exception e) {
-                    // Exception during invoke - handled by EH
+                    // Exception during invoke - handled by Emscripten EH
                 }
                 return null;
             }
@@ -197,16 +203,25 @@ public class TestRunner {
             FunctionType.of(params, List.of(ValType.I32)),
             (inst, args) -> {
                 // Invoke trampolines call functions from the indirect function table
-                // For now, we use stubs - the exception handling will catch failures
                 try {
-                    int idx = (int) args[0];
+                    int tableIdx = (int) args[0];
                     var table = inst.table(0);
                     if (table != null) {
-                        // Chicory table.ref() returns int (raw funcref), use instance.export instead
-                        // This is a simplified implementation that may not handle all cases
+                        // Get the function index from the table
+                        int funcIdx = table.ref(tableIdx);
+                        // Build args array for the function (skip the table index)
+                        long[] funcArgs = new long[nArgs];
+                        for (int i = 0; i < nArgs; i++) {
+                            funcArgs[i] = args[i + 1];
+                        }
+                        // Call the function through the machine
+                        long[] result = inst.getMachine().call(funcIdx, funcArgs);
+                        if (result != null && result.length > 0) {
+                            return new long[] { result[0] };
+                        }
                     }
                 } catch (Exception e) {
-                    // Exception during invoke - handled by EH
+                    // Exception during invoke - handled by Emscripten EH
                 }
                 return new long[] { 0 };
             }

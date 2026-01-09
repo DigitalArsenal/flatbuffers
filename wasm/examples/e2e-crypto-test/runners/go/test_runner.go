@@ -115,6 +115,17 @@ type EncryptionModule struct {
 	// P-256 functions
 	p256GenerateKeypair api.Function
 	p256SharedSecret    api.Function
+	p256Sign            api.Function
+	p256Verify          api.Function
+
+	// Ed25519 functions
+	ed25519GenerateKeypair api.Function
+	ed25519Sign            api.Function
+	ed25519Verify          api.Function
+
+	// secp256k1 signing
+	secp256k1Sign   api.Function
+	secp256k1Verify api.Function
 }
 
 var wasmModule api.Module
@@ -443,8 +454,15 @@ func NewEncryptionModule(ctx context.Context, wasmBytes []byte) (*EncryptionModu
 		x25519SharedSecret:       mod.ExportedFunction("wasi_x25519_shared_secret"),
 		secp256k1GenerateKeypair: mod.ExportedFunction("wasi_secp256k1_generate_keypair"),
 		secp256k1SharedSecret:    mod.ExportedFunction("wasi_secp256k1_shared_secret"),
+		secp256k1Sign:            mod.ExportedFunction("wasi_secp256k1_sign"),
+		secp256k1Verify:          mod.ExportedFunction("wasi_secp256k1_verify"),
 		p256GenerateKeypair:      mod.ExportedFunction("wasi_p256_generate_keypair"),
 		p256SharedSecret:         mod.ExportedFunction("wasi_p256_shared_secret"),
+		p256Sign:                 mod.ExportedFunction("wasi_p256_sign"),
+		p256Verify:               mod.ExportedFunction("wasi_p256_verify"),
+		ed25519GenerateKeypair:   mod.ExportedFunction("wasi_ed25519_generate_keypair"),
+		ed25519Sign:              mod.ExportedFunction("wasi_ed25519_sign"),
+		ed25519Verify:            mod.ExportedFunction("wasi_ed25519_verify"),
 	}, nil
 }
 
@@ -797,6 +815,228 @@ func (em *EncryptionModule) P256SharedSecret(privateKey, publicKey []byte) ([]by
 	result := make([]byte, 32)
 	copy(result, secret)
 	return result, nil
+}
+
+// Ed25519GenerateKeypair generates an Ed25519 keypair
+func (em *EncryptionModule) Ed25519GenerateKeypair() (privateKey, publicKey []byte, err error) {
+	if em.ed25519GenerateKeypair == nil {
+		return nil, nil, fmt.Errorf("Ed25519 not available")
+	}
+
+	privPtr := em.alloc(64) // Ed25519 private key is 64 bytes
+	pubPtr := em.alloc(32)
+
+	defer func() {
+		em.dealloc(privPtr)
+		em.dealloc(pubPtr)
+	}()
+
+	res, err := em.ed25519GenerateKeypair.Call(em.ctx, uint64(privPtr), uint64(pubPtr))
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(res) > 0 && res[0] != 0 {
+		return nil, nil, fmt.Errorf("Ed25519 keypair generation failed")
+	}
+
+	priv, _ := em.memory().Read(privPtr, 64)
+	pub, _ := em.memory().Read(pubPtr, 32)
+
+	privateKey = make([]byte, 64)
+	publicKey = make([]byte, 32)
+	copy(privateKey, priv)
+	copy(publicKey, pub)
+	return privateKey, publicKey, nil
+}
+
+// Ed25519Sign signs data using Ed25519
+func (em *EncryptionModule) Ed25519Sign(privateKey, data []byte) ([]byte, error) {
+	if em.ed25519Sign == nil {
+		return nil, fmt.Errorf("Ed25519 not available")
+	}
+
+	privPtr := em.alloc(64)
+	dataPtr := em.alloc(uint32(len(data)))
+	sigPtr := em.alloc(64) // Ed25519 signature is 64 bytes
+
+	defer func() {
+		em.dealloc(privPtr)
+		em.dealloc(dataPtr)
+		em.dealloc(sigPtr)
+	}()
+
+	em.memory().Write(privPtr, privateKey)
+	em.memory().Write(dataPtr, data)
+
+	res, err := em.ed25519Sign.Call(em.ctx, uint64(privPtr), uint64(dataPtr), uint64(len(data)), uint64(sigPtr))
+	if err != nil {
+		return nil, err
+	}
+	if len(res) > 0 && res[0] != 0 {
+		return nil, fmt.Errorf("Ed25519 signing failed")
+	}
+
+	sig, _ := em.memory().Read(sigPtr, 64)
+	result := make([]byte, 64)
+	copy(result, sig)
+	return result, nil
+}
+
+// Ed25519Verify verifies an Ed25519 signature
+func (em *EncryptionModule) Ed25519Verify(publicKey, data, signature []byte) (bool, error) {
+	if em.ed25519Verify == nil {
+		return false, fmt.Errorf("Ed25519 not available")
+	}
+
+	pubPtr := em.alloc(32)
+	dataPtr := em.alloc(uint32(len(data)))
+	sigPtr := em.alloc(64)
+
+	defer func() {
+		em.dealloc(pubPtr)
+		em.dealloc(dataPtr)
+		em.dealloc(sigPtr)
+	}()
+
+	em.memory().Write(pubPtr, publicKey)
+	em.memory().Write(dataPtr, data)
+	em.memory().Write(sigPtr, signature)
+
+	res, err := em.ed25519Verify.Call(em.ctx, uint64(pubPtr), uint64(dataPtr), uint64(len(data)), uint64(sigPtr))
+	if err != nil {
+		return false, err
+	}
+	return len(res) > 0 && res[0] == 0, nil
+}
+
+// Secp256k1Sign signs data using secp256k1
+func (em *EncryptionModule) Secp256k1Sign(privateKey, data []byte) ([]byte, error) {
+	if em.secp256k1Sign == nil {
+		return nil, fmt.Errorf("secp256k1 signing not available")
+	}
+
+	privPtr := em.alloc(32)
+	dataPtr := em.alloc(uint32(len(data)))
+	sigPtr := em.alloc(72) // DER signature can be up to 72 bytes
+	sigSizePtr := em.alloc(4)
+
+	defer func() {
+		em.dealloc(privPtr)
+		em.dealloc(dataPtr)
+		em.dealloc(sigPtr)
+		em.dealloc(sigSizePtr)
+	}()
+
+	em.memory().Write(privPtr, privateKey)
+	em.memory().Write(dataPtr, data)
+
+	res, err := em.secp256k1Sign.Call(em.ctx, uint64(privPtr), uint64(dataPtr), uint64(len(data)), uint64(sigPtr), uint64(sigSizePtr))
+	if err != nil {
+		return nil, err
+	}
+	if len(res) > 0 && res[0] != 0 {
+		return nil, fmt.Errorf("secp256k1 signing failed")
+	}
+
+	sigSizeBytes, _ := em.memory().Read(sigSizePtr, 4)
+	sigSize := uint32(sigSizeBytes[0]) | uint32(sigSizeBytes[1])<<8 | uint32(sigSizeBytes[2])<<16 | uint32(sigSizeBytes[3])<<24
+
+	sig, _ := em.memory().Read(sigPtr, sigSize)
+	result := make([]byte, sigSize)
+	copy(result, sig)
+	return result, nil
+}
+
+// Secp256k1Verify verifies a secp256k1 signature
+func (em *EncryptionModule) Secp256k1Verify(publicKey, data, signature []byte) (bool, error) {
+	if em.secp256k1Verify == nil {
+		return false, fmt.Errorf("secp256k1 verification not available")
+	}
+
+	pubPtr := em.alloc(uint32(len(publicKey)))
+	dataPtr := em.alloc(uint32(len(data)))
+	sigPtr := em.alloc(uint32(len(signature)))
+
+	defer func() {
+		em.dealloc(pubPtr)
+		em.dealloc(dataPtr)
+		em.dealloc(sigPtr)
+	}()
+
+	em.memory().Write(pubPtr, publicKey)
+	em.memory().Write(dataPtr, data)
+	em.memory().Write(sigPtr, signature)
+
+	res, err := em.secp256k1Verify.Call(em.ctx, uint64(pubPtr), uint64(len(publicKey)), uint64(dataPtr), uint64(len(data)), uint64(sigPtr), uint64(len(signature)))
+	if err != nil {
+		return false, err
+	}
+	return len(res) > 0 && res[0] == 0, nil
+}
+
+// P256Sign signs data using P-256
+func (em *EncryptionModule) P256Sign(privateKey, data []byte) ([]byte, error) {
+	if em.p256Sign == nil {
+		return nil, fmt.Errorf("P-256 signing not available")
+	}
+
+	privPtr := em.alloc(32)
+	dataPtr := em.alloc(uint32(len(data)))
+	sigPtr := em.alloc(72) // DER signature can be up to 72 bytes
+	sigSizePtr := em.alloc(4)
+
+	defer func() {
+		em.dealloc(privPtr)
+		em.dealloc(dataPtr)
+		em.dealloc(sigPtr)
+		em.dealloc(sigSizePtr)
+	}()
+
+	em.memory().Write(privPtr, privateKey)
+	em.memory().Write(dataPtr, data)
+
+	res, err := em.p256Sign.Call(em.ctx, uint64(privPtr), uint64(dataPtr), uint64(len(data)), uint64(sigPtr), uint64(sigSizePtr))
+	if err != nil {
+		return nil, err
+	}
+	if len(res) > 0 && res[0] != 0 {
+		return nil, fmt.Errorf("P-256 signing failed")
+	}
+
+	sigSizeBytes, _ := em.memory().Read(sigSizePtr, 4)
+	sigSize := uint32(sigSizeBytes[0]) | uint32(sigSizeBytes[1])<<8 | uint32(sigSizeBytes[2])<<16 | uint32(sigSizeBytes[3])<<24
+
+	sig, _ := em.memory().Read(sigPtr, sigSize)
+	result := make([]byte, sigSize)
+	copy(result, sig)
+	return result, nil
+}
+
+// P256Verify verifies a P-256 signature
+func (em *EncryptionModule) P256Verify(publicKey, data, signature []byte) (bool, error) {
+	if em.p256Verify == nil {
+		return false, fmt.Errorf("P-256 verification not available")
+	}
+
+	pubPtr := em.alloc(uint32(len(publicKey)))
+	dataPtr := em.alloc(uint32(len(data)))
+	sigPtr := em.alloc(uint32(len(signature)))
+
+	defer func() {
+		em.dealloc(pubPtr)
+		em.dealloc(dataPtr)
+		em.dealloc(sigPtr)
+	}()
+
+	em.memory().Write(pubPtr, publicKey)
+	em.memory().Write(dataPtr, data)
+	em.memory().Write(sigPtr, signature)
+
+	res, err := em.p256Verify.Call(em.ctx, uint64(pubPtr), uint64(len(publicKey)), uint64(dataPtr), uint64(len(data)), uint64(sigPtr), uint64(len(signature)))
+	if err != nil {
+		return false, err
+	}
+	return len(res) > 0 && res[0] == 0, nil
 }
 
 func main() {
@@ -1289,6 +1529,115 @@ func main() {
 					} else {
 						result.Fail(fmt.Sprintf("SecureMessage %s: too short (%d bytes)", curve.name, len(decrypted)), nil)
 					}
+				}
+			}
+		}
+
+		results = append(results, result.Summary())
+	}
+
+	// Test 7: Digital Signatures (Ed25519, secp256k1, P-256)
+	fmt.Println("\nTest 7: Digital Signatures")
+	fmt.Println("----------------------------------------")
+	{
+		result := &TestResult{Name: "Digital Signatures"}
+		testMessage := []byte("Hello, FlatBuffers! This is a test message for signing.")
+
+		// Test Ed25519
+		privKey, pubKey, err := em.Ed25519GenerateKeypair()
+		if err != nil {
+			result.Fail("Ed25519 keypair generation", err)
+		} else {
+			result.Pass(fmt.Sprintf("Ed25519 keypair generated (priv: %d, pub: %d bytes)", len(privKey), len(pubKey)))
+
+			sig, err := em.Ed25519Sign(privKey, testMessage)
+			if err != nil {
+				result.Fail("Ed25519 sign", err)
+			} else {
+				result.Pass(fmt.Sprintf("Ed25519 signature: %d bytes", len(sig)))
+
+				valid, err := em.Ed25519Verify(pubKey, testMessage, sig)
+				if err != nil {
+					result.Fail("Ed25519 verify", err)
+				} else if valid {
+					result.Pass("Ed25519 signature verified")
+				} else {
+					result.Fail("Ed25519 signature verification failed", nil)
+				}
+
+				// Verify wrong message fails
+				wrongMessage := []byte("Wrong message")
+				valid, _ = em.Ed25519Verify(pubKey, wrongMessage, sig)
+				if !valid {
+					result.Pass("Ed25519 rejects wrong message")
+				} else {
+					result.Fail("Ed25519 accepted wrong message", nil)
+				}
+			}
+		}
+
+		// Test secp256k1 signing
+		secpPriv, secpPub, err := em.Secp256k1GenerateKeypair()
+		if err != nil {
+			result.Fail("secp256k1 keypair generation", err)
+		} else {
+			result.Pass(fmt.Sprintf("secp256k1 keypair generated (priv: %d, pub: %d bytes)", len(secpPriv), len(secpPub)))
+
+			sig, err := em.Secp256k1Sign(secpPriv, testMessage)
+			if err != nil {
+				result.Fail("secp256k1 sign", err)
+			} else {
+				result.Pass(fmt.Sprintf("secp256k1 signature: %d bytes (DER)", len(sig)))
+
+				valid, err := em.Secp256k1Verify(secpPub, testMessage, sig)
+				if err != nil {
+					result.Fail("secp256k1 verify", err)
+				} else if valid {
+					result.Pass("secp256k1 signature verified")
+				} else {
+					result.Fail("secp256k1 signature verification failed", nil)
+				}
+
+				// Verify wrong message fails
+				wrongMessage := []byte("Wrong message")
+				valid, _ = em.Secp256k1Verify(secpPub, wrongMessage, sig)
+				if !valid {
+					result.Pass("secp256k1 rejects wrong message")
+				} else {
+					result.Fail("secp256k1 accepted wrong message", nil)
+				}
+			}
+		}
+
+		// Test P-256 signing
+		p256Priv, p256Pub, err := em.P256GenerateKeypair()
+		if err != nil {
+			result.Fail("P-256 keypair generation", err)
+		} else {
+			result.Pass(fmt.Sprintf("P-256 keypair generated (priv: %d, pub: %d bytes)", len(p256Priv), len(p256Pub)))
+
+			sig, err := em.P256Sign(p256Priv, testMessage)
+			if err != nil {
+				result.Fail("P-256 sign", err)
+			} else {
+				result.Pass(fmt.Sprintf("P-256 signature: %d bytes (DER)", len(sig)))
+
+				valid, err := em.P256Verify(p256Pub, testMessage, sig)
+				if err != nil {
+					result.Fail("P-256 verify", err)
+				} else if valid {
+					result.Pass("P-256 signature verified")
+				} else {
+					result.Fail("P-256 signature verification failed", nil)
+				}
+
+				// Verify wrong message fails
+				wrongMessage := []byte("Wrong message")
+				valid, _ = em.P256Verify(p256Pub, wrongMessage, sig)
+				if !valid {
+					result.Pass("P-256 rejects wrong message")
+				} else {
+					result.Fail("P-256 accepted wrong message", nil)
 				}
 			}
 		}

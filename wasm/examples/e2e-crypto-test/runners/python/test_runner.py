@@ -108,6 +108,15 @@ class WasmtimeEncryptionModule:
         self._p256_generate = self.instance.exports(self.store)["wasi_p256_generate_keypair"]
         self._p256_shared = self.instance.exports(self.store)["wasi_p256_shared_secret"]
 
+        # Signing functions
+        self._ed25519_generate = self.instance.exports(self.store)["wasi_ed25519_generate_keypair"]
+        self._ed25519_sign = self.instance.exports(self.store)["wasi_ed25519_sign"]
+        self._ed25519_verify = self.instance.exports(self.store)["wasi_ed25519_verify"]
+        self._secp256k1_sign = self.instance.exports(self.store)["wasi_secp256k1_sign"]
+        self._secp256k1_verify = self.instance.exports(self.store)["wasi_secp256k1_verify"]
+        self._p256_sign = self.instance.exports(self.store)["wasi_p256_sign"]
+        self._p256_verify = self.instance.exports(self.store)["wasi_p256_verify"]
+
         # Get indirect function table if available
         try:
             self._table = self.instance.exports(self.store)["__indirect_function_table"]
@@ -379,6 +388,133 @@ class WasmtimeEncryptionModule:
             self._free(self.store, priv_ptr)
             self._free(self.store, pub_ptr)
             self._free(self.store, shared_ptr)
+
+    def ed25519_generate_keypair(self) -> tuple[bytes, bytes]:
+        """Generate Ed25519 keypair. Returns (private_key, public_key)."""
+        priv_ptr = self._malloc(self.store, 64)  # Ed25519 private key is 64 bytes
+        pub_ptr = self._malloc(self.store, 32)
+
+        try:
+            result = self._ed25519_generate(self.store, priv_ptr, pub_ptr)
+            if result != 0:
+                raise RuntimeError("Ed25519 keypair generation failed")
+            return (self._read_memory(priv_ptr, 64), self._read_memory(pub_ptr, 32))
+        finally:
+            self._free(self.store, priv_ptr)
+            self._free(self.store, pub_ptr)
+
+    def ed25519_sign(self, private_key: bytes, data: bytes) -> bytes:
+        """Sign data using Ed25519. Returns 64-byte signature."""
+        priv_ptr = self._malloc(self.store, 64)
+        data_ptr = self._malloc(self.store, len(data))
+        sig_ptr = self._malloc(self.store, 64)
+
+        try:
+            self._write_memory(priv_ptr, private_key)
+            self._write_memory(data_ptr, data)
+            result = self._ed25519_sign(self.store, priv_ptr, data_ptr, len(data), sig_ptr)
+            if result != 0:
+                raise RuntimeError("Ed25519 signing failed")
+            return self._read_memory(sig_ptr, 64)
+        finally:
+            self._free(self.store, priv_ptr)
+            self._free(self.store, data_ptr)
+            self._free(self.store, sig_ptr)
+
+    def ed25519_verify(self, public_key: bytes, data: bytes, signature: bytes) -> bool:
+        """Verify Ed25519 signature. Returns True if valid."""
+        pub_ptr = self._malloc(self.store, 32)
+        data_ptr = self._malloc(self.store, len(data))
+        sig_ptr = self._malloc(self.store, 64)
+
+        try:
+            self._write_memory(pub_ptr, public_key)
+            self._write_memory(data_ptr, data)
+            self._write_memory(sig_ptr, signature)
+            result = self._ed25519_verify(self.store, pub_ptr, data_ptr, len(data), sig_ptr)
+            return result == 0
+        finally:
+            self._free(self.store, pub_ptr)
+            self._free(self.store, data_ptr)
+            self._free(self.store, sig_ptr)
+
+    def secp256k1_sign(self, private_key: bytes, data: bytes) -> bytes:
+        """Sign data using secp256k1. Returns DER-encoded signature."""
+        priv_ptr = self._malloc(self.store, 32)
+        data_ptr = self._malloc(self.store, len(data))
+        sig_ptr = self._malloc(self.store, 72)  # DER signature up to 72 bytes
+        sig_size_ptr = self._malloc(self.store, 4)
+
+        try:
+            self._write_memory(priv_ptr, private_key)
+            self._write_memory(data_ptr, data)
+            result = self._secp256k1_sign(self.store, priv_ptr, data_ptr, len(data), sig_ptr, sig_size_ptr)
+            if result != 0:
+                raise RuntimeError("secp256k1 signing failed")
+            sig_size_bytes = self._read_memory(sig_size_ptr, 4)
+            sig_size = int.from_bytes(sig_size_bytes, 'little')
+            return self._read_memory(sig_ptr, sig_size)
+        finally:
+            self._free(self.store, priv_ptr)
+            self._free(self.store, data_ptr)
+            self._free(self.store, sig_ptr)
+            self._free(self.store, sig_size_ptr)
+
+    def secp256k1_verify(self, public_key: bytes, data: bytes, signature: bytes) -> bool:
+        """Verify secp256k1 signature. Returns True if valid."""
+        pub_ptr = self._malloc(self.store, len(public_key))
+        data_ptr = self._malloc(self.store, len(data))
+        sig_ptr = self._malloc(self.store, len(signature))
+
+        try:
+            self._write_memory(pub_ptr, public_key)
+            self._write_memory(data_ptr, data)
+            self._write_memory(sig_ptr, signature)
+            result = self._secp256k1_verify(self.store, pub_ptr, len(public_key), data_ptr, len(data), sig_ptr, len(signature))
+            return result == 0
+        finally:
+            self._free(self.store, pub_ptr)
+            self._free(self.store, data_ptr)
+            self._free(self.store, sig_ptr)
+
+    def p256_sign(self, private_key: bytes, data: bytes) -> bytes:
+        """Sign data using P-256. Returns DER-encoded signature."""
+        priv_ptr = self._malloc(self.store, 32)
+        data_ptr = self._malloc(self.store, len(data))
+        sig_ptr = self._malloc(self.store, 72)  # DER signature up to 72 bytes
+        sig_size_ptr = self._malloc(self.store, 4)
+
+        try:
+            self._write_memory(priv_ptr, private_key)
+            self._write_memory(data_ptr, data)
+            result = self._p256_sign(self.store, priv_ptr, data_ptr, len(data), sig_ptr, sig_size_ptr)
+            if result != 0:
+                raise RuntimeError("P-256 signing failed")
+            sig_size_bytes = self._read_memory(sig_size_ptr, 4)
+            sig_size = int.from_bytes(sig_size_bytes, 'little')
+            return self._read_memory(sig_ptr, sig_size)
+        finally:
+            self._free(self.store, priv_ptr)
+            self._free(self.store, data_ptr)
+            self._free(self.store, sig_ptr)
+            self._free(self.store, sig_size_ptr)
+
+    def p256_verify(self, public_key: bytes, data: bytes, signature: bytes) -> bool:
+        """Verify P-256 signature. Returns True if valid."""
+        pub_ptr = self._malloc(self.store, len(public_key))
+        data_ptr = self._malloc(self.store, len(data))
+        sig_ptr = self._malloc(self.store, len(signature))
+
+        try:
+            self._write_memory(pub_ptr, public_key)
+            self._write_memory(data_ptr, data)
+            self._write_memory(sig_ptr, signature)
+            result = self._p256_verify(self.store, pub_ptr, len(public_key), data_ptr, len(data), sig_ptr, len(signature))
+            return result == 0
+        finally:
+            self._free(self.store, pub_ptr)
+            self._free(self.store, data_ptr)
+            self._free(self.store, sig_ptr)
 
 
 def main():
@@ -730,6 +866,86 @@ def main():
         if pregen_path.exists():
             files = list(pregen_path.glob("*.py"))
             result.pass_(f"Pre-generated Python code: {len(files)} files in generated/python/E2E/Crypto/")
+
+    results.append(result.summary())
+
+    # Test 6: Digital Signatures (Ed25519, secp256k1, P-256)
+    print("\nTest 6: Digital Signatures")
+    print("-" * 40)
+    result = TestResult("Digital Signatures")
+    test_message = b"Hello, FlatBuffers! This is a test message for signing."
+
+    # Test Ed25519
+    try:
+        priv_key, pub_key = em.ed25519_generate_keypair()
+        result.pass_(f"Ed25519 keypair generated (priv: {len(priv_key)}, pub: {len(pub_key)} bytes)")
+
+        sig = em.ed25519_sign(priv_key, test_message)
+        result.pass_(f"Ed25519 signature: {len(sig)} bytes")
+
+        valid = em.ed25519_verify(pub_key, test_message, sig)
+        if valid:
+            result.pass_("Ed25519 signature verified")
+        else:
+            result.fail("Ed25519 signature verification failed")
+
+        # Verify wrong message fails
+        wrong_message = b"Wrong message"
+        valid = em.ed25519_verify(pub_key, wrong_message, sig)
+        if not valid:
+            result.pass_("Ed25519 rejects wrong message")
+        else:
+            result.fail("Ed25519 accepted wrong message")
+    except Exception as e:
+        result.fail("Ed25519 test", e)
+
+    # Test secp256k1 signing
+    try:
+        secp_priv, secp_pub = em.secp256k1_generate_keypair()
+        result.pass_(f"secp256k1 keypair generated (priv: {len(secp_priv)}, pub: {len(secp_pub)} bytes)")
+
+        sig = em.secp256k1_sign(secp_priv, test_message)
+        result.pass_(f"secp256k1 signature: {len(sig)} bytes (DER)")
+
+        valid = em.secp256k1_verify(secp_pub, test_message, sig)
+        if valid:
+            result.pass_("secp256k1 signature verified")
+        else:
+            result.fail("secp256k1 signature verification failed")
+
+        # Verify wrong message fails
+        wrong_message = b"Wrong message"
+        valid = em.secp256k1_verify(secp_pub, wrong_message, sig)
+        if not valid:
+            result.pass_("secp256k1 rejects wrong message")
+        else:
+            result.fail("secp256k1 accepted wrong message")
+    except Exception as e:
+        result.fail("secp256k1 signing test", e)
+
+    # Test P-256 signing
+    try:
+        p256_priv, p256_pub = em.p256_generate_keypair()
+        result.pass_(f"P-256 keypair generated (priv: {len(p256_priv)}, pub: {len(p256_pub)} bytes)")
+
+        sig = em.p256_sign(p256_priv, test_message)
+        result.pass_(f"P-256 signature: {len(sig)} bytes (DER)")
+
+        valid = em.p256_verify(p256_pub, test_message, sig)
+        if valid:
+            result.pass_("P-256 signature verified")
+        else:
+            result.fail("P-256 signature verification failed")
+
+        # Verify wrong message fails
+        wrong_message = b"Wrong message"
+        valid = em.p256_verify(p256_pub, wrong_message, sig)
+        if not valid:
+            result.pass_("P-256 rejects wrong message")
+        else:
+            result.fail("P-256 accepted wrong message")
+    except Exception as e:
+        result.fail("P-256 signing test", e)
 
     results.append(result.summary())
 

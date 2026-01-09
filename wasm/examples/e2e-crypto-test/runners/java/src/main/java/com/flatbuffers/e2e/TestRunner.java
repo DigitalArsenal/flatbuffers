@@ -46,6 +46,13 @@ public class TestRunner {
     private final ExportFunction secp256k1SharedFn;
     private final ExportFunction p256GenerateFn;
     private final ExportFunction p256SharedFn;
+    private final ExportFunction ed25519GenerateFn;
+    private final ExportFunction ed25519SignFn;
+    private final ExportFunction ed25519VerifyFn;
+    private final ExportFunction secp256k1SignFn;
+    private final ExportFunction secp256k1VerifyFn;
+    private final ExportFunction p256SignFn;
+    private final ExportFunction p256VerifyFn;
 
     public TestRunner(File wasmFile) {
         var wasiOptions = WasiOptions.builder().build();
@@ -80,6 +87,13 @@ public class TestRunner {
         this.secp256k1SharedFn = instance.export("wasi_secp256k1_shared_secret");
         this.p256GenerateFn = instance.export("wasi_p256_generate_keypair");
         this.p256SharedFn = instance.export("wasi_p256_shared_secret");
+        this.ed25519GenerateFn = instance.export("wasi_ed25519_generate_keypair");
+        this.ed25519SignFn = instance.export("wasi_ed25519_sign");
+        this.ed25519VerifyFn = instance.export("wasi_ed25519_verify");
+        this.secp256k1SignFn = instance.export("wasi_secp256k1_sign");
+        this.secp256k1VerifyFn = instance.export("wasi_secp256k1_verify");
+        this.p256SignFn = instance.export("wasi_p256_sign");
+        this.p256VerifyFn = instance.export("wasi_p256_verify");
 
         // Call _initialize if present
         try {
@@ -418,6 +432,152 @@ public class TestRunner {
         deallocate(pubPtr);
         deallocate(sharedPtr);
         return shared;
+    }
+
+    public KeyPair ed25519GenerateKeypair() {
+        int privPtr = allocate(64);  // Ed25519 private key is 64 bytes
+        int pubPtr = allocate(32);
+
+        long[] result = ed25519GenerateFn.apply(privPtr, pubPtr);
+        if (result[0] != 0) {
+            deallocate(privPtr);
+            deallocate(pubPtr);
+            throw new RuntimeException("Ed25519 keypair generation failed");
+        }
+
+        byte[] priv = readBytes(privPtr, 64);
+        byte[] pub = readBytes(pubPtr, 32);
+        deallocate(privPtr);
+        deallocate(pubPtr);
+        return new KeyPair(priv, pub);
+    }
+
+    public byte[] ed25519Sign(byte[] privateKey, byte[] data) {
+        int privPtr = allocate(64);
+        int dataPtr = allocate(Math.max(data.length, 1));
+        int sigPtr = allocate(64);
+
+        writeBytes(privPtr, privateKey);
+        if (data.length > 0) writeBytes(dataPtr, data);
+        long[] result = ed25519SignFn.apply(privPtr, dataPtr, data.length, sigPtr);
+        if (result[0] != 0) {
+            deallocate(privPtr);
+            deallocate(dataPtr);
+            deallocate(sigPtr);
+            throw new RuntimeException("Ed25519 signing failed");
+        }
+
+        byte[] sig = readBytes(sigPtr, 64);
+        deallocate(privPtr);
+        deallocate(dataPtr);
+        deallocate(sigPtr);
+        return sig;
+    }
+
+    public boolean ed25519Verify(byte[] publicKey, byte[] data, byte[] signature) {
+        int pubPtr = allocate(32);
+        int dataPtr = allocate(Math.max(data.length, 1));
+        int sigPtr = allocate(64);
+
+        writeBytes(pubPtr, publicKey);
+        if (data.length > 0) writeBytes(dataPtr, data);
+        writeBytes(sigPtr, signature);
+        long[] result = ed25519VerifyFn.apply(pubPtr, dataPtr, data.length, sigPtr);
+
+        deallocate(pubPtr);
+        deallocate(dataPtr);
+        deallocate(sigPtr);
+        return result[0] == 0;
+    }
+
+    public byte[] secp256k1Sign(byte[] privateKey, byte[] data) {
+        int privPtr = allocate(32);
+        int dataPtr = allocate(Math.max(data.length, 1));
+        int sigPtr = allocate(72);  // DER signature up to 72 bytes
+        int sigSizePtr = allocate(4);
+
+        writeBytes(privPtr, privateKey);
+        if (data.length > 0) writeBytes(dataPtr, data);
+        long[] result = secp256k1SignFn.apply(privPtr, dataPtr, data.length, sigPtr, sigSizePtr);
+        if (result[0] != 0) {
+            deallocate(privPtr);
+            deallocate(dataPtr);
+            deallocate(sigPtr);
+            deallocate(sigSizePtr);
+            throw new RuntimeException("secp256k1 signing failed");
+        }
+
+        byte[] sigSizeBytes = readBytes(sigSizePtr, 4);
+        int sigSize = (sigSizeBytes[0] & 0xFF) | ((sigSizeBytes[1] & 0xFF) << 8) |
+                      ((sigSizeBytes[2] & 0xFF) << 16) | ((sigSizeBytes[3] & 0xFF) << 24);
+        byte[] sig = readBytes(sigPtr, sigSize);
+
+        deallocate(privPtr);
+        deallocate(dataPtr);
+        deallocate(sigPtr);
+        deallocate(sigSizePtr);
+        return sig;
+    }
+
+    public boolean secp256k1Verify(byte[] publicKey, byte[] data, byte[] signature) {
+        int pubPtr = allocate(publicKey.length);
+        int dataPtr = allocate(Math.max(data.length, 1));
+        int sigPtr = allocate(signature.length);
+
+        writeBytes(pubPtr, publicKey);
+        if (data.length > 0) writeBytes(dataPtr, data);
+        writeBytes(sigPtr, signature);
+        long[] result = secp256k1VerifyFn.apply(pubPtr, publicKey.length, dataPtr, data.length, sigPtr, signature.length);
+
+        deallocate(pubPtr);
+        deallocate(dataPtr);
+        deallocate(sigPtr);
+        return result[0] == 0;
+    }
+
+    public byte[] p256Sign(byte[] privateKey, byte[] data) {
+        int privPtr = allocate(32);
+        int dataPtr = allocate(Math.max(data.length, 1));
+        int sigPtr = allocate(72);  // DER signature up to 72 bytes
+        int sigSizePtr = allocate(4);
+
+        writeBytes(privPtr, privateKey);
+        if (data.length > 0) writeBytes(dataPtr, data);
+        long[] result = p256SignFn.apply(privPtr, dataPtr, data.length, sigPtr, sigSizePtr);
+        if (result[0] != 0) {
+            deallocate(privPtr);
+            deallocate(dataPtr);
+            deallocate(sigPtr);
+            deallocate(sigSizePtr);
+            throw new RuntimeException("P-256 signing failed");
+        }
+
+        byte[] sigSizeBytes = readBytes(sigSizePtr, 4);
+        int sigSize = (sigSizeBytes[0] & 0xFF) | ((sigSizeBytes[1] & 0xFF) << 8) |
+                      ((sigSizeBytes[2] & 0xFF) << 16) | ((sigSizeBytes[3] & 0xFF) << 24);
+        byte[] sig = readBytes(sigPtr, sigSize);
+
+        deallocate(privPtr);
+        deallocate(dataPtr);
+        deallocate(sigPtr);
+        deallocate(sigSizePtr);
+        return sig;
+    }
+
+    public boolean p256Verify(byte[] publicKey, byte[] data, byte[] signature) {
+        int pubPtr = allocate(publicKey.length);
+        int dataPtr = allocate(Math.max(data.length, 1));
+        int sigPtr = allocate(signature.length);
+
+        writeBytes(pubPtr, publicKey);
+        if (data.length > 0) writeBytes(dataPtr, data);
+        writeBytes(sigPtr, signature);
+        long[] result = p256VerifyFn.apply(pubPtr, publicKey.length, dataPtr, data.length, sigPtr, signature.length);
+
+        deallocate(pubPtr);
+        deallocate(dataPtr);
+        deallocate(sigPtr);
+        return result[0] == 0;
     }
 
     public static String toHex(byte[] bytes) {
@@ -836,6 +996,97 @@ public class TestRunner {
                         result.pass("Pre-generated Java code: " + count + " files in generated/java/E2E/Crypto/");
                     }
                 }
+            }
+
+            results.add(result.summary());
+        }
+
+        // Test 6: Digital Signatures (Ed25519, secp256k1, P-256)
+        System.out.println("\nTest 6: Digital Signatures");
+        System.out.println("-".repeat(40));
+        {
+            TestResult result = new TestResult("Digital Signatures");
+            byte[] testMessage = "Hello, FlatBuffers! This is a test message for signing.".getBytes();
+
+            // Test Ed25519
+            try {
+                KeyPair kp = runner.ed25519GenerateKeypair();
+                result.pass("Ed25519 keypair generated (priv: " + kp.privateKey.length + ", pub: " + kp.publicKey.length + " bytes)");
+
+                byte[] sig = runner.ed25519Sign(kp.privateKey, testMessage);
+                result.pass("Ed25519 signature: " + sig.length + " bytes");
+
+                boolean valid = runner.ed25519Verify(kp.publicKey, testMessage, sig);
+                if (valid) {
+                    result.pass("Ed25519 signature verified");
+                } else {
+                    result.fail("Ed25519 signature verification failed");
+                }
+
+                // Verify wrong message fails
+                byte[] wrongMessage = "Wrong message".getBytes();
+                valid = runner.ed25519Verify(kp.publicKey, wrongMessage, sig);
+                if (!valid) {
+                    result.pass("Ed25519 rejects wrong message");
+                } else {
+                    result.fail("Ed25519 accepted wrong message");
+                }
+            } catch (Exception e) {
+                result.fail("Ed25519 test error: " + e.getMessage());
+            }
+
+            // Test secp256k1 signing
+            try {
+                KeyPair kp = runner.secp256k1GenerateKeypair();
+                result.pass("secp256k1 keypair generated (priv: " + kp.privateKey.length + ", pub: " + kp.publicKey.length + " bytes)");
+
+                byte[] sig = runner.secp256k1Sign(kp.privateKey, testMessage);
+                result.pass("secp256k1 signature: " + sig.length + " bytes (DER)");
+
+                boolean valid = runner.secp256k1Verify(kp.publicKey, testMessage, sig);
+                if (valid) {
+                    result.pass("secp256k1 signature verified");
+                } else {
+                    result.fail("secp256k1 signature verification failed");
+                }
+
+                // Verify wrong message fails
+                byte[] wrongMessage = "Wrong message".getBytes();
+                valid = runner.secp256k1Verify(kp.publicKey, wrongMessage, sig);
+                if (!valid) {
+                    result.pass("secp256k1 rejects wrong message");
+                } else {
+                    result.fail("secp256k1 accepted wrong message");
+                }
+            } catch (Exception e) {
+                result.fail("secp256k1 signing test error: " + e.getMessage());
+            }
+
+            // Test P-256 signing
+            try {
+                KeyPair kp = runner.p256GenerateKeypair();
+                result.pass("P-256 keypair generated (priv: " + kp.privateKey.length + ", pub: " + kp.publicKey.length + " bytes)");
+
+                byte[] sig = runner.p256Sign(kp.privateKey, testMessage);
+                result.pass("P-256 signature: " + sig.length + " bytes (DER)");
+
+                boolean valid = runner.p256Verify(kp.publicKey, testMessage, sig);
+                if (valid) {
+                    result.pass("P-256 signature verified");
+                } else {
+                    result.fail("P-256 signature verification failed");
+                }
+
+                // Verify wrong message fails
+                byte[] wrongMessage = "Wrong message".getBytes();
+                valid = runner.p256Verify(kp.publicKey, wrongMessage, sig);
+                if (!valid) {
+                    result.pass("P-256 rejects wrong message");
+                } else {
+                    result.fail("P-256 accepted wrong message");
+                }
+            } catch (Exception e) {
+                result.fail("P-256 signing test error: " + e.getMessage());
             }
 
             results.add(result.summary());

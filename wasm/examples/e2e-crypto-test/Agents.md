@@ -139,22 +139,27 @@ This document tracks the implementation status of the cross-language E2E encrypt
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| WASM encryption loading | ❌ Stub only | Need wasmer-swift |
-| invoke_* trampolines | ❌ Not done | |
-| Exception handling stubs | ❌ Not done | |
-| AES-256-CTR encryption | ❌ Not done | |
-| SHA-256 | ❌ Not done | |
-| Cross-language verification | ❌ Not done | |
-| Runtime code generation | ❌ Not done | |
-| FlatBuffer creation | ❌ Not done | |
+| WASM encryption loading | ✅ Done | Using WasmKit 0.2.0 (pure Swift) |
+| invoke_* trampolines | ⚠️ Partial | Stubs only - can't call indirect functions |
+| Exception handling stubs | ✅ Done | `__cxa_*` functions stubbed |
+| AES-256-CTR encryption | ⚠️ Partial | Fails due to invoke_* limitations |
+| AES-256-CTR decryption | ⚠️ Partial | Fails due to invoke_* limitations |
+| SHA-256 | ⚠️ Partial | Fails due to invoke_* limitations |
+| Cross-language verification | ✅ Done | Reads Node.js binaries, 21/21 tests |
+| **Full test suite** | ⚠️ Partial | **1/12 test suites passing** |
+| **Runtime code generation** | ❌ Not done | Need to call WASM flatc |
+| **FlatBuffer creation** | ❌ Not done | Need generated Swift code |
+| **Full round-trip** | ❌ Not done | Create → Encrypt → Transmit → Decrypt → Read |
+
+**Note**: Swift runner uses WasmKit which doesn't expose public API to call functions by indirect table index. The invoke_* trampolines are stubs that don't actually call the target functions. This causes crypto operations (SHA256, AES) to fail because Crypto++ uses exception handling internally. Cross-language verification works because it decrypts pre-encrypted binaries without needing invoke_* trampolines.
 
 ## Crypto Operations Status
 
 | Operation | Node.js | Go | Python | Rust | Java | C# | Swift |
 |-----------|---------|-----|--------|------|------|-----|-------|
-| AES-256-CTR encrypt | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
-| AES-256-CTR decrypt | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
-| SHA-256 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| AES-256-CTR encrypt | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ |
+| AES-256-CTR decrypt | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ |
+| SHA-256 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ |
 | HKDF-SHA256 | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Ed25519 keygen | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Ed25519 sign/verify | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -174,7 +179,7 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | `runners/rust/src/main.rs` | Rust runner | ✅ Complete (12/12) |
 | `runners/java/src/.../TestRunner.java` | Java runner | ✅ Complete (12/12) |
 | `runners/csharp/TestRunner.cs` | C# runner | ✅ Complete (12/12) |
-| `runners/swift/TestRunner.swift` | Swift runner | ❌ Stub only |
+| `runners/swift/TestRunner.swift` | Swift runner | ⚠️ Partial (1/12) |
 
 ## Generated Files
 
@@ -188,10 +193,10 @@ This document tracks the implementation status of the cross-language E2E encrypt
 ## Next Steps
 
 1. ~~**Test existing runners** - Verify Go, Python, Rust work with current WASM~~ ✅ Done
-2. **Add Ed25519/secp256k1 to Go/Python/Rust** - Expose more crypto ops
-3. **Implement Java runner** - Use GraalVM WASM or chicory
-4. **Implement C# runner** - Use wasmtime-dotnet
-5. **Implement Swift runner** - Use wasmer-swift
+2. ~~**Implement Java runner** - Use Chicory~~ ✅ Done (12/12)
+3. ~~**Implement C# runner** - Use wasmtime-dotnet~~ ✅ Done (12/12)
+4. **Fix Swift runner** - WasmKit lacks indirect function call API for invoke_* trampolines
+5. **Add Ed25519/secp256k1 to Go/Python/Rust** - Expose more crypto ops
 6. **Add runtime code generation** - All languages generate code via WASM flatc
 7. **Add FlatBuffer creation** - Each language creates FlatBuffers using generated code
 8. **Full round-trip test** - Create → Encrypt → Transmit → Decrypt → Read
@@ -222,7 +227,7 @@ cd runners/rust && cargo run
 | Rust | wasmer | `wasmer` crate |
 | Java | Chicory | `com.dylibso.chicory:runtime:1.5.3` |
 | C# | wasmtime | `wasmtime-dotnet` |
-| Swift | wasmer | `wasmer-swift` |
+| Swift | WasmKit | `WasmKit` 0.2.0 (pure Swift) |
 
 ## Test Run Summary (Latest)
 
@@ -234,4 +239,4 @@ cd runners/rust && cargo run
 | Rust | 12/12 | ✅ All passing |
 | Java | 12/12 | ✅ All passing |
 | C# | 12/12 | ✅ All passing |
-| Swift | - | ❌ Not implemented |
+| Swift | 1/12 | ⚠️ Cross-language only (invoke_* limitation) |

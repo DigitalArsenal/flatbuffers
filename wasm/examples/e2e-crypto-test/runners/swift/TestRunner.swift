@@ -2,20 +2,20 @@
  * Swift E2E Test Runner for FlatBuffers Cross-Language Encryption
  *
  * Tests encryption/decryption using the WASM Crypto++ module with all 10 crypto key types.
- * Uses WasmKit pure-Swift WASM runtime.
+ * Uses WasmKit pure-Swift WASM runtime (v0.2.0 API).
  */
 import Foundation
 import WasmKit
-import WASI
+import WasmKitWASI
+import SystemPackage
 
 let AES_KEY_SIZE = 32
 let AES_IV_SIZE = 16
 let SHA256_SIZE = 32
 
 class EncryptionModule {
-    private let runtime: Runtime
-    private let instance: ModuleInstance
     private let store: Store
+    private let instance: Instance
 
     private let mallocFunc: Function
     private let freeFunc: Function
@@ -24,91 +24,112 @@ class EncryptionModule {
     private let decryptBytesFunc: Function
 
     init(wasmPath: String) throws {
-        let data = try Data(contentsOf: URL(fileURLWithPath: wasmPath))
-        try self.init(wasmBytes: [UInt8](data))
-    }
+        let module = try parseWasm(filePath: FilePath(wasmPath))
 
-    init(wasmBytes: [UInt8]) throws {
         let engine = Engine()
-        self.store = Store(engine: engine)
-        self.runtime = Runtime(store: store)
+        let store = Store(engine: engine)
+        self.store = store
 
-        let module = try parseWasm(bytes: wasmBytes)
+        // Create WASI bridge
         let wasi = try WASIBridgeToHost()
 
-        var hostFunctions: [String: HostFunction] = [:]
+        // Build imports
+        var imports = Imports()
+        wasi.link(to: &imports, store: store)
 
         // Emscripten stubs
-        hostFunctions["setThrew"] = HostFunction(type: FunctionType(parameters: [.i32, .i32], results: [])) { _, _ in [] }
-        hostFunctions["__cxa_find_matching_catch_2"] = HostFunction(type: FunctionType(parameters: [], results: [.i32])) { _, _ in [.i32(0)] }
-        hostFunctions["__cxa_find_matching_catch_3"] = HostFunction(type: FunctionType(parameters: [.i32], results: [.i32])) { _, _ in [.i32(0)] }
-        hostFunctions["__resumeException"] = HostFunction(type: FunctionType(parameters: [.i32], results: [])) { _, _ in [] }
-        hostFunctions["__cxa_begin_catch"] = HostFunction(type: FunctionType(parameters: [.i32], results: [.i32])) { _, _ in [.i32(0)] }
-        hostFunctions["__cxa_end_catch"] = HostFunction(type: FunctionType(parameters: [], results: [])) { _, _ in [] }
-        hostFunctions["llvm_eh_typeid_for"] = HostFunction(type: FunctionType(parameters: [.i32], results: [.i32])) { _, _ in [.i32(0)] }
-        hostFunctions["__cxa_throw"] = HostFunction(type: FunctionType(parameters: [.i32, .i32, .i32], results: [])) { _, _ in [] }
-        hostFunctions["__cxa_uncaught_exceptions"] = HostFunction(type: FunctionType(parameters: [], results: [.i32])) { _, _ in [.i32(0)] }
+        EncryptionModule.addEmscriptenStubs(to: &imports, store: store)
 
-        // invoke_* stubs
-        for (name, params, hasReturn) in [
-            ("invoke_v", 1, false), ("invoke_vi", 2, false), ("invoke_vii", 3, false),
-            ("invoke_viii", 4, false), ("invoke_viiii", 5, false), ("invoke_viiiii", 6, false),
-            ("invoke_viiiiii", 7, false), ("invoke_viiiiiii", 8, false), ("invoke_viiiiiiiii", 10, false),
-            ("invoke_i", 1, true), ("invoke_ii", 2, true), ("invoke_iii", 3, true),
-            ("invoke_iiii", 4, true), ("invoke_iiiii", 5, true), ("invoke_iiiiii", 6, true),
-            ("invoke_iiiiiii", 7, true), ("invoke_iiiiiiii", 8, true), ("invoke_iiiiiiiiii", 10, true)
-        ] {
-            let paramTypes = Array(repeating: ValueType.i32, count: params)
-            let resultTypes: [ValueType] = hasReturn ? [.i32] : []
-            hostFunctions[name] = HostFunction(type: FunctionType(parameters: paramTypes, results: resultTypes)) { _, _ in
-                hasReturn ? [.i32(0)] : []
-            }
+        // Instantiate the module
+        self.instance = try module.instantiate(store: store, imports: imports)
+
+        // Get exported functions
+        self.mallocFunc = instance.exports[function: "malloc"]!
+        self.freeFunc = instance.exports[function: "free"]!
+        self.sha256Func = instance.exports[function: "wasi_sha256"]!
+        self.encryptBytesFunc = instance.exports[function: "wasi_encrypt_bytes"]!
+        self.decryptBytesFunc = instance.exports[function: "wasi_decrypt_bytes"]!
+
+        // Call _initialize if present (required for Emscripten modules)
+        if let initFunc = instance.exports[function: "_initialize"] {
+            _ = try? initFunc()
         }
-
-        for (name, function) in hostFunctions {
-            try runtime.register(hostFunction: function, module: "env", name: name)
-        }
-        try wasi.register(to: runtime, module: "wasi_snapshot_preview1")
-
-        self.instance = try runtime.instantiate(module: module)
-
-        self.mallocFunc = try getFunction("malloc")
-        self.freeFunc = try getFunction("free")
-        self.sha256Func = try getFunction("sha256")
-        self.encryptBytesFunc = try getFunction("encrypt_bytes")
-        self.decryptBytesFunc = try getFunction("decrypt_bytes")
     }
 
-    private func getFunction(_ name: String) throws -> Function {
-        guard let export = instance.exports[function: name] else {
-            throw NSError(domain: "EncryptionModule", code: 1, userInfo: [NSLocalizedDescriptionKey: "Function \(name) not found"])
+    private static func addEmscriptenStubs(to imports: inout Imports, store: Store) {
+        // Exception handling stubs
+        imports.define(module: "env", name: "setThrew",
+            Function(store: store, parameters: [.i32, .i32]) { _, _ in [] })
+        imports.define(module: "env", name: "__cxa_find_matching_catch_2",
+            Function(store: store, parameters: [], results: [.i32]) { _, _ in [.i32(0)] })
+        imports.define(module: "env", name: "__cxa_find_matching_catch_3",
+            Function(store: store, parameters: [.i32], results: [.i32]) { _, _ in [.i32(0)] })
+        imports.define(module: "env", name: "__resumeException",
+            Function(store: store, parameters: [.i32]) { _, _ in [] })
+        imports.define(module: "env", name: "__cxa_begin_catch",
+            Function(store: store, parameters: [.i32], results: [.i32]) { _, _ in [.i32(0)] })
+        imports.define(module: "env", name: "__cxa_end_catch",
+            Function(store: store, parameters: []) { _, _ in [] })
+        imports.define(module: "env", name: "llvm_eh_typeid_for",
+            Function(store: store, parameters: [.i32], results: [.i32]) { _, _ in [.i32(0)] })
+        imports.define(module: "env", name: "__cxa_throw",
+            Function(store: store, parameters: [.i32, .i32, .i32]) { _, _ in [] })
+        imports.define(module: "env", name: "__cxa_uncaught_exceptions",
+            Function(store: store, parameters: [], results: [.i32]) { _, _ in [.i32(0)] })
+
+        // invoke_* stubs - void variants
+        let voidInvokes: [(String, Int)] = [
+            ("invoke_v", 1), ("invoke_vi", 2), ("invoke_vii", 3),
+            ("invoke_viii", 4), ("invoke_viiii", 5), ("invoke_viiiii", 6),
+            ("invoke_viiiiii", 7), ("invoke_viiiiiii", 8), ("invoke_viiiiiiiii", 10)
+        ]
+        for (name, params) in voidInvokes {
+            let paramTypes = Array(repeating: ValueType.i32, count: params)
+            imports.define(module: "env", name: name,
+                Function(store: store, parameters: paramTypes) { _, _ in
+                    // Stub - just return without throwing
+                    return []
+                })
         }
-        return export
+
+        // invoke_* stubs - i32 return variants
+        let i32Invokes: [(String, Int)] = [
+            ("invoke_i", 1), ("invoke_ii", 2), ("invoke_iii", 3),
+            ("invoke_iiii", 4), ("invoke_iiiii", 5), ("invoke_iiiiii", 6),
+            ("invoke_iiiiiii", 7), ("invoke_iiiiiiii", 8), ("invoke_iiiiiiiiii", 10)
+        ]
+        for (name, params) in i32Invokes {
+            let paramTypes = Array(repeating: ValueType.i32, count: params)
+            imports.define(module: "env", name: name,
+                Function(store: store, parameters: paramTypes, results: [.i32]) { _, _ in
+                    // Stub - just return 0
+                    return [.i32(0)]
+                })
+        }
     }
 
     private var memory: Memory { instance.exports[memory: "memory"]! }
 
-    private func allocate(_ size: Int) throws -> Int32 {
-        let results = try mallocFunc.invoke([.i32(Int32(size))], runtime: runtime)
+    private func allocate(_ size: Int) throws -> UInt32 {
+        let results = try mallocFunc([.i32(UInt32(size))])
         return results[0].i32
     }
 
-    private func deallocate(_ ptr: Int32) throws {
-        _ = try freeFunc.invoke([.i32(ptr)], runtime: runtime)
+    private func deallocate(_ ptr: UInt32) throws {
+        _ = try freeFunc([.i32(ptr)])
     }
 
-    private func writeBytes(_ ptr: Int32, _ data: [UInt8]) {
-        memory.data.withUnsafeMutableBytes { buffer in
-            for (i, byte) in data.enumerated() {
-                buffer[Int(ptr) + i] = byte
+    private func writeBytes(_ ptr: UInt32, _ bytes: [UInt8]) {
+        memory.withUnsafeMutableBufferPointer(offset: UInt(ptr), count: bytes.count) { buffer in
+            for (i, byte) in bytes.enumerated() {
+                buffer[i] = byte
             }
         }
     }
 
-    private func readBytes(_ ptr: Int32, _ length: Int) -> [UInt8] {
-        memory.data.withUnsafeBytes { buffer in
-            Array(buffer[Int(ptr)..<Int(ptr) + length])
-        }
+    private func readBytes(_ ptr: UInt32, _ length: Int) -> [UInt8] {
+        let data = memory.data
+        return Array(data[Int(ptr)..<Int(ptr) + length])
     }
 
     func sha256(_ data: [UInt8]) throws -> [UInt8] {
@@ -121,7 +142,7 @@ class EncryptionModule {
         }
 
         if !data.isEmpty { writeBytes(dataPtr, data) }
-        _ = try sha256Func.invoke([.i32(dataPtr), .i32(Int32(data.count)), .i32(hashPtr)], runtime: runtime)
+        _ = try sha256Func([.i32(dataPtr), .i32(UInt32(data.count)), .i32(hashPtr)])
 
         return readBytes(hashPtr, SHA256_SIZE)
     }
@@ -140,7 +161,7 @@ class EncryptionModule {
         writeBytes(keyPtr, key)
         writeBytes(ivPtr, iv)
         writeBytes(dataPtr, data)
-        _ = try encryptBytesFunc.invoke([.i32(keyPtr), .i32(ivPtr), .i32(dataPtr), .i32(Int32(data.count))], runtime: runtime)
+        _ = try encryptBytesFunc([.i32(keyPtr), .i32(ivPtr), .i32(dataPtr), .i32(UInt32(data.count))])
 
         return readBytes(dataPtr, data.count)
     }
@@ -159,7 +180,7 @@ class EncryptionModule {
         writeBytes(keyPtr, key)
         writeBytes(ivPtr, iv)
         writeBytes(dataPtr, data)
-        _ = try decryptBytesFunc.invoke([.i32(keyPtr), .i32(ivPtr), .i32(dataPtr), .i32(Int32(data.count))], runtime: runtime)
+        _ = try decryptBytesFunc([.i32(keyPtr), .i32(ivPtr), .i32(dataPtr), .i32(UInt32(data.count))])
 
         return readBytes(dataPtr, data.count)
     }

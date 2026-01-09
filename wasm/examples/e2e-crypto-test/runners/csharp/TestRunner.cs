@@ -12,6 +12,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Wasmtime;
+using Google.FlatBuffers;
+using FBSecureMessage = E2E.Crypto.SecureMessage;
+using FBPayload = E2E.Crypto.Payload;
 
 namespace FlatBuffers.E2E.CryptoTest;
 
@@ -48,7 +51,7 @@ public class TestRunner : IDisposable
     private readonly Function _p256Verify;
 
     private int _threwValue;
-    private Table? _functionTable;
+    private Wasmtime.Table? _functionTable;
 
     public TestRunner(byte[] wasmBytes)
     {
@@ -1046,6 +1049,136 @@ public class TestRunner : IDisposable
             catch (Exception e)
             {
                 result.Fail($"P-256 signing test error: {e.Message}");
+            }
+
+            results.Add(result.Summary());
+        }
+
+        // Test 7: FlatBuffer Creation
+        Console.WriteLine("\nTest 7: FlatBuffer Creation");
+        Console.WriteLine(new string('-', 40));
+        {
+            var result = new TestResult("FlatBuffer Creation");
+
+            try
+            {
+                // Create a SecureMessage using the FlatBuffers builder
+                var builder = new FlatBufferBuilder(1024);
+
+                // Build the Payload first (inner table)
+                var payloadMsgOffset = builder.CreateString("Hello from C#!");
+                byte[] payloadData = { 0x01, 0x02, 0x03, 0x04, 0x05 };
+                var payloadDataOffset = FBPayload.CreateDataVector(builder, payloadData);
+
+                var payloadOffset = FBPayload.CreatePayload(builder, payloadMsgOffset, 42, payloadDataOffset);
+
+                // Build the SecureMessage
+                var idOffset = builder.CreateString("csharp-msg-001");
+                var senderOffset = builder.CreateString("csharp-alice");
+                var recipientOffset = builder.CreateString("csharp-bob");
+
+                var secureMessageOffset = FBSecureMessage.CreateSecureMessage(builder, idOffset, senderOffset, recipientOffset, payloadOffset, 1704067200);
+
+                FBSecureMessage.FinishSecureMessageBuffer(builder, secureMessageOffset);
+
+                var buf = builder.SizedByteArray();
+                result.Pass($"Created SecureMessage binary: {buf.Length} bytes");
+
+                // Verify the buffer has the correct file identifier
+                if (buf.Length >= 8 && buf[4] == 'S' && buf[5] == 'E' && buf[6] == 'C' && buf[7] == 'M')
+                {
+                    result.Pass("Buffer has correct SECM identifier");
+                }
+                else
+                {
+                    result.Fail("Buffer missing SECM identifier");
+                }
+
+                // Read it back and verify contents
+                var byteBuffer = new ByteBuffer(buf);
+                var msg = FBSecureMessage.GetRootAsSecureMessage(byteBuffer);
+
+                if (msg.Id == "csharp-msg-001")
+                    result.Pass("Read back id: csharp-msg-001");
+                else
+                    result.Fail($"Wrong id: {msg.Id}");
+
+                if (msg.Sender == "csharp-alice")
+                    result.Pass("Read back sender: csharp-alice");
+                else
+                    result.Fail($"Wrong sender: {msg.Sender}");
+
+                if (msg.Recipient == "csharp-bob")
+                    result.Pass("Read back recipient: csharp-bob");
+                else
+                    result.Fail($"Wrong recipient: {msg.Recipient}");
+
+                if (msg.Timestamp == 1704067200)
+                    result.Pass("Read back timestamp: 1704067200");
+                else
+                    result.Fail($"Wrong timestamp: {msg.Timestamp}");
+
+                var payloadObj = msg.Payload;
+                if (payloadObj.HasValue)
+                {
+                    var p = payloadObj.Value;
+                    if (p.Message == "Hello from C#!")
+                        result.Pass("Read back payload message: Hello from C#!");
+                    else
+                        result.Fail($"Wrong payload message: {p.Message}");
+
+                    if (p.Value == 42)
+                        result.Pass("Read back payload value: 42");
+                    else
+                        result.Fail($"Wrong payload value: {p.Value}");
+
+                    if (p.DataLength == 5)
+                    {
+                        var readData = new byte[5];
+                        for (int i = 0; i < 5; i++) readData[i] = p.Data(i);
+                        if (readData.SequenceEqual(payloadData))
+                            result.Pass($"Read back payload data: {p.DataLength} bytes");
+                        else
+                            result.Fail("Wrong payload data");
+                    }
+                    else
+                    {
+                        result.Fail($"Wrong payload data length: {p.DataLength}");
+                    }
+                }
+                else
+                {
+                    result.Fail("Failed to read payload");
+                }
+
+                // Test encrypt-decrypt round trip with C#-created FlatBuffer
+                if (encryptionKeys.TryGetValue("sui", out var suiKeys))
+                {
+                    var key = FromHex(suiKeys["key_hex"]);
+                    var iv = FromHex(suiKeys["iv_hex"]);
+
+                    // Make a copy to encrypt
+                    var encrypted = runner.Encrypt(key, iv, buf);
+                    result.Pass("Encrypted C#-created FlatBuffer");
+
+                    // Decrypt
+                    var decrypted = runner.Decrypt(key, iv, encrypted);
+                    result.Pass("Decrypted C#-created FlatBuffer");
+
+                    // Verify decrypted data matches original
+                    if (decrypted.SequenceEqual(buf))
+                        result.Pass("Decrypt round-trip verified");
+                    else
+                        result.Fail("Decrypted data doesn't match original");
+                }
+                else
+                {
+                    result.Fail("Sui encryption keys not found");
+                }
+            }
+            catch (Exception e)
+            {
+                result.Fail($"FlatBuffer creation test error: {e.Message}");
             }
 
             results.Add(result.Summary());

@@ -3,6 +3,13 @@
 //! Tests encryption/decryption using the WASM Crypto++ module with all 10 crypto key types.
 //! Uses wasmtime runtime (same as Python/C# runners).
 
+#[allow(dead_code, unused_imports, non_snake_case)]
+mod message_generated;
+
+use flatbuffers::FlatBufferBuilder;
+use message_generated::e2_e::crypto::{
+    SecureMessage, SecureMessageArgs, Payload, PayloadArgs, SECURE_MESSAGE_IDENTIFIER,
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
@@ -1286,6 +1293,133 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             },
             Err(e) => result.fail(&format!("P-256 keypair generation error: {}", e)),
+        }
+
+        results.push(result.summary());
+    }
+
+    // Test 7: FlatBuffer Creation
+    println!("\nTest 7: FlatBuffer Creation");
+    println!("{}", "-".repeat(40));
+    {
+        let mut result = TestResult::new("FlatBuffer Creation");
+
+        // Create a SecureMessage using the FlatBuffers builder
+        let mut builder = FlatBufferBuilder::with_capacity(1024);
+
+        // Build the Payload first (inner table)
+        let payload_msg = builder.create_string("Hello from Rust!");
+        let payload_data: Vec<u8> = vec![0x01, 0x02, 0x03, 0x04, 0x05];
+        let payload_data_vec = builder.create_vector(&payload_data);
+
+        let payload = Payload::create(&mut builder, &PayloadArgs {
+            message: Some(payload_msg),
+            value: 42,
+            data: Some(payload_data_vec),
+            nested: None,
+            is_encrypted: false,
+        });
+
+        // Build the SecureMessage
+        let msg_id = builder.create_string("rust-msg-001");
+        let sender = builder.create_string("rust-alice");
+        let recipient = builder.create_string("rust-bob");
+
+        let secure_msg = SecureMessage::create(&mut builder, &SecureMessageArgs {
+            id: Some(msg_id),
+            sender: Some(sender),
+            recipient: Some(recipient),
+            payload: Some(payload),
+            timestamp: 1704067200,
+            signature: None,
+        });
+
+        builder.finish(secure_msg, Some(SECURE_MESSAGE_IDENTIFIER));
+
+        let buf = builder.finished_data();
+        result.pass(&format!("Created SecureMessage binary: {} bytes", buf.len()));
+
+        // Verify the buffer has the correct file identifier
+        if buf.len() >= 8 && &buf[4..8] == b"SECM" {
+            result.pass("Buffer has correct SECM identifier");
+        } else {
+            result.fail("Buffer missing SECM identifier");
+        }
+
+        // Read it back and verify contents
+        let msg = flatbuffers::root::<SecureMessage>(buf).expect("Failed to parse SecureMessage");
+
+        if msg.id() == Some("rust-msg-001") {
+            result.pass("Read back id: rust-msg-001");
+        } else {
+            result.fail(&format!("Wrong id: {:?}", msg.id()));
+        }
+
+        if msg.sender() == Some("rust-alice") {
+            result.pass("Read back sender: rust-alice");
+        } else {
+            result.fail(&format!("Wrong sender: {:?}", msg.sender()));
+        }
+
+        if msg.recipient() == Some("rust-bob") {
+            result.pass("Read back recipient: rust-bob");
+        } else {
+            result.fail(&format!("Wrong recipient: {:?}", msg.recipient()));
+        }
+
+        if msg.timestamp() == 1704067200 {
+            result.pass("Read back timestamp: 1704067200");
+        } else {
+            result.fail(&format!("Wrong timestamp: {}", msg.timestamp()));
+        }
+
+        if let Some(payload_obj) = msg.payload() {
+            if payload_obj.message() == Some("Hello from Rust!") {
+                result.pass("Read back payload message: Hello from Rust!");
+            } else {
+                result.fail(&format!("Wrong payload message: {:?}", payload_obj.message()));
+            }
+
+            if payload_obj.value() == 42 {
+                result.pass("Read back payload value: 42");
+            } else {
+                result.fail(&format!("Wrong payload value: {}", payload_obj.value()));
+            }
+
+            if let Some(data) = payload_obj.data() {
+                if data.iter().collect::<Vec<_>>() == payload_data {
+                    result.pass(&format!("Read back payload data: {} bytes", data.len()));
+                } else {
+                    result.fail("Wrong payload data");
+                }
+            } else {
+                result.fail("Failed to read payload data");
+            }
+        } else {
+            result.fail("Failed to read payload");
+        }
+
+        // Test encrypt-decrypt round trip with Rust-created FlatBuffer
+        if let Some(sui_keys) = encryption_keys.get("sui") {
+            let key = hex::decode(&sui_keys.key_hex).expect("Failed to decode key");
+            let iv = hex::decode(&sui_keys.iv_hex).expect("Failed to decode IV");
+
+            // Make a copy to encrypt
+            let encrypted = em.encrypt_bytes(&key, &iv, buf)?;
+            result.pass("Encrypted Rust-created FlatBuffer");
+
+            // Decrypt
+            let decrypted = em.decrypt_bytes(&key, &iv, &encrypted)?;
+            result.pass("Decrypted Rust-created FlatBuffer");
+
+            // Verify decrypted data matches original
+            if decrypted == buf {
+                result.pass("Decrypt round-trip verified");
+            } else {
+                result.fail("Decrypted data doesn't match original");
+            }
+        } else {
+            result.fail("Sui encryption keys not found");
         }
 
         results.push(result.summary());

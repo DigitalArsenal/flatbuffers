@@ -169,8 +169,8 @@ This document tracks the implementation status of the cross-language E2E encrypt
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| WASM encryption loading | ✅ Done | Using WasmKit 0.2.0 (pure Swift) |
-| invoke_* trampolines | ✅ Done | Using patched WasmKit with `Table.getFunction(at:store:)` |
+| WASM encryption loading | ✅ Done | Using Wasmtime C API |
+| invoke_* trampolines | ✅ Done | Using function table lookups |
 | Exception handling stubs | ✅ Done | `__cxa_*` functions stubbed |
 | AES-256-CTR encryption | ✅ Done | Calls WASM `wasi_encrypt_bytes` |
 | AES-256-CTR decryption | ✅ Done | Calls WASM (CTR symmetric) |
@@ -184,10 +184,10 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | P-256 sign/verify | ✅ Done | `p256Sign()`, `p256Verify()` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries + ECDH headers |
 | Runtime code generation | ✅ Done | Calls native flatc binary |
-| FlatBuffer creation | ⏳ Pending | WasmKit API issues with Table type |
-| **Full test suite** | ✅ Done | **17/17 test suites passing** |
+| FlatBuffer creation | ✅ Done | Creates SecureMessage using generated code |
+| **Full test suite** | ✅ Done | **18/18 test suites passing** |
 
-**Note**: Swift runner required a patch to WasmKit to add `Table.getFunction(at:store:)` method for invoke_* trampolines to work. This enables calling functions from the indirect function table by index.
+**Note**: Swift runner uses Wasmtime C API for full WebAssembly support including indirect function calls.
 
 ## Crypto Operations Status
 
@@ -204,9 +204,9 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | Ed25519 sign/verify | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | secp256k1 sign/verify | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | P-256 sign/verify | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| FlatBuffer creation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⏳ |
+| FlatBuffer creation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-**Legend**: ✅ = Working, ⏳ = Pending
+**Legend**: ✅ = Working
 
 ## Test Files
 
@@ -218,7 +218,7 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | `runners/rust/src/main.rs` | Rust runner | ✅ Complete (18/18) |
 | `runners/java/src/.../TestRunner.java` | Java runner | ✅ Complete (18/18) |
 | `runners/csharp/TestRunner.cs` | C# runner | ✅ Complete (18/18) |
-| `runners/swift/TestRunner.swift` | Swift runner | ✅ Complete (17/17) |
+| `runners/swift/TestRunner.swift` | Swift runner | ✅ Complete (18/18) |
 
 ## Generated Files
 
@@ -239,7 +239,7 @@ This document tracks the implementation status of the cross-language E2E encrypt
 6. ~~**Add HKDF-SHA256 to all runners** - Key derivation for ECDH~~ ✅ Done (all 7 runners)
 7. ~~**Add runtime code generation** - All languages generate code via native flatc~~ ✅ Done (all 7 runners)
 8. ~~**Add Ed25519/ECDSA signing to Go/Python/Rust/Java/C#/Swift**~~ ✅ Done (all 7 runners)
-9. ~~**Add FlatBuffer creation** - Each language creates FlatBuffers using generated code~~ ✅ Done (Go, Python, Rust, Java, C# - 5/6 runners, Swift skipped due to WasmKit API issues)
+9. ~~**Add FlatBuffer creation** - Each language creates FlatBuffers using generated code~~ ✅ Done (all 7 runners)
 10. **Full round-trip test** - Create → Encrypt → Transmit → Decrypt → Read
 
 ## Running Tests
@@ -268,7 +268,7 @@ cd runners/rust && cargo run
 | Rust | wasmtime | `wasmtime` crate v27 |
 | Java | Chicory | `com.dylibso.chicory:runtime:1.5.3` |
 | C# | wasmtime | `wasmtime-dotnet` |
-| Swift | WasmKit | `WasmKit` 0.2.0 (pure Swift) |
+| Swift | Wasmtime | Wasmtime C API |
 
 ## Test Run Summary (Latest)
 
@@ -280,4 +280,4 @@ cd runners/rust && cargo run
 | Rust | 18/18 | ✅ All passing (includes FlatBuffer creation) |
 | Java | 18/18 | ✅ All passing (includes FlatBuffer creation) |
 | C# | 18/18 | ✅ All passing (includes FlatBuffer creation) |
-| Swift | 17/17 | ✅ All passing (WasmKit API issues prevent FlatBuffer creation test) |
+| Swift | 18/18 | ✅ All passing (includes FlatBuffer creation) |

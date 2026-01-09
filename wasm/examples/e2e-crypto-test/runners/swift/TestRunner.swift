@@ -6,6 +6,7 @@
  */
 import Foundation
 import CWasmtime
+import FlatBuffers
 
 let AES_KEY_SIZE: Int = 32
 let AES_IV_SIZE: Int = 16
@@ -1369,6 +1370,104 @@ func runTests() {
         failed += 1
     }
 
+    // Test 18: FlatBuffer creation using generated code
+    do {
+        var builder = FlatBufferBuilder(initialSize: 1024)
+
+        // Build the Payload first (inner table)
+        let payloadMsg = builder.create(string: "Hello from Swift!")
+        let payloadData: [UInt8] = [0x01, 0x02, 0x03, 0x04, 0x05]
+        let payloadDataVec = builder.createVector(payloadData)
+
+        let payload = E2E_Crypto_Payload.createPayload(
+            &builder,
+            messageOffset: payloadMsg,
+            value: 42,
+            dataVectorOffset: payloadDataVec,
+            isEncrypted: false
+        )
+
+        // Build the SecureMessage
+        let msgId = builder.create(string: "swift-msg-001")
+        let sender = builder.create(string: "swift-alice")
+        let recipient = builder.create(string: "swift-bob")
+
+        let secureMsg = E2E_Crypto_SecureMessage.createSecureMessage(
+            &builder,
+            idOffset: msgId,
+            senderOffset: sender,
+            recipientOffset: recipient,
+            payloadOffset: payload,
+            timestamp: 1704067200
+        )
+
+        E2E_Crypto_SecureMessage.finish(&builder, end: secureMsg)
+
+        let buf = builder.sizedByteArray
+        var testsPassed = true
+
+        // Verify the buffer has the correct file identifier (SECM)
+        let hasIdentifier = buf.count >= 8 && buf[4] == 0x53 && buf[5] == 0x45 && buf[6] == 0x43 && buf[7] == 0x4D  // "SECM"
+        if !hasIdentifier {
+            print("  [DEBUG] Buffer missing SECM identifier")
+            testsPassed = false
+        }
+
+        // Read it back and verify contents
+        let byteBuffer = ByteBuffer(bytes: buf)
+        let msg = E2E_Crypto_SecureMessage(byteBuffer, o: Int32(byteBuffer.read(def: Int32.self, position: 0)))
+
+        // Get root properly
+        var bb = ByteBuffer(bytes: buf)
+        let rootOffset = bb.read(def: Int32.self, position: 0)
+        let msgRead = E2E_Crypto_SecureMessage(bb, o: rootOffset)
+
+        if msgRead.id != "swift-msg-001" {
+            print("  [DEBUG] Wrong id: \(msgRead.id ?? "nil")")
+            testsPassed = false
+        }
+
+        if msgRead.sender != "swift-alice" {
+            print("  [DEBUG] Wrong sender: \(msgRead.sender ?? "nil")")
+            testsPassed = false
+        }
+
+        if msgRead.recipient != "swift-bob" {
+            print("  [DEBUG] Wrong recipient: \(msgRead.recipient ?? "nil")")
+            testsPassed = false
+        }
+
+        if msgRead.timestamp != 1704067200 {
+            print("  [DEBUG] Wrong timestamp: \(msgRead.timestamp)")
+            testsPassed = false
+        }
+
+        if let payloadRead = msgRead.payload {
+            if payloadRead.message != "Hello from Swift!" {
+                print("  [DEBUG] Wrong payload message: \(payloadRead.message ?? "nil")")
+                testsPassed = false
+            }
+            if payloadRead.value != 42 {
+                print("  [DEBUG] Wrong payload value: \(payloadRead.value)")
+                testsPassed = false
+            }
+        } else {
+            print("  [DEBUG] Payload is nil")
+            testsPassed = false
+        }
+
+        if testsPassed {
+            print("✓ Test 18: FlatBuffer creation (\(buf.count) bytes, SECM identifier)")
+            passed += 1
+        } else {
+            print("✗ Test 18: FlatBuffer creation verification failed")
+            failed += 1
+        }
+    } catch {
+        print("✗ Test 18: FlatBuffer creation failed - \(error)")
+        failed += 1
+    }
+
     print("\n========================================")
     print("Results: \(passed)/\(passed + failed) tests passed")
 
@@ -1377,5 +1476,10 @@ func runTests() {
     }
 }
 
-// Run tests
-runTests()
+// Main entry point
+@main
+struct E2ECryptoTestMain {
+    static func main() {
+        runTests()
+    }
+}

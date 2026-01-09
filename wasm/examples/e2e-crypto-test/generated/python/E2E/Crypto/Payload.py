@@ -5,7 +5,6 @@
 import flatbuffers
 from flatbuffers.compat import import_numpy
 from typing import Any
-from E2E.Crypto.Payload import Payload
 from typing import Optional
 np = import_numpy()
 

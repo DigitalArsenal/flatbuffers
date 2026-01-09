@@ -9,6 +9,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -18,10 +19,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 	"github.com/tetratelabs/wazero/experimental/table"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
+
+	Crypto "e2e-crypto-test/E2E/Crypto"
 )
 
 // WasmPath is the path to the encryption WASM module
@@ -1638,6 +1642,140 @@ func main() {
 					result.Pass("P-256 rejects wrong message")
 				} else {
 					result.Fail("P-256 accepted wrong message", nil)
+				}
+			}
+		}
+
+		results = append(results, result.Summary())
+	}
+
+	// Test 8: FlatBuffer Creation
+	fmt.Println("\nTest 8: FlatBuffer Creation")
+	fmt.Println("----------------------------------------")
+	{
+		result := &TestResult{Name: "FlatBuffer Creation"}
+
+		// Create a SecureMessage using the FlatBuffers builder
+		builder := flatbuffers.NewBuilder(1024)
+
+		// Build the Payload first (inner table)
+		payloadMsg := builder.CreateString("Hello from Go!")
+		payloadData := []byte{0x01, 0x02, 0x03, 0x04, 0x05}
+		Crypto.PayloadStartDataVector(builder, len(payloadData))
+		for i := len(payloadData) - 1; i >= 0; i-- {
+			builder.PrependByte(payloadData[i])
+		}
+		payloadDataVec := builder.EndVector(len(payloadData))
+
+		Crypto.PayloadStart(builder)
+		Crypto.PayloadAddMessage(builder, payloadMsg)
+		Crypto.PayloadAddValue(builder, 42)
+		Crypto.PayloadAddData(builder, payloadDataVec)
+		Crypto.PayloadAddIsEncrypted(builder, false)
+		payload := Crypto.PayloadEnd(builder)
+
+		// Build the SecureMessage
+		msgId := builder.CreateString("go-msg-001")
+		sender := builder.CreateString("go-alice")
+		recipient := builder.CreateString("go-bob")
+
+		Crypto.SecureMessageStart(builder)
+		Crypto.SecureMessageAddId(builder, msgId)
+		Crypto.SecureMessageAddSender(builder, sender)
+		Crypto.SecureMessageAddRecipient(builder, recipient)
+		Crypto.SecureMessageAddPayload(builder, payload)
+		Crypto.SecureMessageAddTimestamp(builder, 1704067200)
+		secureMsg := Crypto.SecureMessageEnd(builder)
+
+		Crypto.FinishSecureMessageBuffer(builder, secureMsg)
+
+		buf := builder.FinishedBytes()
+		result.Pass(fmt.Sprintf("Created SecureMessage binary: %d bytes", len(buf)))
+
+		// Verify the buffer has the correct file identifier
+		if Crypto.SecureMessageBufferHasIdentifier(buf) {
+			result.Pass("Buffer has correct SECM identifier")
+		} else {
+			result.Fail("Buffer missing SECM identifier", nil)
+		}
+
+		// Read it back and verify contents
+		msg := Crypto.GetRootAsSecureMessage(buf, 0)
+		if string(msg.Id()) == "go-msg-001" {
+			result.Pass("Read back id: go-msg-001")
+		} else {
+			result.Fail(fmt.Sprintf("Wrong id: %s", string(msg.Id())), nil)
+		}
+
+		if string(msg.Sender()) == "go-alice" {
+			result.Pass("Read back sender: go-alice")
+		} else {
+			result.Fail(fmt.Sprintf("Wrong sender: %s", string(msg.Sender())), nil)
+		}
+
+		if string(msg.Recipient()) == "go-bob" {
+			result.Pass("Read back recipient: go-bob")
+		} else {
+			result.Fail(fmt.Sprintf("Wrong recipient: %s", string(msg.Recipient())), nil)
+		}
+
+		if msg.Timestamp() == 1704067200 {
+			result.Pass("Read back timestamp: 1704067200")
+		} else {
+			result.Fail(fmt.Sprintf("Wrong timestamp: %d", msg.Timestamp()), nil)
+		}
+
+		payloadObj := new(Crypto.Payload)
+		if msg.Payload(payloadObj) != nil {
+			if string(payloadObj.Message()) == "Hello from Go!" {
+				result.Pass("Read back payload message: Hello from Go!")
+			} else {
+				result.Fail(fmt.Sprintf("Wrong payload message: %s", string(payloadObj.Message())), nil)
+			}
+
+			if payloadObj.Value() == 42 {
+				result.Pass("Read back payload value: 42")
+			} else {
+				result.Fail(fmt.Sprintf("Wrong payload value: %d", payloadObj.Value()), nil)
+			}
+
+			readData := payloadObj.DataBytes()
+			if bytes.Equal(readData, payloadData) {
+				result.Pass(fmt.Sprintf("Read back payload data: %d bytes", len(readData)))
+			} else {
+				result.Fail(fmt.Sprintf("Wrong payload data: %v", readData), nil)
+			}
+		} else {
+			result.Fail("Failed to read payload", nil)
+		}
+
+		// Test encrypt-decrypt round trip with Go-created FlatBuffer
+		if encryptionKeys != nil {
+			suiKey := encryptionKeys["sui"]
+			key, _ := hex.DecodeString(suiKey.KeyHex)
+			iv, _ := hex.DecodeString(suiKey.IVHex)
+
+			// Make a copy to encrypt
+			encrypted := make([]byte, len(buf))
+			copy(encrypted, buf)
+
+			if err := em.EncryptBytes(encrypted, key, iv); err != nil {
+				result.Fail("Encrypt Go FlatBuffer", err)
+			} else {
+				result.Pass("Encrypted Go-created FlatBuffer")
+
+				// Decrypt
+				if err := em.DecryptBytes(encrypted, key, iv); err != nil {
+					result.Fail("Decrypt Go FlatBuffer", err)
+				} else {
+					result.Pass("Decrypted Go-created FlatBuffer")
+
+					// Verify decrypted data matches original
+					if bytes.Equal(encrypted, buf) {
+						result.Pass("Decrypt round-trip verified")
+					} else {
+						result.Fail("Decrypted data doesn't match original", nil)
+					}
 				}
 			}
 		}

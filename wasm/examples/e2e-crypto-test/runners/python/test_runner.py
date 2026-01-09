@@ -15,6 +15,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+import flatbuffers
+
+# Add the generated code directory to the path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "generated" / "python"))
+from E2E.Crypto import SecureMessage, Payload
+
 # Try wasmtime first (better platform support), fall back to wasmer
 try:
     import wasmtime
@@ -946,6 +952,120 @@ def main():
             result.fail("P-256 accepted wrong message")
     except Exception as e:
         result.fail("P-256 signing test", e)
+
+    results.append(result.summary())
+
+    # Test 7: FlatBuffer Creation
+    print("\nTest 7: FlatBuffer Creation")
+    print("-" * 40)
+    result = TestResult("FlatBuffer Creation")
+
+    try:
+        # Create a SecureMessage using the FlatBuffers builder
+        builder = flatbuffers.Builder(1024)
+
+        # Build the Payload first (inner table)
+        payload_msg = builder.CreateString("Hello from Python!")
+        payload_data = bytes([0x01, 0x02, 0x03, 0x04, 0x05])
+        payload_data_vec = builder.CreateByteVector(payload_data)
+
+        Payload.PayloadStart(builder)
+        Payload.PayloadAddMessage(builder, payload_msg)
+        Payload.PayloadAddValue(builder, 42)
+        Payload.PayloadAddData(builder, payload_data_vec)
+        Payload.PayloadAddIsEncrypted(builder, False)
+        payload = Payload.PayloadEnd(builder)
+
+        # Build the SecureMessage
+        msg_id = builder.CreateString("python-msg-001")
+        sender = builder.CreateString("python-alice")
+        recipient = builder.CreateString("python-bob")
+
+        SecureMessage.SecureMessageStart(builder)
+        SecureMessage.SecureMessageAddId(builder, msg_id)
+        SecureMessage.SecureMessageAddSender(builder, sender)
+        SecureMessage.SecureMessageAddRecipient(builder, recipient)
+        SecureMessage.SecureMessageAddPayload(builder, payload)
+        SecureMessage.SecureMessageAddTimestamp(builder, 1704067200)
+        secure_msg = SecureMessage.SecureMessageEnd(builder)
+
+        builder.Finish(secure_msg, b"SECM")
+
+        buf = builder.Output()
+        buf = bytes(buf)  # Convert to bytes
+        result.pass_(f"Created SecureMessage binary: {len(buf)} bytes")
+
+        # Verify the buffer has the correct file identifier
+        if SecureMessage.SecureMessage.SecureMessageBufferHasIdentifier(buf, 0):
+            result.pass_("Buffer has correct SECM identifier")
+        else:
+            result.fail("Buffer missing SECM identifier")
+
+        # Read it back and verify contents
+        msg = SecureMessage.SecureMessage.GetRootAs(buf, 0)
+        if msg.Id().decode('utf-8') == "python-msg-001":
+            result.pass_("Read back id: python-msg-001")
+        else:
+            result.fail(f"Wrong id: {msg.Id()}")
+
+        if msg.Sender().decode('utf-8') == "python-alice":
+            result.pass_("Read back sender: python-alice")
+        else:
+            result.fail(f"Wrong sender: {msg.Sender()}")
+
+        if msg.Recipient().decode('utf-8') == "python-bob":
+            result.pass_("Read back recipient: python-bob")
+        else:
+            result.fail(f"Wrong recipient: {msg.Recipient()}")
+
+        if msg.Timestamp() == 1704067200:
+            result.pass_("Read back timestamp: 1704067200")
+        else:
+            result.fail(f"Wrong timestamp: {msg.Timestamp()}")
+
+        payload_obj = msg.Payload()
+        if payload_obj:
+            if payload_obj.Message().decode('utf-8') == "Hello from Python!":
+                result.pass_("Read back payload message: Hello from Python!")
+            else:
+                result.fail(f"Wrong payload message: {payload_obj.Message()}")
+
+            if payload_obj.Value() == 42:
+                result.pass_("Read back payload value: 42")
+            else:
+                result.fail(f"Wrong payload value: {payload_obj.Value()}")
+
+            read_data = bytes([payload_obj.Data(i) for i in range(payload_obj.DataLength())])
+            if read_data == payload_data:
+                result.pass_(f"Read back payload data: {len(read_data)} bytes")
+            else:
+                result.fail(f"Wrong payload data: {read_data}")
+        else:
+            result.fail("Failed to read payload")
+
+        # Test encrypt-decrypt round trip with Python-created FlatBuffer
+        sui_key = encryption_keys["sui"]
+        key = bytes.fromhex(sui_key["key_hex"])
+        iv = bytes.fromhex(sui_key["iv_hex"])
+
+        # Make a copy to encrypt
+        encrypted = bytearray(buf)
+
+        em.encrypt(key, iv, encrypted)
+        result.pass_("Encrypted Python-created FlatBuffer")
+
+        # Decrypt
+        em.decrypt(key, iv, encrypted)
+        result.pass_("Decrypted Python-created FlatBuffer")
+
+        # Verify decrypted data matches original
+        if bytes(encrypted) == buf:
+            result.pass_("Decrypt round-trip verified")
+        else:
+            result.fail("Decrypted data doesn't match original")
+
+    except Exception as e:
+        result.fail("FlatBuffer creation test", e)
 
     results.append(result.summary())
 

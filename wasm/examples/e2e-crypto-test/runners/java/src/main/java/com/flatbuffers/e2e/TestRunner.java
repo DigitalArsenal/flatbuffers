@@ -16,8 +16,11 @@ import com.dylibso.chicory.wasi.WasiPreview1;
 import com.dylibso.chicory.wasm.Parser;
 import com.dylibso.chicory.wasm.types.FunctionType;
 import com.dylibso.chicory.wasm.types.ValType;
+import com.google.flatbuffers.FlatBufferBuilder;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import E2E.Crypto.SecureMessage;
+import E2E.Crypto.Payload;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -1087,6 +1090,131 @@ public class TestRunner {
                 }
             } catch (Exception e) {
                 result.fail("P-256 signing test error: " + e.getMessage());
+            }
+
+            results.add(result.summary());
+        }
+
+        // Test 7: FlatBuffer Creation
+        System.out.println("\nTest 7: FlatBuffer Creation");
+        System.out.println("-".repeat(40));
+        {
+            TestResult result = new TestResult("FlatBuffer Creation");
+
+            try {
+                // Create a SecureMessage using the FlatBuffers builder
+                FlatBufferBuilder builder = new FlatBufferBuilder(1024);
+
+                // Build the Payload first (inner table)
+                int payloadMsgOffset = builder.createString("Hello from Java!");
+                byte[] payloadData = new byte[] {0x01, 0x02, 0x03, 0x04, 0x05};
+                int payloadDataOffset = Payload.createDataVector(builder, payloadData);
+
+                int payloadOffset = Payload.createPayload(builder, payloadMsgOffset, 42, payloadDataOffset, 0, false);
+
+                // Build the SecureMessage
+                int idOffset = builder.createString("java-msg-001");
+                int senderOffset = builder.createString("java-alice");
+                int recipientOffset = builder.createString("java-bob");
+
+                int secureMessageOffset = SecureMessage.createSecureMessage(builder, idOffset, senderOffset, recipientOffset, payloadOffset, 1704067200L, 0);
+
+                SecureMessage.finishSecureMessageBuffer(builder, secureMessageOffset);
+
+                java.nio.ByteBuffer buf = builder.dataBuffer();
+                byte[] bufBytes = new byte[buf.remaining()];
+                buf.get(bufBytes);
+                result.pass("Created SecureMessage binary: " + bufBytes.length + " bytes");
+
+                // Verify the buffer has the correct file identifier
+                if (bufBytes.length >= 8 && bufBytes[4] == 'S' && bufBytes[5] == 'E' && bufBytes[6] == 'C' && bufBytes[7] == 'M') {
+                    result.pass("Buffer has correct SECM identifier");
+                } else {
+                    result.fail("Buffer missing SECM identifier");
+                }
+
+                // Read it back and verify contents
+                java.nio.ByteBuffer readBuf = java.nio.ByteBuffer.wrap(bufBytes);
+                SecureMessage msg = SecureMessage.getRootAsSecureMessage(readBuf);
+
+                if ("java-msg-001".equals(msg.id())) {
+                    result.pass("Read back id: java-msg-001");
+                } else {
+                    result.fail("Wrong id: " + msg.id());
+                }
+
+                if ("java-alice".equals(msg.sender())) {
+                    result.pass("Read back sender: java-alice");
+                } else {
+                    result.fail("Wrong sender: " + msg.sender());
+                }
+
+                if ("java-bob".equals(msg.recipient())) {
+                    result.pass("Read back recipient: java-bob");
+                } else {
+                    result.fail("Wrong recipient: " + msg.recipient());
+                }
+
+                if (msg.timestamp() == 1704067200L) {
+                    result.pass("Read back timestamp: 1704067200");
+                } else {
+                    result.fail("Wrong timestamp: " + msg.timestamp());
+                }
+
+                Payload payloadObj = msg.payload();
+                if (payloadObj != null) {
+                    if ("Hello from Java!".equals(payloadObj.message())) {
+                        result.pass("Read back payload message: Hello from Java!");
+                    } else {
+                        result.fail("Wrong payload message: " + payloadObj.message());
+                    }
+
+                    if (payloadObj.value() == 42) {
+                        result.pass("Read back payload value: 42");
+                    } else {
+                        result.fail("Wrong payload value: " + payloadObj.value());
+                    }
+
+                    if (payloadObj.dataLength() == 5) {
+                        byte[] readData = new byte[5];
+                        for (int i = 0; i < 5; i++) readData[i] = (byte) payloadObj.data(i);
+                        if (Arrays.equals(readData, payloadData)) {
+                            result.pass("Read back payload data: " + payloadObj.dataLength() + " bytes");
+                        } else {
+                            result.fail("Wrong payload data");
+                        }
+                    } else {
+                        result.fail("Wrong payload data length: " + payloadObj.dataLength());
+                    }
+                } else {
+                    result.fail("Failed to read payload");
+                }
+
+                // Test encrypt-decrypt round trip with Java-created FlatBuffer
+                Map<String, String> suiKeys = encryptionKeys.get("sui");
+                if (suiKeys != null) {
+                    byte[] key = fromHex(suiKeys.get("key_hex"));
+                    byte[] iv = fromHex(suiKeys.get("iv_hex"));
+
+                    // Make a copy to encrypt
+                    byte[] encrypted = runner.encrypt(key, iv, bufBytes);
+                    result.pass("Encrypted Java-created FlatBuffer");
+
+                    // Decrypt
+                    byte[] decrypted = runner.decrypt(key, iv, encrypted);
+                    result.pass("Decrypted Java-created FlatBuffer");
+
+                    // Verify decrypted data matches original
+                    if (Arrays.equals(decrypted, bufBytes)) {
+                        result.pass("Decrypt round-trip verified");
+                    } else {
+                        result.fail("Decrypted data doesn't match original");
+                    }
+                } else {
+                    result.fail("Sui encryption keys not found");
+                }
+            } catch (Exception e) {
+                result.fail("FlatBuffer creation test error: " + e.getMessage());
             }
 
             results.add(result.summary());

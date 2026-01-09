@@ -6,6 +6,10 @@ let package = Package(
     platforms: [
         .macOS(.v13)
     ],
+    dependencies: [
+        // Use the local FlatBuffers library from the parent flatbuffers repository
+        .package(path: "../../../../.."),
+    ],
     targets: [
         // System library for Wasmtime C API
         .systemLibrary(
@@ -16,9 +20,12 @@ let package = Package(
         ),
         .executableTarget(
             name: "E2ECryptoTest",
-            dependencies: ["CWasmtime"],
+            dependencies: [
+                "CWasmtime",
+                .product(name: "FlatBuffers", package: "flatbuffers"),
+            ],
             path: ".",
-            sources: ["TestRunner.swift"],
+            sources: ["TestRunner.swift", "message_generated.swift"],
             cSettings: [
                 .unsafeFlags(["-I", "wasmtime-c-api/include"]),
             ],
@@ -27,6 +34,7 @@ let package = Package(
             ],
             linkerSettings: [
                 .unsafeFlags(["-L", "wasmtime-c-api/lib"]),
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../../../wasmtime-c-api/lib"]),
                 .linkedLibrary("wasmtime"),
             ]
         ),

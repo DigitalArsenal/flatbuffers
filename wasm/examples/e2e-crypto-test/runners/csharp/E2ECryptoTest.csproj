@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="Wasmtime" Version="22.0.0" />
+    <PackageReference Include="Google.FlatBuffers" Version="24.12.23" />
   </ItemGroup>
 
 </Project>

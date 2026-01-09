@@ -1,7 +1,187 @@
 # FlatBuffers Cross-Language Encryption E2E Tests
 
-End-to-end testing framework for FlatBuffers WASM encryption module across multiple languages
-with support for 10 major cryptocurrency key types.
+End-to-end testing framework for FlatBuffers WASM encryption module across **7 languages**
+with full cryptographic support including ECDH key exchange, digital signatures, and
+transparent encryption using 10 major cryptocurrency key types.
+
+## Complete E2E Capabilities
+
+All 7 language runners have complete end-to-end capabilities:
+
+| Capability | Node.js | Go | Python | Rust | Java | C# | Swift |
+|------------|---------|-----|--------|------|------|-----|-------|
+| Load WASM crypto module | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SHA-256 hashing | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| AES-256-CTR encrypt/decrypt | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| HKDF-SHA256 key derivation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| X25519 ECDH | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| secp256k1 ECDH | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| P-256 ECDH | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Ed25519 signatures | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| secp256k1 ECDSA signatures | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| P-256 ECDSA signatures | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| FlatBuffer creation | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Cross-language verification | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+## End-to-End Flow
+
+The complete E2E flow demonstrates how to use FlatBuffers with encryption across any language:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         END-TO-END ENCRYPTION FLOW                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  1. SCHEMA DEFINITION                                                        │
+│     ┌──────────────────┐                                                    │
+│     │  message.fbs     │  Define your FlatBuffers schema                    │
+│     │  (IDL schema)    │                                                    │
+│     └────────┬─────────┘                                                    │
+│              │                                                               │
+│              ▼                                                               │
+│  2. CODE GENERATION (via WASM flatc or native flatc)                        │
+│     ┌──────────────────┐                                                    │
+│     │  flatc --ts      │  Generate language-specific code                   │
+│     │  flatc --go      │  (TypeScript, Go, Python, Rust, Java, C#, Swift)   │
+│     │  flatc --python  │                                                    │
+│     │  ...             │                                                    │
+│     └────────┬─────────┘                                                    │
+│              │                                                               │
+│              ▼                                                               │
+│  3. CREATE FLATBUFFER                                                        │
+│     ┌──────────────────┐                                                    │
+│     │  Builder API     │  Use generated code to create FlatBuffer binary    │
+│     │  SecureMessage   │  e.g., SecureMessage.createSecureMessage(...)      │
+│     └────────┬─────────┘                                                    │
+│              │                                                               │
+│              ▼                                                               │
+│  4. KEY EXCHANGE (ECDH)                                                      │
+│     ┌──────────────────────────────────────────────────────────┐            │
+│     │  Sender                              Recipient           │            │
+│     │  ┌─────────────┐                    ┌─────────────┐     │            │
+│     │  │ Private Key │                    │ Private Key │     │            │
+│     │  │ Public Key  │◄──────────────────►│ Public Key  │     │            │
+│     │  └──────┬──────┘   Exchange Pubs    └──────┬──────┘     │            │
+│     │         │                                   │            │            │
+│     │         └───────────┬───────────────────────┘            │            │
+│     │                     ▼                                    │            │
+│     │             ┌───────────────┐                            │            │
+│     │             │ Shared Secret │  X25519/secp256k1/P-256    │            │
+│     │             └───────┬───────┘                            │            │
+│     │                     │                                    │            │
+│     │                     ▼                                    │            │
+│     │             ┌───────────────┐                            │            │
+│     │             │ HKDF-SHA256   │  Derive encryption key     │            │
+│     │             │ → AES Key     │                            │            │
+│     │             └───────────────┘                            │            │
+│     └──────────────────────────────────────────────────────────┘            │
+│              │                                                               │
+│              ▼                                                               │
+│  5. ENCRYPT FLATBUFFER                                                       │
+│     ┌──────────────────┐                                                    │
+│     │  AES-256-CTR     │  Encrypt entire FlatBuffer binary                  │
+│     │  (WASM module)   │  Binary → Ciphertext                               │
+│     └────────┬─────────┘                                                    │
+│              │                                                               │
+│              ▼                                                               │
+│  6. SIGN (Optional)                                                          │
+│     ┌──────────────────┐                                                    │
+│     │  Ed25519 or      │  Sign ciphertext for authentication                │
+│     │  ECDSA           │  (Ed25519, secp256k1, P-256)                       │
+│     └────────┬─────────┘                                                    │
+│              │                                                               │
+│              ▼                                                               │
+│  7. TRANSMIT                                                                 │
+│     ┌──────────────────┐                                                    │
+│     │  Network/File    │  Send encrypted + signed data                      │
+│     │  Transfer        │                                                    │
+│     └────────┬─────────┘                                                    │
+│              │                                                               │
+│              ▼                                                               │
+│  8. VERIFY SIGNATURE (Optional)                                              │
+│     ┌──────────────────┐                                                    │
+│     │  Verify with     │  Authenticate sender                               │
+│     │  Public Key      │                                                    │
+│     └────────┬─────────┘                                                    │
+│              │                                                               │
+│              ▼                                                               │
+│  9. DECRYPT                                                                  │
+│     ┌──────────────────┐                                                    │
+│     │  AES-256-CTR     │  Recipient decrypts with derived key               │
+│     │  (WASM module)   │  Ciphertext → Binary                               │
+│     └────────┬─────────┘                                                    │
+│              │                                                               │
+│              ▼                                                               │
+│  10. READ FLATBUFFER                                                         │
+│     ┌──────────────────┐                                                    │
+│     │  Generated Code  │  Parse decrypted binary                            │
+│     │  SecureMessage   │  Access fields: id, sender, payload, etc.          │
+│     └──────────────────┘                                                    │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Code Example (TypeScript/Node.js)
+
+```typescript
+import { FlatBufferWasm } from 'flatc-wasm';
+
+// 1. Load WASM modules
+const flatc = await FlatBufferWasm.create();
+const crypto = await loadCryptoWasm();
+
+// 2. Generate code from schema (or use pre-generated)
+const schema = `
+namespace E2E.Crypto;
+table SecureMessage {
+  id: string;
+  sender: string;
+  recipient: string;
+  payload: Payload;
+  timestamp: int64;
+}
+table Payload {
+  message: string;
+  data: [ubyte];
+  is_encrypted: bool;
+}
+root_type SecureMessage;
+file_identifier "SECM";
+`;
+const code = flatc.generateCode(schema, { lang: 'typescript' });
+
+// 3. Create FlatBuffer
+const builder = new flatbuffers.Builder(1024);
+const msg = SecureMessage.createSecureMessage(builder, ...);
+const buffer = builder.asUint8Array();
+
+// 4. ECDH Key Exchange
+const { privateKey: senderPriv, publicKey: senderPub } = crypto.x25519GenerateKeypair();
+const { privateKey: recipientPriv, publicKey: recipientPub } = crypto.x25519GenerateKeypair();
+const sharedSecret = crypto.x25519SharedSecret(senderPriv, recipientPub);
+const aesKey = crypto.hkdf(sharedSecret, salt, info, 32);
+const iv = crypto.randomBytes(16);
+
+// 5. Encrypt
+const ciphertext = crypto.encrypt(aesKey, iv, buffer);
+
+// 6. Sign (optional)
+const signature = crypto.ed25519Sign(senderPriv, ciphertext);
+
+// 7. Transmit (ciphertext + signature + senderPub + iv)
+
+// 8. Verify signature
+const isValid = crypto.ed25519Verify(senderPub, ciphertext, signature);
+
+// 9. Decrypt (recipient side)
+const recipientShared = crypto.x25519SharedSecret(recipientPriv, senderPub);
+const recipientKey = crypto.hkdf(recipientShared, salt, info, 32);
+const plaintext = crypto.decrypt(recipientKey, iv, ciphertext);
+
+// 10. Read FlatBuffer
+const msg = SecureMessage.getRootAsSecureMessage(new ByteBuffer(plaintext));
+console.log(msg.id(), msg.sender(), msg.payload().message());
+```
 
 ## Transparent Encryption Model
 
@@ -23,42 +203,45 @@ binary, not to specific fields in the schema.
 - External metadata or protocol headers
 - File extension or naming convention
 
-## Schema Usage
+## Test Runners
 
-This test framework uses the **upstream FlatBuffers test schemas** - no custom schemas:
+| Language | Runtime | Tests | Location |
+|----------|---------|-------|----------|
+| Node.js | V8 (native) | 37/37 | `runners/node/` |
+| Go | wazero | 19/19 | `runners/go/` |
+| Python | wasmtime | 18/18 | `runners/python/` |
+| Rust | wasmtime | 18/18 | `runners/rust/` |
+| Java | Chicory | 18/18 | `runners/java/` |
+| C# | Wasmtime | 18/18 | `runners/csharp/` |
+| Swift | Wasmtime C API | 18/18 | `runners/swift/` |
 
-| File | Purpose |
-|------|---------|
-| `tests/monster_test.fbs` | Main schema with unions, structs, enums, gRPC |
-| `tests/monsterdata_test.json` | Standard test data with all field types |
-| `tests/unicode_test.json` | Unicode edge cases (Cyrillic, CJK, surrogate pairs) |
-| `tests/optional_scalars.fbs` | Optional/nullable scalar fields |
-| `tests/optional_scalars.json` | Test data for null vs zero vs default |
-| `tests/monster_extra.fbs` | NaN and Infinity floating-point values |
-| `tests/monsterdata_extra.json` | NaN/Inf test data |
-| `tests/monsterdata_test.mon` | Golden binary for wire compatibility |
-| `tests/nested_union_test.fbs` | Nested unions with bit_flags enum |
-| `tests/more_defaults.fbs` | Additional default vector/string tests |
-| `tests/nan_inf_test.fbs` | NaN/Inf as DEFAULT values in schema |
-| `tests/required_strings.fbs` | Required field attribute |
-| `tests/alignment_test.fbs` | Struct alignment edge cases |
-| `tests/alignment_test.json` | Alignment test data |
-| `tests/alignment_test_before_fix.bin` | Pre-fix alignment binary |
-| `tests/alignment_test_after_fix.bin` | Post-fix alignment binary |
-| `tests/arrays_test.fbs` | Fixed-size array syntax |
-| `tests/default_vectors_strings_test.fbs` | Empty default vectors |
-| `tests/unicode_test.mon` | Unicode golden binary |
-| `tests/monsterdata_java_wire.mon` | Java wire format binary |
-| `tests/monsterdata_java_wire_sp.mon` | Java single-precision binary |
-| `tests/monsterdata_python_wire.mon` | Python wire format binary |
-| `tests/monsterdata_rust_wire.mon` | Rust wire format binary |
-| `tests/javatest.bin` | Additional Java test binary |
-| `tests/gold_flexbuffer_example.bin` | FlexBuffer format binary |
-| `tests/native_type_test.fbs` | Native C++ type mapping |
-| `tests/native_inline_table_test.fbs` | native_inline on table vectors |
-| `tests/service_test.fbs` | Standalone gRPC service schema |
-| `tests/union_underlying_type_test.fbs` | Union with explicit underlying type |
-| `tests/optional_scalars_defaults.json` | Optional scalar default values |
+## Supported Cryptographic Operations
+
+### Symmetric Encryption
+| Operation | Algorithm | Key Size | Notes |
+|-----------|-----------|----------|-------|
+| Encrypt | AES-256-CTR | 256-bit | Stream cipher, no padding needed |
+| Decrypt | AES-256-CTR | 256-bit | Same as encrypt (symmetric) |
+
+### Hashing & Key Derivation
+| Operation | Algorithm | Output | Notes |
+|-----------|-----------|--------|-------|
+| Hash | SHA-256 | 32 bytes | Cryptographic hash |
+| KDF | HKDF-SHA256 | Variable | Derive keys from shared secrets |
+
+### Key Exchange (ECDH)
+| Algorithm | Private Key | Public Key | Shared Secret |
+|-----------|-------------|------------|---------------|
+| X25519 | 32 bytes | 32 bytes | 32 bytes |
+| secp256k1 | 32 bytes | 33 bytes (compressed) | 32 bytes |
+| P-256 | 32 bytes | 33 bytes (compressed) | 32 bytes |
+
+### Digital Signatures
+| Algorithm | Private Key | Public Key | Signature |
+|-----------|-------------|------------|-----------|
+| Ed25519 | 64 bytes | 32 bytes | 64 bytes |
+| secp256k1 ECDSA | 32 bytes | 33-65 bytes | 70-72 bytes (DER) |
+| P-256 ECDSA | 32 bytes | 33-65 bytes | 70-72 bytes (DER) |
 
 ## Supported Cryptocurrency Key Types
 
@@ -75,18 +258,6 @@ This test framework uses the **upstream FlatBuffers test schemas** - no custom s
 | 9 | NEAR | EdDSA | Ed25519 |
 | 10 | Aptos | EdDSA | Ed25519 |
 
-## Test Runners
-
-| Language | Runtime | Location |
-|----------|---------|----------|
-| Node.js | V8 (native) | `runners/node/` |
-| Go | wazero | `runners/go/` |
-| Python | wasmer-python | `runners/python/` |
-| Rust | wasmer | `runners/rust/` |
-| Java | Chicory | `runners/java/` |
-| C# | Wasmtime | `runners/csharp/` |
-| Swift | WasmKit | `runners/swift/` |
-
 ## Quick Start
 
 ### Prerequisites
@@ -94,13 +265,13 @@ This test framework uses the **upstream FlatBuffers test schemas** - no custom s
 1. Build the WASM encryption module:
 ```bash
 cd /path/to/flatbuffers
-cmake --build build/wasm --target flatc_wasm_wasi
+./scripts/build_wasm.sh
 ```
 
 2. Generate test vectors (run once):
 ```bash
 cd wasm/examples/e2e-crypto-test
-node generate_vectors.mjs
+node runners/node/create_messages.mjs
 ```
 
 ### Running Tests
@@ -109,7 +280,7 @@ node generate_vectors.mjs
 ```bash
 cd runners/node
 npm link flatc-wasm  # Link the WASM module
-node test_runner.mjs
+npm test
 ```
 
 **Go:**
@@ -121,7 +292,7 @@ go run test_runner.go
 **Python:**
 ```bash
 cd runners/python
-pip install wasmer wasmer_compiler_cranelift
+pip install wasmtime
 python test_runner.py
 ```
 
@@ -161,369 +332,85 @@ Located in `vectors/`:
 ### Generated Binaries
 
 The Node.js test runner generates binary files in `vectors/binary/`:
-- `monster_unencrypted.bin` - Unencrypted FlatBuffer (using upstream schema)
-- `monster_encrypted_bitcoin.bin` - Entire binary encrypted with Bitcoin key
-- `monster_encrypted_ethereum.bin` - Entire binary encrypted with Ethereum key
-- ... (one for each chain)
-
-Other language runners read these files to verify cross-language compatibility.
+- `secure_message_unencrypted.bin` - Unencrypted FlatBuffer
+- `secure_message_encrypted_*.bin` - Encrypted with each chain's key
+- `ecdh_headers.json` - ECDH public keys and encrypted payloads
 
 ## What Each Test Validates
 
-### Test 1a: Unencrypted FlatBuffer (monsterdata_test.json)
-
-Generates a FlatBuffer using the upstream `monsterdata_test.json` and verifies ALL data types
-and edge cases survive the binary round-trip:
-
-| Edge Case | Field | Value | Why It Matters |
-|-----------|-------|-------|----------------|
-| Basic string | `name` | `"MyMonster"` | Simple string field |
-| Numeric scalar | `hp` | `80` | 16-bit integer |
-| Nested struct | `pos` | `{x:1, y:2, z:3}` | Struct with multiple fields |
-| Sub-struct | `pos.test3` | `{a:5, b:6}` | Struct nested inside struct |
-| Enum in struct | `pos.test2` | `"Green"` | Enum value in nested context |
-| Byte array | `inventory` | `[0,1,2,3,4]` | Vector of ubyte |
-| Long array | `vector_of_longs` | `[1,100,...,100000000]` | Vector of 64-bit integers |
-| **Extreme doubles** | `vector_of_doubles` | `[±1.79e+308, 0]` | Near DBL_MAX/DBL_MIN values |
-| Union type | `test_type` + `test` | `Monster{name:"Fred"}` | Union with nested table |
-| Struct array | `test4`, `test5` | `[{a:10,b:20},...]` | Vector of structs |
-| String array | `testarrayofstring` | `["test1","test2"]` | Vector of strings |
-| Nested table | `enemy` | `{name:"Fred"}` | Table reference |
-| Boolean array | `testarrayofbools` | `[true,false,true]` | Vector of bools |
-| Boolean scalar | `testbool` | `true` | Single boolean |
-| Sorted struct array | `testarrayofsortedstruct` | Sorted by `id` | Binary search support |
-| Sorted table array | `scalar_key_sorted_tables` | 2 entries | Keyed table lookup |
-| Native inline | `native_inline` | `{a:1, b:2}` | Inline struct optimization |
-| FNV hash fields | `testhashs32_fnv1` | hash value | String-to-hash conversion |
-
-### Test 1b: Unicode Strings (unicode_test.json)
-
-Verifies multi-byte UTF-8 encoding edge cases:
-
-| Unicode Category | Example | Bytes | Why It Matters |
-|------------------|---------|-------|----------------|
-| Cyrillic/Greek | `Цлїςσδε` | 2-byte UTF-8 | Non-ASCII European scripts |
-| Half-width Katakana | `ﾌﾑｱﾑｶﾓｹﾓ` | 3-byte UTF-8 | Japanese text |
-| Full-width Katakana | `フムヤムカモケモ` | 3-byte UTF-8 | Japanese text variant |
-| CJK Circled | `㊀㊁㊂㊃㊄` | 3-byte UTF-8 | Enclosed CJK characters |
-| I Ching Trigrams | `☳☶☲` | 3-byte UTF-8 | Symbols |
-| **Surrogate Pairs** | `𡇙𝌆` | **4-byte UTF-8** | Characters > U+FFFF |
-
-### Test 1c: Optional Scalars (optional_scalars.json)
-
-Tests null-capable scalar fields:
-
-| Edge Case | Fields | Why It Matters |
-|-----------|--------|----------------|
-| Required fields | `just_i8`, `just_i16`, etc. | Always-present scalars |
-| Optional with zero | `maybe_u8 = 0` | Distinguishes zero from null |
-| Default override | `default_u8 = 0` | Override non-zero default with zero |
-| Optional enum | `maybe_enum = One` | Enum with null capability |
-| Optional bool | `maybe_bool = null` | Boolean null handling |
-
-### Test 1d: NaN/Infinity (monsterdata_extra.json)
-
-Tests IEEE 754 special floating-point values:
-
-| Edge Case | Field | Value | Why It Matters |
-|-----------|-------|-------|----------------|
-| NaN double | `d3` | `nan` | Not-a-Number handling |
-| +Infinity double | `d1` | `+inf` | Positive infinity |
-| -Infinity double | `d2` | `-inf` | Negative infinity |
-| NaN float | `f0`, `f1` | `nan` | Single-precision NaN |
-| +/- Inf float | `f2`, `f3` | `±inf` | Single-precision infinity |
-| Vector with NaN | `dvec`, `fvec` | Mixed special values | Array of special floats |
-
-### Test 1e: Golden Binary Wire Compatibility
-
-Verifies wire format compatibility with pre-generated binaries:
-
-- `monsterdata_test.mon` - Official golden binary (600 bytes)
-- Verifies file identifier `"MONS"` at offset 4-7
-- Compares generated binary size to golden reference
-- Ensures backwards compatibility with existing FlatBuffers
-
-### Test 1f: gRPC/RPC Service Schema
-
-Verifies the schema parser handles `rpc_service` definitions:
-
-| Service | Method | Streaming |
-|---------|--------|-----------|
-| `MonsterStorage` | `Store(Monster):Stat` | none |
-| `MonsterStorage` | `Retrieve(Stat):Monster` | server |
-| `MonsterStorage` | `GetMaxHitPoint(Monster):Stat` | client |
-| `MonsterStorage` | `GetMinMaxHitPoints(Monster):Stat` | bidi |
-
-### Test 1g: Struct Alignment (alignment_test.json)
-
-Tests memory alignment edge cases:
-
-- `BadAlignmentSmall` - 12-byte struct with 4-byte alignment
-- `BadAlignmentLarge` - 8-byte struct with 8-byte alignment
-- `EvenSmallStruct` - 2-byte struct with 1-byte alignment
-- `OddSmallStruct` - 3-byte struct with 1-byte alignment
-- Verifies struct padding survives binary round-trip
-
-### Test 1h: Fixed-Size Arrays (arrays_test.fbs)
-
-Verifies fixed-size array syntax in structs:
-
-| Syntax | Description |
-|--------|-------------|
-| `[int:2]` | Fixed 2-element int array |
-| `[int:0xF]` | Fixed 15-element array (hex size) |
-| `[NestedStruct:2]` | Fixed array of structs |
-| `[TestEnum:2]` | Fixed array of enums |
-| `[int64:2]` | Fixed array of 64-bit integers |
-
-### Test 1i: Default Vectors/Strings (default_vectors_strings_test.fbs)
-
-Tests empty default values:
-
-| Feature | Example |
-|---------|---------|
-| Empty int vector | `int_vec:[int] = []` |
-| Empty string vector | `string_vec:[string] = []` |
-| Empty string | `empty_string:string = ""` |
-| Default string | `some_string:string = "some"` |
-| Empty struct vector | `struct_vec:[MyStruct] = []` |
-| 64-bit vectors | `offset64`, `vector64` attributes |
-
-### Test 1j: Cross-Language Wire Format
-
-Verifies binaries from other FlatBuffers implementations:
-
-| Language | File | Size |
-|----------|------|------|
-| Java | `monsterdata_java_wire.mon` | 312 bytes |
-| Python | `monsterdata_python_wire.mon` | 344 bytes |
-| Rust | `monsterdata_rust_wire.mon` | 408 bytes |
-
-Each binary is parsed and verified to ensure cross-language wire format compatibility.
-
-### Test 1k: Unicode Golden Binary
-
-Verifies the pre-generated `unicode_test.mon` golden binary:
-
-- 6 unicode string edge cases preserved
-- 4-byte UTF-8 surrogate pairs verified
-- Cross-language unicode compatibility
-
-### Test 1l: FlexBuffer Binary
-
-Verifies FlexBuffer format compatibility:
-
-- `gold_flexbuffer_example.bin` (166 bytes)
-- FlexBuffers are a schema-less self-describing format
-- Different binary format from FlatBuffers
-
-### Test 1m: Nested Union (nested_union_test.fbs)
-
-Tests union types with tables and advanced enum attributes:
-
-| Feature | Example | Why It Matters |
-|---------|---------|----------------|
-| bit_flags enum | `enum Color (bit_flags)` | Bitmask enum values |
-| Multiple attributes | `(csharp_partial, private)` | Language-specific hints |
-| Union with tables | `union Any { Vec3, TestSimpleTableWithEnum }` | Complex union variants |
-| Union round-trip | Vec3 and enum variants | Full union preservation |
-
-### Test 1n: More Defaults (more_defaults.fbs)
-
-Tests additional default value edge cases:
-
-| Feature | Example | Why It Matters |
-|---------|---------|----------------|
-| Empty int vector | `ints: [int] = []` | Default empty vector |
-| Whitespace in default | `floats: [float] = [     ]` | Parser tolerance |
-| Empty enum vector | `abcs: [ABC] = []` | Enum vector defaults |
-| Empty bool vector | `bools: [bool] = []` | Boolean vector defaults |
-| Default string | `some_string = "some"` | String default value |
-
-### Test 1o: NaN/Inf Schema Defaults (nan_inf_test.fbs)
-
-Tests NaN and Infinity as **schema default values** (not just data):
-
-| Feature | Schema Syntax | Why It Matters |
-|---------|---------------|----------------|
-| NaN default | `default_nan:double = nan` | Parser handles NaN |
-| +Inf default | `default_inf:double = inf` | Parser handles +Infinity |
-| -Inf default | `default_ninf:double = -inf` | Parser handles -Infinity |
-
-### Test 1p: Alignment Binary Comparison
-
-Tests struct alignment padding correctness:
-
-| Binary | Size | Purpose |
-|--------|------|---------|
-| `alignment_test_before_fix.bin` | 32 bytes | Pre-fix alignment |
-| `alignment_test_after_fix.bin` | 32 bytes | Post-fix alignment |
-
-Verifies that alignment padding bytes differ between pre/post fix versions.
-
-### Test 1q: Java Wire Format SP (Single Precision)
-
-Tests Java-generated FlatBuffer with single-precision floats:
-
-| Feature | Value | Why It Matters |
-|---------|-------|----------------|
-| File identifier | `MONS` | Same schema as double-precision |
-| Binary size | 312 bytes | Different from double-precision |
-| Monster data | name, hp, etc. | Full round-trip |
-
-### Test 1r: Java Test Binary (javatest.bin)
-
-Tests additional Java-generated binary:
-
-| Feature | Value | Why It Matters |
-|---------|-------|----------------|
-| Binary size | 512 bytes | Larger test case |
-| Root offset | 168 | Valid FlatBuffer structure |
-| Schema compatibility | monster_test.fbs | Cross-language wire format |
-
-### Test 1s: Required Strings (required_strings.fbs)
-
-Tests the `(required)` field attribute:
-
-| Feature | Example | Why It Matters |
-|---------|---------|----------------|
-| Required string | `str_a:string (required)` | Must be present |
-| Required string | `str_b:string (required)` | Must be present |
-| Round-trip | Both fields preserved | Required validation |
-
-### Test 1t: Native Type (native_type_test.fbs)
-
-Tests C++ native type mapping attributes:
-
-| Feature | Example | Why It Matters |
-|---------|---------|----------------|
-| native_type | `(native_type:"Native::Vector3D")` | Maps to C++ type |
-| native_type_pack_name | `native_type_pack_name:"Vector3DAlt"` | Custom pack name |
-| native_include | `native_include "native_type_test_impl.h"` | Include directive |
-| native_inline | `position_inline:Vector3D (native_inline)` | Inline storage |
-| Matrix table | `rows`, `columns`, `values` | Table with native_type |
-
-### Test 1u: Native Inline Table (native_inline_table_test.fbs)
-
-Tests `native_inline` attribute on table vectors:
-
-| Feature | Example | Why It Matters |
-|---------|---------|----------------|
-| native_inline on vector | `t: [NativeInlineTable] (native_inline)` | Inline table storage |
-| Table in vector | Vector of tables | Memory layout optimization |
-
-### Test 1v: Service Test (service_test.fbs)
-
-Tests standalone gRPC service schema (separate from monster_test):
-
-| Service | Method | Streaming |
-|---------|--------|-----------|
-| HelloService | Hello | none (unary) |
-| HelloService | StreamClient | client |
-| HelloService | StreamServer | server |
-| HelloService | Stream | bidi |
-
-### Test 1w: Union Underlying Type (union_underlying_type_test.fbs)
-
-Tests unions with explicit underlying type and values:
-
-| Feature | Example | Why It Matters |
-|---------|---------|----------------|
-| Explicit type | `union ABC: int` | Union stored as int |
-| Explicit value | `A = 555` | Custom discriminant value |
-| Explicit value | `B = 666` | Non-sequential values |
-| Explicit value | `C = 777` | Sparse enum space |
-| Vector of unions | `test_vector_of_union: [ABC]` | Union array |
-
-### Test 1x: Optional Scalars Defaults (optional_scalars_defaults.json)
-
-Tests optional scalar fields with schema default values:
-
-| Feature | Value | Why It Matters |
-|---------|-------|----------------|
-| Schema default | `default_i8 = 42` | Non-zero default preserved |
-| Explicit null | `maybe_i8 = null` | Null vs missing |
-| Explicit zero | `just_u8 = 0` | Zero vs null vs default |
-| Float default | `default_f32 = 42.0` | Float precision |
-| Bool null | `maybe_bool = null` | Boolean null handling |
+### Test 1: WASM Module Loading
+Verifies the WASM crypto module loads correctly with all required exports:
+- Memory allocation (`malloc`, `free`)
+- Crypto functions (`wasi_sha256`, `wasi_encrypt_bytes`, etc.)
+- Indirect function table for `invoke_*` trampolines
 
 ### Test 2: SHA-256 Hash
 Verifies SHA-256 produces identical output across all WASM runtimes:
-- `SHA256("hello")` = `2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824`
+```
+SHA256("hello") = 2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+```
 
-### Test 3: Transparent Encryption (Per-Chain)
+### Test 3: AES-256-CTR Encryption/Decryption
+Tests symmetric encryption:
+1. Encrypt plaintext with key and IV
+2. Verify ciphertext differs from plaintext
+3. Decrypt ciphertext
+4. Verify decrypted data matches original
 
-For each of the 10 cryptocurrency chains:
-1. Generate FlatBuffer binary from upstream schema/data
-2. Encrypt **entire binary** with chain-specific AES-256-CTR key
-3. Verify encrypted data differs from original
-4. Decrypt entire binary
-5. Verify decrypted binary matches original exactly (byte-for-byte)
-6. Verify critical edge cases after decryption:
-   - Basic fields (`name`, `hp`)
-   - Extreme double values (`±1.79e+308`)
-   - Nested structures (`pos.test3`, `enemy`)
-   - Array integrity (`inventory`, `testarrayofbools`)
+### Test 4: HKDF Key Derivation
+Derives encryption keys from shared secrets:
+```
+derivedKey = HKDF-SHA256(ikm=sharedSecret, salt=[], info="context", length=32)
+```
 
-### Test 4: Full Code Generation Flow
+### Tests 5-7: ECDH Key Exchange
+For each curve (X25519, secp256k1, P-256):
+1. Generate keypair for Alice
+2. Generate keypair for Bob
+3. Alice computes shared secret with her private + Bob's public
+4. Bob computes shared secret with his private + Alice's public
+5. Verify both shared secrets are identical
 
-Demonstrates the complete FlatBuffers workflow with runtime code generation:
+### Tests 8-10: Digital Signatures
+For each algorithm (Ed25519, secp256k1, P-256):
+1. Generate signing keypair
+2. Sign message with private key
+3. Verify signature with public key
+4. Verify invalid signature is rejected
 
-1. **Generate code from schema** - Create language-specific code at runtime (NOT checked in)
-2. **Create FlatBuffer** - Use schema to generate binary from JSON
-3. **Encrypt** - Encrypt entire binary with AES-256-CTR
-4. **Decrypt** - Decrypt back to original
-5. **Read** - Parse decrypted binary and verify all fields
+### Test 11: Full ECDH + HKDF + AES Pipeline
+Complete encryption flow:
+1. Generate ECDH keypairs
+2. Compute shared secret
+3. Derive AES key via HKDF
+4. Encrypt message
+5. Decrypt message
+6. Verify round-trip
 
-| Language | Files Generated | Options Used |
-|----------|----------------|--------------|
-| TypeScript | Multiple | Default |
-| Go | Multiple | `goModule`, `goPackagePrefix` |
-| Python | Multiple | `pythonTyping: true` |
-| Rust | Multiple | Default |
-| C++ | Multiple | `genObjectApi`, `genMutable` |
-| C# | Multiple | Default |
-| Java | Multiple | Default |
-| Swift | Multiple | Default |
-| Kotlin | Multiple | Default |
+### Tests 12-15: Edge Cases
+- Large data encryption (10KB)
+- Invalid signature rejection for each algorithm
 
-**Key verification points:**
-- Generated TypeScript has `export class` statements
-- Generated TypeScript has Monster fields (`name`, `hp`, `pos`)
-- Generated TypeScript has `getRootAsMonster` accessor
-- Full roundtrip: schema → binary → encrypt → decrypt → read
+### Test 16: Signed Encryption
+Combines encryption with authentication:
+1. Encrypt payload
+2. Sign ciphertext
+3. Verify signature
+4. Decrypt payload
 
-**Important:** Generated code is created in-memory only and NOT written to disk.
-This mirrors how upstream FlatBuffers tests work - code is generated at test time.
+### Test 17: Multi-Recipient Encryption
+Encrypts for multiple recipients using ECDH:
+1. Sender generates keypair
+2. Each recipient generates keypair
+3. Sender derives unique key for each recipient
+4. Each recipient can decrypt with their own derived key
 
-### Test 5: JSON Schema Generation
-
-Generates JSON Schema from FlatBuffers IDL for runtime validation:
-
-| Feature | Verification |
-|---------|-------------|
-| Valid structure | `$schema`, `definitions`, or `type` present |
-| Monster type | `definitions.Monster` or `properties.name` |
-| Runtime validation | Schema usable with JSON Schema validators |
-
-**Use cases:**
-- Validate JSON data before FlatBuffer serialization
-- Generate documentation from schemas
-- IDE autocomplete and type checking
-
-### Test 6: Crypto Operations
-
-- Ed25519 keypair generation (Solana, SUI, Cardano, Tezos, NEAR, Aptos)
-- Ed25519 sign/verify
-- secp256k1 keypair generation (Bitcoin, Ethereum, Cosmos)
-- secp256k1 sign/verify
-
-### Test 7: Cross-Language Verification
-
-1. Read binary files generated by Node.js reference implementation
-2. Decrypt using same chain keys
-3. Verify decrypted bytes match unencrypted reference
-4. Confirm FlatBuffer file identifier (`"MONS"`) is intact
+### Test 18: FlatBuffer Creation
+Creates FlatBuffers using generated code:
+1. Build SecureMessage with nested Payload
+2. Finish buffer with file identifier
+3. Verify binary has correct structure
+4. Read back and verify all fields
 
 ## Architecture
 
@@ -533,9 +420,8 @@ Generates JSON Schema from FlatBuffers IDL for runtime validation:
 ├─────────────────────────────────────────────────────────┤
 │                                                         │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │
-│  │   Test 1    │  │   Test 2    │  │   Test 3    │     │
-│  │   SHA-256   │  │ Transparent │  │ Cross-Lang  │     │
-│  │             │  │ Encrypt     │  │   Verify    │     │
+│  │   SHA-256   │  │   ECDH      │  │  FlatBuffer │     │
+│  │   AES-CTR   │  │   Signing   │  │  Creation   │     │
 │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘     │
 │         │                │                │             │
 │         └────────────────┼────────────────┘             │
@@ -543,7 +429,7 @@ Generates JSON Schema from FlatBuffers IDL for runtime validation:
 │                          ▼                              │
 │         ┌────────────────────────────────┐             │
 │         │     WASM Runtime Adapter       │             │
-│         │  (wazero/wasmer/wasmtime/etc)  │             │
+│         │  (wazero/wasmtime/Chicory/etc) │             │
 │         └────────────────┬───────────────┘             │
 │                          │                              │
 └──────────────────────────┼──────────────────────────────┘
@@ -553,25 +439,310 @@ Generates JSON Schema from FlatBuffers IDL for runtime validation:
             │   flatc-encryption.wasm      │
             │   (Crypto++ compiled)        │
             │                              │
-            │  • AES-256-CTR (encrypt)    │
+            │  • AES-256-CTR               │
             │  • SHA-256                   │
-            │  • Ed25519 Sign/Verify      │
-            │  • secp256k1 ECDH/ECDSA     │
+            │  • HKDF-SHA256               │
+            │  • X25519 ECDH               │
+            │  • secp256k1 ECDH/ECDSA      │
+            │  • P-256 ECDH/ECDSA          │
+            │  • Ed25519 Sign/Verify       │
             └──────────────────────────────┘
 ```
+
+## WASM Runtime Dependencies
+
+| Language | WASM Runtime | Package |
+|----------|--------------|---------|
+| Node.js | V8 (native) | Built-in WebAssembly |
+| Go | wazero | `github.com/tetratelabs/wazero` |
+| Python | wasmtime | `pip install wasmtime` |
+| Rust | wasmtime | `wasmtime` crate v27 |
+| Java | Chicory | `com.dylibso.chicory:runtime:1.5.3` |
+| C# | Wasmtime | `Wasmtime` NuGet 22.0.0 |
+| Swift | Wasmtime | Wasmtime C API |
 
 ## Adding a New Language
 
 1. Create a new directory under `runners/`
 2. Implement WASM loading with your chosen runtime
 3. Implement Emscripten `invoke_*` trampolines (call indirect function table)
-4. Test SHA-256 and AES-256-CTR encrypt/decrypt
-5. Verify against Node.js generated binaries
+4. Implement exception handling stubs (`__cxa_*`, `setThrew`)
+5. Test all crypto operations:
+   - SHA-256
+   - AES-256-CTR encrypt/decrypt
+   - HKDF-SHA256
+   - X25519/secp256k1/P-256 ECDH
+   - Ed25519/secp256k1/P-256 signatures
+6. Implement FlatBuffer creation test
+7. Verify against Node.js generated binaries
 
-Key implementation details:
-- All `invoke_*` functions must look up and call functions from the indirect table
-- Exception handling stubs (`setThrew`, `__cxa_*`) can return dummy values
-- WASI stubs for `random_get` and `clock_time_get` must be functional
+### Key Implementation Details
+
+**invoke_* Trampolines:**
+All `invoke_*` functions must look up and call functions from the indirect function table:
+```
+invoke_vi(index, arg0) → table[index](arg0)
+invoke_viii(index, a0, a1, a2) → table[index](a0, a1, a2)
+```
+
+**Exception Handling Stubs:**
+```
+setThrew(flag, value) → no-op
+__cxa_begin_catch(ptr) → return ptr
+__cxa_end_catch() → no-op
+```
+
+**WASI Stubs:**
+```
+random_get(buf, len) → fill with random bytes
+clock_time_get(id, precision, time_ptr) → write current time
+```
+
+## Schema Usage
+
+This test framework uses a custom `SecureMessage` schema for FlatBuffer creation tests:
+
+```flatbuffers
+namespace E2E.Crypto;
+
+table SecureMessage {
+  id: string;
+  sender: string;
+  recipient: string;
+  payload: Payload;
+  timestamp: int64;
+}
+
+table Payload {
+  message: string;
+  value: int32;
+  data: [ubyte];
+  is_encrypted: bool;
+}
+
+root_type SecureMessage;
+file_identifier "SECM";
+```
+
+The Node.js runner also tests against upstream FlatBuffers test schemas for comprehensive coverage.
+
+## Encryption Keys
+
+The test framework uses pre-generated encryption keys stored in `vectors/encryption_keys.json`. Each cryptocurrency chain has its own AES-256 key and IV for testing transparent encryption.
+
+### Key Format
+
+```json
+{
+  "bitcoin": {
+    "key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "iv": "0123456789abcdef0123456789abcdef"
+  },
+  "ethereum": {
+    "key": "...",
+    "iv": "..."
+  }
+}
+```
+
+- **key**: 256-bit AES key (64 hex characters = 32 bytes)
+- **iv**: 128-bit initialization vector (32 hex characters = 16 bytes)
+
+### Key Derivation in Practice
+
+In real applications, you would derive the AES key from an ECDH shared secret:
+
+```typescript
+// 1. Exchange public keys with recipient
+const senderKeypair = crypto.x25519GenerateKeypair();
+const recipientPubKey = getRecipientPublicKey();
+
+// 2. Compute shared secret
+const sharedSecret = crypto.x25519SharedSecret(
+  senderKeypair.privateKey,
+  recipientPubKey
+);
+
+// 3. Derive AES key using HKDF
+const aesKey = crypto.hkdf(
+  sharedSecret,           // Input key material
+  [],                     // Salt (optional)
+  "encryption-key-v1",    // Context info
+  32                      // Output length (256 bits)
+);
+
+// 4. Generate random IV for each message
+const iv = crypto.randomBytes(16);
+
+// 5. Encrypt FlatBuffer binary
+const ciphertext = crypto.encrypt(aesKey, iv, flatbufferBinary);
+```
+
+## Cryptocurrency Keys
+
+The framework supports cryptographic operations compatible with 10 major blockchain ecosystems. Keys are stored in `vectors/crypto_keys.json`.
+
+### Key Types by Chain
+
+| Chain | ECDH Curve | Signature | Private Key | Public Key |
+|-------|------------|-----------|-------------|------------|
+| Bitcoin | secp256k1 | ECDSA | 32 bytes | 33 bytes (compressed) |
+| Ethereum | secp256k1 | ECDSA | 32 bytes | 33 bytes (compressed) |
+| Solana | X25519 | Ed25519 | 64 bytes | 32 bytes |
+| SUI | X25519 | Ed25519 | 64 bytes | 32 bytes |
+| Cosmos | secp256k1 | ECDSA | 32 bytes | 33 bytes (compressed) |
+| Polkadot | X25519 | Sr25519* | 64 bytes | 32 bytes |
+| Cardano | X25519 | Ed25519 | 64 bytes | 32 bytes |
+| Tezos | X25519 | Ed25519 | 64 bytes | 32 bytes |
+| NEAR | X25519 | Ed25519 | 64 bytes | 32 bytes |
+| Aptos | X25519 | Ed25519 | 64 bytes | 32 bytes |
+
+*Sr25519 uses Ed25519 in this implementation for compatibility.
+
+### Crypto Keys Format
+
+```json
+{
+  "bitcoin": {
+    "ecdh": {
+      "privateKey": "hex...",
+      "publicKey": "hex..."
+    },
+    "signing": {
+      "privateKey": "hex...",
+      "publicKey": "hex..."
+    }
+  },
+  "solana": {
+    "ecdh": {
+      "privateKey": "hex...",
+      "publicKey": "hex..."
+    },
+    "signing": {
+      "privateKey": "hex...",
+      "publicKey": "hex..."
+    }
+  }
+}
+```
+
+### Using Cryptocurrency Keys
+
+**For Bitcoin/Ethereum/Cosmos (secp256k1):**
+
+```typescript
+// Key generation
+const keypair = crypto.secp256k1GenerateKeypair();
+// keypair.privateKey: 32 bytes
+// keypair.publicKey: 33 bytes (compressed)
+
+// ECDH shared secret
+const shared = crypto.secp256k1SharedSecret(
+  myPrivateKey,
+  theirPublicKey
+);
+
+// Signing
+const signature = crypto.secp256k1Sign(privateKey, messageHash);
+const isValid = crypto.secp256k1Verify(publicKey, messageHash, signature);
+```
+
+**For Solana/Cardano/NEAR/Aptos (Ed25519):**
+
+```typescript
+// Key generation
+const keypair = crypto.ed25519GenerateKeypair();
+// keypair.privateKey: 64 bytes (includes public key)
+// keypair.publicKey: 32 bytes
+
+// ECDH (use X25519 for key exchange)
+const x25519Keypair = crypto.x25519GenerateKeypair();
+const shared = crypto.x25519SharedSecret(
+  myX25519PrivateKey,
+  theirX25519PublicKey
+);
+
+// Signing
+const signature = crypto.ed25519Sign(privateKey, message);
+const isValid = crypto.ed25519Verify(publicKey, message, signature);
+```
+
+**For P-256 (NIST curve):**
+
+```typescript
+// Key generation
+const keypair = crypto.p256GenerateKeypair();
+// keypair.privateKey: 32 bytes
+// keypair.publicKey: 33 bytes (compressed)
+
+// ECDH shared secret
+const shared = crypto.p256SharedSecret(myPrivateKey, theirPublicKey);
+
+// Signing
+const signature = crypto.p256Sign(privateKey, messageHash);
+const isValid = crypto.p256Verify(publicKey, messageHash, signature);
+```
+
+### Key Size Reference
+
+| Algorithm | Private Key | Public Key | Shared Secret | Signature |
+|-----------|-------------|------------|---------------|-----------|
+| X25519 | 32 bytes | 32 bytes | 32 bytes | N/A |
+| Ed25519 | 64 bytes | 32 bytes | N/A | 64 bytes |
+| secp256k1 | 32 bytes | 33/65 bytes | 32 bytes | 70-72 bytes |
+| P-256 | 32 bytes | 33/65 bytes | 32 bytes | 70-72 bytes |
+
+### Security Considerations
+
+1. **Never reuse IVs** - Generate a new random IV for each encryption operation
+2. **Use HKDF for key derivation** - Don't use raw ECDH output directly as encryption key
+3. **Include context in HKDF** - Use unique info strings for different purposes
+4. **Verify signatures before decryption** - Authenticate messages before processing
+5. **Use constant-time operations** - The WASM module handles this internally
+
+### Multi-Recipient Encryption
+
+For encrypting to multiple recipients:
+
+```typescript
+// Sender generates ephemeral keypair
+const senderKeypair = crypto.x25519GenerateKeypair();
+
+// For each recipient, derive a unique key
+const recipients = [recipientAPubKey, recipientBPubKey, recipientCPubKey];
+const encryptedPayloads = [];
+
+for (const recipientPub of recipients) {
+  // Compute shared secret with this recipient
+  const shared = crypto.x25519SharedSecret(senderKeypair.privateKey, recipientPub);
+
+  // Derive unique key for this recipient
+  const recipientKey = crypto.hkdf(shared, [], `recipient-${index}`, 32);
+
+  // Encrypt payload
+  const encrypted = crypto.encrypt(recipientKey, iv, payload);
+  encryptedPayloads.push({
+    recipientPublicKey: recipientPub,
+    ciphertext: encrypted
+  });
+}
+
+// Include sender's public key so recipients can derive the shared secret
+const message = {
+  senderPublicKey: senderKeypair.publicKey,
+  iv: iv,
+  payloads: encryptedPayloads
+};
+```
+
+Each recipient decrypts with:
+
+```typescript
+// Recipient derives the same shared secret
+const shared = crypto.x25519SharedSecret(myPrivateKey, message.senderPublicKey);
+const myKey = crypto.hkdf(shared, [], `recipient-${myIndex}`, 32);
+const plaintext = crypto.decrypt(myKey, message.iv, myPayload.ciphertext);
+```
 
 ## License
 

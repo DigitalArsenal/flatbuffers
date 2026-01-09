@@ -69,9 +69,12 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | X25519 ECDH | ✅ Done | Key generation + shared secret |
 | secp256k1 ECDH | ✅ Done | Key generation + shared secret |
 | P-256 ECDH | ✅ Done | Key generation + shared secret |
+| Ed25519 sign/verify | ✅ Done | `ed25519Sign()`, `ed25519Verify()` |
+| secp256k1 sign/verify | ✅ Done | `secp256k1Sign()`, `secp256k1Verify()` |
+| P-256 sign/verify | ✅ Done | `p256Sign()`, `p256Verify()` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries + ECDH headers |
 | Runtime code generation | ✅ Done | Calls native flatc binary |
-| **Full test suite** | ✅ Done | **17/17 test suites passing** |
+| **Full test suite** | ✅ Done | **18/18 test suites passing** |
 
 ### Python
 
@@ -87,15 +90,18 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | X25519 ECDH | ✅ Done | Key generation + shared secret |
 | secp256k1 ECDH | ✅ Done | Key generation + shared secret |
 | P-256 ECDH | ✅ Done | Key generation + shared secret |
+| Ed25519 sign/verify | ✅ Done | `ed25519Sign()`, `ed25519Verify()` |
+| secp256k1 sign/verify | ✅ Done | `secp256k1Sign()`, `secp256k1Verify()` |
+| P-256 sign/verify | ✅ Done | `p256Sign()`, `p256Verify()` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries + ECDH headers |
 | Runtime code generation | ✅ Done | Calls native flatc binary |
-| **Full test suite** | ✅ Done | **16/16 test suites passing** |
+| **Full test suite** | ✅ Done | **17/17 test suites passing** |
 
 ### Rust
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| WASM encryption loading | ✅ Done | Using wasmer runtime |
+| WASM encryption loading | ✅ Done | Using wasmtime runtime |
 | invoke_* trampolines | ✅ Done | All variants implemented |
 | Exception handling stubs | ✅ Done | `__cxa_*` functions |
 | AES-256-CTR encryption | ✅ Done | Calls WASM `wasi_encrypt_bytes` |
@@ -105,9 +111,12 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | X25519 ECDH | ✅ Done | Key generation + shared secret |
 | secp256k1 ECDH | ✅ Done | Key generation + shared secret |
 | P-256 ECDH | ✅ Done | Key generation + shared secret |
+| Ed25519 sign/verify | ✅ Done | `ed25519Sign()`, `ed25519Verify()` |
+| secp256k1 sign/verify | ✅ Done | `secp256k1Sign()`, `secp256k1Verify()` |
+| P-256 sign/verify | ✅ Done | `p256Sign()`, `p256Verify()` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries + ECDH headers |
 | Runtime code generation | ✅ Done | Calls native flatc binary |
-| **Full test suite** | ✅ Done | **16/16 test suites passing** |
+| **Full test suite** | ✅ Done | **17/17 test suites passing** |
 
 ### Java
 
@@ -123,9 +132,12 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | X25519 ECDH | ✅ Done | Key generation + shared secret |
 | secp256k1 ECDH | ✅ Done | Key generation + shared secret |
 | P-256 ECDH | ✅ Done | Key generation + shared secret |
+| Ed25519 sign/verify | ✅ Done | `ed25519Sign()`, `ed25519Verify()` |
+| secp256k1 sign/verify | ✅ Done | `secp256k1Sign()`, `secp256k1Verify()` |
+| P-256 sign/verify | ✅ Done | `p256Sign()`, `p256Verify()` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries + ECDH headers |
 | Runtime code generation | ✅ Done | Calls native flatc binary |
-| **Full test suite** | ✅ Done | **16/16 test suites passing** |
+| **Full test suite** | ✅ Done | **17/17 test suites passing** |
 
 ### C#
 
@@ -141,9 +153,12 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | X25519 ECDH | ✅ Done | Key generation + shared secret |
 | secp256k1 ECDH | ✅ Done | Key generation + shared secret |
 | P-256 ECDH | ✅ Done | Key generation + shared secret |
+| Ed25519 sign/verify | ✅ Done | `Ed25519Sign()`, `Ed25519Verify()` |
+| secp256k1 sign/verify | ✅ Done | `Secp256k1Sign()`, `Secp256k1Verify()` |
+| P-256 sign/verify | ✅ Done | `P256Sign()`, `P256Verify()` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries + ECDH headers |
 | Runtime code generation | ✅ Done | Calls native flatc binary |
-| **Full test suite** | ✅ Done | **16/16 test suites passing** |
+| **Full test suite** | ✅ Done | **17/17 test suites passing** |
 
 ### Swift
 
@@ -159,9 +174,12 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | X25519 ECDH | ✅ Done | Key generation + shared secret |
 | secp256k1 ECDH | ✅ Done | Key generation + shared secret |
 | P-256 ECDH | ✅ Done | Key generation + shared secret |
+| Ed25519 sign/verify | ✅ Done | `ed25519Sign()`, `ed25519Verify()` |
+| secp256k1 sign/verify | ✅ Done | `secp256k1Sign()`, `secp256k1Verify()` |
+| P-256 sign/verify | ✅ Done | `p256Sign()`, `p256Verify()` |
 | Cross-language verification | ✅ Done | Reads Node.js binaries + ECDH headers |
 | Runtime code generation | ✅ Done | Calls native flatc binary |
-| **Full test suite** | ✅ Done | **16/16 test suites passing** |
+| **Full test suite** | ✅ Done | **17/17 test suites passing** |
 
 **Note**: Swift runner required a patch to WasmKit to add `Table.getFunction(at:store:)` method for invoke_* trampolines to work. This enables calling functions from the indirect function table by index.
 
@@ -176,22 +194,24 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | X25519 ECDH | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | secp256k1 ECDH | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | P-256 ECDH | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Ed25519 keygen | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Ed25519 sign/verify | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| secp256k1 sign/verify | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| P-256 sign/verify | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Ed25519 keygen | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Ed25519 sign/verify | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| secp256k1 sign/verify | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| P-256 sign/verify | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+**Legend**: ✅ = Working
 
 ## Test Files
 
 | File | Purpose | Status |
 |------|---------|--------|
 | `runners/node/test_runner.mjs` | Reference implementation | ✅ Complete (37/37) |
-| `runners/go/test_runner.go` | Go runner | ✅ Complete (12/12) |
-| `runners/python/test_runner.py` | Python runner | ✅ Complete (12/12) |
-| `runners/rust/src/main.rs` | Rust runner | ✅ Complete (12/12) |
-| `runners/java/src/.../TestRunner.java` | Java runner | ✅ Complete (12/12) |
-| `runners/csharp/TestRunner.cs` | C# runner | ✅ Complete (12/12) |
-| `runners/swift/TestRunner.swift` | Swift runner | ✅ Complete (12/12) |
+| `runners/go/test_runner.go` | Go runner | ✅ Complete (18/18) |
+| `runners/python/test_runner.py` | Python runner | ✅ Complete (17/17) |
+| `runners/rust/src/main.rs` | Rust runner | ✅ Complete (17/17) |
+| `runners/java/src/.../TestRunner.java` | Java runner | ✅ Complete (17/17) |
+| `runners/csharp/TestRunner.cs` | C# runner | ✅ Complete (17/17) |
+| `runners/swift/TestRunner.swift` | Swift runner | ✅ Complete (17/17) |
 
 ## Generated Files
 
@@ -211,7 +231,7 @@ This document tracks the implementation status of the cross-language E2E encrypt
 5. ~~**Add ECDH key exchange to all runners** - X25519, secp256k1, P-256~~ ✅ Done (all 7 runners)
 6. ~~**Add HKDF-SHA256 to all runners** - Key derivation for ECDH~~ ✅ Done (all 7 runners)
 7. ~~**Add runtime code generation** - All languages generate code via native flatc~~ ✅ Done (all 7 runners)
-8. **Add Ed25519/ECDSA signing to Go/Python/Rust/Java/C#/Swift** - Currently only in Node.js
+8. ~~**Add Ed25519/ECDSA signing to Go/Python/Rust/Java/C#/Swift**~~ ✅ Done (all 7 runners)
 9. **Add FlatBuffer creation** - Each language creates FlatBuffers using generated code
 10. **Full round-trip test** - Create → Encrypt → Transmit → Decrypt → Read
 
@@ -238,7 +258,7 @@ cd runners/rust && cargo run
 | Node.js | V8 (native) | Built-in WebAssembly |
 | Go | wazero | `github.com/tetratelabs/wazero` |
 | Python | wasmtime | `wasmtime` (pip install wasmtime) |
-| Rust | wasmer | `wasmer` crate |
+| Rust | wasmtime | `wasmtime` crate v27 |
 | Java | Chicory | `com.dylibso.chicory:runtime:1.5.3` |
 | C# | wasmtime | `wasmtime-dotnet` |
 | Swift | WasmKit | `WasmKit` 0.2.0 (pure Swift) |
@@ -248,9 +268,9 @@ cd runners/rust && cargo run
 | Language | Test Suites | Status |
 |----------|-------------|--------|
 | Node.js | 37/37 | ✅ All passing |
-| Go | 17/17 | ✅ All passing |
-| Python | 16/16 | ✅ All passing |
-| Rust | 16/16 | ✅ All passing |
-| Java | 16/16 | ✅ All passing |
-| C# | 16/16 | ✅ All passing |
-| Swift | 16/16 | ✅ All passing |
+| Go | 18/18 | ✅ All passing |
+| Python | 17/17 | ✅ All passing |
+| Rust | 17/17 | ✅ All passing |
+| Java | 17/17 | ✅ All passing |
+| C# | 17/17 | ✅ All passing |
+| Swift | 17/17 | ✅ All passing |

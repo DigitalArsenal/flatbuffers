@@ -39,6 +39,13 @@ public class TestRunner : IDisposable
     private readonly Function _secp256k1Shared;
     private readonly Function _p256Generate;
     private readonly Function _p256Shared;
+    private readonly Function _ed25519Generate;
+    private readonly Function _ed25519Sign;
+    private readonly Function _ed25519Verify;
+    private readonly Function _secp256k1Sign;
+    private readonly Function _secp256k1Verify;
+    private readonly Function _p256Sign;
+    private readonly Function _p256Verify;
 
     private int _threwValue;
     private Table? _functionTable;
@@ -70,6 +77,13 @@ public class TestRunner : IDisposable
         _secp256k1Shared = GetFunction("wasi_secp256k1_shared_secret");
         _p256Generate = GetFunction("wasi_p256_generate_keypair");
         _p256Shared = GetFunction("wasi_p256_shared_secret");
+        _ed25519Generate = GetFunction("wasi_ed25519_generate_keypair");
+        _ed25519Sign = GetFunction("wasi_ed25519_sign");
+        _ed25519Verify = GetFunction("wasi_ed25519_verify");
+        _secp256k1Sign = GetFunction("wasi_secp256k1_sign");
+        _secp256k1Verify = GetFunction("wasi_secp256k1_verify");
+        _p256Sign = GetFunction("wasi_p256_sign");
+        _p256Verify = GetFunction("wasi_p256_verify");
 
         // Call _initialize if present (required for Emscripten modules)
         var initFunc = _instance.GetFunction("_initialize");
@@ -372,6 +386,161 @@ public class TestRunner : IDisposable
         Deallocate(pubPtr);
         Deallocate(sharedPtr);
         return shared;
+    }
+
+    public (byte[] privateKey, byte[] publicKey) Ed25519GenerateKeypair()
+    {
+        var privPtr = Allocate(64);  // Ed25519 private key is 64 bytes
+        var pubPtr = Allocate(32);
+
+        var result = (int)_ed25519Generate.Invoke(privPtr, pubPtr)!;
+        if (result != 0)
+        {
+            Deallocate(privPtr);
+            Deallocate(pubPtr);
+            throw new Exception("Ed25519 keypair generation failed");
+        }
+
+        var priv = ReadBytes(_memory, privPtr, 64);
+        var pub = ReadBytes(_memory, pubPtr, 32);
+        Deallocate(privPtr);
+        Deallocate(pubPtr);
+        return (priv, pub);
+    }
+
+    public byte[] Ed25519Sign(byte[] privateKey, byte[] data)
+    {
+        var privPtr = Allocate(64);
+        var dataPtr = Allocate(Math.Max(data.Length, 1));
+        var sigPtr = Allocate(64);
+
+        WriteBytes(_memory, privPtr, privateKey);
+        if (data.Length > 0) WriteBytes(_memory, dataPtr, data);
+        var result = (int)_ed25519Sign.Invoke(privPtr, dataPtr, data.Length, sigPtr)!;
+        if (result != 0)
+        {
+            Deallocate(privPtr);
+            Deallocate(dataPtr);
+            Deallocate(sigPtr);
+            throw new Exception("Ed25519 signing failed");
+        }
+
+        var sig = ReadBytes(_memory, sigPtr, 64);
+        Deallocate(privPtr);
+        Deallocate(dataPtr);
+        Deallocate(sigPtr);
+        return sig;
+    }
+
+    public bool Ed25519Verify(byte[] publicKey, byte[] data, byte[] signature)
+    {
+        var pubPtr = Allocate(32);
+        var dataPtr = Allocate(Math.Max(data.Length, 1));
+        var sigPtr = Allocate(64);
+
+        WriteBytes(_memory, pubPtr, publicKey);
+        if (data.Length > 0) WriteBytes(_memory, dataPtr, data);
+        WriteBytes(_memory, sigPtr, signature);
+        var result = (int)_ed25519Verify.Invoke(pubPtr, dataPtr, data.Length, sigPtr)!;
+
+        Deallocate(pubPtr);
+        Deallocate(dataPtr);
+        Deallocate(sigPtr);
+        return result == 0;
+    }
+
+    public byte[] Secp256k1Sign(byte[] privateKey, byte[] data)
+    {
+        var privPtr = Allocate(32);
+        var dataPtr = Allocate(Math.Max(data.Length, 1));
+        var sigPtr = Allocate(72);  // DER signature up to 72 bytes
+        var sigSizePtr = Allocate(4);
+
+        WriteBytes(_memory, privPtr, privateKey);
+        if (data.Length > 0) WriteBytes(_memory, dataPtr, data);
+        var result = (int)_secp256k1Sign.Invoke(privPtr, dataPtr, data.Length, sigPtr, sigSizePtr)!;
+        if (result != 0)
+        {
+            Deallocate(privPtr);
+            Deallocate(dataPtr);
+            Deallocate(sigPtr);
+            Deallocate(sigSizePtr);
+            throw new Exception("secp256k1 signing failed");
+        }
+
+        var sigSizeBytes = ReadBytes(_memory, sigSizePtr, 4);
+        var sigSize = BitConverter.ToInt32(sigSizeBytes, 0);
+        var sig = ReadBytes(_memory, sigPtr, sigSize);
+
+        Deallocate(privPtr);
+        Deallocate(dataPtr);
+        Deallocate(sigPtr);
+        Deallocate(sigSizePtr);
+        return sig;
+    }
+
+    public bool Secp256k1Verify(byte[] publicKey, byte[] data, byte[] signature)
+    {
+        var pubPtr = Allocate(publicKey.Length);
+        var dataPtr = Allocate(Math.Max(data.Length, 1));
+        var sigPtr = Allocate(signature.Length);
+
+        WriteBytes(_memory, pubPtr, publicKey);
+        if (data.Length > 0) WriteBytes(_memory, dataPtr, data);
+        WriteBytes(_memory, sigPtr, signature);
+        var result = (int)_secp256k1Verify.Invoke(pubPtr, publicKey.Length, dataPtr, data.Length, sigPtr, signature.Length)!;
+
+        Deallocate(pubPtr);
+        Deallocate(dataPtr);
+        Deallocate(sigPtr);
+        return result == 0;
+    }
+
+    public byte[] P256Sign(byte[] privateKey, byte[] data)
+    {
+        var privPtr = Allocate(32);
+        var dataPtr = Allocate(Math.Max(data.Length, 1));
+        var sigPtr = Allocate(72);  // DER signature up to 72 bytes
+        var sigSizePtr = Allocate(4);
+
+        WriteBytes(_memory, privPtr, privateKey);
+        if (data.Length > 0) WriteBytes(_memory, dataPtr, data);
+        var result = (int)_p256Sign.Invoke(privPtr, dataPtr, data.Length, sigPtr, sigSizePtr)!;
+        if (result != 0)
+        {
+            Deallocate(privPtr);
+            Deallocate(dataPtr);
+            Deallocate(sigPtr);
+            Deallocate(sigSizePtr);
+            throw new Exception("P-256 signing failed");
+        }
+
+        var sigSizeBytes = ReadBytes(_memory, sigSizePtr, 4);
+        var sigSize = BitConverter.ToInt32(sigSizeBytes, 0);
+        var sig = ReadBytes(_memory, sigPtr, sigSize);
+
+        Deallocate(privPtr);
+        Deallocate(dataPtr);
+        Deallocate(sigPtr);
+        Deallocate(sigSizePtr);
+        return sig;
+    }
+
+    public bool P256Verify(byte[] publicKey, byte[] data, byte[] signature)
+    {
+        var pubPtr = Allocate(publicKey.Length);
+        var dataPtr = Allocate(Math.Max(data.Length, 1));
+        var sigPtr = Allocate(signature.Length);
+
+        WriteBytes(_memory, pubPtr, publicKey);
+        if (data.Length > 0) WriteBytes(_memory, dataPtr, data);
+        WriteBytes(_memory, sigPtr, signature);
+        var result = (int)_p256Verify.Invoke(pubPtr, publicKey.Length, dataPtr, data.Length, sigPtr, signature.Length)!;
+
+        Deallocate(pubPtr);
+        Deallocate(dataPtr);
+        Deallocate(sigPtr);
+        return result == 0;
     }
 
     public void Dispose()
@@ -795,6 +964,88 @@ public class TestRunner : IDisposable
                     var files = Directory.GetFiles(pregenPath, "*.cs");
                     result.Pass($"Pre-generated C# code: {files.Length} files in generated/csharp/E2E/Crypto/");
                 }
+            }
+
+            results.Add(result.Summary());
+        }
+
+        // Test 6: Digital Signatures (Ed25519, secp256k1, P-256)
+        Console.WriteLine("\nTest 6: Digital Signatures");
+        Console.WriteLine(new string('-', 40));
+        {
+            var result = new TestResult("Digital Signatures");
+            var testMessage = Encoding.UTF8.GetBytes("Hello, FlatBuffers! This is a test message for signing.");
+
+            // Test Ed25519
+            try
+            {
+                var kp = runner.Ed25519GenerateKeypair();
+                result.Pass($"Ed25519 keypair generated (priv: {kp.privateKey.Length}, pub: {kp.publicKey.Length} bytes)");
+
+                var sig = runner.Ed25519Sign(kp.privateKey, testMessage);
+                result.Pass($"Ed25519 signature: {sig.Length} bytes");
+
+                var valid = runner.Ed25519Verify(kp.publicKey, testMessage, sig);
+                if (valid) result.Pass("Ed25519 signature verified");
+                else result.Fail("Ed25519 signature verification failed");
+
+                // Verify wrong message fails
+                var wrongMessage = Encoding.UTF8.GetBytes("Wrong message");
+                valid = runner.Ed25519Verify(kp.publicKey, wrongMessage, sig);
+                if (!valid) result.Pass("Ed25519 rejects wrong message");
+                else result.Fail("Ed25519 accepted wrong message");
+            }
+            catch (Exception e)
+            {
+                result.Fail($"Ed25519 test error: {e.Message}");
+            }
+
+            // Test secp256k1 signing
+            try
+            {
+                var kp = runner.Secp256k1GenerateKeypair();
+                result.Pass($"secp256k1 keypair generated (priv: {kp.privateKey.Length}, pub: {kp.publicKey.Length} bytes)");
+
+                var sig = runner.Secp256k1Sign(kp.privateKey, testMessage);
+                result.Pass($"secp256k1 signature: {sig.Length} bytes (DER)");
+
+                var valid = runner.Secp256k1Verify(kp.publicKey, testMessage, sig);
+                if (valid) result.Pass("secp256k1 signature verified");
+                else result.Fail("secp256k1 signature verification failed");
+
+                // Verify wrong message fails
+                var wrongMessage = Encoding.UTF8.GetBytes("Wrong message");
+                valid = runner.Secp256k1Verify(kp.publicKey, wrongMessage, sig);
+                if (!valid) result.Pass("secp256k1 rejects wrong message");
+                else result.Fail("secp256k1 accepted wrong message");
+            }
+            catch (Exception e)
+            {
+                result.Fail($"secp256k1 signing test error: {e.Message}");
+            }
+
+            // Test P-256 signing
+            try
+            {
+                var kp = runner.P256GenerateKeypair();
+                result.Pass($"P-256 keypair generated (priv: {kp.privateKey.Length}, pub: {kp.publicKey.Length} bytes)");
+
+                var sig = runner.P256Sign(kp.privateKey, testMessage);
+                result.Pass($"P-256 signature: {sig.Length} bytes (DER)");
+
+                var valid = runner.P256Verify(kp.publicKey, testMessage, sig);
+                if (valid) result.Pass("P-256 signature verified");
+                else result.Fail("P-256 signature verification failed");
+
+                // Verify wrong message fails
+                var wrongMessage = Encoding.UTF8.GetBytes("Wrong message");
+                valid = runner.P256Verify(kp.publicKey, wrongMessage, sig);
+                if (!valid) result.Pass("P-256 rejects wrong message");
+                else result.Fail("P-256 accepted wrong message");
+            }
+            catch (Exception e)
+            {
+                result.Fail($"P-256 signing test error: {e.Message}");
             }
 
             results.Add(result.Summary());

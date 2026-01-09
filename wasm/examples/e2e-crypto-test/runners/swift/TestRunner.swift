@@ -29,6 +29,13 @@ class EncryptionModule {
     private let secp256k1SharedFunc: Function
     private let p256GenerateFunc: Function
     private let p256SharedFunc: Function
+    private let ed25519GenerateFunc: Function
+    private let ed25519SignFunc: Function
+    private let ed25519VerifyFunc: Function
+    private let secp256k1SignFunc: Function
+    private let secp256k1VerifyFunc: Function
+    private let p256SignFunc: Function
+    private let p256VerifyFunc: Function
 
     init(wasmPath: String) throws {
         let module = try parseWasm(filePath: FilePath(wasmPath))
@@ -63,6 +70,13 @@ class EncryptionModule {
         self.secp256k1SharedFunc = instance.exports[function: "wasi_secp256k1_shared_secret"]!
         self.p256GenerateFunc = instance.exports[function: "wasi_p256_generate_keypair"]!
         self.p256SharedFunc = instance.exports[function: "wasi_p256_shared_secret"]!
+        self.ed25519GenerateFunc = instance.exports[function: "wasi_ed25519_generate_keypair"]!
+        self.ed25519SignFunc = instance.exports[function: "wasi_ed25519_sign"]!
+        self.ed25519VerifyFunc = instance.exports[function: "wasi_ed25519_verify"]!
+        self.secp256k1SignFunc = instance.exports[function: "wasi_secp256k1_sign"]!
+        self.secp256k1VerifyFunc = instance.exports[function: "wasi_secp256k1_verify"]!
+        self.p256SignFunc = instance.exports[function: "wasi_p256_sign"]!
+        self.p256VerifyFunc = instance.exports[function: "wasi_p256_verify"]!
 
         // Call _initialize if present (required for Emscripten modules)
         if let initFunc = instance.exports[function: "_initialize"] {
@@ -352,6 +366,151 @@ class EncryptionModule {
         _ = try p256SharedFunc([.i32(privPtr), .i32(pubPtr), .i32(UInt32(publicKey.count)), .i32(sharedPtr)])
 
         return readBytes(sharedPtr, 32)
+    }
+
+    func ed25519GenerateKeypair() throws -> (privateKey: [UInt8], publicKey: [UInt8]) {
+        let privPtr = try allocate(64)  // Ed25519 private key is 64 bytes
+        let pubPtr = try allocate(32)
+
+        defer {
+            try? deallocate(privPtr)
+            try? deallocate(pubPtr)
+        }
+
+        let results = try ed25519GenerateFunc([.i32(privPtr), .i32(pubPtr)])
+        if results[0].i32 != 0 {
+            throw NSError(domain: "Ed25519", code: Int(results[0].i32), userInfo: [NSLocalizedDescriptionKey: "Ed25519 keypair generation failed"])
+        }
+
+        return (readBytes(privPtr, 64), readBytes(pubPtr, 32))
+    }
+
+    func ed25519Sign(privateKey: [UInt8], data: [UInt8]) throws -> [UInt8] {
+        let privPtr = try allocate(64)
+        let dataPtr = try allocate(max(data.count, 1))
+        let sigPtr = try allocate(64)
+
+        defer {
+            try? deallocate(privPtr)
+            try? deallocate(dataPtr)
+            try? deallocate(sigPtr)
+        }
+
+        writeBytes(privPtr, privateKey)
+        if !data.isEmpty { writeBytes(dataPtr, data) }
+        let results = try ed25519SignFunc([.i32(privPtr), .i32(dataPtr), .i32(UInt32(data.count)), .i32(sigPtr)])
+        if results[0].i32 != 0 {
+            throw NSError(domain: "Ed25519", code: Int(results[0].i32), userInfo: [NSLocalizedDescriptionKey: "Ed25519 signing failed"])
+        }
+
+        return readBytes(sigPtr, 64)
+    }
+
+    func ed25519Verify(publicKey: [UInt8], data: [UInt8], signature: [UInt8]) throws -> Bool {
+        let pubPtr = try allocate(32)
+        let dataPtr = try allocate(max(data.count, 1))
+        let sigPtr = try allocate(64)
+
+        defer {
+            try? deallocate(pubPtr)
+            try? deallocate(dataPtr)
+            try? deallocate(sigPtr)
+        }
+
+        writeBytes(pubPtr, publicKey)
+        if !data.isEmpty { writeBytes(dataPtr, data) }
+        writeBytes(sigPtr, signature)
+        let results = try ed25519VerifyFunc([.i32(pubPtr), .i32(dataPtr), .i32(UInt32(data.count)), .i32(sigPtr)])
+
+        return results[0].i32 == 0
+    }
+
+    func secp256k1Sign(privateKey: [UInt8], data: [UInt8]) throws -> [UInt8] {
+        let privPtr = try allocate(32)
+        let dataPtr = try allocate(max(data.count, 1))
+        let sigPtr = try allocate(72)  // DER signature up to 72 bytes
+        let sigSizePtr = try allocate(4)
+
+        defer {
+            try? deallocate(privPtr)
+            try? deallocate(dataPtr)
+            try? deallocate(sigPtr)
+            try? deallocate(sigSizePtr)
+        }
+
+        writeBytes(privPtr, privateKey)
+        if !data.isEmpty { writeBytes(dataPtr, data) }
+        let results = try secp256k1SignFunc([.i32(privPtr), .i32(dataPtr), .i32(UInt32(data.count)), .i32(sigPtr), .i32(sigSizePtr)])
+        if results[0].i32 != 0 {
+            throw NSError(domain: "secp256k1", code: Int(results[0].i32), userInfo: [NSLocalizedDescriptionKey: "secp256k1 signing failed"])
+        }
+
+        let sigSizeBytes = readBytes(sigSizePtr, 4)
+        let sigSize = Int(sigSizeBytes[0]) | (Int(sigSizeBytes[1]) << 8) | (Int(sigSizeBytes[2]) << 16) | (Int(sigSizeBytes[3]) << 24)
+        return readBytes(sigPtr, sigSize)
+    }
+
+    func secp256k1Verify(publicKey: [UInt8], data: [UInt8], signature: [UInt8]) throws -> Bool {
+        let pubPtr = try allocate(publicKey.count)
+        let dataPtr = try allocate(max(data.count, 1))
+        let sigPtr = try allocate(signature.count)
+
+        defer {
+            try? deallocate(pubPtr)
+            try? deallocate(dataPtr)
+            try? deallocate(sigPtr)
+        }
+
+        writeBytes(pubPtr, publicKey)
+        if !data.isEmpty { writeBytes(dataPtr, data) }
+        writeBytes(sigPtr, signature)
+        let results = try secp256k1VerifyFunc([.i32(pubPtr), .i32(UInt32(publicKey.count)), .i32(dataPtr), .i32(UInt32(data.count)), .i32(sigPtr), .i32(UInt32(signature.count))])
+
+        return results[0].i32 == 0
+    }
+
+    func p256Sign(privateKey: [UInt8], data: [UInt8]) throws -> [UInt8] {
+        let privPtr = try allocate(32)
+        let dataPtr = try allocate(max(data.count, 1))
+        let sigPtr = try allocate(72)  // DER signature up to 72 bytes
+        let sigSizePtr = try allocate(4)
+
+        defer {
+            try? deallocate(privPtr)
+            try? deallocate(dataPtr)
+            try? deallocate(sigPtr)
+            try? deallocate(sigSizePtr)
+        }
+
+        writeBytes(privPtr, privateKey)
+        if !data.isEmpty { writeBytes(dataPtr, data) }
+        let results = try p256SignFunc([.i32(privPtr), .i32(dataPtr), .i32(UInt32(data.count)), .i32(sigPtr), .i32(sigSizePtr)])
+        if results[0].i32 != 0 {
+            throw NSError(domain: "P256", code: Int(results[0].i32), userInfo: [NSLocalizedDescriptionKey: "P-256 signing failed"])
+        }
+
+        let sigSizeBytes = readBytes(sigSizePtr, 4)
+        let sigSize = Int(sigSizeBytes[0]) | (Int(sigSizeBytes[1]) << 8) | (Int(sigSizeBytes[2]) << 16) | (Int(sigSizeBytes[3]) << 24)
+        return readBytes(sigPtr, sigSize)
+    }
+
+    func p256Verify(publicKey: [UInt8], data: [UInt8], signature: [UInt8]) throws -> Bool {
+        let pubPtr = try allocate(publicKey.count)
+        let dataPtr = try allocate(max(data.count, 1))
+        let sigPtr = try allocate(signature.count)
+
+        defer {
+            try? deallocate(pubPtr)
+            try? deallocate(dataPtr)
+            try? deallocate(sigPtr)
+        }
+
+        writeBytes(pubPtr, publicKey)
+        if !data.isEmpty { writeBytes(dataPtr, data) }
+        writeBytes(sigPtr, signature)
+        let results = try p256VerifyFunc([.i32(pubPtr), .i32(UInt32(publicKey.count)), .i32(dataPtr), .i32(UInt32(data.count)), .i32(sigPtr), .i32(UInt32(signature.count))])
+
+        return results[0].i32 == 0
     }
 }
 
@@ -763,6 +922,97 @@ func main() throws {
                     .filter { $0.hasSuffix(".swift") }
                 result.pass("Pre-generated Swift code: \(files?.count ?? 0) files in generated/swift/")
             }
+        }
+
+        results.append(result.summary())
+    }
+
+    // Test 6: Digital Signatures (Ed25519, secp256k1, P-256)
+    print("\nTest 6: Digital Signatures")
+    print(String(repeating: "-", count: 40))
+    do {
+        let result = TestResult("Digital Signatures")
+        let testMessage = Array("Hello, FlatBuffers! This is a test message for signing.".utf8)
+
+        // Test Ed25519
+        do {
+            let kp = try em.ed25519GenerateKeypair()
+            result.pass("Ed25519 keypair generated (priv: \(kp.privateKey.count), pub: \(kp.publicKey.count) bytes)")
+
+            let sig = try em.ed25519Sign(privateKey: kp.privateKey, data: testMessage)
+            result.pass("Ed25519 signature: \(sig.count) bytes")
+
+            let valid = try em.ed25519Verify(publicKey: kp.publicKey, data: testMessage, signature: sig)
+            if valid {
+                result.pass("Ed25519 signature verified")
+            } else {
+                result.fail("Ed25519 signature verification failed")
+            }
+
+            // Verify wrong message fails
+            let wrongMessage = Array("Wrong message".utf8)
+            let wrongValid = try em.ed25519Verify(publicKey: kp.publicKey, data: wrongMessage, signature: sig)
+            if !wrongValid {
+                result.pass("Ed25519 rejects wrong message")
+            } else {
+                result.fail("Ed25519 accepted wrong message")
+            }
+        } catch {
+            result.fail("Ed25519 test error: \(error)")
+        }
+
+        // Test secp256k1 signing
+        do {
+            let kp = try em.secp256k1GenerateKeypair()
+            result.pass("secp256k1 keypair generated (priv: \(kp.privateKey.count), pub: \(kp.publicKey.count) bytes)")
+
+            let sig = try em.secp256k1Sign(privateKey: kp.privateKey, data: testMessage)
+            result.pass("secp256k1 signature: \(sig.count) bytes (DER)")
+
+            let valid = try em.secp256k1Verify(publicKey: kp.publicKey, data: testMessage, signature: sig)
+            if valid {
+                result.pass("secp256k1 signature verified")
+            } else {
+                result.fail("secp256k1 signature verification failed")
+            }
+
+            // Verify wrong message fails
+            let wrongMessage = Array("Wrong message".utf8)
+            let wrongValid = try em.secp256k1Verify(publicKey: kp.publicKey, data: wrongMessage, signature: sig)
+            if !wrongValid {
+                result.pass("secp256k1 rejects wrong message")
+            } else {
+                result.fail("secp256k1 accepted wrong message")
+            }
+        } catch {
+            result.fail("secp256k1 signing test error: \(error)")
+        }
+
+        // Test P-256 signing
+        do {
+            let kp = try em.p256GenerateKeypair()
+            result.pass("P-256 keypair generated (priv: \(kp.privateKey.count), pub: \(kp.publicKey.count) bytes)")
+
+            let sig = try em.p256Sign(privateKey: kp.privateKey, data: testMessage)
+            result.pass("P-256 signature: \(sig.count) bytes (DER)")
+
+            let valid = try em.p256Verify(publicKey: kp.publicKey, data: testMessage, signature: sig)
+            if valid {
+                result.pass("P-256 signature verified")
+            } else {
+                result.fail("P-256 signature verification failed")
+            }
+
+            // Verify wrong message fails
+            let wrongMessage = Array("Wrong message".utf8)
+            let wrongValid = try em.p256Verify(publicKey: kp.publicKey, data: wrongMessage, signature: sig)
+            if !wrongValid {
+                result.pass("P-256 rejects wrong message")
+            } else {
+                result.fail("P-256 accepted wrong message")
+            }
+        } catch {
+            result.fail("P-256 signing test error: \(error)")
         }
 
         results.append(result.summary())

@@ -1,12 +1,13 @@
 //! Rust E2E Test Runner for FlatBuffers Cross-Language Encryption
 //!
 //! Tests encryption/decryption using the WASM Crypto++ module with all 10 crypto key types.
+//! Uses wasmtime runtime (same as Python/C# runners).
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use wasmer::{imports, Function, FunctionEnv, FunctionEnvMut, Instance, Memory, Module, Store, Table, TypedFunction, Value};
+use wasmtime::*;
 
 const AES_KEY_SIZE: usize = 32;
 const AES_IV_SIZE: usize = 16;
@@ -16,10 +17,13 @@ const SHA256_SIZE: usize = 32;
 struct EncryptionKey {
     key_hex: String,
     iv_hex: String,
+    #[allow(dead_code)]
     key_base64: String,
+    #[allow(dead_code)]
     iv_base64: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct MonsterData {
     id: String,
@@ -32,35 +36,25 @@ struct MonsterData {
 
 #[derive(Debug, Deserialize)]
 struct ECDHHeader {
+    #[allow(dead_code)]
     version: u8,
     key_exchange: u8,
     ephemeral_public_key: String,
+    #[allow(dead_code)]
     context: Option<String>,
     session_key: String,
     session_iv: String,
 }
 
-struct WasmEnv {
+struct WasmState {
     memory: Option<Memory>,
     table: Option<Table>,
     threw: (i32, i32),
 }
 
-impl WasmEnv {
-    fn new() -> Self {
-        Self {
-            memory: None,
-            table: None,
-            threw: (0, 0),
-        }
-    }
-}
-
 struct EncryptionModule {
-    store: Store,
+    store: Store<WasmState>,
     instance: Instance,
-    #[allow(dead_code)]
-    env: FunctionEnv<WasmEnv>,
 }
 
 impl EncryptionModule {
@@ -70,333 +64,371 @@ impl EncryptionModule {
     }
 
     fn from_bytes(wasm_bytes: &[u8]) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut store = Store::default();
-        let module = Module::new(&store, wasm_bytes)?;
-        let env = FunctionEnv::new(&mut store, WasmEnv::new());
+        let engine = Engine::default();
+        let module = Module::new(&engine, wasm_bytes)?;
+
+        let mut store = Store::new(&engine, WasmState {
+            memory: None,
+            table: None,
+            threw: (0, 0),
+        });
+
+        let mut linker = Linker::new(&engine);
 
         // WASI stubs
-        fn fd_close(_: i32) -> i32 { 0 }
-        fn fd_seek(_: i32, _: i64, _: i32, _: i32) -> i32 { 0 }
-        fn fd_write(_: i32, _: i32, _: i32, _: i32) -> i32 { 0 }
-        fn fd_read(_: i32, _: i32, _: i32, _: i32) -> i32 { 0 }
-        fn environ_sizes_get(_: i32, _: i32) -> i32 { 0 }
-        fn environ_get(_: i32, _: i32) -> i32 { 0 }
-        fn proc_exit(_: i32) {}
+        linker.func_wrap("wasi_snapshot_preview1", "fd_close", |_: i32| -> i32 { 0 })?;
+        linker.func_wrap("wasi_snapshot_preview1", "fd_seek", |_: i32, _: i64, _: i32, _: i32| -> i32 { 0 })?;
+        linker.func_wrap("wasi_snapshot_preview1", "fd_write", |_: i32, _: i32, _: i32, _: i32| -> i32 { 0 })?;
+        linker.func_wrap("wasi_snapshot_preview1", "fd_read", |_: i32, _: i32, _: i32, _: i32| -> i32 { 0 })?;
+        linker.func_wrap("wasi_snapshot_preview1", "environ_sizes_get", |_: i32, _: i32| -> i32 { 0 })?;
+        linker.func_wrap("wasi_snapshot_preview1", "environ_get", |_: i32, _: i32| -> i32 { 0 })?;
+        linker.func_wrap("wasi_snapshot_preview1", "proc_exit", |_: i32| {})?;
 
-        fn clock_time_get(mut env: FunctionEnvMut<WasmEnv>, _clock_id: i32, _precision: i64, time_ptr: i32) -> i32 {
-            use std::time::{SystemTime, UNIX_EPOCH};
-            let ns = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64;
-            if let Some(memory) = &env.data().memory {
-                let view = memory.view(&env);
-                let _ = view.write(time_ptr as u64, &ns.to_le_bytes());
-            }
-            0
-        }
-
-        fn random_get(mut env: FunctionEnvMut<WasmEnv>, buf: i32, buf_len: i32) -> i32 {
-            use std::collections::hash_map::RandomState;
-            use std::hash::{BuildHasher, Hasher};
-            if let Some(memory) = &env.data().memory {
-                let view = memory.view(&env);
-                let mut random_bytes = vec![0u8; buf_len as usize];
-                let state = RandomState::new();
-                for (i, byte) in random_bytes.iter_mut().enumerate() {
-                    let mut hasher = state.build_hasher();
-                    hasher.write_usize(i);
-                    hasher.write_u64(std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64);
-                    *byte = hasher.finish() as u8;
+        linker.func_wrap("wasi_snapshot_preview1", "clock_time_get",
+            |mut caller: Caller<'_, WasmState>, _clock_id: i32, _precision: i64, time_ptr: i32| -> i32 {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                let ns = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos() as u64;
+                if let Some(memory) = caller.data().memory {
+                    let _ = memory.write(&mut caller, time_ptr as usize, &ns.to_le_bytes());
                 }
-                let _ = view.write(buf as u64, &random_bytes);
+                0
             }
-            0
-        }
+        )?;
 
-        // Emscripten exception handling
-        fn set_threw(mut env: FunctionEnvMut<WasmEnv>, threw: i32, value: i32) {
-            env.data_mut().threw = (threw, value);
-        }
-        fn cxa_find_matching_catch_2() -> i32 { 0 }
-        fn cxa_find_matching_catch_3(_: i32) -> i32 { 0 }
-        fn resume_exception(_: i32) {}
-        fn cxa_begin_catch(_: i32) -> i32 { 0 }
-        fn cxa_end_catch() {}
-        fn llvm_eh_typeid_for(_: i32) -> i32 { 0 }
-        fn cxa_throw(_: i32, _: i32, _: i32) {}
-        fn cxa_uncaught_exceptions() -> i32 { 0 }
-
-        // invoke_* trampolines
-        fn invoke_v(mut env: FunctionEnvMut<WasmEnv>, idx: i32) {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    let _ = func.call(&mut store, &[]);
+        linker.func_wrap("wasi_snapshot_preview1", "random_get",
+            |mut caller: Caller<'_, WasmState>, buf: i32, buf_len: i32| -> i32 {
+                if let Some(memory) = caller.data().memory {
+                    let mut random_bytes = vec![0u8; buf_len as usize];
+                    // Use simple random from std
+                    use std::collections::hash_map::RandomState;
+                    use std::hash::{BuildHasher, Hasher};
+                    let s = RandomState::new();
+                    for chunk in random_bytes.chunks_mut(8) {
+                        let mut hasher = s.build_hasher();
+                        hasher.write_usize(chunk.as_ptr() as usize);
+                        let random = hasher.finish().to_le_bytes();
+                        for (i, b) in chunk.iter_mut().enumerate() {
+                            *b = random[i % 8];
+                        }
+                    }
+                    let _ = memory.write(&mut caller, buf as usize, &random_bytes);
+                    return 0;
                 }
+                8  // WASI errno for failure
             }
-        }
+        )?;
 
-        fn invoke_vi(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32) {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    let _ = func.call(&mut store, &[Value::I32(a)]);
-                }
+        // Emscripten exception handling stubs
+        linker.func_wrap("env", "setThrew",
+            |mut caller: Caller<'_, WasmState>, threw: i32, value: i32| {
+                caller.data_mut().threw = (threw, value);
             }
-        }
+        )?;
+        linker.func_wrap("env", "__cxa_find_matching_catch_2", || -> i32 { 0 })?;
+        linker.func_wrap("env", "__cxa_find_matching_catch_3", |_: i32| -> i32 { 0 })?;
+        linker.func_wrap("env", "__resumeException", |_: i32| {})?;
+        linker.func_wrap("env", "__cxa_begin_catch", |_: i32| -> i32 { 0 })?;
+        linker.func_wrap("env", "__cxa_end_catch", || {})?;
+        linker.func_wrap("env", "llvm_eh_typeid_for", |_: i32| -> i32 { 0 })?;
+        linker.func_wrap("env", "__cxa_throw", |_: i32, _: i32, _: i32| {})?;
+        linker.func_wrap("env", "__cxa_uncaught_exceptions", || -> i32 { 0 })?;
 
-        fn invoke_vii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32) {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    let _ = func.call(&mut store, &[Value::I32(a), Value::I32(b)]);
-                }
-            }
-        }
-
-        fn invoke_viii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32, c: i32) {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    let _ = func.call(&mut store, &[Value::I32(a), Value::I32(b), Value::I32(c)]);
-                }
-            }
-        }
-
-        fn invoke_viiii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32, c: i32, d: i32) {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    let _ = func.call(&mut store, &[Value::I32(a), Value::I32(b), Value::I32(c), Value::I32(d)]);
-                }
-            }
-        }
-
-        fn invoke_viiiii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32) {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    let _ = func.call(&mut store, &[Value::I32(a), Value::I32(b), Value::I32(c), Value::I32(d), Value::I32(e)]);
-                }
-            }
-        }
-
-        fn invoke_viiiiii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32) {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    let _ = func.call(&mut store, &[Value::I32(a), Value::I32(b), Value::I32(c), Value::I32(d), Value::I32(e), Value::I32(f)]);
-                }
-            }
-        }
-
-        fn invoke_viiiiiii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32) {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    let _ = func.call(&mut store, &[Value::I32(a), Value::I32(b), Value::I32(c), Value::I32(d), Value::I32(e), Value::I32(f), Value::I32(g)]);
-                }
-            }
-        }
-
-        fn invoke_viiiiiiiii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32, h: i32, i: i32) {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    let _ = func.call(&mut store, &[Value::I32(a), Value::I32(b), Value::I32(c), Value::I32(d), Value::I32(e), Value::I32(f), Value::I32(g), Value::I32(h), Value::I32(i)]);
-                }
-            }
-        }
-
-        fn invoke_i(mut env: FunctionEnvMut<WasmEnv>, idx: i32) -> i32 {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    if let Ok(results) = func.call(&mut store, &[]) {
-                        if let Some(Value::I32(v)) = results.first() { return *v; }
+        // invoke_* trampolines - call functions from indirect function table
+        // In wasmtime 27, table.get returns Ref which can be converted to Func via as_func()
+        linker.func_wrap("env", "invoke_v",
+            |mut caller: Caller<'_, WasmState>, idx: i32| {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let _ = func.call(&mut caller, &[], &mut []);
+                        }
                     }
                 }
             }
-            0
-        }
+        )?;
 
-        fn invoke_ii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32) -> i32 {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    if let Ok(results) = func.call(&mut store, &[Value::I32(a)]) {
-                        if let Some(Value::I32(v)) = results.first() { return *v; }
+        linker.func_wrap("env", "invoke_vi",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32| {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let _ = func.call(&mut caller, &[Val::I32(a)], &mut []);
+                        }
                     }
                 }
             }
-            0
-        }
+        )?;
 
-        fn invoke_iii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32) -> i32 {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    if let Ok(results) = func.call(&mut store, &[Value::I32(a), Value::I32(b)]) {
-                        if let Some(Value::I32(v)) = results.first() { return *v; }
+        linker.func_wrap("env", "invoke_vii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32| {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let _ = func.call(&mut caller, &[Val::I32(a), Val::I32(b)], &mut []);
+                        }
                     }
                 }
             }
-            0
-        }
+        )?;
 
-        fn invoke_iiii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32, c: i32) -> i32 {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    if let Ok(results) = func.call(&mut store, &[Value::I32(a), Value::I32(b), Value::I32(c)]) {
-                        if let Some(Value::I32(v)) = results.first() { return *v; }
+        linker.func_wrap("env", "invoke_viii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32, c: i32| {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let _ = func.call(&mut caller, &[Val::I32(a), Val::I32(b), Val::I32(c)], &mut []);
+                        }
                     }
                 }
             }
-            0
-        }
+        )?;
 
-        fn invoke_iiiii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32, c: i32, d: i32) -> i32 {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    if let Ok(results) = func.call(&mut store, &[Value::I32(a), Value::I32(b), Value::I32(c), Value::I32(d)]) {
-                        if let Some(Value::I32(v)) = results.first() { return *v; }
+        linker.func_wrap("env", "invoke_viiii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32, c: i32, d: i32| {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let _ = func.call(&mut caller, &[Val::I32(a), Val::I32(b), Val::I32(c), Val::I32(d)], &mut []);
+                        }
                     }
                 }
             }
-            0
-        }
+        )?;
 
-        fn invoke_iiiiii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32) -> i32 {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    if let Ok(results) = func.call(&mut store, &[Value::I32(a), Value::I32(b), Value::I32(c), Value::I32(d), Value::I32(e)]) {
-                        if let Some(Value::I32(v)) = results.first() { return *v; }
+        linker.func_wrap("env", "invoke_viiiii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32| {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let _ = func.call(&mut caller, &[Val::I32(a), Val::I32(b), Val::I32(c), Val::I32(d), Val::I32(e)], &mut []);
+                        }
                     }
                 }
             }
-            0
-        }
+        )?;
 
-        fn invoke_iiiiiii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32) -> i32 {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    if let Ok(results) = func.call(&mut store, &[Value::I32(a), Value::I32(b), Value::I32(c), Value::I32(d), Value::I32(e), Value::I32(f)]) {
-                        if let Some(Value::I32(v)) = results.first() { return *v; }
+        linker.func_wrap("env", "invoke_viiiiii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32| {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let _ = func.call(&mut caller, &[Val::I32(a), Val::I32(b), Val::I32(c), Val::I32(d), Val::I32(e), Val::I32(f)], &mut []);
+                        }
                     }
                 }
             }
-            0
-        }
+        )?;
 
-        fn invoke_iiiiiiii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32) -> i32 {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    if let Ok(results) = func.call(&mut store, &[Value::I32(a), Value::I32(b), Value::I32(c), Value::I32(d), Value::I32(e), Value::I32(f), Value::I32(g)]) {
-                        if let Some(Value::I32(v)) = results.first() { return *v; }
+        linker.func_wrap("env", "invoke_viiiiiii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32| {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let _ = func.call(&mut caller, &[Val::I32(a), Val::I32(b), Val::I32(c), Val::I32(d), Val::I32(e), Val::I32(f), Val::I32(g)], &mut []);
+                        }
                     }
                 }
             }
-            0
-        }
+        )?;
 
-        fn invoke_iiiiiiiiii(mut env: FunctionEnvMut<WasmEnv>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32, h: i32, i: i32) -> i32 {
-            let (data, mut store) = env.data_and_store_mut();
-            if let Some(table) = &data.table {
-                if let Some(Value::FuncRef(Some(func))) = table.get(&mut store, idx as u32) {
-                    if let Ok(results) = func.call(&mut store, &[Value::I32(a), Value::I32(b), Value::I32(c), Value::I32(d), Value::I32(e), Value::I32(f), Value::I32(g), Value::I32(h), Value::I32(i)]) {
-                        if let Some(Value::I32(v)) = results.first() { return *v; }
+        linker.func_wrap("env", "invoke_viiiiiiiii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32, h: i32, i: i32| {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let _ = func.call(&mut caller, &[Val::I32(a), Val::I32(b), Val::I32(c), Val::I32(d), Val::I32(e), Val::I32(f), Val::I32(g), Val::I32(h), Val::I32(i)], &mut []);
+                        }
                     }
                 }
             }
-            0
+        )?;
+
+        linker.func_wrap("env", "invoke_i",
+            |mut caller: Caller<'_, WasmState>, idx: i32| -> i32 {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let mut results = [Val::I32(0)];
+                            if func.call(&mut caller, &[], &mut results).is_ok() {
+                                if let Val::I32(v) = results[0] { return v; }
+                            }
+                        }
+                    }
+                }
+                0
+            }
+        )?;
+
+        linker.func_wrap("env", "invoke_ii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32| -> i32 {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let mut results = [Val::I32(0)];
+                            if func.call(&mut caller, &[Val::I32(a)], &mut results).is_ok() {
+                                if let Val::I32(v) = results[0] { return v; }
+                            }
+                        }
+                    }
+                }
+                0
+            }
+        )?;
+
+        linker.func_wrap("env", "invoke_iii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32| -> i32 {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let mut results = [Val::I32(0)];
+                            if func.call(&mut caller, &[Val::I32(a), Val::I32(b)], &mut results).is_ok() {
+                                if let Val::I32(v) = results[0] { return v; }
+                            }
+                        }
+                    }
+                }
+                0
+            }
+        )?;
+
+        linker.func_wrap("env", "invoke_iiii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32, c: i32| -> i32 {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let mut results = [Val::I32(0)];
+                            if func.call(&mut caller, &[Val::I32(a), Val::I32(b), Val::I32(c)], &mut results).is_ok() {
+                                if let Val::I32(v) = results[0] { return v; }
+                            }
+                        }
+                    }
+                }
+                0
+            }
+        )?;
+
+        linker.func_wrap("env", "invoke_iiiii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32, c: i32, d: i32| -> i32 {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let mut results = [Val::I32(0)];
+                            if func.call(&mut caller, &[Val::I32(a), Val::I32(b), Val::I32(c), Val::I32(d)], &mut results).is_ok() {
+                                if let Val::I32(v) = results[0] { return v; }
+                            }
+                        }
+                    }
+                }
+                0
+            }
+        )?;
+
+        linker.func_wrap("env", "invoke_iiiiii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32| -> i32 {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let mut results = [Val::I32(0)];
+                            if func.call(&mut caller, &[Val::I32(a), Val::I32(b), Val::I32(c), Val::I32(d), Val::I32(e)], &mut results).is_ok() {
+                                if let Val::I32(v) = results[0] { return v; }
+                            }
+                        }
+                    }
+                }
+                0
+            }
+        )?;
+
+        linker.func_wrap("env", "invoke_iiiiiii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32| -> i32 {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let mut results = [Val::I32(0)];
+                            if func.call(&mut caller, &[Val::I32(a), Val::I32(b), Val::I32(c), Val::I32(d), Val::I32(e), Val::I32(f)], &mut results).is_ok() {
+                                if let Val::I32(v) = results[0] { return v; }
+                            }
+                        }
+                    }
+                }
+                0
+            }
+        )?;
+
+        linker.func_wrap("env", "invoke_iiiiiiii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32| -> i32 {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let mut results = [Val::I32(0)];
+                            if func.call(&mut caller, &[Val::I32(a), Val::I32(b), Val::I32(c), Val::I32(d), Val::I32(e), Val::I32(f), Val::I32(g)], &mut results).is_ok() {
+                                if let Val::I32(v) = results[0] { return v; }
+                            }
+                        }
+                    }
+                }
+                0
+            }
+        )?;
+
+        linker.func_wrap("env", "invoke_iiiiiiiiii",
+            |mut caller: Caller<'_, WasmState>, idx: i32, a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32, h: i32, i: i32| -> i32 {
+                if let Some(table) = caller.data().table {
+                    if let Some(ref_val) = table.get(&mut caller, idx as u64) {
+                        if let Some(func) = ref_val.as_func().flatten().cloned() {
+                            let mut results = [Val::I32(0)];
+                            if func.call(&mut caller, &[Val::I32(a), Val::I32(b), Val::I32(c), Val::I32(d), Val::I32(e), Val::I32(f), Val::I32(g), Val::I32(h), Val::I32(i)], &mut results).is_ok() {
+                                if let Val::I32(v) = results[0] { return v; }
+                            }
+                        }
+                    }
+                }
+                0
+            }
+        )?;
+
+        let instance = linker.instantiate(&mut store, &module)?;
+
+        // Get memory and table, store in state
+        if let Some(memory) = instance.get_memory(&mut store, "memory") {
+            store.data_mut().memory = Some(memory);
+        }
+        if let Some(table) = instance.get_table(&mut store, "__indirect_function_table") {
+            store.data_mut().table = Some(table);
         }
 
-        let import_object = imports! {
-            "wasi_snapshot_preview1" => {
-                "fd_close" => Function::new_typed(&mut store, fd_close),
-                "fd_seek" => Function::new_typed(&mut store, fd_seek),
-                "fd_write" => Function::new_typed(&mut store, fd_write),
-                "fd_read" => Function::new_typed(&mut store, fd_read),
-                "environ_sizes_get" => Function::new_typed(&mut store, environ_sizes_get),
-                "environ_get" => Function::new_typed(&mut store, environ_get),
-                "clock_time_get" => Function::new_typed_with_env(&mut store, &env, clock_time_get),
-                "proc_exit" => Function::new_typed(&mut store, proc_exit),
-                "random_get" => Function::new_typed_with_env(&mut store, &env, random_get),
-            },
-            "env" => {
-                "setThrew" => Function::new_typed_with_env(&mut store, &env, set_threw),
-                "__cxa_find_matching_catch_2" => Function::new_typed(&mut store, cxa_find_matching_catch_2),
-                "__cxa_find_matching_catch_3" => Function::new_typed(&mut store, cxa_find_matching_catch_3),
-                "__resumeException" => Function::new_typed(&mut store, resume_exception),
-                "__cxa_begin_catch" => Function::new_typed(&mut store, cxa_begin_catch),
-                "__cxa_end_catch" => Function::new_typed(&mut store, cxa_end_catch),
-                "llvm_eh_typeid_for" => Function::new_typed(&mut store, llvm_eh_typeid_for),
-                "__cxa_throw" => Function::new_typed(&mut store, cxa_throw),
-                "__cxa_uncaught_exceptions" => Function::new_typed(&mut store, cxa_uncaught_exceptions),
-                "invoke_v" => Function::new_typed_with_env(&mut store, &env, invoke_v),
-                "invoke_vi" => Function::new_typed_with_env(&mut store, &env, invoke_vi),
-                "invoke_vii" => Function::new_typed_with_env(&mut store, &env, invoke_vii),
-                "invoke_viii" => Function::new_typed_with_env(&mut store, &env, invoke_viii),
-                "invoke_viiii" => Function::new_typed_with_env(&mut store, &env, invoke_viiii),
-                "invoke_viiiii" => Function::new_typed_with_env(&mut store, &env, invoke_viiiii),
-                "invoke_viiiiii" => Function::new_typed_with_env(&mut store, &env, invoke_viiiiii),
-                "invoke_viiiiiii" => Function::new_typed_with_env(&mut store, &env, invoke_viiiiiii),
-                "invoke_viiiiiiiii" => Function::new_typed_with_env(&mut store, &env, invoke_viiiiiiiii),
-                "invoke_i" => Function::new_typed_with_env(&mut store, &env, invoke_i),
-                "invoke_ii" => Function::new_typed_with_env(&mut store, &env, invoke_ii),
-                "invoke_iii" => Function::new_typed_with_env(&mut store, &env, invoke_iii),
-                "invoke_iiii" => Function::new_typed_with_env(&mut store, &env, invoke_iiii),
-                "invoke_iiiii" => Function::new_typed_with_env(&mut store, &env, invoke_iiiii),
-                "invoke_iiiiii" => Function::new_typed_with_env(&mut store, &env, invoke_iiiiii),
-                "invoke_iiiiiii" => Function::new_typed_with_env(&mut store, &env, invoke_iiiiiii),
-                "invoke_iiiiiiii" => Function::new_typed_with_env(&mut store, &env, invoke_iiiiiiii),
-                "invoke_iiiiiiiiii" => Function::new_typed_with_env(&mut store, &env, invoke_iiiiiiiiii),
-            }
-        };
-
-        let instance = Instance::new(&mut store, &module, &import_object)?;
-
-        {
-            let env_mut = env.as_mut(&mut store);
-            if let Ok(memory) = instance.exports.get_memory("memory") {
-                env_mut.memory = Some(memory.clone());
-            }
-            if let Ok(table) = instance.exports.get_table("__indirect_function_table") {
-                env_mut.table = Some(table.clone());
-            }
+        // Call _initialize if present
+        if let Some(init) = instance.get_func(&mut store, "_initialize") {
+            let _ = init.call(&mut store, &[], &mut []);
         }
 
-        Ok(Self { store, instance, env })
+        Ok(Self { store, instance })
     }
 
-    fn memory(&self) -> &Memory {
-        self.instance.exports.get_memory("memory").unwrap()
+    fn memory(&mut self) -> Memory {
+        self.store.data().memory.expect("memory not initialized")
     }
 
     fn allocate(&mut self, size: u32) -> Result<u32, Box<dyn std::error::Error>> {
-        let malloc: TypedFunction<u32, u32> = self.instance.exports.get_typed_function(&self.store, "malloc")?;
+        let malloc = self.instance.get_typed_func::<u32, u32>(&mut self.store, "malloc")?;
         Ok(malloc.call(&mut self.store, size)?)
     }
 
     fn deallocate(&mut self, ptr: u32) {
-        if let Ok(free) = self.instance.exports.get_typed_function::<u32, ()>(&self.store, "free") {
+        if let Ok(free) = self.instance.get_typed_func::<u32, ()>(&mut self.store, "free") {
             let _ = free.call(&mut self.store, ptr);
         }
     }
 
-    fn write_bytes(&self, ptr: u32, data: &[u8]) {
-        let view = self.memory().view(&self.store);
-        let _ = view.write(ptr as u64, data);
+    fn write_bytes(&mut self, ptr: u32, data: &[u8]) {
+        let memory = self.memory();
+        let _ = memory.write(&mut self.store, ptr as usize, data);
     }
 
-    fn read_bytes(&self, ptr: u32, size: usize) -> Vec<u8> {
-        let view = self.memory().view(&self.store);
+    fn read_bytes(&mut self, ptr: u32, size: usize) -> Vec<u8> {
+        let memory = self.memory();
         let mut buffer = vec![0u8; size];
-        let _ = view.read(ptr as u64, &mut buffer);
+        let _ = memory.read(&self.store, ptr as usize, &mut buffer);
         buffer
     }
 
@@ -408,8 +440,8 @@ impl EncryptionModule {
             self.write_bytes(data_ptr, data);
         }
 
-        let sha256_fn: TypedFunction<(u32, u32, u32), ()> = self.instance.exports.get_typed_function(&self.store, "wasi_sha256")?;
-        sha256_fn.call(&mut self.store, data_ptr, data.len() as u32, hash_ptr)?;
+        let sha256_fn = self.instance.get_typed_func::<(u32, u32, u32), ()>(&mut self.store, "wasi_sha256")?;
+        sha256_fn.call(&mut self.store, (data_ptr, data.len() as u32, hash_ptr))?;
 
         let hash = self.read_bytes(hash_ptr, SHA256_SIZE);
         self.deallocate(data_ptr);
@@ -426,8 +458,8 @@ impl EncryptionModule {
         self.write_bytes(iv_ptr, iv);
         self.write_bytes(data_ptr, data);
 
-        let encrypt_fn: TypedFunction<(u32, u32, u32, u32), i32> = self.instance.exports.get_typed_function(&self.store, "wasi_encrypt_bytes")?;
-        let _ = encrypt_fn.call(&mut self.store, key_ptr, iv_ptr, data_ptr, data.len() as u32)?;
+        let encrypt_fn = self.instance.get_typed_func::<(u32, u32, u32, u32), i32>(&mut self.store, "wasi_encrypt_bytes")?;
+        let _ = encrypt_fn.call(&mut self.store, (key_ptr, iv_ptr, data_ptr, data.len() as u32))?;
 
         let encrypted = self.read_bytes(data_ptr, data.len());
         self.deallocate(key_ptr);
@@ -445,8 +477,8 @@ impl EncryptionModule {
         self.write_bytes(iv_ptr, iv);
         self.write_bytes(data_ptr, data);
 
-        let decrypt_fn: TypedFunction<(u32, u32, u32, u32), i32> = self.instance.exports.get_typed_function(&self.store, "wasi_decrypt_bytes")?;
-        let _ = decrypt_fn.call(&mut self.store, key_ptr, iv_ptr, data_ptr, data.len() as u32)?;
+        let decrypt_fn = self.instance.get_typed_func::<(u32, u32, u32, u32), i32>(&mut self.store, "wasi_decrypt_bytes")?;
+        let _ = decrypt_fn.call(&mut self.store, (key_ptr, iv_ptr, data_ptr, data.len() as u32))?;
 
         let decrypted = self.read_bytes(data_ptr, data.len());
         self.deallocate(key_ptr);
@@ -465,10 +497,9 @@ impl EncryptionModule {
         if !salt.is_empty() { self.write_bytes(salt_ptr, salt); }
         if !info.is_empty() { self.write_bytes(info_ptr, info); }
 
-        let hkdf_fn: TypedFunction<(u32, u32, u32, u32, u32, u32, u32, u32), ()> =
-            self.instance.exports.get_typed_function(&self.store, "wasi_hkdf")?;
-        hkdf_fn.call(&mut self.store, ikm_ptr, ikm.len() as u32, salt_ptr, salt.len() as u32,
-                     info_ptr, info.len() as u32, out_ptr, output_len as u32)?;
+        let hkdf_fn = self.instance.get_typed_func::<(u32, u32, u32, u32, u32, u32, u32, u32), ()>(&mut self.store, "wasi_hkdf")?;
+        hkdf_fn.call(&mut self.store, (ikm_ptr, ikm.len() as u32, salt_ptr, salt.len() as u32,
+                     info_ptr, info.len() as u32, out_ptr, output_len as u32))?;
 
         let output = self.read_bytes(out_ptr, output_len);
         self.deallocate(ikm_ptr);
@@ -482,9 +513,8 @@ impl EncryptionModule {
         let priv_ptr = self.allocate(32)?;
         let pub_ptr = self.allocate(32)?;
 
-        let gen_fn: TypedFunction<(u32, u32), i32> =
-            self.instance.exports.get_typed_function(&self.store, "wasi_x25519_generate_keypair")?;
-        gen_fn.call(&mut self.store, priv_ptr, pub_ptr)?;
+        let gen_fn = self.instance.get_typed_func::<(u32, u32), i32>(&mut self.store, "wasi_x25519_generate_keypair")?;
+        gen_fn.call(&mut self.store, (priv_ptr, pub_ptr))?;
 
         let private_key = self.read_bytes(priv_ptr, 32);
         let public_key = self.read_bytes(pub_ptr, 32);
@@ -501,9 +531,8 @@ impl EncryptionModule {
         self.write_bytes(priv_ptr, private_key);
         self.write_bytes(pub_ptr, public_key);
 
-        let shared_fn: TypedFunction<(u32, u32, u32), i32> =
-            self.instance.exports.get_typed_function(&self.store, "wasi_x25519_shared_secret")?;
-        shared_fn.call(&mut self.store, priv_ptr, pub_ptr, shared_ptr)?;
+        let shared_fn = self.instance.get_typed_func::<(u32, u32, u32), i32>(&mut self.store, "wasi_x25519_shared_secret")?;
+        shared_fn.call(&mut self.store, (priv_ptr, pub_ptr, shared_ptr))?;
 
         let shared = self.read_bytes(shared_ptr, 32);
         self.deallocate(priv_ptr);
@@ -516,9 +545,8 @@ impl EncryptionModule {
         let priv_ptr = self.allocate(32)?;
         let pub_ptr = self.allocate(33)?;
 
-        let gen_fn: TypedFunction<(u32, u32), i32> =
-            self.instance.exports.get_typed_function(&self.store, "wasi_secp256k1_generate_keypair")?;
-        gen_fn.call(&mut self.store, priv_ptr, pub_ptr)?;
+        let gen_fn = self.instance.get_typed_func::<(u32, u32), i32>(&mut self.store, "wasi_secp256k1_generate_keypair")?;
+        gen_fn.call(&mut self.store, (priv_ptr, pub_ptr))?;
 
         let private_key = self.read_bytes(priv_ptr, 32);
         let public_key = self.read_bytes(pub_ptr, 33);
@@ -535,9 +563,8 @@ impl EncryptionModule {
         self.write_bytes(priv_ptr, private_key);
         self.write_bytes(pub_ptr, public_key);
 
-        let shared_fn: TypedFunction<(u32, u32, u32, u32), i32> =
-            self.instance.exports.get_typed_function(&self.store, "wasi_secp256k1_shared_secret")?;
-        shared_fn.call(&mut self.store, priv_ptr, pub_ptr, public_key.len() as u32, shared_ptr)?;
+        let shared_fn = self.instance.get_typed_func::<(u32, u32, u32, u32), i32>(&mut self.store, "wasi_secp256k1_shared_secret")?;
+        shared_fn.call(&mut self.store, (priv_ptr, pub_ptr, public_key.len() as u32, shared_ptr))?;
 
         let shared = self.read_bytes(shared_ptr, 32);
         self.deallocate(priv_ptr);
@@ -550,9 +577,8 @@ impl EncryptionModule {
         let priv_ptr = self.allocate(32)?;
         let pub_ptr = self.allocate(33)?;
 
-        let gen_fn: TypedFunction<(u32, u32), i32> =
-            self.instance.exports.get_typed_function(&self.store, "wasi_p256_generate_keypair")?;
-        gen_fn.call(&mut self.store, priv_ptr, pub_ptr)?;
+        let gen_fn = self.instance.get_typed_func::<(u32, u32), i32>(&mut self.store, "wasi_p256_generate_keypair")?;
+        gen_fn.call(&mut self.store, (priv_ptr, pub_ptr))?;
 
         let private_key = self.read_bytes(priv_ptr, 32);
         let public_key = self.read_bytes(pub_ptr, 33);
@@ -569,15 +595,179 @@ impl EncryptionModule {
         self.write_bytes(priv_ptr, private_key);
         self.write_bytes(pub_ptr, public_key);
 
-        let shared_fn: TypedFunction<(u32, u32, u32, u32), i32> =
-            self.instance.exports.get_typed_function(&self.store, "wasi_p256_shared_secret")?;
-        shared_fn.call(&mut self.store, priv_ptr, pub_ptr, public_key.len() as u32, shared_ptr)?;
+        let shared_fn = self.instance.get_typed_func::<(u32, u32, u32, u32), i32>(&mut self.store, "wasi_p256_shared_secret")?;
+        shared_fn.call(&mut self.store, (priv_ptr, pub_ptr, public_key.len() as u32, shared_ptr))?;
 
         let shared = self.read_bytes(shared_ptr, 32);
         self.deallocate(priv_ptr);
         self.deallocate(pub_ptr);
         self.deallocate(shared_ptr);
         Ok(shared)
+    }
+
+    fn ed25519_generate_keypair(&mut self) -> Result<(Vec<u8>, Vec<u8>), Box<dyn std::error::Error>> {
+        let priv_ptr = self.allocate(64)?;  // Ed25519 private key is 64 bytes
+        let pub_ptr = self.allocate(32)?;
+
+        let gen_fn = self.instance.get_typed_func::<(u32, u32), i32>(&mut self.store, "wasi_ed25519_generate_keypair")?;
+        let result = gen_fn.call(&mut self.store, (priv_ptr, pub_ptr))?;
+        if result != 0 {
+            self.deallocate(priv_ptr);
+            self.deallocate(pub_ptr);
+            return Err("Ed25519 keypair generation failed".into());
+        }
+
+        let private_key = self.read_bytes(priv_ptr, 64);
+        let public_key = self.read_bytes(pub_ptr, 32);
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+        Ok((private_key, public_key))
+    }
+
+    fn ed25519_sign(&mut self, private_key: &[u8], data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let priv_ptr = self.allocate(64)?;
+        let data_ptr = self.allocate(data.len().max(1) as u32)?;
+        let sig_ptr = self.allocate(64)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        if !data.is_empty() {
+            self.write_bytes(data_ptr, data);
+        }
+
+        let sign_fn = self.instance.get_typed_func::<(u32, u32, u32, u32), i32>(&mut self.store, "wasi_ed25519_sign")?;
+        let result = sign_fn.call(&mut self.store, (priv_ptr, data_ptr, data.len() as u32, sig_ptr))?;
+        if result != 0 {
+            self.deallocate(priv_ptr);
+            self.deallocate(data_ptr);
+            self.deallocate(sig_ptr);
+            return Err("Ed25519 signing failed".into());
+        }
+
+        let signature = self.read_bytes(sig_ptr, 64);
+        self.deallocate(priv_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+        Ok(signature)
+    }
+
+    fn ed25519_verify(&mut self, public_key: &[u8], data: &[u8], signature: &[u8]) -> Result<bool, Box<dyn std::error::Error>> {
+        let pub_ptr = self.allocate(32)?;
+        let data_ptr = self.allocate(data.len().max(1) as u32)?;
+        let sig_ptr = self.allocate(64)?;
+
+        self.write_bytes(pub_ptr, public_key);
+        if !data.is_empty() {
+            self.write_bytes(data_ptr, data);
+        }
+        self.write_bytes(sig_ptr, signature);
+
+        let verify_fn = self.instance.get_typed_func::<(u32, u32, u32, u32), i32>(&mut self.store, "wasi_ed25519_verify")?;
+        let result = verify_fn.call(&mut self.store, (pub_ptr, data_ptr, data.len() as u32, sig_ptr))?;
+
+        self.deallocate(pub_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+        Ok(result == 0)
+    }
+
+    fn secp256k1_sign(&mut self, private_key: &[u8], data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let priv_ptr = self.allocate(32)?;
+        let data_ptr = self.allocate(data.len().max(1) as u32)?;
+        let sig_ptr = self.allocate(72)?;  // DER signature up to 72 bytes
+        let sig_size_ptr = self.allocate(4)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        if !data.is_empty() {
+            self.write_bytes(data_ptr, data);
+        }
+
+        let sign_fn = self.instance.get_typed_func::<(u32, u32, u32, u32, u32), i32>(&mut self.store, "wasi_secp256k1_sign")?;
+        let result = sign_fn.call(&mut self.store, (priv_ptr, data_ptr, data.len() as u32, sig_ptr, sig_size_ptr))?;
+        if result != 0 {
+            self.deallocate(priv_ptr);
+            self.deallocate(data_ptr);
+            self.deallocate(sig_ptr);
+            self.deallocate(sig_size_ptr);
+            return Err("secp256k1 signing failed".into());
+        }
+
+        let sig_size_bytes = self.read_bytes(sig_size_ptr, 4);
+        let sig_size = u32::from_le_bytes([sig_size_bytes[0], sig_size_bytes[1], sig_size_bytes[2], sig_size_bytes[3]]) as usize;
+        let signature = self.read_bytes(sig_ptr, sig_size);
+
+        self.deallocate(priv_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+        self.deallocate(sig_size_ptr);
+        Ok(signature)
+    }
+
+    fn secp256k1_verify(&mut self, public_key: &[u8], data: &[u8], signature: &[u8]) -> Result<bool, Box<dyn std::error::Error>> {
+        let pub_ptr = self.allocate(public_key.len().max(1) as u32)?;
+        let data_ptr = self.allocate(data.len().max(1) as u32)?;
+        let sig_ptr = self.allocate(signature.len().max(1) as u32)?;
+
+        if !public_key.is_empty() { self.write_bytes(pub_ptr, public_key); }
+        if !data.is_empty() { self.write_bytes(data_ptr, data); }
+        if !signature.is_empty() { self.write_bytes(sig_ptr, signature); }
+
+        let verify_fn = self.instance.get_typed_func::<(u32, u32, u32, u32, u32, u32), i32>(&mut self.store, "wasi_secp256k1_verify")?;
+        let result = verify_fn.call(&mut self.store, (pub_ptr, public_key.len() as u32, data_ptr, data.len() as u32, sig_ptr, signature.len() as u32))?;
+
+        self.deallocate(pub_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+        Ok(result == 0)
+    }
+
+    fn p256_sign(&mut self, private_key: &[u8], data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let priv_ptr = self.allocate(32)?;
+        let data_ptr = self.allocate(data.len().max(1) as u32)?;
+        let sig_ptr = self.allocate(72)?;  // DER signature up to 72 bytes
+        let sig_size_ptr = self.allocate(4)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        if !data.is_empty() {
+            self.write_bytes(data_ptr, data);
+        }
+
+        let sign_fn = self.instance.get_typed_func::<(u32, u32, u32, u32, u32), i32>(&mut self.store, "wasi_p256_sign")?;
+        let result = sign_fn.call(&mut self.store, (priv_ptr, data_ptr, data.len() as u32, sig_ptr, sig_size_ptr))?;
+        if result != 0 {
+            self.deallocate(priv_ptr);
+            self.deallocate(data_ptr);
+            self.deallocate(sig_ptr);
+            self.deallocate(sig_size_ptr);
+            return Err("P-256 signing failed".into());
+        }
+
+        let sig_size_bytes = self.read_bytes(sig_size_ptr, 4);
+        let sig_size = u32::from_le_bytes([sig_size_bytes[0], sig_size_bytes[1], sig_size_bytes[2], sig_size_bytes[3]]) as usize;
+        let signature = self.read_bytes(sig_ptr, sig_size);
+
+        self.deallocate(priv_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+        self.deallocate(sig_size_ptr);
+        Ok(signature)
+    }
+
+    fn p256_verify(&mut self, public_key: &[u8], data: &[u8], signature: &[u8]) -> Result<bool, Box<dyn std::error::Error>> {
+        let pub_ptr = self.allocate(public_key.len().max(1) as u32)?;
+        let data_ptr = self.allocate(data.len().max(1) as u32)?;
+        let sig_ptr = self.allocate(signature.len().max(1) as u32)?;
+
+        if !public_key.is_empty() { self.write_bytes(pub_ptr, public_key); }
+        if !data.is_empty() { self.write_bytes(data_ptr, data); }
+        if !signature.is_empty() { self.write_bytes(sig_ptr, signature); }
+
+        let verify_fn = self.instance.get_typed_func::<(u32, u32, u32, u32, u32, u32), i32>(&mut self.store, "wasi_p256_verify")?;
+        let result = verify_fn.call(&mut self.store, (pub_ptr, public_key.len() as u32, data_ptr, data.len() as u32, sig_ptr, signature.len() as u32))?;
+
+        self.deallocate(pub_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+        Ok(result == 0)
     }
 }
 
@@ -614,6 +804,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{}", "=".repeat(60));
     println!("FlatBuffers Cross-Language Encryption E2E Tests - Rust");
     println!("{}", "=".repeat(60));
+    println!();
+    println!("WASM Runtime: wasmtime");
     println!();
 
     // Get directory containing the source file
@@ -996,6 +1188,104 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     result.pass(&format!("Pre-generated Rust code: {} files in generated/rust/", count));
                 }
             }
+        }
+
+        results.push(result.summary());
+    }
+
+    // Test 6: Digital Signatures (Ed25519, secp256k1, P-256)
+    println!("\nTest 6: Digital Signatures");
+    println!("{}", "-".repeat(40));
+    {
+        let mut result = TestResult::new("Digital Signatures");
+
+        let test_message = b"Hello, FlatBuffers! This is a test message for signing.";
+
+        // Test Ed25519
+        match em.ed25519_generate_keypair() {
+            Ok((priv_key, pub_key)) => {
+                result.pass(&format!("Ed25519 keypair generated (priv: {}, pub: {} bytes)", priv_key.len(), pub_key.len()));
+
+                match em.ed25519_sign(&priv_key, test_message) {
+                    Ok(sig) => {
+                        result.pass(&format!("Ed25519 signature: {} bytes", sig.len()));
+
+                        match em.ed25519_verify(&pub_key, test_message, &sig) {
+                            Ok(true) => result.pass("Ed25519 signature verified"),
+                            Ok(false) => result.fail("Ed25519 signature verification failed"),
+                            Err(e) => result.fail(&format!("Ed25519 verify error: {}", e)),
+                        }
+
+                        // Verify wrong message fails
+                        let wrong_message = b"Wrong message";
+                        match em.ed25519_verify(&pub_key, wrong_message, &sig) {
+                            Ok(false) => result.pass("Ed25519 rejects wrong message"),
+                            Ok(true) => result.fail("Ed25519 accepted wrong message"),
+                            Err(_) => result.pass("Ed25519 rejects wrong message (error)"),
+                        }
+                    },
+                    Err(e) => result.fail(&format!("Ed25519 sign error: {}", e)),
+                }
+            },
+            Err(e) => result.fail(&format!("Ed25519 keypair generation error: {}", e)),
+        }
+
+        // Test secp256k1 signing
+        match em.secp256k1_generate_keypair() {
+            Ok((priv_key, pub_key)) => {
+                result.pass(&format!("secp256k1 keypair generated (priv: {}, pub: {} bytes)", priv_key.len(), pub_key.len()));
+
+                match em.secp256k1_sign(&priv_key, test_message) {
+                    Ok(sig) => {
+                        result.pass(&format!("secp256k1 signature: {} bytes (DER)", sig.len()));
+
+                        match em.secp256k1_verify(&pub_key, test_message, &sig) {
+                            Ok(true) => result.pass("secp256k1 signature verified"),
+                            Ok(false) => result.fail("secp256k1 signature verification failed"),
+                            Err(e) => result.fail(&format!("secp256k1 verify error: {}", e)),
+                        }
+
+                        // Verify wrong message fails
+                        let wrong_message = b"Wrong message";
+                        match em.secp256k1_verify(&pub_key, wrong_message, &sig) {
+                            Ok(false) => result.pass("secp256k1 rejects wrong message"),
+                            Ok(true) => result.fail("secp256k1 accepted wrong message"),
+                            Err(_) => result.pass("secp256k1 rejects wrong message (error)"),
+                        }
+                    },
+                    Err(e) => result.fail(&format!("secp256k1 sign error: {}", e)),
+                }
+            },
+            Err(e) => result.fail(&format!("secp256k1 keypair generation error: {}", e)),
+        }
+
+        // Test P-256 signing
+        match em.p256_generate_keypair() {
+            Ok((priv_key, pub_key)) => {
+                result.pass(&format!("P-256 keypair generated (priv: {}, pub: {} bytes)", priv_key.len(), pub_key.len()));
+
+                match em.p256_sign(&priv_key, test_message) {
+                    Ok(sig) => {
+                        result.pass(&format!("P-256 signature: {} bytes (DER)", sig.len()));
+
+                        match em.p256_verify(&pub_key, test_message, &sig) {
+                            Ok(true) => result.pass("P-256 signature verified"),
+                            Ok(false) => result.fail("P-256 signature verification failed"),
+                            Err(e) => result.fail(&format!("P-256 verify error: {}", e)),
+                        }
+
+                        // Verify wrong message fails
+                        let wrong_message = b"Wrong message";
+                        match em.p256_verify(&pub_key, wrong_message, &sig) {
+                            Ok(false) => result.pass("P-256 rejects wrong message"),
+                            Ok(true) => result.fail("P-256 accepted wrong message"),
+                            Err(_) => result.pass("P-256 rejects wrong message (error)"),
+                        }
+                    },
+                    Err(e) => result.fail(&format!("P-256 sign error: {}", e)),
+                }
+            },
+            Err(e) => result.fail(&format!("P-256 keypair generation error: {}", e)),
         }
 
         results.push(result.summary());

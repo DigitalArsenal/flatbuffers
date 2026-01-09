@@ -140,26 +140,26 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | Feature | Status | Notes |
 |---------|--------|-------|
 | WASM encryption loading | ✅ Done | Using WasmKit 0.2.0 (pure Swift) |
-| invoke_* trampolines | ⚠️ Partial | Stubs only - can't call indirect functions |
+| invoke_* trampolines | ✅ Done | Using patched WasmKit with `Table.getFunction(at:store:)` |
 | Exception handling stubs | ✅ Done | `__cxa_*` functions stubbed |
-| AES-256-CTR encryption | ⚠️ Partial | Fails due to invoke_* limitations |
-| AES-256-CTR decryption | ⚠️ Partial | Fails due to invoke_* limitations |
-| SHA-256 | ⚠️ Partial | Fails due to invoke_* limitations |
-| Cross-language verification | ✅ Done | Reads Node.js binaries, 21/21 tests |
-| **Full test suite** | ⚠️ Partial | **1/12 test suites passing** |
+| AES-256-CTR encryption | ✅ Done | Calls WASM `wasi_encrypt_bytes` |
+| AES-256-CTR decryption | ✅ Done | Calls WASM (CTR symmetric) |
+| SHA-256 | ✅ Done | Calls WASM `wasi_sha256` |
+| Cross-language verification | ✅ Done | Reads Node.js binaries |
+| **Full test suite** | ✅ Done | **12/12 test suites passing** |
 | **Runtime code generation** | ❌ Not done | Need to call WASM flatc |
 | **FlatBuffer creation** | ❌ Not done | Need generated Swift code |
 | **Full round-trip** | ❌ Not done | Create → Encrypt → Transmit → Decrypt → Read |
 
-**Note**: Swift runner uses WasmKit which doesn't expose public API to call functions by indirect table index. The invoke_* trampolines are stubs that don't actually call the target functions. This causes crypto operations (SHA256, AES) to fail because Crypto++ uses exception handling internally. Cross-language verification works because it decrypts pre-encrypted binaries without needing invoke_* trampolines.
+**Note**: Swift runner required a patch to WasmKit to add `Table.getFunction(at:store:)` method for invoke_* trampolines to work. This enables calling functions from the indirect function table by index.
 
 ## Crypto Operations Status
 
 | Operation | Node.js | Go | Python | Rust | Java | C# | Swift |
 |-----------|---------|-----|--------|------|------|-----|-------|
-| AES-256-CTR encrypt | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ |
-| AES-256-CTR decrypt | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ |
-| SHA-256 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ |
+| AES-256-CTR encrypt | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| AES-256-CTR decrypt | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SHA-256 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | HKDF-SHA256 | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Ed25519 keygen | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Ed25519 sign/verify | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -179,7 +179,7 @@ This document tracks the implementation status of the cross-language E2E encrypt
 | `runners/rust/src/main.rs` | Rust runner | ✅ Complete (12/12) |
 | `runners/java/src/.../TestRunner.java` | Java runner | ✅ Complete (12/12) |
 | `runners/csharp/TestRunner.cs` | C# runner | ✅ Complete (12/12) |
-| `runners/swift/TestRunner.swift` | Swift runner | ⚠️ Partial (1/12) |
+| `runners/swift/TestRunner.swift` | Swift runner | ✅ Complete (12/12) |
 
 ## Generated Files
 
@@ -195,7 +195,7 @@ This document tracks the implementation status of the cross-language E2E encrypt
 1. ~~**Test existing runners** - Verify Go, Python, Rust work with current WASM~~ ✅ Done
 2. ~~**Implement Java runner** - Use Chicory~~ ✅ Done (12/12)
 3. ~~**Implement C# runner** - Use wasmtime-dotnet~~ ✅ Done (12/12)
-4. **Fix Swift runner** - WasmKit lacks indirect function call API for invoke_* trampolines
+4. ~~**Fix Swift runner** - WasmKit lacks indirect function call API for invoke_* trampolines~~ ✅ Done (patched WasmKit)
 5. **Add Ed25519/secp256k1 to Go/Python/Rust** - Expose more crypto ops
 6. **Add runtime code generation** - All languages generate code via WASM flatc
 7. **Add FlatBuffer creation** - Each language creates FlatBuffers using generated code
@@ -239,4 +239,4 @@ cd runners/rust && cargo run
 | Rust | 12/12 | ✅ All passing |
 | Java | 12/12 | ✅ All passing |
 | C# | 12/12 | ✅ All passing |
-| Swift | 1/12 | ⚠️ Cross-language only (invoke_* limitation) |
+| Swift | 12/12 | ✅ All passing |

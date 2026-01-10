@@ -9,7 +9,11 @@ FlatBuffers compiler (`flatc`) as a WebAssembly module. Run the FlatBuffers comp
 - **Code Generation**: Generate code for 13 languages (C++, TypeScript, Go, Rust, etc.)
 - **JSON Schema Support**: Import JSON Schema and convert to FlatBuffer schemas
 - **Streaming Support**: Process large data with streaming APIs
-- **Zero Dependencies**: Self-contained WASM module with inlined binary (~2.7MB)
+- **End-to-End Encryption**: AES-256-CTR encryption with ECDH key exchange (X25519, secp256k1, P-256)
+- **Digital Signatures**: Ed25519 and ECDSA signing for message authentication
+- **Cryptocurrency Compatible**: Keys work with Bitcoin, Ethereum, Solana, and 7 other blockchains
+- **Cross-Language**: Encryption works across Node.js, Go, Python, Rust, Java, C#, and Swift
+- **Zero Dependencies**: Self-contained WASM modules with inlined binaries
 
 ## Installation
 
@@ -21,6 +25,20 @@ npm install flatc-wasm
 
 - [Quick Start](#quick-start)
 - [FlatcRunner API](#flatcrunner-api) (Recommended)
+- [Encryption Module](#encryption-module)
+  - [End-to-End Encryption Flow](#end-to-end-encryption-flow)
+  - [Cryptographic Operations](#cryptographic-operations)
+  - [Key Exchange (ECDH)](#key-exchange-ecdh)
+  - [Digital Signatures](#digital-signatures)
+  - [Cryptocurrency Compatibility](#cryptocurrency-compatibility)
+  - [Cross-Language Support](#cross-language-support)
+    - [Go Example](#go-example)
+    - [Python Example](#python-example)
+    - [Rust Example](#rust-example)
+    - [Java Example](#java-example-chicory)
+    - [C# Example](#c-example)
+    - [Swift Example](#swift-example)
+  - [WASM Function Reference](#wasm-function-reference)
 - [Low-Level API Reference](#low-level-api-reference)
   - [Module Initialization](#module-initialization)
   - [Schema Management](#schema-management)
@@ -501,6 +519,812 @@ async function buildSchemas() {
 
 buildSchemas().catch(console.error);
 ```
+
+---
+
+## Encryption Module
+
+The `flatc-wasm` package includes a separate encryption module powered by Crypto++ compiled to WebAssembly. This enables end-to-end encryption of FlatBuffer data directly in JavaScript/TypeScript with no native dependencies.
+
+```javascript
+import { createEncryptionModule } from 'flatc-wasm/encryption';
+
+const crypto = await createEncryptionModule();
+```
+
+### End-to-End Encryption Flow
+
+The complete flow for secure FlatBuffer transmission:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        END-TO-END ENCRYPTION FLOW                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  SENDER                                              RECIPIENT              │
+│  ──────                                              ─────────              │
+│                                                                             │
+│  1. Define Schema (.fbs)                                                    │
+│         │                                                                   │
+│         ▼                                                                   │
+│  2. Generate Code (flatc --ts)                                              │
+│         │                                                                   │
+│         ▼                                                                   │
+│  3. Create FlatBuffer ◄──────────────────────────────────────┐              │
+│         │                                                    │              │
+│         ▼                                                    │              │
+│  4. ECDH Key Exchange ◄─────── Public Keys ────────► ECDH Key Exchange      │
+│         │                                                    │              │
+│         ▼                                                    │              │
+│  5. Derive AES Key (HKDF)                           Derive AES Key (HKDF)   │
+│         │                                                    │              │
+│         ▼                                                    │              │
+│  6. Encrypt (AES-256-CTR)                                    │              │
+│         │                                                    │              │
+│         ▼                                                    │              │
+│  7. Sign (Ed25519/ECDSA)                                     │              │
+│         │                                                    │              │
+│         ▼                                                    │              │
+│  8. ════════════════════ TRANSMIT ═══════════════════════════╪══════►       │
+│                                                              │              │
+│                                                    9. Verify Signature      │
+│                                                              │              │
+│                                                              ▼              │
+│                                                   10. Decrypt (AES-256-CTR) │
+│                                                              │              │
+│                                                              ▼              │
+│                                                   11. Read FlatBuffer       │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Complete E2E Example
+
+```typescript
+import { FlatcRunner } from 'flatc-wasm';
+import { createEncryptionModule } from 'flatc-wasm/encryption';
+
+// Initialize both modules
+const flatc = await FlatcRunner.init();
+const crypto = await createEncryptionModule();
+
+// 1. Define schema
+const schema = {
+  entry: '/message.fbs',
+  files: {
+    '/message.fbs': `
+      namespace Secure;
+      table Message {
+        id: string;
+        sender: string;
+        content: string;
+        timestamp: int64;
+      }
+      root_type Message;
+    `
+  }
+};
+
+// 2. Create FlatBuffer from JSON
+const messageJson = JSON.stringify({
+  id: 'msg-001',
+  sender: 'alice',
+  content: 'Hello, Bob!',
+  timestamp: Date.now()
+});
+const flatbuffer = flatc.generateBinary(schema, messageJson);
+
+// 3. Generate keypairs for sender and recipient
+const senderKeyPair = crypto.x25519GenerateKeypair();
+const recipientKeyPair = crypto.x25519GenerateKeypair();
+const senderSigningKey = crypto.ed25519GenerateKeypair();
+
+// 4. Compute shared secret (sender side)
+const sharedSecret = crypto.x25519SharedSecret(
+  senderKeyPair.privateKey,
+  recipientKeyPair.publicKey
+);
+
+// 5. Derive AES key using HKDF
+const aesKey = crypto.hkdf(
+  sharedSecret,
+  new Uint8Array(0),           // salt (optional)
+  new TextEncoder().encode('flatbuffer-encryption-v1'),  // context
+  32                           // 256 bits
+);
+
+// 6. Generate random IV and encrypt
+const iv = crypto.randomBytes(16);
+const ciphertext = crypto.encrypt(aesKey, iv, flatbuffer);
+
+// 7. Sign the ciphertext
+const signature = crypto.ed25519Sign(
+  senderSigningKey.privateKey,
+  ciphertext
+);
+
+// 8. Package for transmission
+const securePackage = {
+  senderPublicKey: senderKeyPair.publicKey,
+  senderSigningPublicKey: senderSigningKey.publicKey,
+  iv: iv,
+  ciphertext: ciphertext,
+  signature: signature
+};
+
+// === RECIPIENT SIDE ===
+
+// 9. Verify signature
+const isValid = crypto.ed25519Verify(
+  securePackage.senderSigningPublicKey,
+  securePackage.ciphertext,
+  securePackage.signature
+);
+
+if (!isValid) {
+  throw new Error('Invalid signature - message tampered or wrong sender');
+}
+
+// 10. Derive shared secret (recipient side)
+const recipientSharedSecret = crypto.x25519SharedSecret(
+  recipientKeyPair.privateKey,
+  securePackage.senderPublicKey
+);
+
+// Derive same AES key
+const recipientAesKey = crypto.hkdf(
+  recipientSharedSecret,
+  new Uint8Array(0),
+  new TextEncoder().encode('flatbuffer-encryption-v1'),
+  32
+);
+
+// 11. Decrypt
+const decryptedFlatbuffer = crypto.decrypt(
+  recipientAesKey,
+  securePackage.iv,
+  securePackage.ciphertext
+);
+
+// 12. Convert back to JSON
+const recoveredJson = flatc.generateJSON(schema, {
+  path: '/message.bin',
+  data: decryptedFlatbuffer
+});
+
+console.log('Decrypted message:', JSON.parse(recoveredJson));
+```
+
+### Cryptographic Operations
+
+#### Initialization
+
+```javascript
+import { createEncryptionModule } from 'flatc-wasm/encryption';
+
+const crypto = await createEncryptionModule();
+```
+
+#### SHA-256 Hashing
+
+```javascript
+const data = new TextEncoder().encode('Hello, World!');
+const hash = crypto.sha256(data);
+console.log('SHA-256:', Buffer.from(hash).toString('hex'));
+// e.g., "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
+```
+
+#### AES-256-CTR Encryption/Decryption
+
+```javascript
+// Key: 32 bytes, IV: 16 bytes
+const key = crypto.randomBytes(32);
+const iv = crypto.randomBytes(16);
+const plaintext = new TextEncoder().encode('Secret message');
+
+// Encrypt
+const ciphertext = crypto.encrypt(key, iv, plaintext);
+
+// Decrypt (CTR mode is symmetric)
+const decrypted = crypto.decrypt(key, iv, ciphertext);
+
+console.log(new TextDecoder().decode(decrypted)); // "Secret message"
+```
+
+#### HKDF Key Derivation
+
+Derive cryptographic keys from shared secrets:
+
+```javascript
+const inputKeyMaterial = sharedSecret;  // e.g., from ECDH
+const salt = new Uint8Array(0);         // optional, can be empty
+const info = new TextEncoder().encode('my-app-encryption-key');
+const outputLength = 32;                // 256 bits
+
+const derivedKey = crypto.hkdf(inputKeyMaterial, salt, info, outputLength);
+```
+
+### Key Exchange (ECDH)
+
+Three elliptic curves are supported for key exchange:
+
+#### X25519 (Curve25519)
+
+Best for general-purpose encryption. Used by Signal, WireGuard, etc.
+
+```javascript
+// Generate keypair
+const keypair = crypto.x25519GenerateKeypair();
+// keypair.privateKey: 32 bytes
+// keypair.publicKey: 32 bytes
+
+// Compute shared secret
+const sharedSecret = crypto.x25519SharedSecret(
+  myPrivateKey,
+  theirPublicKey
+);
+// sharedSecret: 32 bytes
+```
+
+#### secp256k1
+
+Used by Bitcoin, Ethereum, and most cryptocurrencies.
+
+```javascript
+// Generate keypair
+const keypair = crypto.secp256k1GenerateKeypair();
+// keypair.privateKey: 32 bytes
+// keypair.publicKey: 33 bytes (compressed)
+
+// Compute shared secret
+const sharedSecret = crypto.secp256k1SharedSecret(
+  myPrivateKey,
+  theirPublicKey  // 33 or 65 bytes
+);
+// sharedSecret: 32 bytes
+```
+
+#### P-256 (secp256r1/prime256v1)
+
+NIST standard curve, used in TLS and enterprise applications.
+
+```javascript
+// Generate keypair
+const keypair = crypto.p256GenerateKeypair();
+// keypair.privateKey: 32 bytes
+// keypair.publicKey: 33 bytes (compressed)
+
+// Compute shared secret
+const sharedSecret = crypto.p256SharedSecret(
+  myPrivateKey,
+  theirPublicKey  // 33 or 65 bytes
+);
+// sharedSecret: 32 bytes
+```
+
+### Digital Signatures
+
+Three signature algorithms are supported:
+
+#### Ed25519
+
+Fast, secure, deterministic signatures. Used by Solana, Cardano, etc.
+
+```javascript
+// Generate signing keypair
+const keypair = crypto.ed25519GenerateKeypair();
+// keypair.privateKey: 64 bytes (includes public key)
+// keypair.publicKey: 32 bytes
+
+// Sign message
+const message = new TextEncoder().encode('Sign this message');
+const signature = crypto.ed25519Sign(keypair.privateKey, message);
+// signature: 64 bytes
+
+// Verify signature
+const isValid = crypto.ed25519Verify(keypair.publicKey, message, signature);
+// isValid: boolean
+```
+
+#### secp256k1 ECDSA
+
+Bitcoin/Ethereum-compatible signatures.
+
+```javascript
+// Generate signing keypair
+const keypair = crypto.secp256k1GenerateKeypair();
+
+// Sign message (usually a hash)
+const messageHash = crypto.sha256(message);
+const signature = crypto.secp256k1Sign(keypair.privateKey, messageHash);
+// signature: 70-72 bytes (DER encoded)
+
+// Verify signature
+const isValid = crypto.secp256k1Verify(
+  keypair.publicKey,
+  messageHash,
+  signature
+);
+```
+
+#### P-256 ECDSA
+
+NIST-compliant signatures.
+
+```javascript
+// Generate signing keypair
+const keypair = crypto.p256GenerateKeypair();
+
+// Sign message
+const messageHash = crypto.sha256(message);
+const signature = crypto.p256Sign(keypair.privateKey, messageHash);
+// signature: 70-72 bytes (DER encoded)
+
+// Verify signature
+const isValid = crypto.p256Verify(keypair.publicKey, messageHash, signature);
+```
+
+### Cryptocurrency Compatibility
+
+The encryption module supports keys compatible with major blockchain ecosystems:
+
+| Blockchain | ECDH Curve | Signature | Private Key | Public Key |
+|------------|------------|-----------|-------------|------------|
+| Bitcoin | secp256k1 | ECDSA | 32 bytes | 33 bytes |
+| Ethereum | secp256k1 | ECDSA | 32 bytes | 33 bytes |
+| Solana | X25519 | Ed25519 | 64 bytes | 32 bytes |
+| Cosmos | secp256k1 | ECDSA | 32 bytes | 33 bytes |
+| Polkadot | X25519 | Ed25519* | 64 bytes | 32 bytes |
+| Cardano | X25519 | Ed25519 | 64 bytes | 32 bytes |
+| Aptos | X25519 | Ed25519 | 64 bytes | 32 bytes |
+| NEAR | X25519 | Ed25519 | 64 bytes | 32 bytes |
+| SUI | X25519 | Ed25519 | 64 bytes | 32 bytes |
+| Tezos | X25519 | Ed25519 | 64 bytes | 32 bytes |
+
+*Polkadot uses Sr25519, but Ed25519 is compatible for most use cases.
+
+#### Example: Multi-Recipient Encryption
+
+Encrypt a FlatBuffer for multiple recipients:
+
+```javascript
+// Sender generates ephemeral keypair
+const senderKeypair = crypto.x25519GenerateKeypair();
+
+// Encrypt for multiple recipients
+const recipients = [recipientAPubKey, recipientBPubKey, recipientCPubKey];
+const plaintext = flatbuffer;
+const iv = crypto.randomBytes(16);
+
+const encryptedPayloads = recipients.map((recipientPub, index) => {
+  // Compute shared secret with this recipient
+  const shared = crypto.x25519SharedSecret(senderKeypair.privateKey, recipientPub);
+
+  // Derive unique key for this recipient
+  const key = crypto.hkdf(
+    shared,
+    new Uint8Array(0),
+    new TextEncoder().encode(`recipient-${index}`),
+    32
+  );
+
+  // Encrypt
+  return {
+    recipientPublicKey: recipientPub,
+    ciphertext: crypto.encrypt(key, iv, plaintext)
+  };
+});
+
+// Package for transmission
+const multiRecipientMessage = {
+  senderPublicKey: senderKeypair.publicKey,
+  iv: iv,
+  payloads: encryptedPayloads
+};
+```
+
+Each recipient decrypts:
+
+```javascript
+// Find my payload
+const myPayload = message.payloads.find(p =>
+  arraysEqual(p.recipientPublicKey, myPublicKey)
+);
+
+// Derive shared secret
+const shared = crypto.x25519SharedSecret(myPrivateKey, message.senderPublicKey);
+
+// Derive my key
+const myKey = crypto.hkdf(
+  shared,
+  new Uint8Array(0),
+  new TextEncoder().encode(`recipient-${myIndex}`),
+  32
+);
+
+// Decrypt
+const plaintext = crypto.decrypt(myKey, message.iv, myPayload.ciphertext);
+```
+
+### Cross-Language Support
+
+The encryption WASM module works across 7 programming languages:
+
+| Language | Runtime | Package/Crate |
+|----------|---------|---------------|
+| Node.js | V8 (native) | `flatc-wasm/encryption` |
+| Go | wazero | `github.com/tetratelabs/wazero` |
+| Python | wasmtime | `pip install wasmtime` |
+| Rust | wasmtime | `wasmtime` crate |
+| Java | Chicory | Pure Java WASM runtime |
+| C# | Wasmtime | `wasmtime-dotnet` NuGet |
+| Swift | Wasmtime C API | Link `libwasmtime` |
+
+All languages can encrypt/decrypt FlatBuffers and verify signatures across language boundaries.
+
+#### Go Example
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/tetratelabs/wazero"
+    "github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
+)
+
+func main() {
+    ctx := context.Background()
+    r := wazero.NewRuntime(ctx)
+    defer r.Close(ctx)
+
+    // Instantiate WASI
+    wasi_snapshot_preview1.MustInstantiate(ctx, r)
+
+    // Load the WASM module
+    wasmBytes, _ := os.ReadFile("flatc-encryption.wasm")
+    module, _ := r.InstantiateWithConfig(ctx, wasmBytes,
+        wazero.NewModuleConfig().WithName("flatc"))
+
+    // Get exported functions
+    malloc := module.ExportedFunction("malloc")
+    free := module.ExportedFunction("free")
+    encrypt := module.ExportedFunction("wasi_encrypt_bytes")
+    decrypt := module.ExportedFunction("wasi_decrypt_bytes")
+    sha256 := module.ExportedFunction("wasi_sha256")
+    hkdf := module.ExportedFunction("wasi_hkdf")
+
+    // ECDH key exchange
+    x25519Generate := module.ExportedFunction("wasi_x25519_generate_keypair")
+    x25519Shared := module.ExportedFunction("wasi_x25519_shared_secret")
+
+    // Digital signatures
+    ed25519Sign := module.ExportedFunction("wasi_ed25519_sign")
+    ed25519Verify := module.ExportedFunction("wasi_ed25519_verify")
+
+    // Allocate memory and call functions...
+}
+```
+
+#### Python Example
+
+```python
+import wasmtime
+
+# Create engine and store
+engine = wasmtime.Engine()
+store = wasmtime.Store(engine)
+linker = wasmtime.Linker(engine)
+
+# Add WASI imports
+wasi_config = wasmtime.WasiConfig()
+store.set_wasi(wasi_config)
+linker.define_wasi()
+
+# Load module
+module = wasmtime.Module.from_file(engine, "flatc-encryption.wasm")
+instance = linker.instantiate(store, module)
+
+# Get exports
+memory = instance.exports(store)["memory"]
+malloc = instance.exports(store)["malloc"]
+free = instance.exports(store)["free"]
+encrypt = instance.exports(store)["wasi_encrypt_bytes"]
+decrypt = instance.exports(store)["wasi_decrypt_bytes"]
+sha256 = instance.exports(store)["wasi_sha256"]
+hkdf = instance.exports(store)["wasi_hkdf"]
+
+# ECDH key exchange
+x25519_generate = instance.exports(store)["wasi_x25519_generate_keypair"]
+x25519_shared = instance.exports(store)["wasi_x25519_shared_secret"]
+
+# Digital signatures
+ed25519_sign = instance.exports(store)["wasi_ed25519_sign"]
+ed25519_verify = instance.exports(store)["wasi_ed25519_verify"]
+
+# Helper to write bytes to WASM memory
+def write_bytes(ptr: int, data: bytes):
+    mem_data = memory.data_ptr(store)
+    for i, b in enumerate(data):
+        mem_data[ptr + i] = b
+
+# Helper to read bytes from WASM memory
+def read_bytes(ptr: int, length: int) -> bytes:
+    mem_data = memory.data_ptr(store)
+    return bytes(mem_data[ptr:ptr + length])
+
+# Encrypt data
+def encrypt_data(key: bytes, iv: bytes, plaintext: bytes) -> bytes:
+    key_ptr = malloc(store, 32)
+    iv_ptr = malloc(store, 16)
+    data_ptr = malloc(store, len(plaintext))
+
+    write_bytes(key_ptr, key)
+    write_bytes(iv_ptr, iv)
+    write_bytes(data_ptr, plaintext)
+
+    encrypt(store, key_ptr, iv_ptr, data_ptr, len(plaintext))
+    result = read_bytes(data_ptr, len(plaintext))
+
+    free(store, key_ptr)
+    free(store, iv_ptr)
+    free(store, data_ptr)
+    return result
+```
+
+#### Rust Example
+
+```rust
+use wasmtime::*;
+use std::fs;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let engine = Engine::default();
+    let module = Module::from_file(&engine, "flatc-encryption.wasm")?;
+    let mut store = Store::new(&engine, ());
+
+    // Create linker with WASI stubs
+    let mut linker = Linker::new(&engine);
+    // Add WASI imports...
+
+    let instance = linker.instantiate(&mut store, &module)?;
+
+    // Get exports
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+    let malloc = instance.get_typed_func::<i32, i32>(&mut store, "malloc")?;
+    let free = instance.get_typed_func::<i32, ()>(&mut store, "free")?;
+    let encrypt = instance.get_typed_func::<(i32, i32, i32, i32), i32>(
+        &mut store, "wasi_encrypt_bytes")?;
+    let sha256 = instance.get_typed_func::<(i32, i32, i32), ()>(
+        &mut store, "wasi_sha256")?;
+
+    // ECDH and signatures
+    let x25519_generate = instance.get_typed_func::<(i32, i32), i32>(
+        &mut store, "wasi_x25519_generate_keypair")?;
+    let ed25519_sign = instance.get_typed_func::<(i32, i32, i32, i32), i32>(
+        &mut store, "wasi_ed25519_sign")?;
+
+    // Allocate, write data, call functions, read results...
+    Ok(())
+}
+```
+
+#### Java Example (Chicory)
+
+```java
+import com.dylibso.chicory.runtime.*;
+import com.dylibso.chicory.wasi.*;
+import com.dylibso.chicory.wasm.Parser;
+import java.io.File;
+
+public class EncryptionExample {
+    public static void main(String[] args) {
+        var wasiOptions = WasiOptions.builder().build();
+        var wasi = WasiPreview1.builder().withOptions(wasiOptions).build();
+
+        var store = new Store();
+        store.addFunction(wasi.toHostFunctions());
+
+        var module = Parser.parse(new File("flatc-encryption.wasm"));
+        var instance = store.instantiate("flatc", module);
+        var memory = instance.memory();
+
+        // Get exports
+        var malloc = instance.export("malloc");
+        var free = instance.export("free");
+        var encrypt = instance.export("wasi_encrypt_bytes");
+        var decrypt = instance.export("wasi_decrypt_bytes");
+        var sha256 = instance.export("wasi_sha256");
+        var hkdf = instance.export("wasi_hkdf");
+
+        // ECDH key exchange
+        var x25519Generate = instance.export("wasi_x25519_generate_keypair");
+        var x25519Shared = instance.export("wasi_x25519_shared_secret");
+
+        // Digital signatures
+        var ed25519Sign = instance.export("wasi_ed25519_sign");
+        var ed25519Verify = instance.export("wasi_ed25519_verify");
+
+        // Encrypt example
+        int keyPtr = (int) malloc.apply(32)[0];
+        int ivPtr = (int) malloc.apply(16)[0];
+        int dataPtr = (int) malloc.apply(100)[0];
+
+        // Write key, iv, and data to memory...
+        memory.write(keyPtr, keyBytes);
+        memory.write(ivPtr, ivBytes);
+        memory.write(dataPtr, plaintextBytes);
+
+        // Encrypt in-place
+        encrypt.apply(keyPtr, ivPtr, dataPtr, plaintextBytes.length);
+
+        // Read encrypted data
+        byte[] ciphertext = memory.readBytes(dataPtr, plaintextBytes.length);
+
+        // Clean up
+        free.apply(keyPtr);
+        free.apply(ivPtr);
+        free.apply(dataPtr);
+    }
+}
+```
+
+#### C# Example
+
+```csharp
+using Wasmtime;
+
+var engine = new Engine();
+var store = new Store(engine);
+var linker = new Linker(engine);
+
+// Add WASI imports
+linker.DefineFunction("wasi_snapshot_preview1", "fd_close", (int fd) => 0);
+linker.DefineFunction("wasi_snapshot_preview1", "fd_write",
+    (Caller c, int fd, int iovs, int len, int nw) => { /* ... */ return 0; });
+// ... other WASI functions
+
+var module = Module.FromFile(engine, "flatc-encryption.wasm");
+var instance = linker.Instantiate(store, module);
+
+var memory = instance.GetMemory("memory")!;
+var malloc = instance.GetFunction("malloc")!;
+var free = instance.GetFunction("free")!;
+var encrypt = instance.GetFunction("wasi_encrypt_bytes")!;
+var decrypt = instance.GetFunction("wasi_decrypt_bytes")!;
+var sha256 = instance.GetFunction("wasi_sha256")!;
+var hkdf = instance.GetFunction("wasi_hkdf")!;
+
+// ECDH key exchange
+var x25519Generate = instance.GetFunction("wasi_x25519_generate_keypair")!;
+var x25519Shared = instance.GetFunction("wasi_x25519_shared_secret")!;
+
+// Digital signatures
+var ed25519Sign = instance.GetFunction("wasi_ed25519_sign")!;
+var ed25519Verify = instance.GetFunction("wasi_ed25519_verify")!;
+
+// Helper methods
+void WriteBytes(int offset, byte[] data) {
+    var span = memory.GetSpan(offset, data.Length);
+    data.CopyTo(span);
+}
+
+byte[] ReadBytes(int offset, int length) {
+    var span = memory.GetSpan(offset, length);
+    return span.ToArray();
+}
+
+// Encrypt example
+int keyPtr = (int)malloc.Invoke(32)!;
+int ivPtr = (int)malloc.Invoke(16)!;
+int dataPtr = (int)malloc.Invoke(plaintext.Length)!;
+
+WriteBytes(keyPtr, key);
+WriteBytes(ivPtr, iv);
+WriteBytes(dataPtr, plaintext);
+
+encrypt.Invoke(keyPtr, ivPtr, dataPtr, plaintext.Length);
+
+byte[] ciphertext = ReadBytes(dataPtr, plaintext.Length);
+
+free.Invoke(keyPtr);
+free.Invoke(ivPtr);
+free.Invoke(dataPtr);
+```
+
+#### Swift Example
+
+```swift
+import CWasmtime  // Link against libwasmtime
+
+let engine = wasm_engine_new()
+defer { wasm_engine_delete(engine) }
+
+let store = wasmtime_store_new(engine, nil, nil)
+defer { wasmtime_store_delete(store) }
+
+let context = wasmtime_store_context(store)
+
+// Load WASM module
+let wasmData = try Data(contentsOf: URL(fileURLWithPath: "flatc-encryption.wasm"))
+var module: OpaquePointer?
+wasmData.withUnsafeBytes { ptr in
+    wasmtime_module_new(engine, ptr.baseAddress, wasmData.count, &module)
+}
+defer { wasmtime_module_delete(module) }
+
+// Create linker and add WASI
+let linker = wasmtime_linker_new(engine)
+defer { wasmtime_linker_delete(linker) }
+wasmtime_linker_define_wasi(linker)
+
+// Instantiate
+var instance = wasmtime_instance_t()
+wasmtime_linker_instantiate(linker, context, module, &instance, nil)
+
+// Get memory and functions
+var memory = wasmtime_memory_t()
+wasmtime_instance_export_get(context, &instance, "memory", 6, &memory)
+
+// Get crypto functions
+var mallocFunc = wasmtime_func_t()
+var sha256Func = wasmtime_func_t()
+var encryptFunc = wasmtime_func_t()
+var x25519GenerateFunc = wasmtime_func_t()
+var ed25519SignFunc = wasmtime_func_t()
+
+// ... get function exports
+
+// Write bytes to WASM memory
+func writeBytes(_ ptr: UInt32, _ data: [UInt8]) {
+    let memData = wasmtime_memory_data(context, &memory)
+    for (i, byte) in data.enumerated() {
+        memData.advanced(by: Int(ptr) + i).pointee = byte
+    }
+}
+
+// Read bytes from WASM memory
+func readBytes(_ ptr: UInt32, _ length: Int) -> [UInt8] {
+    let memData = wasmtime_memory_data(context, &memory)
+    return (0..<length).map { memData.advanced(by: Int(ptr) + $0).pointee }
+}
+
+// Call crypto functions...
+```
+
+### WASM Function Reference
+
+All languages use the same WASM exports:
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `malloc` | `(size: i32) -> i32` | Allocate memory |
+| `free` | `(ptr: i32)` | Free memory |
+| `wasi_sha256` | `(data, len, out)` | SHA-256 hash |
+| `wasi_encrypt_bytes` | `(key, iv, data, len) -> i32` | AES-256-CTR encrypt |
+| `wasi_decrypt_bytes` | `(key, iv, data, len) -> i32` | AES-256-CTR decrypt |
+| `wasi_hkdf` | `(ikm, ikm_len, salt, salt_len, info, info_len, out, out_len)` | HKDF-SHA256 |
+| `wasi_x25519_generate_keypair` | `(priv_out, pub_out) -> i32` | Generate X25519 keypair |
+| `wasi_x25519_shared_secret` | `(priv, pub, out) -> i32` | X25519 ECDH |
+| `wasi_secp256k1_generate_keypair` | `(priv_out, pub_out) -> i32` | Generate secp256k1 keypair |
+| `wasi_secp256k1_shared_secret` | `(priv, pub, pub_len, out) -> i32` | secp256k1 ECDH |
+| `wasi_p256_generate_keypair` | `(priv_out, pub_out) -> i32` | Generate P-256 keypair |
+| `wasi_p256_shared_secret` | `(priv, pub, pub_len, out) -> i32` | P-256 ECDH |
+| `wasi_ed25519_generate_keypair` | `(priv_out, pub_out) -> i32` | Generate Ed25519 keypair |
+| `wasi_ed25519_sign` | `(priv, data, len, sig_out) -> i32` | Ed25519 sign |
+| `wasi_ed25519_verify` | `(pub, data, len, sig) -> i32` | Ed25519 verify (0=valid) |
+| `wasi_secp256k1_sign` | `(priv, data, len, sig_out, sig_len_out) -> i32` | secp256k1 ECDSA sign |
+| `wasi_secp256k1_verify` | `(pub, pub_len, data, len, sig, sig_len) -> i32` | secp256k1 verify |
+| `wasi_p256_sign` | `(priv, data, len, sig_out, sig_len_out) -> i32` | P-256 ECDSA sign |
+| `wasi_p256_verify` | `(pub, pub_len, data, len, sig, sig_len) -> i32` | P-256 verify |
+
+### Security Best Practices
+
+1. **Never reuse IVs** - Generate a new random IV for each encryption operation
+2. **Use HKDF for key derivation** - Don't use raw ECDH output directly as encryption key
+3. **Include context in HKDF** - Use unique info strings for different purposes
+4. **Verify before decrypt** - Always verify signatures before decrypting
+5. **Rotate keys regularly** - Use ephemeral keys for forward secrecy
 
 ---
 

@@ -1465,6 +1465,14 @@ export class EncryptionContext {
       );
     }
 
+    // IV/nonce is required for decryption - without it, decryption produces garbage
+    if (!nonce) {
+      throw new CryptoError(
+        CryptoErrorCode.INVALID_IV_SIZE,
+        'Header must contain iv (nonce) for decryption - cannot decrypt without the original nonce'
+      );
+    }
+
     let sharedSecret;
 
     // Compute shared secret based on algorithm
@@ -2047,6 +2055,16 @@ function processTable(buffer, tableOffset, schema, ctx) {
       encryptBytes(strData, key, iv);
     } else if (field.type === 'vector') {
       // Vector: offset to vector, then length-prefixed elements
+      // Only scalar vectors are supported - vectors of strings/tables/structs contain
+      // offsets, not inline data, and encrypting offsets would corrupt the buffer
+      if (field.elementType === 'struct' || field.elementType === 'string') {
+        throw new CryptoError(
+          CryptoErrorCode.INVALID_INPUT,
+          `Field '${field.name}': encryption of vector<${field.elementType}> is not supported. ` +
+          `Only vectors of scalar types (int, float, byte, etc.) can be encrypted. ` +
+          `For vectors of strings/tables, encrypt each element individually before adding to the buffer.`
+        );
+      }
       if (fieldLoc + 4 > bufLen) {
         throw new CryptoError(
           CryptoErrorCode.INVALID_INPUT,
@@ -2062,7 +2080,13 @@ function processTable(buffer, tableOffset, schema, ctx) {
         );
       }
       const vecLen = readUint32(buffer, vecLoc);
-      const elemSize = field.elementSize || 1;
+      const elemSize = field.elementSize;
+      if (!elemSize || elemSize < 1) {
+        throw new CryptoError(
+          CryptoErrorCode.INVALID_INPUT,
+          `Field '${field.name}': cannot determine element size for vector encryption`
+        );
+      }
       const vecDataLen = vecLen * elemSize;
       if (vecLoc + 4 + vecDataLen > bufLen) {
         throw new CryptoError(
@@ -2104,6 +2128,21 @@ function processTable(buffer, tableOffset, schema, ctx) {
  * IMPORTANT: When passing a raw key (Uint8Array or hex string), a random nonce is generated.
  * You MUST save the returned nonce and pass it to decryptBuffer for decryption.
  * For better control, use an EncryptionContext directly.
+ *
+ * LIMITATION: This function only encrypts fields in the ROOT table. Encrypted fields in
+ * nested tables (tables referenced by the root table) are NOT processed. If you need to
+ * encrypt fields in nested structures, you must either:
+ * 1. Flatten your schema to avoid nesting
+ * 2. Encrypt nested data before building the FlatBuffer
+ * 3. Use encryptBytes() directly on the nested table's buffer region
+ *
+ * SUPPORTED TYPES for encryption:
+ * - Scalar types (int, float, bool, byte, etc.): fully supported
+ * - Strings: fully supported
+ * - Vectors of scalars (e.g., [int], [float]): fully supported
+ * - Vectors of strings/tables: NOT supported (will throw an error)
+ * - Structs: NOT supported (will throw an error)
+ * - Nested tables: NOT traversed (see LIMITATION above)
  *
  * SECURITY NOTE: This function uses AES-CTR without authentication (no HMAC).
  * This preserves the FlatBuffer binary layout but does not detect tampering.

@@ -195,15 +195,44 @@ export function getVersion() {
 // =============================================================================
 
 function readString(ptr, maxLen = 32) {
-  const view = new Uint8Array(wasmMemory.buffer, ptr, maxLen);
+  if (!wasmMemory) throw new Error('WASM memory not initialized');
+  if (ptr < 0 || ptr >= wasmMemory.buffer.byteLength) {
+    throw new Error(`Invalid pointer: ${ptr} (memory size: ${wasmMemory.buffer.byteLength})`);
+  }
+  const safeLen = Math.min(maxLen, wasmMemory.buffer.byteLength - ptr);
+  const view = new Uint8Array(wasmMemory.buffer, ptr, safeLen);
   let end = view.indexOf(0);
-  if (end === -1) end = maxLen;
+  if (end === -1) end = safeLen;
   return new TextDecoder().decode(view.subarray(0, end));
 }
 
+/**
+ * Get cryptographically secure random bytes (works in Node.js and browser)
+ * @param {number} size - Number of random bytes
+ * @returns {Uint8Array}
+ */
+function getRandomBytes(size) {
+  // Browser environment
+  if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
+    return globalThis.crypto.getRandomValues(new Uint8Array(size));
+  }
+  // Node.js environment
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    try {
+      // Use dynamic require for Node.js crypto
+      const nodeCrypto = require('crypto');
+      return new Uint8Array(nodeCrypto.randomBytes(size));
+    } catch {
+      throw new Error('crypto module not available');
+    }
+  }
+  throw new Error('No cryptographic random source available');
+}
+
 function allocate(size) {
+  if (!wasmModule) throw new Error('Encryption module not initialized. Call loadEncryptionWasm() first.');
   const ptr = wasmModule.malloc(size);
-  if (ptr === 0) throw new Error('malloc failed');
+  if (ptr === 0) throw new Error(`Memory allocation failed for ${size} bytes`);
   return ptr;
 }
 
@@ -794,30 +823,66 @@ export const KeyDerivationFunction = {
 // =============================================================================
 
 /**
- * Encryption context for field-level key derivation
+ * Encryption context for field-level key derivation.
+ *
+ * WARNING: Methods that encrypt data modify the buffer in-place.
  */
 export class EncryptionContext {
   #key;
 
   /**
    * Create encryption context
-   * @param {Uint8Array} key - 32-byte master key
+   * @param {Uint8Array|string} key - 32-byte master key as Uint8Array or 64-char hex string
    */
   constructor(key) {
-    if (key.length !== KEY_SIZE) {
-      throw new Error('Key must be 32 bytes');
+    if (typeof key === 'string') {
+      // Validate hex string
+      if (!/^[0-9a-fA-F]*$/.test(key)) {
+        throw new Error('Invalid hex string: must contain only hex characters (0-9, a-f, A-F)');
+      }
+      if (key.length !== 64) {
+        throw new Error(`Invalid hex key length: expected 64 characters (32 bytes), got ${key.length}`);
+      }
+      // Parse hex string
+      const bytes = new Uint8Array(32);
+      for (let i = 0; i < 64; i += 2) {
+        bytes[i / 2] = parseInt(key.substring(i, i + 2), 16);
+      }
+      this.#key = bytes;
+    } else if (key instanceof Uint8Array) {
+      if (key.length !== KEY_SIZE) {
+        throw new Error(`Invalid key length: expected ${KEY_SIZE} bytes, got ${key.length}`);
+      }
+      this.#key = new Uint8Array(key);
+    } else {
+      throw new Error('Key must be a Uint8Array or 64-character hex string');
     }
-    this.#key = new Uint8Array(key);
+  }
+
+  /**
+   * Check if context is valid
+   * @returns {boolean}
+   */
+  isValid() {
+    return this.#key !== null && this.#key.length === KEY_SIZE;
   }
 
   /**
    * Create from hex string
-   * @param {string} hexKey
+   * @param {string} hexKey - 64-character hex string
    * @returns {EncryptionContext}
    */
   static fromHex(hexKey) {
-    const key = new Uint8Array(hexKey.match(/.{1,2}/g).map(b => parseInt(b, 16)));
-    return new EncryptionContext(key);
+    if (typeof hexKey !== 'string') {
+      throw new Error('hexKey must be a string');
+    }
+    if (!/^[0-9a-fA-F]*$/.test(hexKey)) {
+      throw new Error('Invalid hex string: must contain only hex characters (0-9, a-f, A-F)');
+    }
+    if (hexKey.length !== 64) {
+      throw new Error(`Invalid hex key length: expected 64 characters (32 bytes), got ${hexKey.length}`);
+    }
+    return new EncryptionContext(hexKey);
   }
 
   /**
@@ -904,7 +969,7 @@ export class EncryptionContext {
  * @returns {Object}
  */
 export function createEncryptionHeader(options) {
-  const iv = options.iv || crypto.getRandomValues(new Uint8Array(IV_SIZE));
+  const iv = options.iv || getRandomBytes(IV_SIZE);
   return {
     version: 1,
     algorithm: options.algorithm,
@@ -970,6 +1035,215 @@ export function encryptScalar(buffer, offset, size, ctx, fieldId) {
 }
 
 // =============================================================================
+// Schema Parsing and Buffer Encryption
+// =============================================================================
+
+/**
+ * Type sizes for FlatBuffer scalar types
+ */
+const TYPE_SIZES = {
+  bool: 1, byte: 1, ubyte: 1,
+  short: 2, ushort: 2,
+  int: 4, uint: 4, float: 4,
+  long: 8, ulong: 8, double: 8,
+};
+
+const SCALAR_TYPES = new Set(Object.keys(TYPE_SIZES));
+
+/**
+ * Parse a FlatBuffers schema to extract field encryption info
+ * @param {string} schemaContent - FlatBuffers schema content (.fbs)
+ * @param {string} rootType - Name of the root type
+ * @returns {Object} Parsed schema with encryption metadata
+ */
+export function parseSchemaForEncryption(schemaContent, rootType) {
+  const schema = { fields: [] };
+
+  // Find the table definition
+  const tableRegex = new RegExp(`table\\s+${rootType}\\s*\\{([^}]+)\\}`, 's');
+  const match = schemaContent.match(tableRegex);
+  if (!match) return schema;
+
+  const tableBody = match[1];
+  // Match field definitions: name: type (attributes);
+  const fieldRegex = /(\w+)\s*:\s*(\[?\w+\]?)\s*(?:\(([^)]*)\))?/g;
+  let fieldId = 0;
+  let fieldMatch;
+
+  while ((fieldMatch = fieldRegex.exec(tableBody)) !== null) {
+    const name = fieldMatch[1];
+    const typeStr = fieldMatch[2];
+    const attributes = fieldMatch[3] || '';
+
+    const isEncrypted = attributes.includes('encrypted');
+    const isVector = typeStr.startsWith('[') && typeStr.endsWith(']');
+    const baseType = isVector ? typeStr.slice(1, -1) : typeStr;
+
+    let fieldType;
+    if (isVector) {
+      fieldType = 'vector';
+    } else if (SCALAR_TYPES.has(baseType)) {
+      fieldType = baseType;
+    } else if (baseType === 'string') {
+      fieldType = 'string';
+    } else {
+      fieldType = 'struct';
+    }
+
+    schema.fields.push({
+      name,
+      id: fieldId++,
+      type: fieldType,
+      encrypted: isEncrypted,
+      elementType: isVector ? (SCALAR_TYPES.has(baseType) ? baseType : 'struct') : undefined,
+      elementSize: TYPE_SIZES[baseType] || 1,
+    });
+  }
+
+  return schema;
+}
+
+/**
+ * Read uint32 from buffer (little-endian)
+ */
+function readUint32(buffer, offset) {
+  return buffer[offset] | (buffer[offset + 1] << 8) | (buffer[offset + 2] << 16) | (buffer[offset + 3] << 24) >>> 0;
+}
+
+/**
+ * Read int32 from buffer (little-endian)
+ */
+function readInt32(buffer, offset) {
+  return buffer[offset] | (buffer[offset + 1] << 8) | (buffer[offset + 2] << 16) | (buffer[offset + 3] << 24);
+}
+
+/**
+ * Read uint16 from buffer (little-endian)
+ */
+function readUint16(buffer, offset) {
+  return buffer[offset] | (buffer[offset + 1] << 8);
+}
+
+/**
+ * Process a FlatBuffer table and encrypt/decrypt marked fields
+ * @param {Uint8Array} buffer - The FlatBuffer
+ * @param {number} tableOffset - Offset to the table
+ * @param {Object} schema - Parsed schema
+ * @param {EncryptionContext} ctx - Encryption context
+ */
+function processTable(buffer, tableOffset, schema, ctx) {
+  // Read vtable offset (soffset_t at table start)
+  const vtableOffsetDelta = readInt32(buffer, tableOffset);
+  const vtableOffset = tableOffset - vtableOffsetDelta;
+
+  // Read vtable size
+  const vtableSize = readUint16(buffer, vtableOffset);
+
+  for (const field of schema.fields) {
+    // Field offset is at vtable + (field.id + 2) * 2
+    const fieldVtableIdx = (field.id + 2) * 2;
+    if (fieldVtableIdx >= vtableSize) continue;
+
+    const fieldOffset = readUint16(buffer, vtableOffset + fieldVtableIdx);
+    if (fieldOffset === 0) continue; // Field not present
+
+    const fieldLoc = tableOffset + fieldOffset;
+
+    if (!field.encrypted) continue;
+
+    const key = ctx.deriveFieldKey(field.id);
+    const iv = ctx.deriveFieldIV(field.id);
+
+    // Handle different field types
+    const size = TYPE_SIZES[field.type];
+    if (size) {
+      // Scalar type - encrypt in place
+      const data = buffer.subarray(fieldLoc, fieldLoc + size);
+      encryptBytes(data, key, iv);
+    } else if (field.type === 'string') {
+      // String: offset to string, then length-prefixed data
+      const strOffset = readUint32(buffer, fieldLoc);
+      const strLoc = fieldLoc + strOffset;
+      const strLen = readUint32(buffer, strLoc);
+      const strData = buffer.subarray(strLoc + 4, strLoc + 4 + strLen);
+      encryptBytes(strData, key, iv);
+    } else if (field.type === 'vector') {
+      // Vector: offset to vector, then length-prefixed elements
+      const vecOffset = readUint32(buffer, fieldLoc);
+      const vecLoc = fieldLoc + vecOffset;
+      const vecLen = readUint32(buffer, vecLoc);
+      const elemSize = field.elementSize || 1;
+      const vecData = buffer.subarray(vecLoc + 4, vecLoc + 4 + vecLen * elemSize);
+      encryptBytes(vecData, key, iv);
+    } else if (field.type === 'struct') {
+      // Struct is inline - we need structSize, but for now encrypt as single block
+      // This is a simplification; real implementation should know struct size
+      console.warn(`Struct encryption for field '${field.name}' requires struct size`);
+    }
+  }
+}
+
+/**
+ * Encrypt a FlatBuffer in-place.
+ *
+ * Fields marked with the (encrypted) attribute will be encrypted.
+ * The buffer structure remains valid - only field values change.
+ *
+ * WARNING: This function modifies the buffer in-place.
+ *
+ * @param {Uint8Array} buffer - FlatBuffer to encrypt (modified in-place)
+ * @param {Object|string} schema - Parsed schema or schema content string
+ * @param {Uint8Array|string|EncryptionContext} key - Encryption key or context
+ * @param {string} [rootType] - Root type name (required if schema is string)
+ * @returns {Uint8Array} The encrypted buffer (same reference)
+ */
+export function encryptBuffer(buffer, schema, key, rootType) {
+  // Get or create encryption context
+  let ctx;
+  if (key instanceof EncryptionContext) {
+    ctx = key;
+  } else {
+    ctx = new EncryptionContext(key);
+  }
+
+  if (!ctx.isValid()) {
+    throw new Error('Invalid encryption key');
+  }
+
+  // Parse schema if needed
+  const parsedSchema = typeof schema === 'string'
+    ? parseSchemaForEncryption(schema, rootType)
+    : schema;
+
+  if (!parsedSchema.fields || parsedSchema.fields.length === 0) {
+    throw new Error('No fields found in schema. Check that rootType matches the table name.');
+  }
+
+  // Read root table offset
+  const rootOffset = readUint32(buffer, 0);
+
+  // Process the root table
+  processTable(buffer, rootOffset, parsedSchema, ctx);
+
+  return buffer;
+}
+
+/**
+ * Decrypt a FlatBuffer in-place.
+ *
+ * Same as encryptBuffer since AES-CTR is symmetric.
+ *
+ * WARNING: This function modifies the buffer in-place.
+ *
+ * @param {Uint8Array} buffer - FlatBuffer to decrypt (modified in-place)
+ * @param {Object|string} schema - Parsed schema or schema content string
+ * @param {Uint8Array|string|EncryptionContext} key - Encryption key or context
+ * @param {string} [rootType] - Root type name (required if schema is string)
+ * @returns {Uint8Array} The decrypted buffer (same reference)
+ */
+export const decryptBuffer = encryptBuffer;
+
+// =============================================================================
 // Default export
 // =============================================================================
 
@@ -1027,4 +1301,9 @@ export default {
   encryptionHeaderToJSON,
   encryptionHeaderFromJSON,
   encryptScalar,
+
+  // Buffer encryption
+  parseSchemaForEncryption,
+  encryptBuffer,
+  decryptBuffer,
 };

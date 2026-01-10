@@ -527,9 +527,21 @@ buildSchemas().catch(console.error);
 The `flatc-wasm` package includes a separate encryption module powered by Crypto++ compiled to WebAssembly. This enables end-to-end encryption of FlatBuffer data directly in JavaScript/TypeScript with no native dependencies.
 
 ```javascript
-import { createEncryptionModule } from 'flatc-wasm/encryption';
+import {
+  loadEncryptionWasm,
+  encryptBuffer,
+  decryptBuffer,
+  x25519GenerateKeyPair,
+  x25519SharedSecret,
+  ed25519GenerateKeyPair,
+  ed25519Sign,
+  ed25519Verify,
+  hkdf,
+  EncryptionContext
+} from 'flatc-wasm/encryption';
 
-const crypto = await createEncryptionModule();
+// Initialize the WASM module (required once before use)
+await loadEncryptionWasm('path/to/flatc-encryption.wasm');
 ```
 
 ### End-to-End Encryption Flow
@@ -582,11 +594,24 @@ The complete flow for secure FlatBuffer transmission:
 
 ```typescript
 import { FlatcRunner } from 'flatc-wasm';
-import { createEncryptionModule } from 'flatc-wasm/encryption';
+import {
+  loadEncryptionWasm,
+  x25519GenerateKeyPair,
+  x25519SharedSecret,
+  ed25519GenerateKeyPair,
+  ed25519Sign,
+  ed25519Verify,
+  hkdf,
+  encryptBytes,
+  decryptBytes,
+  KEY_SIZE,
+  IV_SIZE
+} from 'flatc-wasm/encryption';
+import { randomBytes } from 'crypto'; // Node.js
 
-// Initialize both modules
+// Initialize modules
 const flatc = await FlatcRunner.init();
-const crypto = await createEncryptionModule();
+await loadEncryptionWasm('path/to/flatc-encryption.wasm');
 
 // 1. Define schema
 const schema = {
@@ -615,33 +640,31 @@ const messageJson = JSON.stringify({
 const flatbuffer = flatc.generateBinary(schema, messageJson);
 
 // 3. Generate keypairs for sender and recipient
-const senderKeyPair = crypto.x25519GenerateKeypair();
-const recipientKeyPair = crypto.x25519GenerateKeypair();
-const senderSigningKey = crypto.ed25519GenerateKeypair();
+const senderKeyPair = x25519GenerateKeyPair();
+const recipientKeyPair = x25519GenerateKeyPair();
+const senderSigningKey = ed25519GenerateKeyPair();
 
 // 4. Compute shared secret (sender side)
-const sharedSecret = crypto.x25519SharedSecret(
+const sharedSecret = x25519SharedSecret(
   senderKeyPair.privateKey,
   recipientKeyPair.publicKey
 );
 
 // 5. Derive AES key using HKDF
-const aesKey = crypto.hkdf(
+const aesKey = hkdf(
   sharedSecret,
-  new Uint8Array(0),           // salt (optional)
+  null,  // salt (optional)
   new TextEncoder().encode('flatbuffer-encryption-v1'),  // context
-  32                           // 256 bits
+  KEY_SIZE  // 32 bytes
 );
 
-// 6. Generate random IV and encrypt
-const iv = crypto.randomBytes(16);
-const ciphertext = crypto.encrypt(aesKey, iv, flatbuffer);
+// 6. Generate random IV and encrypt (creates copy)
+const iv = new Uint8Array(randomBytes(IV_SIZE));
+const ciphertext = new Uint8Array(flatbuffer);  // Copy to avoid modifying original
+encryptBytes(ciphertext, aesKey, iv);  // Encrypts in-place
 
 // 7. Sign the ciphertext
-const signature = crypto.ed25519Sign(
-  senderSigningKey.privateKey,
-  ciphertext
-);
+const signature = ed25519Sign(senderSigningKey.privateKey, ciphertext);
 
 // 8. Package for transmission
 const securePackage = {
@@ -655,7 +678,7 @@ const securePackage = {
 // === RECIPIENT SIDE ===
 
 // 9. Verify signature
-const isValid = crypto.ed25519Verify(
+const isValid = ed25519Verify(
   securePackage.senderSigningPublicKey,
   securePackage.ciphertext,
   securePackage.signature
@@ -666,25 +689,22 @@ if (!isValid) {
 }
 
 // 10. Derive shared secret (recipient side)
-const recipientSharedSecret = crypto.x25519SharedSecret(
+const recipientSharedSecret = x25519SharedSecret(
   recipientKeyPair.privateKey,
   securePackage.senderPublicKey
 );
 
 // Derive same AES key
-const recipientAesKey = crypto.hkdf(
+const recipientAesKey = hkdf(
   recipientSharedSecret,
-  new Uint8Array(0),
+  null,
   new TextEncoder().encode('flatbuffer-encryption-v1'),
-  32
+  KEY_SIZE
 );
 
-// 11. Decrypt
-const decryptedFlatbuffer = crypto.decrypt(
-  recipientAesKey,
-  securePackage.iv,
-  securePackage.ciphertext
-);
+// 11. Decrypt (copy to avoid modifying received data)
+const decryptedFlatbuffer = new Uint8Array(securePackage.ciphertext);
+decryptBytes(decryptedFlatbuffer, recipientAesKey, securePackage.iv);
 
 // 12. Convert back to JSON
 const recoveredJson = flatc.generateJSON(schema, {
@@ -697,19 +717,13 @@ console.log('Decrypted message:', JSON.parse(recoveredJson));
 
 ### Cryptographic Operations
 
-#### Initialization
-
-```javascript
-import { createEncryptionModule } from 'flatc-wasm/encryption';
-
-const crypto = await createEncryptionModule();
-```
-
 #### SHA-256 Hashing
 
 ```javascript
+import { sha256 } from 'flatc-wasm/encryption';
+
 const data = new TextEncoder().encode('Hello, World!');
-const hash = crypto.sha256(data);
+const hash = sha256(data);
 console.log('SHA-256:', Buffer.from(hash).toString('hex'));
 // e.g., "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
 ```
@@ -717,18 +731,22 @@ console.log('SHA-256:', Buffer.from(hash).toString('hex'));
 #### AES-256-CTR Encryption/Decryption
 
 ```javascript
+import { encryptBytes, decryptBytes, KEY_SIZE, IV_SIZE } from 'flatc-wasm/encryption';
+import { randomBytes } from 'crypto';
+
 // Key: 32 bytes, IV: 16 bytes
-const key = crypto.randomBytes(32);
-const iv = crypto.randomBytes(16);
-const plaintext = new TextEncoder().encode('Secret message');
+const key = new Uint8Array(randomBytes(KEY_SIZE));
+const iv = new Uint8Array(randomBytes(IV_SIZE));
+const data = new TextEncoder().encode('Secret message');
 
-// Encrypt
-const ciphertext = crypto.encrypt(key, iv, plaintext);
+// Encrypt in-place (make a copy first if you need the original)
+const ciphertext = new Uint8Array(data);
+encryptBytes(ciphertext, key, iv);
 
-// Decrypt (CTR mode is symmetric)
-const decrypted = crypto.decrypt(key, iv, ciphertext);
+// Decrypt in-place (CTR mode is symmetric)
+decryptBytes(ciphertext, key, iv);
 
-console.log(new TextDecoder().decode(decrypted)); // "Secret message"
+console.log(new TextDecoder().decode(ciphertext)); // "Secret message"
 ```
 
 #### HKDF Key Derivation
@@ -736,12 +754,14 @@ console.log(new TextDecoder().decode(decrypted)); // "Secret message"
 Derive cryptographic keys from shared secrets:
 
 ```javascript
+import { hkdf } from 'flatc-wasm/encryption';
+
 const inputKeyMaterial = sharedSecret;  // e.g., from ECDH
-const salt = new Uint8Array(0);         // optional, can be empty
+const salt = null;                      // optional, can be null
 const info = new TextEncoder().encode('my-app-encryption-key');
 const outputLength = 32;                // 256 bits
 
-const derivedKey = crypto.hkdf(inputKeyMaterial, salt, info, outputLength);
+const derivedKey = hkdf(inputKeyMaterial, salt, info, outputLength);
 ```
 
 ### Key Exchange (ECDH)
@@ -753,13 +773,15 @@ Three elliptic curves are supported for key exchange:
 Best for general-purpose encryption. Used by Signal, WireGuard, etc.
 
 ```javascript
+import { x25519GenerateKeyPair, x25519SharedSecret } from 'flatc-wasm/encryption';
+
 // Generate keypair
-const keypair = crypto.x25519GenerateKeypair();
+const keypair = x25519GenerateKeyPair();
 // keypair.privateKey: 32 bytes
 // keypair.publicKey: 32 bytes
 
 // Compute shared secret
-const sharedSecret = crypto.x25519SharedSecret(
+const sharedSecret = x25519SharedSecret(
   myPrivateKey,
   theirPublicKey
 );
@@ -771,13 +793,15 @@ const sharedSecret = crypto.x25519SharedSecret(
 Used by Bitcoin, Ethereum, and most cryptocurrencies.
 
 ```javascript
+import { secp256k1GenerateKeyPair, secp256k1SharedSecret } from 'flatc-wasm/encryption';
+
 // Generate keypair
-const keypair = crypto.secp256k1GenerateKeypair();
+const keypair = secp256k1GenerateKeyPair();
 // keypair.privateKey: 32 bytes
 // keypair.publicKey: 33 bytes (compressed)
 
 // Compute shared secret
-const sharedSecret = crypto.secp256k1SharedSecret(
+const sharedSecret = secp256k1SharedSecret(
   myPrivateKey,
   theirPublicKey  // 33 or 65 bytes
 );
@@ -789,13 +813,15 @@ const sharedSecret = crypto.secp256k1SharedSecret(
 NIST standard curve, used in TLS and enterprise applications.
 
 ```javascript
+import { p256GenerateKeyPair, p256SharedSecret } from 'flatc-wasm/encryption';
+
 // Generate keypair
-const keypair = crypto.p256GenerateKeypair();
+const keypair = p256GenerateKeyPair();
 // keypair.privateKey: 32 bytes
 // keypair.publicKey: 33 bytes (compressed)
 
 // Compute shared secret
-const sharedSecret = crypto.p256SharedSecret(
+const sharedSecret = p256SharedSecret(
   myPrivateKey,
   theirPublicKey  // 33 or 65 bytes
 );
@@ -811,18 +837,20 @@ Three signature algorithms are supported:
 Fast, secure, deterministic signatures. Used by Solana, Cardano, etc.
 
 ```javascript
+import { ed25519GenerateKeyPair, ed25519Sign, ed25519Verify } from 'flatc-wasm/encryption';
+
 // Generate signing keypair
-const keypair = crypto.ed25519GenerateKeypair();
+const keypair = ed25519GenerateKeyPair();
 // keypair.privateKey: 64 bytes (includes public key)
 // keypair.publicKey: 32 bytes
 
 // Sign message
 const message = new TextEncoder().encode('Sign this message');
-const signature = crypto.ed25519Sign(keypair.privateKey, message);
+const signature = ed25519Sign(keypair.privateKey, message);
 // signature: 64 bytes
 
 // Verify signature
-const isValid = crypto.ed25519Verify(keypair.publicKey, message, signature);
+const isValid = ed25519Verify(keypair.publicKey, message, signature);
 // isValid: boolean
 ```
 
@@ -831,16 +859,18 @@ const isValid = crypto.ed25519Verify(keypair.publicKey, message, signature);
 Bitcoin/Ethereum-compatible signatures.
 
 ```javascript
+import { secp256k1GenerateKeyPair, secp256k1Sign, secp256k1Verify, sha256 } from 'flatc-wasm/encryption';
+
 // Generate signing keypair
-const keypair = crypto.secp256k1GenerateKeypair();
+const keypair = secp256k1GenerateKeyPair();
 
 // Sign message (usually a hash)
-const messageHash = crypto.sha256(message);
-const signature = crypto.secp256k1Sign(keypair.privateKey, messageHash);
+const messageHash = sha256(message);
+const signature = secp256k1Sign(keypair.privateKey, messageHash);
 // signature: 70-72 bytes (DER encoded)
 
 // Verify signature
-const isValid = crypto.secp256k1Verify(
+const isValid = secp256k1Verify(
   keypair.publicKey,
   messageHash,
   signature
@@ -852,16 +882,18 @@ const isValid = crypto.secp256k1Verify(
 NIST-compliant signatures.
 
 ```javascript
+import { p256GenerateKeyPair, p256Sign, p256Verify, sha256 } from 'flatc-wasm/encryption';
+
 // Generate signing keypair
-const keypair = crypto.p256GenerateKeypair();
+const keypair = p256GenerateKeyPair();
 
 // Sign message
-const messageHash = crypto.sha256(message);
-const signature = crypto.p256Sign(keypair.privateKey, messageHash);
+const messageHash = sha256(message);
+const signature = p256Sign(keypair.privateKey, messageHash);
 // signature: 70-72 bytes (DER encoded)
 
 // Verify signature
-const isValid = crypto.p256Verify(keypair.publicKey, messageHash, signature);
+const isValid = p256Verify(keypair.publicKey, messageHash, signature);
 ```
 
 ### Cryptocurrency Compatibility
@@ -888,37 +920,44 @@ The encryption module supports keys compatible with major blockchain ecosystems:
 Encrypt a FlatBuffer for multiple recipients:
 
 ```javascript
+import {
+  x25519GenerateKeyPair, x25519SharedSecret, hkdf, encryptBytes, IV_SIZE, KEY_SIZE
+} from 'flatc-wasm/encryption';
+import { randomBytes } from 'crypto';
+
 // Sender generates ephemeral keypair
-const senderKeypair = crypto.x25519GenerateKeypair();
+const senderKeypair = x25519GenerateKeyPair();
 
 // Encrypt for multiple recipients
 const recipients = [recipientAPubKey, recipientBPubKey, recipientCPubKey];
-const plaintext = flatbuffer;
-const iv = crypto.randomBytes(16);
+const iv = new Uint8Array(randomBytes(IV_SIZE));
 
 const encryptedPayloads = recipients.map((recipientPub, index) => {
   // Compute shared secret with this recipient
-  const shared = crypto.x25519SharedSecret(senderKeypair.privateKey, recipientPub);
+  const shared = x25519SharedSecret(senderKeypair.privateKey, recipientPub);
 
   // Derive unique key for this recipient
-  const key = crypto.hkdf(
+  const key = hkdf(
     shared,
-    new Uint8Array(0),
+    null,
     new TextEncoder().encode(`recipient-${index}`),
-    32
+    KEY_SIZE
   );
 
-  // Encrypt
+  // Encrypt (copy to preserve original for other recipients)
+  const ciphertext = new Uint8Array(flatbuffer);
+  encryptBytes(ciphertext, key, iv);
+
   return {
     recipientPublicKey: recipientPub,
-    ciphertext: crypto.encrypt(key, iv, plaintext)
+    ciphertext
   };
 });
 
 // Package for transmission
 const multiRecipientMessage = {
   senderPublicKey: senderKeypair.publicKey,
-  iv: iv,
+  iv,
   payloads: encryptedPayloads
 };
 ```
@@ -926,24 +965,27 @@ const multiRecipientMessage = {
 Each recipient decrypts:
 
 ```javascript
+import { x25519SharedSecret, hkdf, decryptBytes, KEY_SIZE } from 'flatc-wasm/encryption';
+
 // Find my payload
 const myPayload = message.payloads.find(p =>
   arraysEqual(p.recipientPublicKey, myPublicKey)
 );
 
 // Derive shared secret
-const shared = crypto.x25519SharedSecret(myPrivateKey, message.senderPublicKey);
+const shared = x25519SharedSecret(myPrivateKey, message.senderPublicKey);
 
 // Derive my key
-const myKey = crypto.hkdf(
+const myKey = hkdf(
   shared,
-  new Uint8Array(0),
+  null,
   new TextEncoder().encode(`recipient-${myIndex}`),
-  32
+  KEY_SIZE
 );
 
-// Decrypt
-const plaintext = crypto.decrypt(myKey, message.iv, myPayload.ciphertext);
+// Decrypt (modifies in place)
+const plaintext = new Uint8Array(myPayload.ciphertext);
+decryptBytes(plaintext, myKey, message.iv);
 ```
 
 ### Cross-Language Support

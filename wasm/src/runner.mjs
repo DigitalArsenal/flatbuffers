@@ -8,6 +8,62 @@
 import createFlatcModule from "../dist/flatc-wasm.js";
 
 /**
+ * Validates that a path is safe and doesn't contain path traversal attempts.
+ * @param {string} path - The path to validate
+ * @param {string} [context] - Context for error messages
+ * @throws {Error} If the path contains traversal sequences or is invalid
+ */
+function validatePath(path, context = 'path') {
+  if (typeof path !== 'string') {
+    throw new Error(`Invalid ${context}: must be a string`);
+  }
+  if (path.length === 0) {
+    throw new Error(`Invalid ${context}: cannot be empty`);
+  }
+  // Check for path traversal attempts
+  const normalized = path.replace(/\\/g, '/');
+  if (normalized.includes('/../') || normalized.startsWith('../') ||
+      normalized.endsWith('/..') || normalized === '..' ||
+      normalized.includes('/./') || normalized.startsWith('./')) {
+    throw new Error(`Invalid ${context}: path traversal detected in "${path}"`);
+  }
+  // Check for null bytes (could be used to truncate paths)
+  if (path.includes('\0')) {
+    throw new Error(`Invalid ${context}: null byte detected`);
+  }
+  return path;
+}
+
+/**
+ * Validates schema input structure.
+ * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput
+ * @throws {Error} If the schema input is invalid
+ */
+function validateSchemaInput(schemaInput) {
+  if (!schemaInput || typeof schemaInput !== 'object') {
+    throw new Error('Schema input must be an object with entry and files properties');
+  }
+  if (typeof schemaInput.entry !== 'string' || schemaInput.entry.length === 0) {
+    throw new Error('Schema input must have a non-empty entry path');
+  }
+  if (!schemaInput.files || typeof schemaInput.files !== 'object') {
+    throw new Error('Schema input must have a files object');
+  }
+
+  validatePath(schemaInput.entry, 'schema entry');
+
+  // Validate that entry exists in files
+  if (!(schemaInput.entry in schemaInput.files)) {
+    throw new Error(`Schema entry "${schemaInput.entry}" not found in files. Available: ${Object.keys(schemaInput.files).join(', ')}`);
+  }
+
+  // Validate all file paths
+  for (const filePath of Object.keys(schemaInput.files)) {
+    validatePath(filePath, 'schema file path');
+  }
+}
+
+/**
  * Computes include directories from a schema input tree.
  * @param {{ files: Record<string, string|Uint8Array> }} schemaInput
  * @returns {string[]}
@@ -26,8 +82,27 @@ function getIncludeDirs(schemaInput) {
  * FlatcRunner - High-level wrapper for the flatc WebAssembly module.
  * Provides CLI-style access to all flatc functionality.
  */
+/**
+ * @typedef {Object} EmscriptenFS
+ * @property {function(string): void} mkdir
+ * @property {function(string): void} mkdirTree
+ * @property {function(string, Uint8Array|string): void} writeFile
+ * @property {function(string, {encoding?: string}=): string|Uint8Array} readFile
+ * @property {function(string): string[]} readdir
+ * @property {function(string): {mode: number}} stat
+ * @property {function(number): boolean} isDir
+ * @property {function(string): void} unlink
+ * @property {function(string): void} rmdir
+ */
+
+/**
+ * @typedef {Object} EmscriptenModule
+ * @property {function(string[]): void} callMain
+ * @property {EmscriptenFS} FS
+ */
+
 export class FlatcRunner {
-  /** @type {any} */
+  /** @type {EmscriptenModule | null} */
   Module = null;
 
   /** @type {string} */
@@ -44,7 +119,7 @@ export class FlatcRunner {
 
   /**
    * Create a FlatcRunner instance.
-   * @param {any} Module - The instantiated WebAssembly module.
+   * @param {EmscriptenModule | null} Module - The instantiated WebAssembly module.
    */
   constructor(Module) {
     this.Module = Module;
@@ -478,9 +553,12 @@ export class FlatcRunner {
   /**
    * Internal: Mount schema files if they've changed.
    * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput
+   * @throws {Error} If schema input is invalid or contains path traversal
    * @private
    */
   _mountSchemaIfNeeded(schemaInput) {
+    validateSchemaInput(schemaInput);
+
     const schemaUnchanged =
       this._cachedSchema &&
       this._cachedSchema.entry === schemaInput.entry &&

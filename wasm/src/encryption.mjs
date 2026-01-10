@@ -18,6 +18,10 @@
 let wasmModule = null;
 let wasmMemory = null;
 
+// Cached encoder/decoder instances for performance
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
 // Key sizes
 export const KEY_SIZE = 32;
 export const IV_SIZE = 16;
@@ -203,48 +207,133 @@ function readString(ptr, maxLen = 32) {
   const view = new Uint8Array(wasmMemory.buffer, ptr, safeLen);
   let end = view.indexOf(0);
   if (end === -1) end = safeLen;
-  return new TextDecoder().decode(view.subarray(0, end));
+  return textDecoder.decode(view.subarray(0, end));
 }
+
+// Cached Node.js crypto module (lazy-loaded)
+let nodeCryptoModule = null;
 
 /**
  * Get cryptographically secure random bytes (works in Node.js and browser)
  * @param {number} size - Number of random bytes
  * @returns {Uint8Array}
+ * @throws {Error} If no cryptographic random source is available
  */
 function getRandomBytes(size) {
-  // Browser environment
-  if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
-    return globalThis.crypto.getRandomValues(new Uint8Array(size));
+  if (size <= 0) {
+    throw new Error('Size must be a positive integer');
   }
-  // Node.js environment
-  if (typeof process !== 'undefined' && process.versions?.node) {
+
+  // Browser environment - check for SecureContext
+  if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
     try {
-      // Use dynamic require for Node.js crypto
-      const nodeCrypto = require('crypto');
-      return new Uint8Array(nodeCrypto.randomBytes(size));
-    } catch {
-      throw new Error('crypto module not available');
+      return globalThis.crypto.getRandomValues(new Uint8Array(size));
+    } catch (e) {
+      // getRandomValues may fail if not in a secure context
+      throw new Error(`crypto.getRandomValues failed: ${e.message}. Ensure you are in a secure context (HTTPS).`);
     }
   }
-  throw new Error('No cryptographic random source available');
+
+  // Node.js environment - use cached module
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    if (!nodeCryptoModule) {
+      // Node.js has crypto as a built-in, access via globalThis or lazy import
+      // In Node.js 18+, crypto is available on globalThis
+      if (globalThis.crypto?.randomBytes) {
+        nodeCryptoModule = globalThis.crypto;
+      } else {
+        // Fallback: use Function constructor to avoid static analysis of require
+        // This is necessary because we're in an ESM module
+        try {
+          // eslint-disable-next-line no-new-func
+          nodeCryptoModule = new Function('return require("crypto")')();
+        } catch {
+          throw new Error('Node.js crypto module not available');
+        }
+      }
+    }
+    return new Uint8Array(nodeCryptoModule.randomBytes(size));
+  }
+
+  throw new Error('No cryptographic random source available. Use a modern browser with HTTPS or Node.js 18+.');
 }
 
+/**
+ * Allocate memory in WASM heap
+ * @param {number} size - Number of bytes to allocate
+ * @returns {number} Pointer to allocated memory
+ * @throws {Error} If allocation fails or module not initialized
+ */
 function allocate(size) {
   if (!wasmModule) throw new Error('Encryption module not initialized. Call loadEncryptionWasm() first.');
+  if (size <= 0) throw new Error(`Invalid allocation size: ${size}`);
   const ptr = wasmModule.malloc(size);
   if (ptr === 0) throw new Error(`Memory allocation failed for ${size} bytes`);
   return ptr;
 }
 
+/**
+ * Securely deallocate memory by zeroing it first.
+ * This prevents sensitive data (keys, plaintext) from remaining in freed memory.
+ * @param {number} ptr - Pointer to memory
+ * @param {number} size - Size of memory to clear before freeing
+ */
+function secureDeallocate(ptr, size) {
+  if (ptr !== 0 && wasmMemory) {
+    // Zero-fill the memory before freeing to prevent data leakage
+    try {
+      const view = new Uint8Array(wasmMemory.buffer, ptr, size);
+      view.fill(0);
+    } catch {
+      // Memory may already be invalid, continue with free
+    }
+    wasmModule.free(ptr);
+  }
+}
+
+/**
+ * Deallocate memory (non-secure, for non-sensitive data)
+ * @param {number} ptr - Pointer to memory
+ */
 function deallocate(ptr) {
   if (ptr !== 0) wasmModule.free(ptr);
 }
 
+/**
+ * Write bytes to WASM memory with bounds checking
+ * @param {number} ptr - Destination pointer
+ * @param {Uint8Array} data - Data to write
+ * @throws {Error} If write would exceed memory bounds
+ */
 function writeBytes(ptr, data) {
+  if (!wasmMemory) throw new Error('WASM memory not initialized');
+  if (ptr < 0) throw new Error(`Invalid pointer: ${ptr}`);
+
+  const memSize = wasmMemory.buffer.byteLength;
+  if (ptr + data.length > memSize) {
+    throw new Error(`Memory write overflow: ptr=${ptr}, size=${data.length}, memSize=${memSize}`);
+  }
+
   new Uint8Array(wasmMemory.buffer, ptr, data.length).set(data);
 }
 
+/**
+ * Read bytes from WASM memory with bounds checking
+ * @param {number} ptr - Source pointer
+ * @param {number} size - Number of bytes to read
+ * @returns {Uint8Array} Copy of the data
+ * @throws {Error} If read would exceed memory bounds
+ */
 function readBytes(ptr, size) {
+  if (!wasmMemory) throw new Error('WASM memory not initialized');
+  if (ptr < 0) throw new Error(`Invalid pointer: ${ptr}`);
+  if (size < 0) throw new Error(`Invalid size: ${size}`);
+
+  const memSize = wasmMemory.buffer.byteLength;
+  if (ptr + size > memSize) {
+    throw new Error(`Memory read overflow: ptr=${ptr}, size=${size}, memSize=${memSize}`);
+  }
+
   return new Uint8Array(wasmMemory.buffer, ptr, size).slice();
 }
 
@@ -268,7 +357,7 @@ export function sha256(data) {
     wasmModule.wasi_sha256(dataPtr, data.length, hashPtr);
     return readBytes(hashPtr, SHA256_SIZE);
   } finally {
-    deallocate(dataPtr);
+    secureDeallocate(dataPtr, data.length);
     deallocate(hashPtr);
   }
 }
@@ -285,9 +374,12 @@ export function sha256(data) {
  */
 export function encryptBytes(data, key, iv) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
-  if (key.length !== KEY_SIZE) throw new Error('Key must be 32 bytes');
-  if (iv.length !== IV_SIZE) throw new Error('IV must be 16 bytes');
-  if (data.length === 0) return;
+  if (!(data instanceof Uint8Array)) throw new Error('Data must be a Uint8Array');
+  if (!(key instanceof Uint8Array)) throw new Error('Key must be a Uint8Array');
+  if (!(iv instanceof Uint8Array)) throw new Error('IV must be a Uint8Array');
+  if (key.length !== KEY_SIZE) throw new Error(`Key must be ${KEY_SIZE} bytes, got ${key.length}`);
+  if (iv.length !== IV_SIZE) throw new Error(`IV must be ${IV_SIZE} bytes, got ${iv.length}`);
+  if (data.length === 0) return; // Nothing to encrypt - data is unchanged
 
   const keyPtr = allocate(KEY_SIZE);
   const ivPtr = allocate(IV_SIZE);
@@ -303,9 +395,10 @@ export function encryptBytes(data, key, iv) {
 
     data.set(readBytes(dataPtr, data.length));
   } finally {
-    deallocate(keyPtr);
-    deallocate(ivPtr);
-    deallocate(dataPtr);
+    // Securely clear sensitive data (key, IV, plaintext/ciphertext)
+    secureDeallocate(keyPtr, KEY_SIZE);
+    secureDeallocate(ivPtr, IV_SIZE);
+    secureDeallocate(dataPtr, data.length);
   }
 }
 
@@ -349,10 +442,11 @@ export function hkdf(ikm, salt, info, length) {
 
     return readBytes(okmPtr, length);
   } finally {
-    deallocate(ikmPtr);
-    if (saltPtr) deallocate(saltPtr);
-    if (infoPtr) deallocate(infoPtr);
-    deallocate(okmPtr);
+    // Securely clear input key material and derived key
+    secureDeallocate(ikmPtr, ikm.length);
+    if (saltPtr) secureDeallocate(saltPtr, salt.length);
+    if (infoPtr) deallocate(infoPtr); // info is not sensitive
+    secureDeallocate(okmPtr, length);
   }
 }
 
@@ -367,6 +461,9 @@ export function hkdf(ikm, salt, info, length) {
  */
 export function x25519GenerateKeyPair(privateKey) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (privateKey && privateKey.length !== X25519_PRIVATE_KEY_SIZE) {
+    throw new Error(`Private key must be ${X25519_PRIVATE_KEY_SIZE} bytes`);
+  }
 
   const privPtr = allocate(X25519_PRIVATE_KEY_SIZE);
   const pubPtr = allocate(X25519_PUBLIC_KEY_SIZE);
@@ -384,7 +481,7 @@ export function x25519GenerateKeyPair(privateKey) {
       publicKey: readBytes(pubPtr, X25519_PUBLIC_KEY_SIZE),
     };
   } finally {
-    deallocate(privPtr);
+    secureDeallocate(privPtr, X25519_PRIVATE_KEY_SIZE);
     deallocate(pubPtr);
   }
 }
@@ -397,6 +494,12 @@ export function x25519GenerateKeyPair(privateKey) {
  */
 export function x25519SharedSecret(privateKey, publicKey) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (privateKey.length !== X25519_PRIVATE_KEY_SIZE) {
+    throw new Error(`Private key must be ${X25519_PRIVATE_KEY_SIZE} bytes`);
+  }
+  if (publicKey.length !== X25519_PUBLIC_KEY_SIZE) {
+    throw new Error(`Public key must be ${X25519_PUBLIC_KEY_SIZE} bytes`);
+  }
 
   const privPtr = allocate(X25519_PRIVATE_KEY_SIZE);
   const pubPtr = allocate(X25519_PUBLIC_KEY_SIZE);
@@ -411,9 +514,9 @@ export function x25519SharedSecret(privateKey, publicKey) {
 
     return readBytes(secretPtr, KEY_SIZE);
   } finally {
-    deallocate(privPtr);
+    secureDeallocate(privPtr, X25519_PRIVATE_KEY_SIZE);
     deallocate(pubPtr);
-    deallocate(secretPtr);
+    secureDeallocate(secretPtr, KEY_SIZE);
   }
 }
 
@@ -425,7 +528,7 @@ export function x25519SharedSecret(privateKey, publicKey) {
  */
 export function x25519DeriveKey(sharedSecret, context) {
   const info = typeof context === 'string'
-    ? new TextEncoder().encode(context)
+    ? textEncoder.encode(context)
     : context;
   return hkdf(sharedSecret, null, info, KEY_SIZE);
 }
@@ -441,6 +544,9 @@ export function x25519DeriveKey(sharedSecret, context) {
  */
 export function secp256k1GenerateKeyPair(privateKey) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (privateKey && privateKey.length !== SECP256K1_PRIVATE_KEY_SIZE) {
+    throw new Error(`Private key must be ${SECP256K1_PRIVATE_KEY_SIZE} bytes`);
+  }
 
   const privPtr = allocate(SECP256K1_PRIVATE_KEY_SIZE);
   const pubPtr = allocate(SECP256K1_PUBLIC_KEY_SIZE);
@@ -458,7 +564,7 @@ export function secp256k1GenerateKeyPair(privateKey) {
       publicKey: readBytes(pubPtr, SECP256K1_PUBLIC_KEY_SIZE),
     };
   } finally {
-    deallocate(privPtr);
+    secureDeallocate(privPtr, SECP256K1_PRIVATE_KEY_SIZE);
     deallocate(pubPtr);
   }
 }
@@ -471,6 +577,12 @@ export function secp256k1GenerateKeyPair(privateKey) {
  */
 export function secp256k1SharedSecret(privateKey, publicKey) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (privateKey.length !== SECP256K1_PRIVATE_KEY_SIZE) {
+    throw new Error(`Private key must be ${SECP256K1_PRIVATE_KEY_SIZE} bytes`);
+  }
+  if (publicKey.length !== SECP256K1_PUBLIC_KEY_SIZE) {
+    throw new Error(`Public key must be ${SECP256K1_PUBLIC_KEY_SIZE} bytes (compressed)`);
+  }
 
   const privPtr = allocate(SECP256K1_PRIVATE_KEY_SIZE);
   const pubPtr = allocate(publicKey.length);
@@ -487,9 +599,9 @@ export function secp256k1SharedSecret(privateKey, publicKey) {
 
     return readBytes(secretPtr, KEY_SIZE);
   } finally {
-    deallocate(privPtr);
+    secureDeallocate(privPtr, SECP256K1_PRIVATE_KEY_SIZE);
     deallocate(pubPtr);
-    deallocate(secretPtr);
+    secureDeallocate(secretPtr, KEY_SIZE);
   }
 }
 
@@ -498,7 +610,7 @@ export function secp256k1SharedSecret(privateKey, publicKey) {
  */
 export function secp256k1DeriveKey(sharedSecret, context) {
   const info = typeof context === 'string'
-    ? new TextEncoder().encode(context)
+    ? textEncoder.encode(context)
     : context;
   return hkdf(sharedSecret, null, info, KEY_SIZE);
 }
@@ -511,6 +623,9 @@ export function secp256k1DeriveKey(sharedSecret, context) {
  */
 export function secp256k1Sign(privateKey, data) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (privateKey.length !== SECP256K1_PRIVATE_KEY_SIZE) {
+    throw new Error(`Private key must be ${SECP256K1_PRIVATE_KEY_SIZE} bytes`);
+  }
 
   const privPtr = allocate(SECP256K1_PRIVATE_KEY_SIZE);
   const dataPtr = allocate(data.length);
@@ -529,7 +644,7 @@ export function secp256k1Sign(privateKey, data) {
     const sigSize = new DataView(wasmMemory.buffer).getUint32(sigSizePtr, true);
     return readBytes(sigPtr, sigSize);
   } finally {
-    deallocate(privPtr);
+    secureDeallocate(privPtr, SECP256K1_PRIVATE_KEY_SIZE);
     deallocate(dataPtr);
     deallocate(sigPtr);
     deallocate(sigSizePtr);
@@ -579,6 +694,9 @@ export function secp256k1Verify(publicKey, data, signature) {
  */
 export function p256GenerateKeyPair(privateKey) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (privateKey && privateKey.length !== P256_PRIVATE_KEY_SIZE) {
+    throw new Error(`Private key must be ${P256_PRIVATE_KEY_SIZE} bytes`);
+  }
 
   const privPtr = allocate(P256_PRIVATE_KEY_SIZE);
   const pubPtr = allocate(P256_PUBLIC_KEY_SIZE);
@@ -596,7 +714,7 @@ export function p256GenerateKeyPair(privateKey) {
       publicKey: readBytes(pubPtr, P256_PUBLIC_KEY_SIZE),
     };
   } finally {
-    deallocate(privPtr);
+    secureDeallocate(privPtr, P256_PRIVATE_KEY_SIZE);
     deallocate(pubPtr);
   }
 }
@@ -609,6 +727,12 @@ export function p256GenerateKeyPair(privateKey) {
  */
 export function p256SharedSecret(privateKey, publicKey) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (privateKey.length !== P256_PRIVATE_KEY_SIZE) {
+    throw new Error(`Private key must be ${P256_PRIVATE_KEY_SIZE} bytes`);
+  }
+  if (publicKey.length !== P256_PUBLIC_KEY_SIZE) {
+    throw new Error(`Public key must be ${P256_PUBLIC_KEY_SIZE} bytes (compressed)`);
+  }
 
   const privPtr = allocate(P256_PRIVATE_KEY_SIZE);
   const pubPtr = allocate(publicKey.length);
@@ -625,9 +749,9 @@ export function p256SharedSecret(privateKey, publicKey) {
 
     return readBytes(secretPtr, KEY_SIZE);
   } finally {
-    deallocate(privPtr);
+    secureDeallocate(privPtr, P256_PRIVATE_KEY_SIZE);
     deallocate(pubPtr);
-    deallocate(secretPtr);
+    secureDeallocate(secretPtr, KEY_SIZE);
   }
 }
 
@@ -636,7 +760,7 @@ export function p256SharedSecret(privateKey, publicKey) {
  */
 export function p256DeriveKey(sharedSecret, context) {
   const info = typeof context === 'string'
-    ? new TextEncoder().encode(context)
+    ? textEncoder.encode(context)
     : context;
   return hkdf(sharedSecret, null, info, KEY_SIZE);
 }
@@ -649,6 +773,9 @@ export function p256DeriveKey(sharedSecret, context) {
  */
 export function p256Sign(privateKey, data) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (privateKey.length !== P256_PRIVATE_KEY_SIZE) {
+    throw new Error(`Private key must be ${P256_PRIVATE_KEY_SIZE} bytes`);
+  }
 
   const privPtr = allocate(P256_PRIVATE_KEY_SIZE);
   const dataPtr = allocate(data.length);
@@ -667,7 +794,7 @@ export function p256Sign(privateKey, data) {
     const sigSize = new DataView(wasmMemory.buffer).getUint32(sigSizePtr, true);
     return readBytes(sigPtr, sigSize);
   } finally {
-    deallocate(privPtr);
+    secureDeallocate(privPtr, P256_PRIVATE_KEY_SIZE);
     deallocate(dataPtr);
     deallocate(sigPtr);
     deallocate(sigSizePtr);
@@ -729,7 +856,7 @@ export function ed25519GenerateKeyPair() {
       publicKey: readBytes(pubPtr, ED25519_PUBLIC_KEY_SIZE),
     };
   } finally {
-    deallocate(privPtr);
+    secureDeallocate(privPtr, ED25519_PRIVATE_KEY_SIZE);
     deallocate(pubPtr);
   }
 }
@@ -742,6 +869,9 @@ export function ed25519GenerateKeyPair() {
  */
 export function ed25519Sign(privateKey, data) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (privateKey.length !== ED25519_PRIVATE_KEY_SIZE) {
+    throw new Error(`Private key must be ${ED25519_PRIVATE_KEY_SIZE} bytes`);
+  }
 
   const privPtr = allocate(ED25519_PRIVATE_KEY_SIZE);
   const dataPtr = allocate(data.length);
@@ -758,7 +888,7 @@ export function ed25519Sign(privateKey, data) {
 
     return readBytes(sigPtr, ED25519_SIGNATURE_SIZE);
   } finally {
-    deallocate(privPtr);
+    secureDeallocate(privPtr, ED25519_PRIVATE_KEY_SIZE);
     deallocate(dataPtr);
     deallocate(sigPtr);
   }
@@ -892,7 +1022,7 @@ export class EncryptionContext {
    */
   deriveFieldKey(fieldId) {
     const info = new Uint8Array(19);
-    new TextEncoder().encodeInto('flatbuffers-field', info);
+    textEncoder.encodeInto('flatbuffers-field', info);
     info[17] = (fieldId >> 8) & 0xff;
     info[18] = fieldId & 0xff;
     return hkdf(this.#key, null, info, KEY_SIZE);
@@ -905,7 +1035,7 @@ export class EncryptionContext {
    */
   deriveFieldIV(fieldId) {
     const info = new Uint8Array(16);
-    new TextEncoder().encodeInto('flatbuffers-iv', info);
+    textEncoder.encodeInto('flatbuffers-iv', info);
     info[14] = (fieldId >> 8) & 0xff;
     info[15] = fieldId & 0xff;
     return hkdf(this.#key, null, info, IV_SIZE);

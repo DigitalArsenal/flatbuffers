@@ -1285,20 +1285,28 @@ export const KeyDerivationFunction = {
 };
 
 // =============================================================================
-// Encryption Context (field-level key derivation)
+// Encryption Context (field-level key derivation + ECIES hybrid encryption)
 // =============================================================================
 
 /**
- * Encryption context for field-level key derivation.
+ * Encryption context for field-level key derivation and hybrid (ECIES) encryption.
  *
  * IMPORTANT: Each encryption operation requires a unique nonce to prevent IV reuse.
  * The nonce is combined with the field ID to derive unique IVs for each field.
+ *
+ * For hybrid encryption (ECIES), use the static factory methods:
+ * - `forEncryption(recipientPublicKey, options)` - Sender side
+ * - `forDecryption(privateKey, header)` - Recipient side
  *
  * WARNING: Methods that encrypt data modify the buffer in-place.
  */
 export class EncryptionContext {
   #key;
   #nonce;
+  #ephemeralPublicKey;
+  #recipientKeyId;
+  #algorithm;
+  #context;
 
   /**
    * Create encryption context
@@ -1344,6 +1352,209 @@ export class EncryptionContext {
       // Generate random nonce for safety
       this.#nonce = getRandomBytes(IV_SIZE);
     }
+
+    // Initialize ECIES-specific fields (set by factory methods)
+    this.#ephemeralPublicKey = null;
+    this.#recipientKeyId = null;
+    this.#algorithm = null;
+    this.#context = null;
+  }
+
+  /**
+   * Create an encryption context for hybrid (ECIES) encryption.
+   *
+   * This performs the sender-side ECIES setup:
+   * 1. Generates an ephemeral key pair for the specified algorithm
+   * 2. Computes a shared secret via ECDH with the recipient's public key
+   * 3. Derives a symmetric key from the shared secret using HKDF
+   *
+   * The ephemeral public key and other metadata must be sent to the recipient
+   * along with the encrypted data (via getHeader() or getHeaderJSON()).
+   *
+   * @param {Uint8Array} recipientPublicKey - Recipient's public key
+   * @param {Object} [options] - Encryption options
+   * @param {string} [options.algorithm='x25519'] - Key exchange algorithm ('x25519', 'secp256k1', 'p256')
+   * @param {string} [options.context=''] - Application context for key derivation
+   * @param {string} [options.rootType] - Root type name (for documentation/debugging)
+   * @returns {EncryptionContext} Configured encryption context
+   *
+   * @example
+   * const ctx = EncryptionContext.forEncryption(recipientPublicKey, {
+   *   algorithm: 'x25519',
+   *   context: 'my-app-v1',
+   * });
+   * const header = ctx.getHeaderJSON();
+   * encryptBuffer(buffer, schema, ctx, 'MyTable');
+   * // Send header + encrypted buffer to recipient
+   */
+  static forEncryption(recipientPublicKey, options = {}) {
+    const algorithm = options.algorithm || KeyExchangeAlgorithm.X25519;
+    const contextStr = options.context || '';
+
+    let ephemeralKeys;
+    let sharedSecret;
+
+    // Generate ephemeral key pair and compute shared secret based on algorithm
+    switch (algorithm) {
+      case KeyExchangeAlgorithm.X25519:
+      case 'x25519':
+        ephemeralKeys = x25519GenerateKeyPair();
+        sharedSecret = x25519SharedSecret(ephemeralKeys.privateKey, recipientPublicKey);
+        break;
+      case KeyExchangeAlgorithm.SECP256K1:
+      case 'secp256k1':
+        ephemeralKeys = secp256k1GenerateKeyPair();
+        sharedSecret = secp256k1SharedSecret(ephemeralKeys.privateKey, recipientPublicKey);
+        break;
+      case KeyExchangeAlgorithm.P256:
+      case 'p256':
+        ephemeralKeys = p256GenerateKeyPair();
+        sharedSecret = p256SharedSecret(ephemeralKeys.privateKey, recipientPublicKey);
+        break;
+      default:
+        throw new CryptoError(
+          CryptoErrorCode.INVALID_INPUT,
+          `Unsupported key exchange algorithm: ${algorithm}`
+        );
+    }
+
+    // Derive symmetric key from shared secret using HKDF
+    const info = contextStr ? textEncoder.encode(contextStr) : null;
+    const symmetricKey = hkdf(sharedSecret, null, info, KEY_SIZE);
+
+    // Create context with derived key
+    const ctx = new EncryptionContext(symmetricKey);
+    ctx.#ephemeralPublicKey = ephemeralKeys.publicKey;
+    ctx.#recipientKeyId = computeKeyId(recipientPublicKey);
+    ctx.#algorithm = algorithm;
+    ctx.#context = contextStr;
+
+    return ctx;
+  }
+
+  /**
+   * Create an encryption context for hybrid (ECIES) decryption.
+   *
+   * This performs the recipient-side ECIES setup:
+   * 1. Extracts the ephemeral public key from the header
+   * 2. Computes the shared secret via ECDH with our private key
+   * 3. Derives the same symmetric key using HKDF
+   *
+   * @param {Uint8Array} privateKey - Recipient's private key
+   * @param {Object} header - Encryption header from sender (from getHeader() or parsed JSON)
+   * @param {string} [header.algorithm] - Key exchange algorithm
+   * @param {Uint8Array} header.senderPublicKey - Sender's ephemeral public key
+   * @param {Uint8Array} [header.iv] - IV/nonce from header
+   * @param {string} [context] - Application context (must match sender's context)
+   * @returns {EncryptionContext} Configured decryption context
+   *
+   * @example
+   * const header = encryptionHeaderFromJSON(receivedHeaderJSON);
+   * const ctx = EncryptionContext.forDecryption(myPrivateKey, header, 'my-app-v1');
+   * decryptBuffer(buffer, schema, ctx, 'MyTable');
+   */
+  static forDecryption(privateKey, header, context = '') {
+    const algorithm = header.algorithm || KeyExchangeAlgorithm.X25519;
+    const ephemeralPublicKey = header.senderPublicKey;
+    const nonce = header.iv;
+
+    if (!ephemeralPublicKey) {
+      throw new CryptoError(
+        CryptoErrorCode.INVALID_INPUT,
+        'Header must contain senderPublicKey (ephemeral public key)'
+      );
+    }
+
+    let sharedSecret;
+
+    // Compute shared secret based on algorithm
+    switch (algorithm) {
+      case KeyExchangeAlgorithm.X25519:
+      case 'x25519':
+        sharedSecret = x25519SharedSecret(privateKey, ephemeralPublicKey);
+        break;
+      case KeyExchangeAlgorithm.SECP256K1:
+      case 'secp256k1':
+        sharedSecret = secp256k1SharedSecret(privateKey, ephemeralPublicKey);
+        break;
+      case KeyExchangeAlgorithm.P256:
+      case 'p256':
+        sharedSecret = p256SharedSecret(privateKey, ephemeralPublicKey);
+        break;
+      default:
+        throw new CryptoError(
+          CryptoErrorCode.INVALID_INPUT,
+          `Unsupported key exchange algorithm: ${algorithm}`
+        );
+    }
+
+    // Derive symmetric key from shared secret using HKDF
+    const info = context ? textEncoder.encode(context) : null;
+    const symmetricKey = hkdf(sharedSecret, null, info, KEY_SIZE);
+
+    // Create context with derived key and nonce from header
+    const ctx = new EncryptionContext(symmetricKey, nonce);
+    ctx.#ephemeralPublicKey = ephemeralPublicKey;
+    ctx.#algorithm = algorithm;
+    ctx.#context = context;
+
+    return ctx;
+  }
+
+  /**
+   * Get the ephemeral public key (for ECIES encryption).
+   * This key must be sent to the recipient along with the encrypted data.
+   * @returns {Uint8Array|null} The ephemeral public key, or null if not using ECIES
+   */
+  getEphemeralPublicKey() {
+    return this.#ephemeralPublicKey ? new Uint8Array(this.#ephemeralPublicKey) : null;
+  }
+
+  /**
+   * Get the encryption header for transmission to recipient.
+   * Contains all information needed for the recipient to decrypt.
+   * @returns {Object} Encryption header
+   */
+  getHeader() {
+    if (!this.#ephemeralPublicKey) {
+      throw new CryptoError(
+        CryptoErrorCode.INVALID_INPUT,
+        'No ephemeral key available. Use EncryptionContext.forEncryption() for ECIES.'
+      );
+    }
+    return {
+      version: 1,
+      algorithm: this.#algorithm || KeyExchangeAlgorithm.X25519,
+      senderPublicKey: new Uint8Array(this.#ephemeralPublicKey),
+      recipientKeyId: this.#recipientKeyId ? new Uint8Array(this.#recipientKeyId) : new Uint8Array(8),
+      iv: this.getNonce(),
+      context: this.#context || '',
+    };
+  }
+
+  /**
+   * Get the encryption header as a JSON string for transmission.
+   * @returns {string} JSON-encoded encryption header
+   */
+  getHeaderJSON() {
+    const header = this.getHeader();
+    return JSON.stringify(encryptionHeaderToJSON(header));
+  }
+
+  /**
+   * Get the algorithm used for key exchange (for ECIES contexts).
+   * @returns {string|null} The algorithm name, or null if not using ECIES
+   */
+  getAlgorithm() {
+    return this.#algorithm;
+  }
+
+  /**
+   * Get the context string used for key derivation.
+   * @returns {string|null} The context string, or null if not set
+   */
+  getContext() {
+    return this.#context;
   }
 
   /**
@@ -1495,27 +1706,35 @@ export function computeKeyId(publicKey) {
  * @returns {Object}
  */
 export function encryptionHeaderToJSON(header) {
-  return {
+  const json = {
     version: header.version,
     algorithm: header.algorithm,
     senderPublicKey: Array.from(header.senderPublicKey),
     recipientKeyId: Array.from(header.recipientKeyId),
     iv: Array.from(header.iv),
   };
+  // Include context if present
+  if (header.context !== undefined && header.context !== '') {
+    json.context = header.context;
+  }
+  return json;
 }
 
 /**
  * Parse encryption header from JSON
- * @param {Object} json
+ * @param {Object|string} json - JSON object or JSON string
  * @returns {Object}
  */
 export function encryptionHeaderFromJSON(json) {
+  // Handle JSON string input
+  const parsed = typeof json === 'string' ? JSON.parse(json) : json;
   return {
-    version: json.version,
-    algorithm: json.algorithm,
-    senderPublicKey: new Uint8Array(json.senderPublicKey),
-    recipientKeyId: new Uint8Array(json.recipientKeyId),
-    iv: new Uint8Array(json.iv),
+    version: parsed.version,
+    algorithm: parsed.algorithm,
+    senderPublicKey: new Uint8Array(parsed.senderPublicKey),
+    recipientKeyId: new Uint8Array(parsed.recipientKeyId),
+    iv: new Uint8Array(parsed.iv),
+    context: parsed.context || '',
   };
 }
 

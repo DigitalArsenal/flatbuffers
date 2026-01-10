@@ -22,10 +22,9 @@ import {
   p256GenerateKeyPair,
   EncryptionContext,
   KeyExchangeAlgorithm,
-  encryptBuffer,
   decryptBuffer,
   encryptionHeaderFromJSON,
-} from "flatc-wasm/encryption";
+} from "../../src/encryption.mjs";
 import {
   schemaContent,
   schemaInput,
@@ -134,24 +133,29 @@ async function handleRequest(req, res) {
 
       // Select private key based on algorithm
       let privateKey;
-      switch (header.keyExchange) {
+      const algorithm = header.algorithm || 'x25519';
+      switch (algorithm) {
         case KeyExchangeAlgorithm.X25519:
+        case 'x25519':
           privateKey = serverKeys.x25519.privateKey;
           break;
-        case KeyExchangeAlgorithm.Secp256k1:
+        case KeyExchangeAlgorithm.SECP256K1:
+        case 'secp256k1':
           privateKey = serverKeys.secp256k1.privateKey;
           break;
         case KeyExchangeAlgorithm.P256:
+        case 'p256':
           privateKey = serverKeys.p256.privateKey;
           break;
         default:
           res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "Unsupported key exchange" }));
+          res.end(JSON.stringify({ error: `Unsupported key exchange algorithm: ${algorithm}` }));
           return;
       }
 
-      // Decrypt to verify and log
-      const decryptCtx = EncryptionContext.forDecryption(privateKey, header);
+      // Decrypt to verify and log (use context from header if available)
+      const appContext = header.context || "rest-api-v1";
+      const decryptCtx = EncryptionContext.forDecryption(privateKey, header, appContext);
       const decrypted = new Uint8Array(body);
       decryptBuffer(decrypted, schemaContent, decryptCtx, "Message");
 

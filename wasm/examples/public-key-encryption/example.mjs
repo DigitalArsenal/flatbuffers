@@ -18,14 +18,19 @@
  * Usage: node example.mjs
  */
 
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 import {
+  loadEncryptionWasm,
   EncryptionContext,
   x25519GenerateKeyPair,
   encryptBuffer,
   decryptBuffer,
-  encryptionHeaderToJSON,
   encryptionHeaderFromJSON,
-} from "flatc-wasm/encryption";
+} from "../../src/encryption.mjs";
 
 import { FlatcRunner } from "flatc-wasm";
 
@@ -37,6 +42,12 @@ function toHex(bytes) {
 
 async function main() {
   console.log("=== Public Key Encryption Example ===\n");
+
+  // Initialize the encryption WASM module
+  const wasmPath = path.join(__dirname, '..', '..', 'dist', 'flatc-encryption.wasm');
+  console.log("Loading encryption WASM module...");
+  await loadEncryptionWasm(wasmPath);
+  console.log("WASM module loaded.\n");
 
   // Step 1: Recipient generates their long-term key pair
   console.log("1. Recipient generates X25519 key pair...");
@@ -84,13 +95,14 @@ async function main() {
 
   // Step 3: Sender encrypts using recipient's public key
   console.log("\n3. Sender encrypts using recipient's public key...");
+  const appContext = "example-app-v1";
   const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
-    context: "example-app-v1",
+    algorithm: "x25519",
+    context: appContext,
     rootType: "SecretMessage",
   });
 
   // Get the encryption header (must be sent to recipient along with encrypted data)
-  const header = encryptCtx.getHeader();
   const headerJSON = encryptCtx.getHeaderJSON();
   console.log(`   Ephemeral public key: ${toHex(encryptCtx.getEphemeralPublicKey()).substring(0, 32)}...`);
   console.log(`   Header: ${headerJSON.substring(0, 100)}...\n`);
@@ -107,14 +119,16 @@ async function main() {
 
   // Simulate transmission - recipient parses the header
   const receivedHeader = encryptionHeaderFromJSON(headerJSON);
-  console.log(`   Received ephemeral key: ${toHex(receivedHeader.ephemeralPublicKey).substring(0, 32)}...`);
-  console.log(`   Context: ${receivedHeader.context}`);
+  console.log(`   Received ephemeral key: ${toHex(receivedHeader.senderPublicKey).substring(0, 32)}...`);
+  console.log(`   Algorithm: ${receivedHeader.algorithm}`);
+  console.log(`   Context: ${receivedHeader.context || appContext}`);
 
   // Step 5: Recipient decrypts using their private key
   console.log("\n5. Recipient decrypts using their private key...");
   const decryptCtx = EncryptionContext.forDecryption(
     recipientKeys.privateKey,
-    receivedHeader
+    receivedHeader,
+    appContext  // Pass context explicitly for key derivation
   );
 
   // Decrypt the buffer

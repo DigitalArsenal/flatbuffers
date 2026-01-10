@@ -402,10 +402,26 @@ export declare function ed25519Verify(
 // =============================================================================
 
 /**
- * Encryption context for FlatBuffer field encryption.
+ * Options for ECIES encryption
+ */
+export interface ECIESEncryptionOptions {
+  /** Key exchange algorithm ('x25519', 'secp256k1', 'p256'). Default: 'x25519' */
+  algorithm?: 'x25519' | 'secp256k1' | 'p256';
+  /** Application context for key derivation */
+  context?: string;
+  /** Root type name (for documentation/debugging) */
+  rootType?: string;
+}
+
+/**
+ * Encryption context for FlatBuffer field encryption and hybrid (ECIES) encryption.
  *
  * IMPORTANT: Each encryption operation requires a unique nonce to prevent IV reuse.
  * The nonce is combined with the field ID to derive unique IVs for each field.
+ *
+ * For hybrid encryption (ECIES), use the static factory methods:
+ * - `forEncryption(recipientPublicKey, options)` - Sender side
+ * - `forDecryption(privateKey, header)` - Recipient side
  *
  * WARNING: Methods that encrypt data modify the buffer in-place.
  */
@@ -420,6 +436,53 @@ export declare class EncryptionContext {
   constructor(key: Uint8Array | string, nonce?: Uint8Array);
 
   /**
+   * Create an encryption context for hybrid (ECIES) encryption.
+   *
+   * This performs the sender-side ECIES setup:
+   * 1. Generates an ephemeral key pair for the specified algorithm
+   * 2. Computes a shared secret via ECDH with the recipient's public key
+   * 3. Derives a symmetric key from the shared secret using HKDF
+   *
+   * @param recipientPublicKey - Recipient's public key
+   * @param options - Encryption options
+   * @returns Configured encryption context
+   *
+   * @example
+   * ```javascript
+   * const ctx = EncryptionContext.forEncryption(recipientPublicKey, {
+   *   algorithm: 'x25519',
+   *   context: 'my-app-v1',
+   * });
+   * const header = ctx.getHeaderJSON();
+   * encryptBuffer(buffer, schema, ctx, 'MyTable');
+   * // Send header + encrypted buffer to recipient
+   * ```
+   */
+  static forEncryption(recipientPublicKey: Uint8Array, options?: ECIESEncryptionOptions): EncryptionContext;
+
+  /**
+   * Create an encryption context for hybrid (ECIES) decryption.
+   *
+   * This performs the recipient-side ECIES setup:
+   * 1. Extracts the ephemeral public key from the header
+   * 2. Computes the shared secret via ECDH with our private key
+   * 3. Derives the same symmetric key using HKDF
+   *
+   * @param privateKey - Recipient's private key
+   * @param header - Encryption header from sender
+   * @param context - Application context (must match sender's context)
+   * @returns Configured decryption context
+   *
+   * @example
+   * ```javascript
+   * const header = encryptionHeaderFromJSON(receivedHeaderJSON);
+   * const ctx = EncryptionContext.forDecryption(myPrivateKey, header, 'my-app-v1');
+   * decryptBuffer(buffer, schema, ctx, 'MyTable');
+   * ```
+   */
+  static forDecryption(privateKey: Uint8Array, header: EncryptionHeader, context?: string): EncryptionContext;
+
+  /**
    * Create from hex string
    * @param hexKey - 64-character hex string
    * @param nonce - Optional 16-byte nonce for IV derivation
@@ -432,6 +495,40 @@ export declare class EncryptionContext {
    * @returns The 16-byte nonce
    */
   getNonce(): Uint8Array;
+
+  /**
+   * Get the ephemeral public key (for ECIES encryption).
+   * This key must be sent to the recipient along with the encrypted data.
+   * @returns The ephemeral public key, or null if not using ECIES
+   */
+  getEphemeralPublicKey(): Uint8Array | null;
+
+  /**
+   * Get the encryption header for transmission to recipient.
+   * Contains all information needed for the recipient to decrypt.
+   * @returns Encryption header
+   * @throws CryptoError if not using ECIES (no ephemeral key)
+   */
+  getHeader(): EncryptionHeader;
+
+  /**
+   * Get the encryption header as a JSON string for transmission.
+   * @returns JSON-encoded encryption header
+   * @throws CryptoError if not using ECIES (no ephemeral key)
+   */
+  getHeaderJSON(): string;
+
+  /**
+   * Get the algorithm used for key exchange (for ECIES contexts).
+   * @returns The algorithm name, or null if not using ECIES
+   */
+  getAlgorithm(): string | null;
+
+  /**
+   * Get the context string used for key derivation.
+   * @returns The context string, or null if not set
+   */
+  getContext(): string | null;
 
   /**
    * Check if context is valid
@@ -625,6 +722,7 @@ export interface EncryptionHeader {
   senderPublicKey: Uint8Array;
   recipientKeyId: Uint8Array;
   iv: Uint8Array;
+  context?: string;
 }
 
 export interface EncryptionHeaderJSON {
@@ -633,6 +731,7 @@ export interface EncryptionHeaderJSON {
   senderPublicKey: number[];
   recipientKeyId: number[];
   iv: number[];
+  context?: string;
 }
 
 /**
@@ -656,9 +755,9 @@ export declare function computeKeyId(publicKey: Uint8Array): Uint8Array;
 export declare function encryptionHeaderToJSON(header: EncryptionHeader): EncryptionHeaderJSON;
 
 /**
- * Parse encryption header from JSON
+ * Parse encryption header from JSON object or string
  */
-export declare function encryptionHeaderFromJSON(json: EncryptionHeaderJSON): EncryptionHeader;
+export declare function encryptionHeaderFromJSON(json: EncryptionHeaderJSON | string): EncryptionHeader;
 
 // =============================================================================
 // Default Export

@@ -132,10 +132,11 @@ function randomBytes(size) {
   const bytes = new Uint8Array(size);
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     crypto.getRandomValues(bytes);
-  } else {
-    // Fallback for Node.js
-    const { randomFillSync } = await import('crypto');
-    randomFillSync(bytes);
+  } else if (typeof process !== 'undefined' && process.versions?.node) {
+    // Fallback for Node.js - use synchronous require
+    // eslint-disable-next-line no-new-func
+    const nodeCrypto = new Function('return require("crypto")')();
+    nodeCrypto.randomFillSync(bytes);
   }
   return bytes;
 }
@@ -869,6 +870,283 @@ async function main() {
     assertArrayEqual(restored.senderPublicKey, header.senderPublicKey, 'sender key should match');
     assertArrayEqual(restored.recipientKeyId, header.recipientKeyId, 'recipient key ID should match');
     assertArrayEqual(restored.iv, header.iv, 'IV should match');
+  });
+
+  // ==========================================================================
+  // ECIES (Hybrid Encryption) Tests
+  // ==========================================================================
+  log('\n[ECIES Hybrid Encryption]');
+
+  await test('EncryptionContext.forEncryption creates valid context with X25519', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+    const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'x25519',
+      context: 'test-app-v1',
+    });
+
+    assert(ctx.isValid(), 'context should be valid');
+    assert(ctx.getEphemeralPublicKey() !== null, 'should have ephemeral public key');
+    assertEqual(ctx.getEphemeralPublicKey().length, 32, 'ephemeral key should be 32 bytes');
+    assertEqual(ctx.getAlgorithm(), 'x25519', 'algorithm should be x25519');
+    assertEqual(ctx.getContext(), 'test-app-v1', 'context should match');
+  });
+
+  await test('EncryptionContext.forEncryption creates valid context with secp256k1', async () => {
+    const recipientKeys = secp256k1GenerateKeyPair();
+    const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'secp256k1',
+      context: 'test-app-v1',
+    });
+
+    assert(ctx.isValid(), 'context should be valid');
+    assert(ctx.getEphemeralPublicKey() !== null, 'should have ephemeral public key');
+    assertEqual(ctx.getEphemeralPublicKey().length, 33, 'ephemeral key should be 33 bytes (compressed)');
+    assertEqual(ctx.getAlgorithm(), 'secp256k1', 'algorithm should be secp256k1');
+  });
+
+  await test('EncryptionContext.forEncryption creates valid context with P-256', async () => {
+    const recipientKeys = p256GenerateKeyPair();
+    const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'p256',
+      context: 'test-app-v1',
+    });
+
+    assert(ctx.isValid(), 'context should be valid');
+    assert(ctx.getEphemeralPublicKey() !== null, 'should have ephemeral public key');
+    assertEqual(ctx.getEphemeralPublicKey().length, 33, 'ephemeral key should be 33 bytes (compressed)');
+    assertEqual(ctx.getAlgorithm(), 'p256', 'algorithm should be p256');
+  });
+
+  await test('EncryptionContext.getHeader returns valid header', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+    const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'x25519',
+      context: 'test-context',
+    });
+
+    const header = ctx.getHeader();
+    assertEqual(header.version, 1, 'header version should be 1');
+    assertEqual(header.algorithm, 'x25519', 'algorithm should match');
+    assertEqual(header.senderPublicKey.length, 32, 'sender public key should be 32 bytes');
+    assertEqual(header.recipientKeyId.length, 8, 'recipient key ID should be 8 bytes');
+    assertEqual(header.iv.length, 16, 'IV should be 16 bytes');
+    assertEqual(header.context, 'test-context', 'context should match');
+  });
+
+  await test('EncryptionContext.getHeaderJSON returns valid JSON string', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+    const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      context: 'json-test',
+    });
+
+    const headerJSON = ctx.getHeaderJSON();
+    assert(typeof headerJSON === 'string', 'should return string');
+
+    const parsed = JSON.parse(headerJSON);
+    assertEqual(parsed.version, 1, 'parsed version should be 1');
+    assert(Array.isArray(parsed.senderPublicKey), 'senderPublicKey should be array');
+    assertEqual(parsed.context, 'json-test', 'context should match');
+  });
+
+  await test('ECIES encrypt/decrypt roundtrip with X25519', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+    const appContext = 'roundtrip-test-v1';
+
+    // Sender encrypts
+    const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'x25519',
+      context: appContext,
+    });
+
+    const plaintext = new TextEncoder().encode('Secret message for ECIES test!');
+    const data = new Uint8Array(plaintext);
+    const originalData = new Uint8Array(plaintext);
+
+    // Encrypt using field-level method
+    encryptCtx.encryptScalar(data, 0, data.length, 0);
+
+    // Verify data changed
+    let changed = false;
+    for (let i = 0; i < data.length; i++) {
+      if (data[i] !== originalData[i]) {
+        changed = true;
+        break;
+      }
+    }
+    assert(changed, 'data should be encrypted');
+
+    // Get header for transmission
+    const headerJSON = encryptCtx.getHeaderJSON();
+
+    // Recipient decrypts
+    const receivedHeader = encryptionHeaderFromJSON(headerJSON);
+    const decryptCtx = EncryptionContext.forDecryption(
+      recipientKeys.privateKey,
+      receivedHeader,
+      appContext
+    );
+
+    // Decrypt
+    decryptCtx.encryptScalar(data, 0, data.length, 0); // CTR mode: encrypt = decrypt
+
+    // Verify decrypted data matches original
+    assertArrayEqual(data, originalData, 'decrypted data should match original');
+  });
+
+  await test('ECIES encrypt/decrypt roundtrip with secp256k1', async () => {
+    const recipientKeys = secp256k1GenerateKeyPair();
+    const appContext = 'secp256k1-test';
+
+    // Sender encrypts
+    const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'secp256k1',
+      context: appContext,
+    });
+
+    const plaintext = new TextEncoder().encode('Bitcoin-compatible encryption!');
+    const data = new Uint8Array(plaintext);
+    const originalData = new Uint8Array(plaintext);
+
+    encryptCtx.encryptScalar(data, 0, data.length, 0);
+
+    // Get header and decrypt
+    const headerJSON = encryptCtx.getHeaderJSON();
+    const receivedHeader = encryptionHeaderFromJSON(headerJSON);
+    const decryptCtx = EncryptionContext.forDecryption(
+      recipientKeys.privateKey,
+      receivedHeader,
+      appContext
+    );
+
+    decryptCtx.encryptScalar(data, 0, data.length, 0);
+    assertArrayEqual(data, originalData, 'secp256k1 decrypted data should match');
+  });
+
+  await test('ECIES encrypt/decrypt roundtrip with P-256', async () => {
+    const recipientKeys = p256GenerateKeyPair();
+    const appContext = 'p256-nist-test';
+
+    // Sender encrypts
+    const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'p256',
+      context: appContext,
+    });
+
+    const plaintext = new TextEncoder().encode('NIST P-256 encryption test!');
+    const data = new Uint8Array(plaintext);
+    const originalData = new Uint8Array(plaintext);
+
+    encryptCtx.encryptScalar(data, 0, data.length, 0);
+
+    // Get header and decrypt
+    const headerJSON = encryptCtx.getHeaderJSON();
+    const receivedHeader = encryptionHeaderFromJSON(headerJSON);
+    const decryptCtx = EncryptionContext.forDecryption(
+      recipientKeys.privateKey,
+      receivedHeader,
+      appContext
+    );
+
+    decryptCtx.encryptScalar(data, 0, data.length, 0);
+    assertArrayEqual(data, originalData, 'P-256 decrypted data should match');
+  });
+
+  await test('ECIES fails with wrong private key', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+    const wrongKeys = x25519GenerateKeyPair();
+    const appContext = 'wrong-key-test';
+
+    // Sender encrypts to recipient
+    const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      context: appContext,
+    });
+
+    const plaintext = new TextEncoder().encode('Secret data');
+    const data = new Uint8Array(plaintext);
+    const originalData = new Uint8Array(plaintext);
+
+    encryptCtx.encryptScalar(data, 0, data.length, 0);
+
+    // Wrong recipient tries to decrypt
+    const headerJSON = encryptCtx.getHeaderJSON();
+    const receivedHeader = encryptionHeaderFromJSON(headerJSON);
+    const decryptCtx = EncryptionContext.forDecryption(
+      wrongKeys.privateKey, // Wrong key!
+      receivedHeader,
+      appContext
+    );
+
+    decryptCtx.encryptScalar(data, 0, data.length, 0);
+
+    // Data should NOT match original (wrong key = wrong derived key)
+    let matches = true;
+    for (let i = 0; i < data.length; i++) {
+      if (data[i] !== originalData[i]) {
+        matches = false;
+        break;
+      }
+    }
+    assert(!matches, 'decryption with wrong key should produce different data');
+  });
+
+  await test('ECIES fails with wrong context', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+
+    // Sender encrypts with context A
+    const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      context: 'context-A',
+    });
+
+    const plaintext = new TextEncoder().encode('Context matters!');
+    const data = new Uint8Array(plaintext);
+    const originalData = new Uint8Array(plaintext);
+
+    encryptCtx.encryptScalar(data, 0, data.length, 0);
+
+    // Recipient decrypts with context B (wrong!)
+    const headerJSON = encryptCtx.getHeaderJSON();
+    const receivedHeader = encryptionHeaderFromJSON(headerJSON);
+    const decryptCtx = EncryptionContext.forDecryption(
+      recipientKeys.privateKey,
+      receivedHeader,
+      'context-B' // Wrong context!
+    );
+
+    decryptCtx.encryptScalar(data, 0, data.length, 0);
+
+    // Data should NOT match original (different context = different derived key)
+    let matches = true;
+    for (let i = 0; i < data.length; i++) {
+      if (data[i] !== originalData[i]) {
+        matches = false;
+        break;
+      }
+    }
+    assert(!matches, 'decryption with wrong context should produce different data');
+  });
+
+  await test('encryptionHeaderFromJSON accepts string input', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+    const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      context: 'string-test',
+    });
+
+    const headerJSON = ctx.getHeaderJSON();
+    const header = encryptionHeaderFromJSON(headerJSON); // Pass string directly
+
+    assertEqual(header.algorithm, 'x25519', 'algorithm should parse correctly');
+    assertEqual(header.context, 'string-test', 'context should parse correctly');
+    assert(header.senderPublicKey instanceof Uint8Array, 'senderPublicKey should be Uint8Array');
+  });
+
+  await test('EncryptionContext.getHeader throws without ECIES setup', async () => {
+    const ctx = new EncryptionContext(new Uint8Array(KEY_SIZE).fill(0x42));
+
+    assertThrows(
+      () => ctx.getHeader(),
+      'ephemeral key',
+      'should throw when not using ECIES'
+    );
   });
 
   // ==========================================================================

@@ -2,7 +2,12 @@
  * Shared utilities for web transport examples
  */
 
+import { fileURLToPath } from 'url';
+import path from 'path';
 import { FlatcRunner } from "flatc-wasm";
+import { loadEncryptionWasm, isInitialized } from "../../src/encryption.mjs";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Schema for messages
 export const schemaContent = `
@@ -43,11 +48,25 @@ export const plainSchemaInput = {
 };
 
 let runnerInstance = null;
+let encryptionInitialized = false;
+
+/**
+ * Initialize the encryption WASM module (call once before using encryption)
+ */
+export async function initEncryption() {
+  if (!encryptionInitialized && !isInitialized()) {
+    const wasmPath = path.join(__dirname, '..', '..', 'dist', 'flatc-encryption.wasm');
+    await loadEncryptionWasm(wasmPath);
+    encryptionInitialized = true;
+  }
+}
 
 export async function getRunner() {
   if (!runnerInstance) {
     runnerInstance = await FlatcRunner.init();
   }
+  // Also init encryption when getting runner
+  await initEncryption();
   return runnerInstance;
 }
 

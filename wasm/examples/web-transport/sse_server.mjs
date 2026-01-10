@@ -64,15 +64,15 @@ function toBase64(bytes) {
 /**
  * Create a new encryption session for a client
  */
-function createSession(publicKey, keyExchange) {
+function createSession(publicKey, algorithm) {
   const encryptCtx = EncryptionContext.forEncryption(publicKey, {
-    keyExchange,
+    algorithm,
     context: "sse-stream-v1",
     rootType: "Message",
   });
   return {
     publicKey,
-    keyExchange,
+    algorithm,
     encryptCtx,
     headerJSON: encryptCtx.getHeaderJSON(),
     messageCount: 0,
@@ -138,19 +138,19 @@ async function handleRequest(req, res) {
         return;
       }
 
-      let keyExchange;
+      let algorithm;
       let expectedLength;
       switch (algo) {
         case "x25519":
-          keyExchange = KeyExchangeAlgorithm.X25519;
+          algorithm = KeyExchangeAlgorithm.X25519;
           expectedLength = 32;
           break;
         case "secp256k1":
-          keyExchange = KeyExchangeAlgorithm.Secp256k1;
+          algorithm = KeyExchangeAlgorithm.SECP256K1;
           expectedLength = 33;
           break;
         case "p256":
-          keyExchange = KeyExchangeAlgorithm.P256;
+          algorithm = KeyExchangeAlgorithm.P256;
           expectedLength = 33;
           break;
         default:
@@ -173,7 +173,7 @@ async function handleRequest(req, res) {
       });
 
       // Create session with encryption context
-      const session = createSession(publicKey, keyExchange);
+      const session = createSession(publicKey, algorithm);
       encryptedClients.set(res, session);
       console.log(`[ENCRYPTED] Client connected with ${algo} (${encryptedClients.size} total)`);
 
@@ -240,7 +240,7 @@ async function broadcast() {
       const ROTATION_INTERVAL = 100;
       if (session.messageCount % ROTATION_INTERVAL === 0) {
         // Create new session (key rotation)
-        const newSession = createSession(session.publicKey, session.keyExchange);
+        const newSession = createSession(session.publicKey, session.algorithm);
         encryptedClients.set(client, newSession);
 
         // Send rotation event with new header

@@ -99,7 +99,7 @@ async function main() {
 
   // Create encryption context
   const encryptCtx = EncryptionContext.forEncryption(recipientPublicKey, {
-    keyExchange: KeyExchangeAlgorithm.X25519,
+    algorithm: KeyExchangeAlgorithm.X25519,
     context: "pipe-example-v1",
     rootType: "SecretMessage",
   });

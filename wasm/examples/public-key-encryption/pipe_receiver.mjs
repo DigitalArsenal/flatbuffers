@@ -101,11 +101,11 @@ async function main() {
   const { headerJSON, data } = unframeMessage(buffer);
   const header = encryptionHeaderFromJSON(headerJSON);
 
-  console.error(`Key exchange: ${["X25519", "secp256k1", "P-256"][header.keyExchange]}`);
+  console.error(`Key exchange: ${["X25519", "secp256k1", "P-256"][header.algorithm]}`);
   console.error(`Context: ${header.context || "(none)"}`);
 
   // Create decryption context
-  const decryptCtx = EncryptionContext.forDecryption(privateKey, header);
+  const decryptCtx = EncryptionContext.forDecryption(privateKey, header, header.context || "");
 
   // Decrypt the FlatBuffer
   decryptBuffer(data, schemaContent, decryptCtx, "SecretMessage");

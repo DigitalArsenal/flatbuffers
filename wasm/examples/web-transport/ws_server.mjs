@@ -63,10 +63,10 @@ function fromBase64(base64) {
 /**
  * Create encryption/decryption contexts for a client
  */
-function createSession(clientPublicKey, keyExchange) {
+function createSession(clientPublicKey, algorithm) {
   // Context for encrypting TO client
   const encryptCtx = EncryptionContext.forEncryption(clientPublicKey, {
-    keyExchange,
+    algorithm,
     context: "ws-stream-v1",
     rootType: "Message",
   });
@@ -74,7 +74,7 @@ function createSession(clientPublicKey, keyExchange) {
   return {
     encrypted: true,
     publicKey: clientPublicKey,
-    keyExchange,
+    algorithm,
     encryptCtx,
     decryptCtx: null, // Will be set when client sends their header
     serverHeader: JSON.parse(encryptCtx.getHeaderJSON()),
@@ -98,20 +98,20 @@ async function handleMessage(ws, message, runner) {
     case "hello": {
       // Client wants encrypted communication
       const algo = data.algo || "x25519";
-      let keyExchange;
+      let algorithm;
       let expectedLength;
 
       switch (algo) {
         case "x25519":
-          keyExchange = KeyExchangeAlgorithm.X25519;
+          algorithm = KeyExchangeAlgorithm.X25519;
           expectedLength = 32;
           break;
         case "secp256k1":
-          keyExchange = KeyExchangeAlgorithm.Secp256k1;
+          algorithm = KeyExchangeAlgorithm.SECP256K1;
           expectedLength = 33;
           break;
         case "p256":
-          keyExchange = KeyExchangeAlgorithm.P256;
+          algorithm = KeyExchangeAlgorithm.P256;
           expectedLength = 33;
           break;
         default:
@@ -125,7 +125,7 @@ async function handleMessage(ws, message, runner) {
         return;
       }
 
-      session = createSession(clientPublicKey, keyExchange);
+      session = createSession(clientPublicKey, algorithm);
       sessions.set(ws, session);
 
       console.log(`[WS] Client initiated ${algo} encryption`);
@@ -148,11 +148,11 @@ async function handleMessage(ws, message, runner) {
 
       // Select server private key based on algorithm
       let privateKey;
-      switch (session.keyExchange) {
+      switch (session.algorithm) {
         case KeyExchangeAlgorithm.X25519:
           privateKey = serverKeys.x25519.privateKey;
           break;
-        case KeyExchangeAlgorithm.Secp256k1:
+        case KeyExchangeAlgorithm.SECP256K1:
           privateKey = serverKeys.secp256k1.privateKey;
           break;
         case KeyExchangeAlgorithm.P256:
@@ -161,7 +161,7 @@ async function handleMessage(ws, message, runner) {
       }
 
       session.clientHeader = data.header;
-      session.decryptCtx = EncryptionContext.forDecryption(privateKey, data.header);
+      session.decryptCtx = EncryptionContext.forDecryption(privateKey, data.header, "ws-stream-v1");
 
       console.log(`[WS] Received client session header, bidirectional encryption ready`);
       break;
@@ -223,7 +223,7 @@ async function handleMessage(ws, message, runner) {
         return;
       }
 
-      const newSession = createSession(session.publicKey, session.keyExchange);
+      const newSession = createSession(session.publicKey, session.algorithm);
       newSession.decryptCtx = session.decryptCtx; // Keep ability to decrypt old messages
       sessions.set(ws, newSession);
 

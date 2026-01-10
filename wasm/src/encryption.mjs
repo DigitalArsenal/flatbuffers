@@ -128,15 +128,36 @@ export async function loadEncryptionWasm(wasmSource) {
   if (wasmSource instanceof Uint8Array || wasmSource instanceof ArrayBuffer) {
     wasmBytes = wasmSource;
   } else if (typeof wasmSource === 'string' || wasmSource instanceof URL) {
-    // In Node.js, use fs to read the file
-    if (typeof process !== 'undefined' && process.versions?.node) {
+    const urlStr = wasmSource instanceof URL ? wasmSource.href : wasmSource;
+
+    // Check if it's an HTTP(S) URL or file URL
+    if (urlStr.startsWith('http://') || urlStr.startsWith('https://')) {
+      // Use fetch for HTTP URLs (works in both Node.js 18+ and browser)
+      const response = await fetch(urlStr);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch WASM: ${response.status} ${response.statusText}`);
+      }
+      wasmBytes = await response.arrayBuffer();
+    } else if (urlStr.startsWith('file://')) {
+      // File URL - Node.js only
+      if (typeof process !== 'undefined' && process.versions?.node) {
+        const { readFileSync } = await import('fs');
+        const { fileURLToPath } = await import('url');
+        const path = fileURLToPath(urlStr);
+        wasmBytes = readFileSync(path);
+      } else {
+        throw new Error('file:// URLs are only supported in Node.js');
+      }
+    } else if (typeof process !== 'undefined' && process.versions?.node) {
+      // Local file path - Node.js only
       const { readFileSync } = await import('fs');
-      const { fileURLToPath } = await import('url');
-      const path = wasmSource instanceof URL ? fileURLToPath(wasmSource) : wasmSource;
-      wasmBytes = readFileSync(path);
+      wasmBytes = readFileSync(urlStr);
     } else {
-      // In browser, use fetch
-      const response = await fetch(wasmSource);
+      // In browser, use fetch for relative/absolute paths
+      const response = await fetch(urlStr);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch WASM: ${response.status} ${response.statusText}`);
+      }
       wasmBytes = await response.arrayBuffer();
     }
   } else {
@@ -144,8 +165,19 @@ export async function loadEncryptionWasm(wasmSource) {
   }
 
   // Exception handling state
-  let threwValue = 0;
   let exceptionPtr = 0;
+
+  // Temporary memory reference - will be set after instantiation
+  let tempMemory = null;
+
+  // Helper to get memory view safely
+  function getMemoryView() {
+    const mem = tempMemory || wasmMemory;
+    if (!mem) {
+      throw new Error('WASM memory not yet initialized');
+    }
+    return new DataView(mem.buffer);
+  }
 
   // Helper to call a WASM function with exception handling
   function invoke(fn, ...args) {
@@ -153,7 +185,6 @@ export async function loadEncryptionWasm(wasmSource) {
       return fn(...args);
     } catch (e) {
       // Set exception state
-      threwValue = 1;
       return 0;
     }
   }
@@ -164,18 +195,41 @@ export async function loadEncryptionWasm(wasmSource) {
       // Clock
       clock_time_get: (clockId, precision, resultPtr) => {
         const now = BigInt(Date.now()) * 1000000n;
-        const view = new DataView(wasmMemory.buffer);
+        const view = getMemoryView();
         view.setBigUint64(resultPtr, now, true);
         return 0;
       },
       // Environment
       environ_sizes_get: (countPtr, sizePtr) => {
-        const view = new DataView(wasmMemory.buffer);
+        const view = getMemoryView();
         view.setUint32(countPtr, 0, true);
         view.setUint32(sizePtr, 0, true);
         return 0;
       },
       environ_get: () => 0,
+      // Random - required for cryptographic operations
+      random_get: (bufPtr, bufLen) => {
+        const mem = tempMemory || wasmMemory;
+        if (!mem) return 1; // ERRNO_BADF
+        const buf = new Uint8Array(mem.buffer, bufPtr, bufLen);
+        // Use crypto.getRandomValues (available in browser and Node.js 18+)
+        if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
+          globalThis.crypto.getRandomValues(buf);
+        } else if (typeof process !== 'undefined' && process.versions?.node) {
+          // Fallback for older Node.js
+          try {
+            // eslint-disable-next-line no-new-func
+            const nodeCrypto = new Function('return require("crypto")')();
+            const randomBytes = nodeCrypto.randomBytes(bufLen);
+            buf.set(randomBytes);
+          } catch {
+            return 1; // ERRNO_BADF
+          }
+        } else {
+          return 1; // ERRNO_BADF - no random source available
+        }
+        return 0;
+      },
       // File descriptors
       fd_write: () => 0,
       fd_read: () => 0,
@@ -229,6 +283,7 @@ export async function loadEncryptionWasm(wasmSource) {
   const { instance } = await WebAssembly.instantiate(wasmBytes, imports);
 
   // Store memory reference before initializing
+  tempMemory = instance.exports.memory;
   wasmMemory = instance.exports.memory;
 
   // Initialize
@@ -700,20 +755,24 @@ export function decryptAuthenticated(authenticatedCiphertext, key, associatedDat
 export function hkdf(ikm, salt, info, length) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
 
+  // Handle empty arrays as null (HKDF allows empty salt/info)
+  const hasSalt = salt && salt.length > 0;
+  const hasInfo = info && info.length > 0;
+
   const ikmPtr = allocate(ikm.length);
-  const saltPtr = salt ? allocate(salt.length) : 0;
-  const infoPtr = info ? allocate(info.length) : 0;
+  const saltPtr = hasSalt ? allocate(salt.length) : 0;
+  const infoPtr = hasInfo ? allocate(info.length) : 0;
   const okmPtr = allocate(length);
 
   try {
     writeBytes(ikmPtr, ikm);
-    if (salt) writeBytes(saltPtr, salt);
-    if (info) writeBytes(infoPtr, info);
+    if (hasSalt) writeBytes(saltPtr, salt);
+    if (hasInfo) writeBytes(infoPtr, info);
 
     wasmModule.wasi_hkdf(
       ikmPtr, ikm.length,
-      saltPtr, salt ? salt.length : 0,
-      infoPtr, info ? info.length : 0,
+      saltPtr, hasSalt ? salt.length : 0,
+      infoPtr, hasInfo ? info.length : 0,
       okmPtr, length
     );
 
@@ -1673,12 +1732,38 @@ function readUint16(buffer, offset) {
  * @param {EncryptionContext} ctx - Encryption context
  */
 function processTable(buffer, tableOffset, schema, ctx) {
+  const bufLen = buffer.length;
+
+  // Bounds check: table offset must be within buffer
+  if (tableOffset < 0 || tableOffset + 4 > bufLen) {
+    throw new CryptoError(
+      CryptoErrorCode.INVALID_INPUT,
+      `Invalid table offset: ${tableOffset} (buffer size: ${bufLen})`
+    );
+  }
+
   // Read vtable offset (soffset_t at table start)
   const vtableOffsetDelta = readInt32(buffer, tableOffset);
   const vtableOffset = tableOffset - vtableOffsetDelta;
 
+  // Bounds check: vtable must be within buffer
+  if (vtableOffset < 0 || vtableOffset + 4 > bufLen) {
+    throw new CryptoError(
+      CryptoErrorCode.INVALID_INPUT,
+      `Invalid vtable offset: ${vtableOffset} (buffer size: ${bufLen})`
+    );
+  }
+
   // Read vtable size
   const vtableSize = readUint16(buffer, vtableOffset);
+
+  // Bounds check: vtable must fit within buffer
+  if (vtableOffset + vtableSize > bufLen) {
+    throw new CryptoError(
+      CryptoErrorCode.INVALID_INPUT,
+      `VTable extends beyond buffer: offset=${vtableOffset}, size=${vtableSize}, bufLen=${bufLen}`
+    );
+  }
 
   for (const field of schema.fields) {
     // Field offset is at vtable + (field.id + 2) * 2
@@ -1690,6 +1775,14 @@ function processTable(buffer, tableOffset, schema, ctx) {
 
     const fieldLoc = tableOffset + fieldOffset;
 
+    // Bounds check: field location must be within buffer
+    if (fieldLoc < 0 || fieldLoc >= bufLen) {
+      throw new CryptoError(
+        CryptoErrorCode.INVALID_INPUT,
+        `Field '${field.name}' offset ${fieldLoc} is out of bounds (buffer size: ${bufLen})`
+      );
+    }
+
     if (!field.encrypted) continue;
 
     const key = ctx.deriveFieldKey(field.id);
@@ -1698,23 +1791,67 @@ function processTable(buffer, tableOffset, schema, ctx) {
     // Handle different field types
     const size = TYPE_SIZES[field.type];
     if (size) {
+      // Bounds check for scalar
+      if (fieldLoc + size > bufLen) {
+        throw new CryptoError(
+          CryptoErrorCode.INVALID_INPUT,
+          `Field '${field.name}' data extends beyond buffer: offset=${fieldLoc}, size=${size}, bufLen=${bufLen}`
+        );
+      }
       // Scalar type - encrypt in place
       const data = buffer.subarray(fieldLoc, fieldLoc + size);
       encryptBytes(data, key, iv);
     } else if (field.type === 'string') {
       // String: offset to string, then length-prefixed data
+      if (fieldLoc + 4 > bufLen) {
+        throw new CryptoError(
+          CryptoErrorCode.INVALID_INPUT,
+          `Field '${field.name}' string offset extends beyond buffer`
+        );
+      }
       const strOffset = readUint32(buffer, fieldLoc);
       const strLoc = fieldLoc + strOffset;
+      if (strLoc + 4 > bufLen) {
+        throw new CryptoError(
+          CryptoErrorCode.INVALID_INPUT,
+          `Field '${field.name}' string length extends beyond buffer`
+        );
+      }
       const strLen = readUint32(buffer, strLoc);
+      if (strLoc + 4 + strLen > bufLen) {
+        throw new CryptoError(
+          CryptoErrorCode.INVALID_INPUT,
+          `Field '${field.name}' string data extends beyond buffer: strLoc=${strLoc}, strLen=${strLen}, bufLen=${bufLen}`
+        );
+      }
       const strData = buffer.subarray(strLoc + 4, strLoc + 4 + strLen);
       encryptBytes(strData, key, iv);
     } else if (field.type === 'vector') {
       // Vector: offset to vector, then length-prefixed elements
+      if (fieldLoc + 4 > bufLen) {
+        throw new CryptoError(
+          CryptoErrorCode.INVALID_INPUT,
+          `Field '${field.name}' vector offset extends beyond buffer`
+        );
+      }
       const vecOffset = readUint32(buffer, fieldLoc);
       const vecLoc = fieldLoc + vecOffset;
+      if (vecLoc + 4 > bufLen) {
+        throw new CryptoError(
+          CryptoErrorCode.INVALID_INPUT,
+          `Field '${field.name}' vector length extends beyond buffer`
+        );
+      }
       const vecLen = readUint32(buffer, vecLoc);
       const elemSize = field.elementSize || 1;
-      const vecData = buffer.subarray(vecLoc + 4, vecLoc + 4 + vecLen * elemSize);
+      const vecDataLen = vecLen * elemSize;
+      if (vecLoc + 4 + vecDataLen > bufLen) {
+        throw new CryptoError(
+          CryptoErrorCode.INVALID_INPUT,
+          `Field '${field.name}' vector data extends beyond buffer: vecLoc=${vecLoc}, vecDataLen=${vecDataLen}, bufLen=${bufLen}`
+        );
+      }
+      const vecData = buffer.subarray(vecLoc + 4, vecLoc + 4 + vecDataLen);
       encryptBytes(vecData, key, iv);
     } else if (field.type === 'struct') {
       // Struct encryption requires knowing the struct size, which isn't available
@@ -1876,8 +2013,13 @@ export function decryptBuffer(buffer, schema, key, rootType, nonce) {
 // =============================================================================
 
 export default {
+  // Error types
+  CryptoError,
+  CryptoErrorCode,
+
   // Initialization
   initEncryption,
+  loadEncryptionWasm,
   isInitialized,
   hasCryptopp,
   getVersion,
@@ -1885,9 +2027,15 @@ export default {
   // Hash
   sha256,
 
+  // HMAC
+  hmacSha256,
+  hmacSha256Verify,
+
   // Symmetric encryption
   encryptBytes,
   decryptBytes,
+  encryptAuthenticated,
+  decryptAuthenticated,
   hkdf,
 
   // X25519
@@ -1919,6 +2067,10 @@ export default {
   SignatureAlgorithm,
   SymmetricAlgorithm,
   KeyDerivationFunction,
+  KEY_SIZE,
+  IV_SIZE,
+  HMAC_SIZE,
+  SHA256_SIZE,
 
   // Classes
   EncryptionContext,

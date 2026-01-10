@@ -1202,11 +1202,20 @@ export function ed25519GenerateKeyPair() {
  * @param {Uint8Array} privateKey - Signing private key (64 bytes)
  * @param {Uint8Array} data - Data to sign
  * @returns {Uint8Array} - 64-byte signature
+ * @throws {Error} If privateKey is not 64 bytes or inputs are not Uint8Array
  */
 export function ed25519Sign(privateKey, data) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
+
+  // Validate inputs before allocation
+  if (!(privateKey instanceof Uint8Array)) {
+    throw new Error('privateKey must be a Uint8Array');
+  }
   if (privateKey.length !== ED25519_PRIVATE_KEY_SIZE) {
-    throw new Error(`Private key must be ${ED25519_PRIVATE_KEY_SIZE} bytes`);
+    throw new Error(`Invalid private key length: expected ${ED25519_PRIVATE_KEY_SIZE} bytes, got ${privateKey.length}`);
+  }
+  if (!(data instanceof Uint8Array)) {
+    throw new Error('data must be a Uint8Array');
   }
 
   const privPtr = allocate(ED25519_PRIVATE_KEY_SIZE);
@@ -1236,9 +1245,27 @@ export function ed25519Sign(privateKey, data) {
  * @param {Uint8Array} data - Original data
  * @param {Uint8Array} signature - 64-byte signature
  * @returns {boolean} - True if valid
+ * @throws {Error} If publicKey is not 32 bytes or signature is not 64 bytes
  */
 export function ed25519Verify(publicKey, data, signature) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
+
+  // Validate input lengths before allocation to prevent buffer issues
+  if (!(publicKey instanceof Uint8Array)) {
+    throw new Error('publicKey must be a Uint8Array');
+  }
+  if (publicKey.length !== ED25519_PUBLIC_KEY_SIZE) {
+    throw new Error(`Invalid public key length: expected ${ED25519_PUBLIC_KEY_SIZE} bytes, got ${publicKey.length}`);
+  }
+  if (!(signature instanceof Uint8Array)) {
+    throw new Error('signature must be a Uint8Array');
+  }
+  if (signature.length !== ED25519_SIGNATURE_SIZE) {
+    throw new Error(`Invalid signature length: expected ${ED25519_SIGNATURE_SIZE} bytes, got ${signature.length}`);
+  }
+  if (!(data instanceof Uint8Array)) {
+    throw new Error('data must be a Uint8Array');
+  }
 
   const pubPtr = allocate(ED25519_PUBLIC_KEY_SIZE);
   const dataPtr = allocate(data.length);

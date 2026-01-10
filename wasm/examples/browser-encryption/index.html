@@ -189,123 +189,25 @@ root_type UserData;</textarea>
 
   <!-- Import from CDN or local -->
   <script type="module">
-    // Import the WASM-based encryption module (Crypto++ compiled to WASM)
+    // Import the encryption module which includes all needed functions
     import {
       loadEncryptionWasm,
-      encrypt,
-      decrypt,
+      encryptBytes,
       hkdf,
+      EncryptionContext,
+      encryptBuffer as encryptBufferLib,
+      parseSchemaForEncryption,
       KEY_SIZE,
       IV_SIZE
     } from '../../src/encryption.mjs';
 
     // Path to the encryption WASM module (built from Crypto++)
-    const ENCRYPTION_WASM_PATH = '../../build/wasm/wasm/flatc-encryption.wasm';
+    const ENCRYPTION_WASM_PATH = '../../dist/flatc-encryption.wasm';
 
-    // Encryption context using the WASM module
-    class EncryptionContext {
-      #key;
-      constructor(key) {
-        if (typeof key === 'string') {
-          this.#key = new Uint8Array(key.length / 2);
-          for (let i = 0; i < key.length; i += 2) {
-            this.#key[i / 2] = parseInt(key.substring(i, i + 2), 16);
-          }
-        } else {
-          this.#key = new Uint8Array(key);
-        }
-      }
-      isValid() { return this.#key.length === KEY_SIZE; }
-      deriveFieldKey(fieldId) {
-        const info = new TextEncoder().encode(`flatbuffers-field-${fieldId}`);
-        return hkdf(this.#key, new Uint8Array(0), info, KEY_SIZE);
-      }
-      deriveFieldIV(fieldId) {
-        const info = new TextEncoder().encode(`flatbuffers-iv-${fieldId}`);
-        return hkdf(this.#key, new Uint8Array(0), info, IV_SIZE);
-      }
-    }
-
-    function parseSchemaForEncryption(schemaContent, rootType) {
-      const schema = { fields: [] };
-      const tableRegex = new RegExp(`table\\s+${rootType}\\s*\\{([^}]+)\\}`, 's');
-      const match = schemaContent.match(tableRegex);
-      if (!match) return schema;
-
-      const tableBody = match[1];
-      const fieldRegex = /(\w+)\s*:\s*(\[?\w+\]?)\s*(?:\(([^)]*)\))?/g;
-      let fieldId = 0;
-      let fieldMatch;
-
-      while ((fieldMatch = fieldRegex.exec(tableBody)) !== null) {
-        const isEncrypted = (fieldMatch[3] || '').includes('encrypted');
-        const isVector = fieldMatch[2].startsWith('[') && fieldMatch[2].endsWith(']');
-        const baseType = isVector ? fieldMatch[2].slice(1, -1) : fieldMatch[2];
-
-        const sizes = { bool: 1, byte: 1, ubyte: 1, short: 2, ushort: 2, int: 4, uint: 4, float: 4, long: 8, ulong: 8, double: 8 };
-        const scalarTypes = ['bool', 'byte', 'ubyte', 'short', 'ushort', 'int', 'uint', 'long', 'ulong', 'float', 'double'];
-
-        schema.fields.push({
-          name: fieldMatch[1],
-          id: fieldId++,
-          type: isVector ? 'vector' : (scalarTypes.includes(baseType) ? baseType : (baseType === 'string' ? 'string' : 'struct')),
-          encrypted: isEncrypted,
-          elementSize: sizes[baseType] || 1
-        });
-      }
-      return schema;
-    }
-
-    function readUint32(buf, off) { return buf[off] | (buf[off+1] << 8) | (buf[off+2] << 16) | (buf[off+3] << 24) >>> 0; }
-    function readInt32(buf, off) { return buf[off] | (buf[off+1] << 8) | (buf[off+2] << 16) | (buf[off+3] << 24); }
-    function readUint16(buf, off) { return buf[off] | (buf[off+1] << 8); }
-
-    function processTable(buffer, tableOffset, schema, ctx) {
-      const vtableOffsetDelta = readInt32(buffer, tableOffset);
-      const vtableOffset = tableOffset - vtableOffsetDelta;
-      const vtableSize = readUint16(buffer, vtableOffset);
-
-      for (const field of schema.fields) {
-        const fieldVtableIdx = (field.id + 2) * 2;
-        if (fieldVtableIdx >= vtableSize) continue;
-        const fieldOffset = readUint16(buffer, vtableOffset + fieldVtableIdx);
-        if (fieldOffset === 0) continue;
-        const fieldLoc = tableOffset + fieldOffset;
-        if (!field.encrypted) continue;
-
-        const key = ctx.deriveFieldKey(field.id);
-        const iv = ctx.deriveFieldIV(field.id);
-
-        const sizes = { bool: 1, byte: 1, ubyte: 1, short: 2, ushort: 2, int: 4, uint: 4, float: 4, long: 8, ulong: 8, double: 8 };
-        if (sizes[field.type]) {
-          const data = buffer.subarray(fieldLoc, fieldLoc + sizes[field.type]);
-          const encrypted = encrypt(key, iv, data);
-          buffer.set(encrypted, fieldLoc);
-        } else if (field.type === 'string') {
-          const strOffset = readUint32(buffer, fieldLoc);
-          const strLoc = fieldLoc + strOffset;
-          const strLen = readUint32(buffer, strLoc);
-          const data = buffer.subarray(strLoc + 4, strLoc + 4 + strLen);
-          const encrypted = encrypt(key, iv, data);
-          buffer.set(encrypted, strLoc + 4);
-        } else if (field.type === 'vector') {
-          const vecOffset = readUint32(buffer, fieldLoc);
-          const vecLoc = fieldLoc + vecOffset;
-          const vecLen = readUint32(buffer, vecLoc);
-          const data = buffer.subarray(vecLoc + 4, vecLoc + 4 + vecLen * field.elementSize);
-          const encrypted = encrypt(key, iv, data);
-          buffer.set(encrypted, vecLoc + 4);
-        }
-      }
-    }
-
+    // Wrapper for encrypting buffers that uses the library's implementation
     function encryptBufferImpl(buffer, schema, key, rootType) {
-      const ctx = typeof key === 'string' || key instanceof Uint8Array ? new EncryptionContext(key) : key;
-      if (!ctx.isValid()) throw new Error('Invalid key');
-      const parsedSchema = typeof schema === 'string' ? parseSchemaForEncryption(schema, rootType) : schema;
-      const rootOffset = readUint32(buffer, 0);
-      processTable(buffer, rootOffset, parsedSchema, ctx);
-      return buffer;
+      const { buffer: encrypted } = encryptBufferLib(buffer, schema, key, rootType);
+      return encrypted;
     }
 
     // Global state

@@ -74,19 +74,19 @@ async function main() {
   const recipientPublicKey = fromHex(recipientKeyHex);
 
   // Determine key exchange algorithm
-  let keyExchange;
+  let algorithm;
   let expectedKeyLength;
   switch (CURVE) {
     case "x25519":
-      keyExchange = KeyExchangeAlgorithm.X25519;
+      algorithm = KeyExchangeAlgorithm.X25519;
       expectedKeyLength = 32;
       break;
     case "secp256k1":
-      keyExchange = KeyExchangeAlgorithm.Secp256k1;
+      algorithm = KeyExchangeAlgorithm.SECP256K1;
       expectedKeyLength = 33;
       break;
     case "p256":
-      keyExchange = KeyExchangeAlgorithm.P256;
+      algorithm = KeyExchangeAlgorithm.P256;
       expectedKeyLength = 33;
       break;
     default:
@@ -129,7 +129,7 @@ async function main() {
 
   // Create encryption context
   const encryptCtx = EncryptionContext.forEncryption(recipientPublicKey, {
-    keyExchange,
+    algorithm,
     context: "tcp-example-v1",
     rootType: "SecretMessage",
   });

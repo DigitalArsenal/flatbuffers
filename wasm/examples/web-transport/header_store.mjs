@@ -21,8 +21,6 @@
 
 import {
   sha256,
-  encryptionHeaderToBinary,
-  encryptionHeaderFromBinary,
   encryptionHeaderToJSON,
   encryptionHeaderFromJSON,
 } from "flatc-wasm/encryption";
@@ -221,78 +219,44 @@ export function sessionFromJSON(json) {
 }
 
 /**
- * Save session to FlatBuffer binary format
- * Only the header is stored as FlatBuffer; session metadata is JSON wrapper
+ * Save session to binary format
+ * Uses JSON encoding for the full session (simple and portable)
  * @param {Object} session - Session object from createSession()
- * @returns {Promise<Uint8Array>} - Binary format: [4-byte metadata length][metadata JSON][header FlatBuffer]
+ * @returns {Uint8Array} - Binary encoded session
  */
-export async function sessionToBinary(session) {
-  // Convert header to FlatBuffer binary
-  const headerBinary = await encryptionHeaderToBinary(session.header);
-
-  // Create metadata (everything except header)
-  const metadata = {
-    version: session.version,
-    sessionId: session.sessionId,
-    created: session.created,
-    files: session.files,
-    description: session.description,
-  };
-  const metadataJSON = JSON.stringify(metadata);
-  const metadataBytes = new TextEncoder().encode(metadataJSON);
-
-  // Format: [4-byte metadata length (LE)][metadata JSON][header FlatBuffer]
-  const result = new Uint8Array(4 + metadataBytes.length + headerBinary.length);
-  const view = new DataView(result.buffer);
-  view.setUint32(0, metadataBytes.length, true); // little-endian
-  result.set(metadataBytes, 4);
-  result.set(headerBinary, 4 + metadataBytes.length);
-
-  return result;
+export function sessionToBinary(session) {
+  const json = sessionToJSON(session);
+  return new TextEncoder().encode(json);
 }
 
 /**
- * Load session from FlatBuffer binary format
+ * Load session from binary format
  * @param {Uint8Array} binary - Binary data from sessionToBinary()
- * @returns {Promise<Object>} - Session object with header as parsed object
+ * @returns {Object} - Session object with header as parsed object
  */
-export async function sessionFromBinary(binary) {
-  const view = new DataView(binary.buffer, binary.byteOffset, binary.byteLength);
-  const metadataLength = view.getUint32(0, true);
-
-  const metadataBytes = binary.subarray(4, 4 + metadataLength);
-  const metadataJSON = new TextDecoder().decode(metadataBytes);
-  const metadata = JSON.parse(metadataJSON);
-
-  const headerBinary = binary.subarray(4 + metadataLength);
-  const header = await encryptionHeaderFromBinary(headerBinary);
-
-  return {
-    version: metadata.version,
-    sessionId: metadata.sessionId,
-    created: metadata.created,
-    header: header,
-    files: metadata.files,
-    description: metadata.description,
-  };
+export function sessionFromBinary(binary) {
+  const json = new TextDecoder().decode(binary);
+  return sessionFromJSON(json);
 }
 
 /**
- * Save header only to FlatBuffer binary
+ * Save header only to binary (JSON encoded)
  * @param {Object} header - Header object
- * @returns {Promise<Uint8Array>} - FlatBuffer binary
+ * @returns {Uint8Array} - Binary encoded header
  */
-export async function headerToBinary(header) {
-  return encryptionHeaderToBinary(header);
+export function headerToBinary(header) {
+  const json = headerToJSON(header);
+  return new TextEncoder().encode(json);
 }
 
 /**
- * Load header only from FlatBuffer binary
- * @param {Uint8Array} binary - FlatBuffer binary
- * @returns {Promise<Object>} - Header object
+ * Load header only from binary (JSON encoded)
+ * @param {Uint8Array} binary - Binary encoded header
+ * @returns {Object} - Header object
  */
-export async function headerFromBinary(binary) {
-  return encryptionHeaderFromBinary(binary);
+export function headerFromBinary(binary) {
+  const json = new TextDecoder().decode(binary);
+  return headerFromJSON(json);
 }
 
 /**

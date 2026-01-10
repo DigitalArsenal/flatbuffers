@@ -93,27 +93,27 @@ async function main() {
         const { headerJSON, data } = unframeMessage(buffer);
         const header = encryptionHeaderFromJSON(headerJSON);
 
-        console.log(`Key exchange: ${["X25519", "secp256k1", "P-256"][header.keyExchange]}`);
+        console.log(`Key exchange: ${["X25519", "secp256k1", "P-256"][header.algorithm]}`);
         console.log(`Context: ${header.context || "(none)"}`);
 
         // Select the appropriate private key based on the key exchange algorithm
         let privateKey;
-        switch (header.keyExchange) {
+        switch (header.algorithm) {
           case KeyExchangeAlgorithm.X25519:
             privateKey = keys.x25519.privateKey;
             break;
-          case KeyExchangeAlgorithm.Secp256k1:
+          case KeyExchangeAlgorithm.SECP256K1:
             privateKey = keys.secp256k1.privateKey;
             break;
           case KeyExchangeAlgorithm.P256:
             privateKey = keys.p256.privateKey;
             break;
           default:
-            throw new Error(`Unknown key exchange: ${header.keyExchange}`);
+            throw new Error(`Unknown key exchange: ${header.algorithm}`);
         }
 
         // Create decryption context
-        const decryptCtx = EncryptionContext.forDecryption(privateKey, header);
+        const decryptCtx = EncryptionContext.forDecryption(privateKey, header, header.context || "");
 
         // Decrypt the FlatBuffer
         decryptBuffer(data, schemaContent, decryptCtx, "SecretMessage");

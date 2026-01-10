@@ -99,14 +99,14 @@ async function main() {
   console.log("--- Demo 2: FlatBuffer Binary Format ---\n");
 
   // Save as binary
-  const sessionBinary = await sessionToBinary(session);
+  const sessionBinary = sessionToBinary(session);
   const binPath = join(DEMO_DIR, "session.bin");
   await writeFile(binPath, sessionBinary);
   console.log(`Saved session.bin (${sessionBinary.length} bytes)`);
 
   // Load from binary
   const loadedBinary = await readFile(binPath);
-  const sessionFromBinaryFile = await sessionFromBinary(new Uint8Array(loadedBinary));
+  const sessionFromBinaryFile = sessionFromBinary(new Uint8Array(loadedBinary));
   console.log(`Loaded session from binary:`);
   console.log(`  Session ID: ${sessionFromBinaryFile.sessionId}`);
   console.log(`  Created: ${sessionFromBinaryFile.created}`);
@@ -124,8 +124,8 @@ async function main() {
   await writeFile(headerJsonPath, headerJSONStr);
   console.log(`Saved header.json (${headerJSONStr.length} bytes)`);
 
-  // Header as binary FlatBuffer
-  const headerBinary = await headerToBinary(header);
+  // Header as binary
+  const headerBinary = headerToBinary(header);
   const headerBinPath = join(DEMO_DIR, "header.bin");
   await writeFile(headerBinPath, headerBinary);
   console.log(`Saved header.bin (${headerBinary.length} bytes)`);
@@ -166,7 +166,7 @@ async function main() {
   // Update session with actual files and re-save
   session.files = encryptedFiles;
   await writeFile(jsonPath, sessionToJSON(session));
-  await writeFile(binPath, await sessionToBinary(session));
+  await writeFile(binPath, sessionToBinary(session));
   console.log(`\nUpdated session files with: ${encryptedFiles.join(", ")}`);
   console.log();
 
@@ -175,12 +175,13 @@ async function main() {
 
   // Load session (using binary format this time)
   const loadedSessionBin = await readFile(binPath);
-  const loadedSession = await sessionFromBinary(new Uint8Array(loadedSessionBin));
+  const loadedSession = sessionFromBinary(new Uint8Array(loadedSessionBin));
 
   // Create decryption context from loaded header
   const decryptCtx = EncryptionContext.forDecryption(
     recipientKeys.privateKey,
-    loadedSession.header
+    loadedSession.header,
+    "demo-session-v1"
   );
 
   // Decrypt each file

@@ -167,7 +167,7 @@ function handleEncryptedEvent(runner, eventType, eventData, privateKey, currentC
     console.log(`Connected (encrypted, algo: ${data.algo})`);
 
     // Create decryption context from session header
-    decryptCtx = EncryptionContext.forDecryption(privateKey, data.header);
+    decryptCtx = EncryptionContext.forDecryption(privateKey, data.header, "sse-stream-v1");
     console.log("Session header received, ready to decrypt\n");
 
     return { decryptCtx, messageCount: 0 };
@@ -177,7 +177,7 @@ function handleEncryptedEvent(runner, eventType, eventData, privateKey, currentC
     console.log(`\n[KEY ROTATION] Reason: ${data.reason}`);
 
     // Create new decryption context from new header
-    decryptCtx = EncryptionContext.forDecryption(privateKey, data.header);
+    decryptCtx = EncryptionContext.forDecryption(privateKey, data.header, "sse-stream-v1");
     console.log("New session header applied\n");
 
     return { decryptCtx, messageCount: 0 };

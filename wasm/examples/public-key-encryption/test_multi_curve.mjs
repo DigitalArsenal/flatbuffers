@@ -66,7 +66,7 @@ async function testCurve(curveName, keyExchange, generateKeyPair) {
 
   // Encrypt using EncryptionContext
   const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
-    keyExchange,
+    algorithm: keyExchange,
     context: `test-${curveName.toLowerCase()}`,
     rootType: "SecretMessage",
   });
@@ -90,7 +90,8 @@ async function testCurve(curveName, keyExchange, generateKeyPair) {
   const receivedHeader = encryptionHeaderFromJSON(headerJSON);
   const decryptCtx = EncryptionContext.forDecryption(
     recipientKeys.privateKey,
-    receivedHeader
+    receivedHeader,
+    `test-${curveName.toLowerCase()}`
   );
 
   decryptBuffer(flatbuffer, schemaContent, decryptCtx, "SecretMessage");
@@ -127,7 +128,7 @@ async function main() {
 
   const results = {
     x25519: await testCurve("X25519", KeyExchangeAlgorithm.X25519, x25519GenerateKeyPair),
-    secp256k1: await testCurve("secp256k1", KeyExchangeAlgorithm.Secp256k1, secp256k1GenerateKeyPair),
+    secp256k1: await testCurve("secp256k1", KeyExchangeAlgorithm.SECP256K1, secp256k1GenerateKeyPair),
     p256: await testCurve("P-256", KeyExchangeAlgorithm.P256, p256GenerateKeyPair),
   };
 

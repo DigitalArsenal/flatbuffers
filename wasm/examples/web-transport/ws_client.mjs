@@ -94,7 +94,7 @@ async function main() {
         console.log(`Received server session header${data.rotated ? " (rotated)" : ""}`);
 
         // Create context to decrypt messages FROM server
-        decryptCtx = EncryptionContext.forDecryption(clientKeys.privateKey, data.header);
+        decryptCtx = EncryptionContext.forDecryption(clientKeys.privateKey, data.header, "ws-stream-v1");
 
         if (!data.rotated && data.serverPublicKey) {
           // First session - create context to encrypt messages TO server

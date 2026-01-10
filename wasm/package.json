@@ -37,6 +37,7 @@
     "dist/flatc-wasm.js",
     "dist/flatc-wasm.cjs",
     "dist/flatc-wasm.d.ts",
+    "dist/flatc-encryption.wasm",
     "README.md"
   ],
   "scripts": {

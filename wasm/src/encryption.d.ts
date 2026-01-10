@@ -1,9 +1,304 @@
 /**
  * Type definitions for FlatBuffers field-level encryption
+ *
+ * All cryptographic operations use the Crypto++ WASM module.
  */
 
+// =============================================================================
+// Constants
+// =============================================================================
+
+export declare const KEY_SIZE: 32;
+export declare const IV_SIZE: 16;
+export declare const SHA256_SIZE: 32;
+export declare const X25519_PRIVATE_KEY_SIZE: 32;
+export declare const X25519_PUBLIC_KEY_SIZE: 32;
+export declare const SECP256K1_PRIVATE_KEY_SIZE: 32;
+export declare const SECP256K1_PUBLIC_KEY_SIZE: 33;
+export declare const P256_PRIVATE_KEY_SIZE: 32;
+export declare const P256_PUBLIC_KEY_SIZE: 33;
+export declare const ED25519_PRIVATE_KEY_SIZE: 64;
+export declare const ED25519_PUBLIC_KEY_SIZE: 32;
+export declare const ED25519_SIGNATURE_SIZE: 64;
+
+export declare const KeyExchangeAlgorithm: {
+  X25519: 'x25519';
+  SECP256K1: 'secp256k1';
+  P256: 'p256';
+};
+
+export declare const SignatureAlgorithm: {
+  ED25519: 'ed25519';
+  SECP256K1_ECDSA: 'secp256k1-ecdsa';
+  P256_ECDSA: 'p256-ecdsa';
+};
+
+export declare const SymmetricAlgorithm: {
+  AES_256_CTR: 'aes-256-ctr';
+};
+
+export declare const KeyDerivationFunction: {
+  HKDF_SHA256: 'hkdf-sha256';
+};
+
+// =============================================================================
+// Initialization
+// =============================================================================
+
 /**
- * Encryption context for FlatBuffer field encryption
+ * Initialize the encryption module with a pre-loaded WASM instance
+ */
+export declare function initEncryption(instance: WebAssembly.Instance): void;
+
+/**
+ * Load and initialize the encryption WASM module
+ * @param wasmSource - Path to WASM file, URL, or binary data
+ */
+export declare function loadEncryptionWasm(
+  wasmSource: string | URL | Uint8Array | ArrayBuffer
+): Promise<void>;
+
+/**
+ * Check if encryption module is initialized
+ */
+export declare function isInitialized(): boolean;
+
+/**
+ * Check if Crypto++ is available in the WASM module
+ */
+export declare function hasCryptopp(): boolean;
+
+/**
+ * Get the WASM module version
+ */
+export declare function getVersion(): string;
+
+// =============================================================================
+// Hash Functions
+// =============================================================================
+
+/**
+ * Compute SHA-256 hash
+ * @param data - Data to hash
+ * @returns 32-byte hash
+ */
+export declare function sha256(data: Uint8Array): Uint8Array;
+
+// =============================================================================
+// Symmetric Encryption (AES-256-CTR)
+// =============================================================================
+
+/**
+ * Encrypt data in-place using AES-256-CTR
+ *
+ * WARNING: This function modifies the data array in-place.
+ * CTR mode is a stream cipher - each (key, IV) pair must be unique.
+ *
+ * @param data - Data to encrypt (modified in-place)
+ * @param key - 32-byte key
+ * @param iv - 16-byte IV (must be unique per encryption)
+ */
+export declare function encryptBytes(
+  data: Uint8Array,
+  key: Uint8Array,
+  iv: Uint8Array
+): void;
+
+/**
+ * Decrypt data in-place using AES-256-CTR
+ * Same as encryptBytes (CTR mode is symmetric)
+ */
+export declare function decryptBytes(
+  data: Uint8Array,
+  key: Uint8Array,
+  iv: Uint8Array
+): void;
+
+/**
+ * Derive key using HKDF-SHA256
+ * @param ikm - Input key material
+ * @param salt - Optional salt (can be null)
+ * @param info - Optional context info (can be null)
+ * @param length - Output length in bytes
+ * @returns Derived key material
+ */
+export declare function hkdf(
+  ikm: Uint8Array,
+  salt: Uint8Array | null,
+  info: Uint8Array | null,
+  length: number
+): Uint8Array;
+
+// =============================================================================
+// X25519 Key Exchange
+// =============================================================================
+
+export interface KeyPair {
+  privateKey: Uint8Array;
+  publicKey: Uint8Array;
+}
+
+/**
+ * Generate X25519 key pair
+ * @param privateKey - Optional 32-byte private key (generates random if not provided)
+ */
+export declare function x25519GenerateKeyPair(privateKey?: Uint8Array): KeyPair;
+
+/**
+ * Compute X25519 shared secret (ECDH)
+ * @param privateKey - Our private key (32 bytes)
+ * @param publicKey - Their public key (32 bytes)
+ * @returns 32-byte shared secret
+ */
+export declare function x25519SharedSecret(
+  privateKey: Uint8Array,
+  publicKey: Uint8Array
+): Uint8Array;
+
+/**
+ * Derive symmetric key from X25519 shared secret
+ */
+export declare function x25519DeriveKey(
+  sharedSecret: Uint8Array,
+  context: Uint8Array | string
+): Uint8Array;
+
+// =============================================================================
+// secp256k1 Key Exchange and Signatures (Bitcoin/Ethereum)
+// =============================================================================
+
+/**
+ * Generate secp256k1 key pair
+ * @param privateKey - Optional 32-byte private key
+ */
+export declare function secp256k1GenerateKeyPair(privateKey?: Uint8Array): KeyPair;
+
+/**
+ * Compute secp256k1 ECDH shared secret
+ * @param privateKey - Our private key (32 bytes)
+ * @param publicKey - Their public key (33 bytes compressed)
+ */
+export declare function secp256k1SharedSecret(
+  privateKey: Uint8Array,
+  publicKey: Uint8Array
+): Uint8Array;
+
+/**
+ * Derive symmetric key from secp256k1 shared secret
+ */
+export declare function secp256k1DeriveKey(
+  sharedSecret: Uint8Array,
+  context: Uint8Array | string
+): Uint8Array;
+
+/**
+ * Sign data with secp256k1 ECDSA
+ * @param privateKey - Signing private key (32 bytes)
+ * @param data - Data to sign
+ * @returns DER-encoded signature
+ */
+export declare function secp256k1Sign(
+  privateKey: Uint8Array,
+  data: Uint8Array
+): Uint8Array;
+
+/**
+ * Verify secp256k1 ECDSA signature
+ * @param publicKey - Verification public key (33 bytes)
+ * @param data - Original data
+ * @param signature - DER-encoded signature
+ * @returns true if signature is valid, false otherwise
+ */
+export declare function secp256k1Verify(
+  publicKey: Uint8Array,
+  data: Uint8Array,
+  signature: Uint8Array
+): boolean;
+
+// =============================================================================
+// P-256 Key Exchange and Signatures (NIST)
+// =============================================================================
+
+/**
+ * Generate P-256 key pair
+ * @param privateKey - Optional 32-byte private key
+ */
+export declare function p256GenerateKeyPair(privateKey?: Uint8Array): KeyPair;
+
+/**
+ * Compute P-256 ECDH shared secret
+ */
+export declare function p256SharedSecret(
+  privateKey: Uint8Array,
+  publicKey: Uint8Array
+): Uint8Array;
+
+/**
+ * Derive symmetric key from P-256 shared secret
+ */
+export declare function p256DeriveKey(
+  sharedSecret: Uint8Array,
+  context: Uint8Array | string
+): Uint8Array;
+
+/**
+ * Sign data with P-256 ECDSA
+ */
+export declare function p256Sign(
+  privateKey: Uint8Array,
+  data: Uint8Array
+): Uint8Array;
+
+/**
+ * Verify P-256 ECDSA signature
+ */
+export declare function p256Verify(
+  publicKey: Uint8Array,
+  data: Uint8Array,
+  signature: Uint8Array
+): boolean;
+
+// =============================================================================
+// Ed25519 Signatures
+// =============================================================================
+
+/**
+ * Generate Ed25519 signing key pair
+ */
+export declare function ed25519GenerateKeyPair(): KeyPair;
+
+/**
+ * Sign data with Ed25519
+ * @param privateKey - Signing private key (64 bytes)
+ * @param data - Data to sign
+ * @returns 64-byte signature
+ */
+export declare function ed25519Sign(
+  privateKey: Uint8Array,
+  data: Uint8Array
+): Uint8Array;
+
+/**
+ * Verify Ed25519 signature
+ * @param publicKey - Verification public key (32 bytes)
+ * @param data - Original data
+ * @param signature - 64-byte signature
+ * @returns true if signature is valid, false otherwise
+ */
+export declare function ed25519Verify(
+  publicKey: Uint8Array,
+  data: Uint8Array,
+  signature: Uint8Array
+): boolean;
+
+// =============================================================================
+// Encryption Context
+// =============================================================================
+
+/**
+ * Encryption context for FlatBuffer field encryption.
+ *
+ * WARNING: Methods that encrypt data modify the buffer in-place.
  */
 export declare class EncryptionContext {
   /**
@@ -13,24 +308,49 @@ export declare class EncryptionContext {
   constructor(key: Uint8Array | string);
 
   /**
+   * Create from hex string
+   * @param hexKey - 64-character hex string
+   */
+  static fromHex(hexKey: string): EncryptionContext;
+
+  /**
    * Check if context is valid
    */
   isValid(): boolean;
 
   /**
-   * Derive a field-specific key
-   * @param fieldId - field ID
+   * Derive a field-specific key using HKDF
+   * @param fieldId - Field ID
    * @returns 32-byte derived key
    */
   deriveFieldKey(fieldId: number): Uint8Array;
 
   /**
-   * Derive a field-specific IV
-   * @param fieldId - field ID
+   * Derive a field-specific IV using HKDF
+   * @param fieldId - Field ID
    * @returns 16-byte derived IV
    */
   deriveFieldIV(fieldId: number): Uint8Array;
+
+  /**
+   * Encrypt scalar value in buffer (modifies buffer in-place)
+   */
+  encryptScalar(buffer: Uint8Array, offset: number, size: number, fieldId: number): void;
+
+  /**
+   * Encrypt string value in buffer (modifies buffer in-place)
+   */
+  encryptString(buffer: Uint8Array, offset: number, length: number, fieldId: number): void;
+
+  /**
+   * Encrypt vector data in buffer (modifies buffer in-place)
+   */
+  encryptVector(buffer: Uint8Array, offset: number, elementSize: number, count: number, fieldId: number): void;
 }
+
+// =============================================================================
+// Schema Parsing
+// =============================================================================
 
 /**
  * Parsed field information for encryption
@@ -46,12 +366,8 @@ export interface EncryptionFieldInfo {
   encrypted: boolean;
   /** Element type for vectors */
   elementType?: string;
-  /** Element size for vectors */
+  /** Element size for vectors/scalars */
   elementSize?: number;
-  /** Size for structs */
-  structSize?: number;
-  /** Nested schema for table fields */
-  nestedSchema?: EncryptionSchema;
 }
 
 /**
@@ -63,49 +379,9 @@ export interface EncryptionSchema {
 }
 
 /**
- * Encrypt bytes using AES-CTR (XOR with keystream)
- * @param data - data to encrypt (modified in-place)
- * @param key - 32-byte key
- * @param iv - 16-byte IV
- */
-export declare function encryptBytes(
-  data: Uint8Array,
-  key: Uint8Array,
-  iv: Uint8Array
-): void;
-
-/**
- * Decrypt bytes using AES-CTR (same as encrypt)
- * @param data - data to decrypt (modified in-place)
- * @param key - 32-byte key
- * @param iv - 16-byte IV
- */
-export declare function decryptBytes(
-  data: Uint8Array,
-  key: Uint8Array,
-  iv: Uint8Array
-): void;
-
-/**
- * Encrypt a scalar value in a buffer
- * @param buffer - buffer containing the scalar
- * @param offset - offset of the scalar
- * @param size - size of the scalar (1, 2, 4, or 8)
- * @param ctx - encryption context
- * @param fieldId - field ID for key derivation
- */
-export declare function encryptScalar(
-  buffer: Uint8Array,
-  offset: number,
-  size: number,
-  ctx: EncryptionContext,
-  fieldId: number
-): void;
-
-/**
  * Parse a FlatBuffers schema to extract field encryption info
  * @param schemaContent - FlatBuffers schema content (.fbs)
- * @param rootType - name of the root type
+ * @param rootType - Name of the root type
  * @returns Parsed schema with encryption metadata
  */
 export declare function parseSchemaForEncryption(
@@ -113,15 +389,21 @@ export declare function parseSchemaForEncryption(
   rootType: string
 ): EncryptionSchema;
 
+// =============================================================================
+// Buffer Encryption
+// =============================================================================
+
 /**
- * Encrypt a FlatBuffer in-place
+ * Encrypt a FlatBuffer in-place.
  *
  * Fields marked with the (encrypted) attribute will be encrypted.
  * The buffer structure remains valid - only field values change.
  *
+ * WARNING: This function modifies the buffer in-place.
+ *
  * @param buffer - FlatBuffer to encrypt (modified in-place)
  * @param schema - Parsed schema or schema content string
- * @param key - 32-byte encryption key, hex string, or EncryptionContext
+ * @param key - 32-byte encryption key, 64-char hex string, or EncryptionContext
  * @param rootType - Root type name (required if schema is string)
  * @returns The encrypted buffer (same reference)
  *
@@ -130,7 +412,7 @@ export declare function parseSchemaForEncryption(
  * import { encryptBuffer, EncryptionContext } from 'flatc-wasm/encryption';
  *
  * const key = crypto.getRandomValues(new Uint8Array(32));
- * const encrypted = encryptBuffer(buffer, schemaContent, key, 'MyTable');
+ * encryptBuffer(buffer, schemaContent, key, 'MyTable');
  * ```
  */
 export declare function encryptBuffer(
@@ -141,22 +423,17 @@ export declare function encryptBuffer(
 ): Uint8Array;
 
 /**
- * Decrypt a FlatBuffer in-place
+ * Decrypt a FlatBuffer in-place.
  *
  * Same as encryptBuffer since AES-CTR is symmetric.
  *
+ * WARNING: This function modifies the buffer in-place.
+ *
  * @param buffer - FlatBuffer to decrypt (modified in-place)
  * @param schema - Parsed schema or schema content string
- * @param key - 32-byte encryption key, hex string, or EncryptionContext
+ * @param key - 32-byte encryption key, 64-char hex string, or EncryptionContext
  * @param rootType - Root type name (required if schema is string)
  * @returns The decrypted buffer (same reference)
- *
- * @example
- * ```javascript
- * import { decryptBuffer } from 'flatc-wasm/encryption';
- *
- * const decrypted = decryptBuffer(encrypted, schemaContent, key, 'MyTable');
- * ```
  */
 export declare function decryptBuffer(
   buffer: Uint8Array,
@@ -165,14 +442,126 @@ export declare function decryptBuffer(
   rootType?: string
 ): Uint8Array;
 
+/**
+ * Encrypt scalar in buffer (convenience function)
+ */
+export declare function encryptScalar(
+  buffer: Uint8Array,
+  offset: number,
+  size: number,
+  ctx: EncryptionContext,
+  fieldId: number
+): void;
+
+// =============================================================================
+// Encryption Header (for hybrid encryption)
+// =============================================================================
+
+export interface EncryptionHeader {
+  version: number;
+  algorithm: string;
+  senderPublicKey: Uint8Array;
+  recipientKeyId: Uint8Array;
+  iv: Uint8Array;
+}
+
+export interface EncryptionHeaderJSON {
+  version: number;
+  algorithm: string;
+  senderPublicKey: number[];
+  recipientKeyId: number[];
+  iv: number[];
+}
+
+/**
+ * Create encryption header for hybrid encryption
+ */
+export declare function createEncryptionHeader(options: {
+  algorithm: string;
+  senderPublicKey: Uint8Array;
+  recipientKeyId: Uint8Array;
+  iv?: Uint8Array;
+}): EncryptionHeader;
+
+/**
+ * Compute key ID from public key (first 8 bytes of SHA-256)
+ */
+export declare function computeKeyId(publicKey: Uint8Array): Uint8Array;
+
+/**
+ * Convert encryption header to JSON-serializable object
+ */
+export declare function encryptionHeaderToJSON(header: EncryptionHeader): EncryptionHeaderJSON;
+
+/**
+ * Parse encryption header from JSON
+ */
+export declare function encryptionHeaderFromJSON(json: EncryptionHeaderJSON): EncryptionHeader;
+
+// =============================================================================
+// Default Export
+// =============================================================================
+
 declare const encryption: {
-  EncryptionContext: typeof EncryptionContext;
+  // Initialization
+  initEncryption: typeof initEncryption;
+  loadEncryptionWasm: typeof loadEncryptionWasm;
+  isInitialized: typeof isInitialized;
+  hasCryptopp: typeof hasCryptopp;
+  getVersion: typeof getVersion;
+
+  // Hash
+  sha256: typeof sha256;
+
+  // Symmetric encryption
   encryptBytes: typeof encryptBytes;
   decryptBytes: typeof decryptBytes;
+  hkdf: typeof hkdf;
+
+  // X25519
+  x25519GenerateKeyPair: typeof x25519GenerateKeyPair;
+  x25519SharedSecret: typeof x25519SharedSecret;
+  x25519DeriveKey: typeof x25519DeriveKey;
+
+  // secp256k1
+  secp256k1GenerateKeyPair: typeof secp256k1GenerateKeyPair;
+  secp256k1SharedSecret: typeof secp256k1SharedSecret;
+  secp256k1DeriveKey: typeof secp256k1DeriveKey;
+  secp256k1Sign: typeof secp256k1Sign;
+  secp256k1Verify: typeof secp256k1Verify;
+
+  // P-256
+  p256GenerateKeyPair: typeof p256GenerateKeyPair;
+  p256SharedSecret: typeof p256SharedSecret;
+  p256DeriveKey: typeof p256DeriveKey;
+  p256Sign: typeof p256Sign;
+  p256Verify: typeof p256Verify;
+
+  // Ed25519
+  ed25519GenerateKeyPair: typeof ed25519GenerateKeyPair;
+  ed25519Sign: typeof ed25519Sign;
+  ed25519Verify: typeof ed25519Verify;
+
+  // Constants
+  KeyExchangeAlgorithm: typeof KeyExchangeAlgorithm;
+  SignatureAlgorithm: typeof SignatureAlgorithm;
+  SymmetricAlgorithm: typeof SymmetricAlgorithm;
+  KeyDerivationFunction: typeof KeyDerivationFunction;
+
+  // Classes
+  EncryptionContext: typeof EncryptionContext;
+
+  // Header utilities
+  createEncryptionHeader: typeof createEncryptionHeader;
+  computeKeyId: typeof computeKeyId;
+  encryptionHeaderToJSON: typeof encryptionHeaderToJSON;
+  encryptionHeaderFromJSON: typeof encryptionHeaderFromJSON;
   encryptScalar: typeof encryptScalar;
+
+  // Buffer encryption
+  parseSchemaForEncryption: typeof parseSchemaForEncryption;
   encryptBuffer: typeof encryptBuffer;
   decryptBuffer: typeof decryptBuffer;
-  parseSchemaForEncryption: typeof parseSchemaForEncryption;
 };
 
 export default encryption;

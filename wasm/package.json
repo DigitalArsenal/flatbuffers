@@ -6,6 +6,7 @@
   "main": "src/index.mjs",
   "module": "src/index.mjs",
   "types": "src/index.d.ts",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
@@ -40,7 +41,8 @@
   ],
   "scripts": {
     "build": "cmake --build ../build/wasm --target flatc_wasm_npm -j",
-    "test": "node test/test_all.mjs && node test/test_runner.mjs",
+    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_encryption.mjs",
+    "test:encryption": "node test/test_encryption.mjs",
     "prepublishOnly": "npm run build && npm test"
   },
   "repository": {

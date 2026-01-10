@@ -229,27 +229,27 @@ test("encrypts and decrypts FlatBuffer", () => {
   const buffer = flatc.generateBinary(schemaInput, json);
   const original = new Uint8Array(buffer);
 
-  // Encrypt
+  // Encrypt - now returns { buffer, nonce }
   const key = randomBytes(32);
-  encryptBuffer(buffer, simpleSchema, key, "SimpleMessage");
+  const { buffer: encrypted, nonce } = encryptBuffer(buffer, simpleSchema, key, "SimpleMessage");
 
-  // Buffer should be modified
+  // Buffer should be modified (encrypted is same reference as buffer)
   let changed = false;
-  for (let i = 0; i < buffer.length; i++) {
-    if (buffer[i] !== original[i]) {
+  for (let i = 0; i < encrypted.length; i++) {
+    if (encrypted[i] !== original[i]) {
       changed = true;
       break;
     }
   }
   assertEqual(changed, true, "buffer should change after encryption");
 
-  // Decrypt
-  decryptBuffer(buffer, simpleSchema, key, "SimpleMessage");
+  // Decrypt - must pass the nonce
+  decryptBuffer(encrypted, simpleSchema, key, "SimpleMessage", nonce);
 
   // Should be able to read JSON again
   const recovered = flatc.generateJSON(schemaInput, {
     path: "/msg.bin",
-    data: buffer,
+    data: encrypted,
   });
   const recoveredObj = JSON.parse(recovered);
 
@@ -273,7 +273,7 @@ test("encrypted buffer is still a valid FlatBuffer", () => {
   const buffer = flatc.generateBinary(schemaInput, json);
   const key = randomBytes(32);
 
-  encryptBuffer(buffer, simpleSchema, key, "SimpleMessage");
+  const { nonce } = encryptBuffer(buffer, simpleSchema, key, "SimpleMessage");
 
   // The buffer should still be parseable (though values will be garbage)
   // This is the key property - binary layout is preserved
@@ -293,7 +293,7 @@ test("encrypted buffer is still a valid FlatBuffer", () => {
   }
 
   // Either way, decrypt should restore original
-  decryptBuffer(buffer, simpleSchema, key, "SimpleMessage");
+  decryptBuffer(buffer, simpleSchema, key, "SimpleMessage", nonce);
   const recovered = flatc.generateJSON(schemaInput, {
     path: "/msg.bin",
     data: buffer,
@@ -320,8 +320,13 @@ test("different keys produce different ciphertext", () => {
   const key1 = randomBytes(32);
   const key2 = randomBytes(32);
 
-  encryptBuffer(buffer1, simpleSchema, key1, "SimpleMessage");
-  encryptBuffer(buffer2, simpleSchema, key2, "SimpleMessage");
+  // Use EncryptionContext with same nonce to ensure only key differs
+  const nonce = randomBytes(16);
+  const ctx1 = new EncryptionContext(key1, nonce);
+  const ctx2 = new EncryptionContext(key2, nonce);
+
+  encryptBuffer(buffer1, simpleSchema, ctx1, "SimpleMessage");
+  encryptBuffer(buffer2, simpleSchema, ctx2, "SimpleMessage");
 
   let different = false;
   for (let i = 0; i < buffer1.length; i++) {
@@ -349,11 +354,10 @@ test("public fields remain unchanged after encryption", () => {
   const buffer = flatc.generateBinary(schemaInput, json);
   const key = randomBytes(32);
 
-  encryptBuffer(buffer, simpleSchema, key, "SimpleMessage");
+  const { buffer: encrypted } = encryptBuffer(buffer, simpleSchema, key, "SimpleMessage");
 
   // The public_text string bytes should still be in the buffer
-  const textBytes = new TextEncoder().encode(publicText);
-  const bufferStr = new TextDecoder().decode(buffer);
+  const bufferStr = new TextDecoder().decode(encrypted);
 
   assertEqual(
     bufferStr.includes(publicText),
@@ -365,9 +369,8 @@ test("public fields remain unchanged after encryption", () => {
 // Test 5: Encryption context reuse
 console.log("\n5. Encryption context reuse:");
 
-test("EncryptionContext can be reused", () => {
+test("EncryptionContext usage with unique nonces per message", () => {
   const key = randomBytes(32);
-  const ctx = new EncryptionContext(key);
 
   const schemaInput = {
     entry: "/simple.fbs",
@@ -388,13 +391,19 @@ test("EncryptionContext can be reused", () => {
   const buffer1 = flatc.generateBinary(schemaInput, json1);
   const buffer2 = flatc.generateBinary(schemaInput, json2);
 
-  // Use same context for both
-  encryptBuffer(buffer1, simpleSchema, ctx, "SimpleMessage");
-  encryptBuffer(buffer2, simpleSchema, ctx, "SimpleMessage");
+  // IMPORTANT: Use different nonces for each message (security requirement for CTR mode)
+  const nonce1 = randomBytes(16);
+  const nonce2 = randomBytes(16);
+  const ctx1 = new EncryptionContext(key, nonce1);
+  const ctx2 = new EncryptionContext(key, nonce2);
 
-  // Both should decrypt correctly
-  decryptBuffer(buffer1, simpleSchema, ctx, "SimpleMessage");
-  decryptBuffer(buffer2, simpleSchema, ctx, "SimpleMessage");
+  // Encrypt each buffer with its own context/nonce
+  encryptBuffer(buffer1, simpleSchema, ctx1, "SimpleMessage");
+  encryptBuffer(buffer2, simpleSchema, ctx2, "SimpleMessage");
+
+  // Decrypt with the matching context
+  decryptBuffer(buffer1, simpleSchema, ctx1, "SimpleMessage");
+  decryptBuffer(buffer2, simpleSchema, ctx2, "SimpleMessage");
 
   const recovered1 = JSON.parse(
     flatc.generateJSON(schemaInput, { path: "/m.bin", data: buffer1 })

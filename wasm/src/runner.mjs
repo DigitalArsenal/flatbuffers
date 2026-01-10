@@ -481,7 +481,8 @@ export class FlatcRunner {
 
     const result = this.runCommand(args);
 
-    if (result.code !== 0) {
+    // Check for errors - flatc sometimes exits 0 but writes errors to stderr
+    if (result.code !== 0 || result.stderr.includes("error:")) {
       throw new Error(
         `flatc code generation failed (exit ${result.code}):\n${result.stderr || result.stdout}`
       );

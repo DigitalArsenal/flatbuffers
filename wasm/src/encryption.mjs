@@ -1545,7 +1545,10 @@ export function parseSchemaForEncryption(schemaContent, rootType) {
   // We need to handle string defaults that might contain special chars
   const lines = tableBody.split(';').map(l => l.trim()).filter(l => l.length > 0);
 
-  let fieldId = 0;
+  // First pass: collect all fields with their explicit IDs (if any)
+  const fieldsWithIds = [];
+  let implicitId = 0;
+
   for (const line of lines) {
     // Skip empty lines or lines that are just whitespace
     if (!line || /^\s*$/.test(line)) continue;
@@ -1557,12 +1560,19 @@ export function parseSchemaForEncryption(schemaContent, rootType) {
     const name = fieldMatch[1];
     const typeStr = fieldMatch[2];
 
-    // Extract attributes from parentheses at the end
-    // Be careful to not match parentheses in default values
-    const attrMatch = line.match(/\(\s*([^)]*encrypted[^)]*)\s*\)\s*$/);
-    const attributes = attrMatch ? attrMatch[1] : '';
+    // Extract all attributes from parentheses at the end
+    // Match any parenthesized group at the end of the line
+    const attrMatch = line.match(/\(\s*([^)]+)\s*\)\s*$/);
+    const attributesStr = attrMatch ? attrMatch[1] : '';
 
-    const isEncrypted = /\bencrypted\b/.test(attributes);
+    // Parse individual attributes
+    const isEncrypted = /\bencrypted\b/.test(attributesStr);
+
+    // Look for explicit id: attribute
+    // Format: id: N or id:N
+    const idMatch = attributesStr.match(/\bid\s*:\s*(\d+)\b/);
+    const explicitId = idMatch ? parseInt(idMatch[1], 10) : null;
+
     const isVector = typeStr.startsWith('[') && typeStr.endsWith(']');
     const baseType = isVector ? typeStr.slice(1, -1) : typeStr;
     // Handle namespaced types (e.g., MyGame.Sample.Monster)
@@ -1579,13 +1589,46 @@ export function parseSchemaForEncryption(schemaContent, rootType) {
       fieldType = 'struct';
     }
 
-    schema.fields.push({
+    fieldsWithIds.push({
       name,
-      id: fieldId++,
+      explicitId,
+      implicitOrder: implicitId++,
       type: fieldType,
       encrypted: isEncrypted,
       elementType: isVector ? (SCALAR_TYPES.has(simpleBaseType) ? simpleBaseType : 'struct') : undefined,
       elementSize: TYPE_SIZES[simpleBaseType] || 1,
+    });
+  }
+
+  // Second pass: assign IDs
+  // Fields with explicit IDs get those IDs
+  // Fields without explicit IDs get sequential IDs starting from 0,
+  // skipping any IDs that are explicitly assigned
+  const usedIds = new Set(
+    fieldsWithIds.filter(f => f.explicitId !== null).map(f => f.explicitId)
+  );
+
+  let nextImplicitId = 0;
+  for (const field of fieldsWithIds) {
+    let finalId;
+    if (field.explicitId !== null) {
+      finalId = field.explicitId;
+    } else {
+      // Find next available ID
+      while (usedIds.has(nextImplicitId)) {
+        nextImplicitId++;
+      }
+      finalId = nextImplicitId++;
+      usedIds.add(finalId);
+    }
+
+    schema.fields.push({
+      name: field.name,
+      id: finalId,
+      type: field.type,
+      encrypted: field.encrypted,
+      elementType: field.elementType,
+      elementSize: field.elementSize,
     });
   }
 
@@ -1686,6 +1729,15 @@ function processTable(buffer, tableOffset, schema, ctx) {
 }
 
 /**
+ * Result of encrypting a FlatBuffer
+ */
+/**
+ * @typedef {Object} EncryptBufferResult
+ * @property {Uint8Array} buffer - The encrypted buffer (same reference as input)
+ * @property {Uint8Array} nonce - The 16-byte nonce used for encryption (must be stored for decryption)
+ */
+
+/**
  * Encrypt a FlatBuffer in-place.
  *
  * Fields marked with the (encrypted) attribute will be encrypted.
@@ -1693,11 +1745,32 @@ function processTable(buffer, tableOffset, schema, ctx) {
  *
  * WARNING: This function modifies the buffer in-place.
  *
+ * IMPORTANT: When passing a raw key (Uint8Array or hex string), a random nonce is generated.
+ * You MUST save the returned nonce and pass it to decryptBuffer for decryption.
+ * For better control, use an EncryptionContext directly.
+ *
+ * SECURITY NOTE: This function uses AES-CTR without authentication (no HMAC).
+ * This preserves the FlatBuffer binary layout but does not detect tampering.
+ * For tamper detection, either:
+ * 1. Use encryptAuthenticated() to encrypt the entire buffer (changes format)
+ * 2. Add an HMAC of the encrypted buffer at the transport layer
+ * 3. Use a transport that provides integrity (TLS, authenticated channels)
+ *
  * @param {Uint8Array} buffer - FlatBuffer to encrypt (modified in-place)
  * @param {Object|string} schema - Parsed schema or schema content string
  * @param {Uint8Array|string|EncryptionContext} key - Encryption key or context
  * @param {string} [rootType] - Root type name (required if schema is string)
- * @returns {Uint8Array} The encrypted buffer (same reference)
+ * @returns {EncryptBufferResult} Object with encrypted buffer and nonce
+ *
+ * @example
+ * // Using raw key - MUST save the nonce
+ * const { buffer, nonce } = encryptBuffer(buf, schema, key, 'MyTable');
+ * // Store nonce alongside encrypted data for decryption
+ *
+ * @example
+ * // Using EncryptionContext - manage nonce yourself
+ * const ctx = new EncryptionContext(key, nonce);
+ * const { buffer } = encryptBuffer(buf, schema, ctx, 'MyTable');
  */
 export function encryptBuffer(buffer, schema, key, rootType) {
   // Get or create encryption context
@@ -1727,13 +1800,18 @@ export function encryptBuffer(buffer, schema, key, rootType) {
   // Process the root table
   processTable(buffer, rootOffset, parsedSchema, ctx);
 
-  return buffer;
+  // Return buffer and nonce - nonce is critical for decryption
+  return {
+    buffer,
+    nonce: ctx.getNonce(),
+  };
 }
 
 /**
  * Decrypt a FlatBuffer in-place.
  *
- * Same as encryptBuffer since AES-CTR is symmetric.
+ * AES-CTR is symmetric, so decryption uses the same operation as encryption.
+ * You MUST provide the same nonce that was used during encryption.
  *
  * WARNING: This function modifies the buffer in-place.
  *
@@ -1741,9 +1819,57 @@ export function encryptBuffer(buffer, schema, key, rootType) {
  * @param {Object|string} schema - Parsed schema or schema content string
  * @param {Uint8Array|string|EncryptionContext} key - Encryption key or context
  * @param {string} [rootType] - Root type name (required if schema is string)
+ * @param {Uint8Array} [nonce] - The 16-byte nonce from encryption (required if key is not EncryptionContext)
  * @returns {Uint8Array} The decrypted buffer (same reference)
+ *
+ * @example
+ * // Using raw key with nonce from encryptBuffer
+ * const { buffer: encrypted, nonce } = encryptBuffer(buf, schema, key, 'MyTable');
+ * // ... later ...
+ * decryptBuffer(encrypted, schema, key, 'MyTable', nonce);
+ *
+ * @example
+ * // Using EncryptionContext with saved nonce
+ * const ctx = new EncryptionContext(key, savedNonce);
+ * decryptBuffer(encrypted, schema, ctx, 'MyTable');
  */
-export const decryptBuffer = encryptBuffer;
+export function decryptBuffer(buffer, schema, key, rootType, nonce) {
+  // Get or create encryption context
+  let ctx;
+  if (key instanceof EncryptionContext) {
+    ctx = key;
+  } else {
+    // For raw keys, nonce is required for decryption
+    if (!nonce) {
+      throw new CryptoError(
+        CryptoErrorCode.INVALID_NONCE_SIZE,
+        'Nonce is required for decryption when using a raw key. Pass the nonce returned from encryptBuffer.'
+      );
+    }
+    ctx = new EncryptionContext(key, nonce);
+  }
+
+  if (!ctx.isValid()) {
+    throw new Error('Invalid encryption key');
+  }
+
+  // Parse schema if needed
+  const parsedSchema = typeof schema === 'string'
+    ? parseSchemaForEncryption(schema, rootType)
+    : schema;
+
+  if (!parsedSchema.fields || parsedSchema.fields.length === 0) {
+    throw new Error('No fields found in schema. Check that rootType matches the table name.');
+  }
+
+  // Read root table offset
+  const rootOffset = readUint32(buffer, 0);
+
+  // Process the root table (CTR mode: encryption = decryption)
+  processTable(buffer, rootOffset, parsedSchema, ctx);
+
+  return buffer;
+}
 
 // =============================================================================
 // Default export

@@ -514,6 +514,16 @@ export declare function parseSchemaForEncryption(
 // =============================================================================
 
 /**
+ * Result of encrypting a FlatBuffer
+ */
+export interface EncryptBufferResult {
+  /** The encrypted buffer (same reference as input) */
+  buffer: Uint8Array;
+  /** The 16-byte nonce used for encryption (must be stored for decryption) */
+  nonce: Uint8Array;
+}
+
+/**
  * Encrypt a FlatBuffer in-place.
  *
  * Fields marked with the (encrypted) attribute will be encrypted.
@@ -521,18 +531,35 @@ export declare function parseSchemaForEncryption(
  *
  * WARNING: This function modifies the buffer in-place.
  *
+ * IMPORTANT: When passing a raw key (Uint8Array or hex string), a random nonce is generated.
+ * You MUST save the returned nonce and pass it to decryptBuffer for decryption.
+ * For better control, use an EncryptionContext directly.
+ *
+ * SECURITY NOTE: This function uses AES-CTR without authentication (no HMAC).
+ * This preserves the FlatBuffer binary layout but does not detect tampering.
+ * For tamper detection, either:
+ * 1. Use encryptAuthenticated() to encrypt the entire buffer (changes format)
+ * 2. Add an HMAC of the encrypted buffer at the transport layer
+ * 3. Use a transport that provides integrity (TLS, authenticated channels)
+ *
  * @param buffer - FlatBuffer to encrypt (modified in-place)
  * @param schema - Parsed schema or schema content string
  * @param key - 32-byte encryption key, 64-char hex string, or EncryptionContext
  * @param rootType - Root type name (required if schema is string)
- * @returns The encrypted buffer (same reference)
+ * @returns Object with encrypted buffer and nonce
  *
  * @example
  * ```javascript
  * import { encryptBuffer, EncryptionContext } from 'flatc-wasm/encryption';
  *
+ * // Using raw key - MUST save the nonce
  * const key = crypto.getRandomValues(new Uint8Array(32));
- * encryptBuffer(buffer, schemaContent, key, 'MyTable');
+ * const { buffer, nonce } = encryptBuffer(buf, schemaContent, key, 'MyTable');
+ * // Store nonce alongside encrypted data for decryption
+ *
+ * // Using EncryptionContext - manage nonce yourself
+ * const ctx = new EncryptionContext(key, nonce);
+ * const { buffer } = encryptBuffer(buf, schemaContent, ctx, 'MyTable');
  * ```
  */
 export declare function encryptBuffer(
@@ -540,12 +567,13 @@ export declare function encryptBuffer(
   schema: EncryptionSchema | string,
   key: Uint8Array | string | EncryptionContext,
   rootType?: string
-): Uint8Array;
+): EncryptBufferResult;
 
 /**
  * Decrypt a FlatBuffer in-place.
  *
- * Same as encryptBuffer since AES-CTR is symmetric.
+ * AES-CTR is symmetric, so decryption uses the same operation as encryption.
+ * You MUST provide the same nonce that was used during encryption.
  *
  * WARNING: This function modifies the buffer in-place.
  *
@@ -553,13 +581,27 @@ export declare function encryptBuffer(
  * @param schema - Parsed schema or schema content string
  * @param key - 32-byte encryption key, 64-char hex string, or EncryptionContext
  * @param rootType - Root type name (required if schema is string)
+ * @param nonce - The 16-byte nonce from encryption (required if key is not EncryptionContext)
  * @returns The decrypted buffer (same reference)
+ *
+ * @example
+ * ```javascript
+ * // Using raw key with nonce from encryptBuffer
+ * const { buffer: encrypted, nonce } = encryptBuffer(buf, schema, key, 'MyTable');
+ * // ... later ...
+ * decryptBuffer(encrypted, schema, key, 'MyTable', nonce);
+ *
+ * // Using EncryptionContext with saved nonce
+ * const ctx = new EncryptionContext(key, savedNonce);
+ * decryptBuffer(encrypted, schema, ctx, 'MyTable');
+ * ```
  */
 export declare function decryptBuffer(
   buffer: Uint8Array,
   schema: EncryptionSchema | string,
   key: Uint8Array | string | EncryptionContext,
-  rootType?: string
+  rootType?: string,
+  nonce?: Uint8Array
 ): Uint8Array;
 
 /**

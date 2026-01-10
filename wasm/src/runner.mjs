@@ -153,10 +153,18 @@ export class FlatcRunner {
     this._stderr = "";
     let code = 0;
     try {
-      this.Module.callMain(args);
+      // callMain may return an exit code directly or throw it depending on
+      // Emscripten build settings. Capture both cases.
+      const returnValue = this.Module.callMain(args);
+      if (typeof returnValue === "number" && returnValue !== 0) {
+        code = returnValue;
+      }
     } catch (e) {
       if (typeof e === "number") {
         code = e;
+      } else if (e && typeof e === "object" && "status" in e) {
+        // Emscripten ExitStatus object
+        code = e.status;
       } else {
         throw e;
       }
@@ -448,68 +456,7 @@ export class FlatcRunner {
     const outDir = `/out_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     this.Module.FS.mkdirTree(outDir);
 
-    this._mountSchemaIfNeeded(schemaInput);
-
-    const args = [`--${language}`, "-o", outDir];
-
-    for (const dir of this._cachedIncludeDirs) {
-      args.push("-I", dir);
-    }
-
-    // Code generation options
-    if (options.genObjectApi) args.push("--gen-object-api");
-    if (options.genOnefile) args.push("--gen-onefile");
-    if (options.genMutable) args.push("--gen-mutable");
-    if (options.genCompare) args.push("--gen-compare");
-    if (options.genNameStrings) args.push("--gen-name-strings");
-    if (options.reflectNames) args.push("--reflect-names");
-    if (options.reflectTypes) args.push("--reflect-types");
-    if (options.genJsonEmit) args.push("--gen-json-emit");
-    if (options.noIncludes) args.push("--no-includes");
-    if (options.keepPrefix) args.push("--keep-prefix");
-    if (options.noWarnings) args.push("--no-warnings");
-    if (options.genAll) args.push("--gen-all");
-
-    // Language-specific options
-    if (options.pythonTyping) args.push("--python-typing");
-    if (options.tsFlexBuffers) args.push("--ts-flexbuffers");
-    if (options.tsNoImportExt) args.push("--ts-no-import-ext");
-    if (options.goModule) args.push("--go-module", options.goModule);
-    if (options.goPackagePrefix) args.push("--go-package-prefix", options.goPackagePrefix);
-
-    args.push(schemaInput.entry);
-
-    const result = this.runCommand(args);
-
-    // Check for errors - flatc sometimes exits 0 but writes errors to stderr
-    if (result.code !== 0 || result.stderr.includes("error:")) {
-      throw new Error(
-        `flatc code generation failed (exit ${result.code}):\n${result.stderr || result.stdout}`
-      );
-    }
-
-    // Collect output files
-    const output = {};
-    const walk = (dir, base = "") => {
-      const entries = this.Module.FS.readdir(dir).filter(
-        (e) => e !== "." && e !== ".."
-      );
-      for (const entry of entries) {
-        const fullPath = `${dir}/${entry}`;
-        const relPath = base ? `${base}/${entry}` : entry;
-        const stat = this.Module.FS.stat(fullPath);
-        if (this.Module.FS.isDir(stat.mode)) {
-          walk(fullPath, relPath);
-        } else {
-          output[relPath] = this.Module.FS.readFile(fullPath, {
-            encoding: "utf8",
-          });
-        }
-      }
-    };
-    walk(outDir);
-
-    // Cleanup
+    // Cleanup helper - defined early so it can be used in finally block
     const cleanupDir = (dir) => {
       try {
         const entries = this.Module.FS.readdir(dir).filter(
@@ -526,12 +473,77 @@ export class FlatcRunner {
         }
         this.rmdir(dir);
       } catch {
-        // ignore
+        // ignore cleanup errors
       }
     };
-    cleanupDir(outDir);
 
-    return output;
+    try {
+      this._mountSchemaIfNeeded(schemaInput);
+
+      const args = [`--${language}`, "-o", outDir];
+
+      for (const dir of this._cachedIncludeDirs) {
+        args.push("-I", dir);
+      }
+
+      // Code generation options
+      if (options.genObjectApi) args.push("--gen-object-api");
+      if (options.genOnefile) args.push("--gen-onefile");
+      if (options.genMutable) args.push("--gen-mutable");
+      if (options.genCompare) args.push("--gen-compare");
+      if (options.genNameStrings) args.push("--gen-name-strings");
+      if (options.reflectNames) args.push("--reflect-names");
+      if (options.reflectTypes) args.push("--reflect-types");
+      if (options.genJsonEmit) args.push("--gen-json-emit");
+      if (options.noIncludes) args.push("--no-includes");
+      if (options.keepPrefix) args.push("--keep-prefix");
+      if (options.noWarnings) args.push("--no-warnings");
+      if (options.genAll) args.push("--gen-all");
+
+      // Language-specific options
+      if (options.pythonTyping) args.push("--python-typing");
+      if (options.tsFlexBuffers) args.push("--ts-flexbuffers");
+      if (options.tsNoImportExt) args.push("--ts-no-import-ext");
+      if (options.goModule) args.push("--go-module", options.goModule);
+      if (options.goPackagePrefix) args.push("--go-package-prefix", options.goPackagePrefix);
+
+      args.push(schemaInput.entry);
+
+      const result = this.runCommand(args);
+
+      // Check for errors - flatc sometimes exits 0 but writes errors to stderr
+      if (result.code !== 0 || result.stderr.includes("error:")) {
+        throw new Error(
+          `flatc code generation failed (exit ${result.code}):\n${result.stderr || result.stdout}`
+        );
+      }
+
+      // Collect output files
+      const output = {};
+      const walk = (dir, base = "") => {
+        const entries = this.Module.FS.readdir(dir).filter(
+          (e) => e !== "." && e !== ".."
+        );
+        for (const entry of entries) {
+          const fullPath = `${dir}/${entry}`;
+          const relPath = base ? `${base}/${entry}` : entry;
+          const stat = this.Module.FS.stat(fullPath);
+          if (this.Module.FS.isDir(stat.mode)) {
+            walk(fullPath, relPath);
+          } else {
+            output[relPath] = this.Module.FS.readFile(fullPath, {
+              encoding: "utf8",
+            });
+          }
+        }
+      };
+      walk(outDir);
+
+      return output;
+    } finally {
+      // Always cleanup outDir, even on error
+      cleanupDir(outDir);
+    }
   }
 
   /**

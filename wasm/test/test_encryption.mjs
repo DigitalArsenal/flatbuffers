@@ -160,6 +160,10 @@ async function main() {
   log('Encryption Module Test Suite');
   log('============================================================');
 
+  // Check for CI mode - in CI, missing WASM should be a hard failure
+  const isCI = process.env.CI === 'true' || process.env.CI === '1' ||
+               process.env.REQUIRE_WASM === 'true' || process.env.REQUIRE_WASM === '1';
+
   // Try to load WASM module
   log('\n[Module Initialization]');
 
@@ -172,6 +176,11 @@ async function main() {
     log(`  WASM module loaded from: ${wasmPath}`);
   } catch (err) {
     log(`  WARNING: Could not load WASM module: ${err.message}`);
+    if (isCI) {
+      log(`  ERROR: WASM module is required in CI mode (CI=${process.env.CI}, REQUIRE_WASM=${process.env.REQUIRE_WASM})`);
+      log(`  Build the WASM module first with: npm run build`);
+      process.exit(1);
+    }
     log(`  Some tests will be skipped.`);
   }
 
@@ -185,7 +194,8 @@ async function main() {
     log('\n============================================================');
     log(`Results: ${passed} passed, ${failed} failed (many skipped)`);
     log('============================================================');
-    process.exit(failed > 0 ? 1 : 0);
+    // Exit with failure in CI mode (should have already exited above, but just in case)
+    process.exit(isCI ? 1 : (failed > 0 ? 1 : 0));
   }
 
   await test('hasCryptopp returns boolean', async () => {

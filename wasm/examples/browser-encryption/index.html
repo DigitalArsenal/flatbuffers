@@ -196,6 +196,7 @@ root_type UserData;</textarea>
       hkdf,
       EncryptionContext,
       encryptBuffer as encryptBufferLib,
+      decryptBuffer as decryptBufferLib,
       parseSchemaForEncryption,
       KEY_SIZE,
       IV_SIZE
@@ -214,6 +215,7 @@ root_type UserData;</textarea>
     let flatc = null;
     let currentBuffer = null;
     let originalBuffer = null;
+    let encryptionNonce = null;  // Store nonce for decrypt
 
     // UI helpers
     const log = document.getElementById('log');
@@ -295,9 +297,12 @@ root_type UserData;</textarea>
         const rootMatch = schema.match(/root_type\s+(\w+)/);
         const rootType = rootMatch[1];
 
-        encryptBufferImpl(currentBuffer, schema, keyHex, rootType);
+        // Encrypt and save the nonce for later decryption
+        const { buffer, nonce } = encryptBufferLib(currentBuffer, schema, keyHex, rootType);
+        encryptionNonce = nonce;
 
         appendLog('Buffer encrypted!', 'success');
+        appendLog(`Nonce (save for decrypt): ${Array.from(nonce).map(b => b.toString(16).padStart(2, '0')).join('')}`, 'info');
         updateBufferDisplay();
         document.getElementById('btn-decrypt').disabled = false;
       } catch (e) {
@@ -309,13 +314,17 @@ root_type UserData;</textarea>
       appendLog('Decrypting buffer...', 'info');
 
       try {
+        if (!encryptionNonce) {
+          throw new Error('No nonce available. Encrypt first or provide the nonce from encryption.');
+        }
+
         const keyHex = document.getElementById('encryption-key').value;
         const schema = document.getElementById('schema').value;
         const rootMatch = schema.match(/root_type\s+(\w+)/);
         const rootType = rootMatch[1];
 
-        encryptBufferImpl(currentBuffer, schema, keyHex, rootType);
-
+        // Decrypt using the saved nonce (CRITICAL: must use same nonce as encryption)
+        decryptBufferLib(currentBuffer, schema, keyHex, rootType, encryptionNonce);
         appendLog('Buffer decrypted!', 'success');
         updateBufferDisplay();
       } catch (e) {

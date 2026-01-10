@@ -15,7 +15,7 @@ import {
   encryptBuffer,
   decryptBuffer,
   encryptionHeaderFromJSON,
-} from "flatc-wasm/encryption";
+} from "../../src/encryption.mjs";
 import {
   schemaContent,
   schemaInput,
@@ -114,9 +114,10 @@ async function main() {
   console.log(`Original hex: ${toHex(encBuffer).substring(0, 60)}...`);
 
   // Create encryption context with server's public key
+  const appContext = "rest-api-v1";
   const encryptCtx = EncryptionContext.forEncryption(serverPublicKey, {
-    keyExchange: KeyExchangeAlgorithm.X25519,
-    context: "rest-api-v1",
+    algorithm: KeyExchangeAlgorithm.X25519,
+    context: appContext,
     rootType: "Message",
   });
 
@@ -177,9 +178,10 @@ async function main() {
 
   // Create and encrypt FlatBuffer for recipient
   const privateBuffer = runner.generateBinary(schemaInput, JSON.stringify(privateMessage));
+  const e2eContext = "e2e-messaging-v1";
   const senderCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
-    keyExchange: KeyExchangeAlgorithm.X25519,
-    context: "e2e-messaging-v1",
+    algorithm: KeyExchangeAlgorithm.X25519,
+    context: e2eContext,
     rootType: "Message",
   });
   encryptBuffer(privateBuffer, schemaContent, senderCtx, "Message");
@@ -194,7 +196,7 @@ async function main() {
   // Recipient receives and decrypts
   console.log("\nRecipient decrypting...");
   const e2eHeader = encryptionHeaderFromJSON(e2eHeaderJSON);
-  const recipientCtx = EncryptionContext.forDecryption(recipientKeys.privateKey, e2eHeader);
+  const recipientCtx = EncryptionContext.forDecryption(recipientKeys.privateKey, e2eHeader, e2eContext);
 
   const decryptedBuffer = new Uint8Array(privateBuffer);
   decryptBuffer(decryptedBuffer, schemaContent, recipientCtx, "Message");

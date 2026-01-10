@@ -49,10 +49,10 @@ All these examples use the same Crypto++ WASM module, ensuring identical cryptog
 
 ### Multi-Language Examples
 
-| Directory | Description |
-|-----------|-------------|
-| [public-key-encryption/](public-key-encryption/) | Hybrid encryption with ECDH |
-| [cross-language-test/](cross-language-test/) | Cross-language compatibility tests |
+| Directory                                        | Description                                               |
+|--------------------------------------------------|-----------------------------------------------------------|
+| [public-key-encryption/](public-key-encryption/) | Hybrid encryption with ECDH                               |
+| [e2e-crypto-test/](e2e-crypto-test/)             | End-to-end cross-language encryption tests (7 languages)  |
 
 ## Quick Start (Node.js)
 

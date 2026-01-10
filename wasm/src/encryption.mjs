@@ -22,10 +22,77 @@ let wasmMemory = null;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
+// =============================================================================
+// Error Types
+// =============================================================================
+
+/**
+ * Error codes for cryptographic operations
+ */
+export const CryptoErrorCode = {
+  NOT_INITIALIZED: 'NOT_INITIALIZED',
+  INVALID_KEY_SIZE: 'INVALID_KEY_SIZE',
+  INVALID_IV_SIZE: 'INVALID_IV_SIZE',
+  INVALID_NONCE_SIZE: 'INVALID_NONCE_SIZE',
+  INVALID_SIGNATURE: 'INVALID_SIGNATURE',
+  INVALID_PUBLIC_KEY: 'INVALID_PUBLIC_KEY',
+  INVALID_PRIVATE_KEY: 'INVALID_PRIVATE_KEY',
+  ENCRYPTION_FAILED: 'ENCRYPTION_FAILED',
+  DECRYPTION_FAILED: 'DECRYPTION_FAILED',
+  KEY_GENERATION_FAILED: 'KEY_GENERATION_FAILED',
+  ECDH_FAILED: 'ECDH_FAILED',
+  SIGNING_FAILED: 'SIGNING_FAILED',
+  VERIFICATION_FAILED: 'VERIFICATION_FAILED',
+  AUTHENTICATION_FAILED: 'AUTHENTICATION_FAILED',
+  MEMORY_ERROR: 'MEMORY_ERROR',
+  INVALID_INPUT: 'INVALID_INPUT',
+};
+
+/**
+ * Custom error class for cryptographic operations
+ */
+export class CryptoError extends Error {
+  /**
+   * @param {string} code - Error code from CryptoErrorCode
+   * @param {string} message - Human-readable error message
+   * @param {Error} [cause] - Original error that caused this one
+   */
+  constructor(code, message, cause) {
+    super(message);
+    this.name = 'CryptoError';
+    this.code = code;
+    this.cause = cause;
+  }
+
+  /**
+   * Create a CryptoError from a WASM error code
+   * @param {number} wasmCode - Error code returned by WASM function
+   * @param {string} operation - Name of the operation that failed
+   * @returns {CryptoError}
+   */
+  static fromWasmCode(wasmCode, operation) {
+    const codeMap = {
+      1: CryptoErrorCode.INVALID_INPUT,
+      2: CryptoErrorCode.INVALID_KEY_SIZE,
+      3: CryptoErrorCode.MEMORY_ERROR,
+      4: CryptoErrorCode.ENCRYPTION_FAILED,
+      5: CryptoErrorCode.DECRYPTION_FAILED,
+      6: CryptoErrorCode.KEY_GENERATION_FAILED,
+      7: CryptoErrorCode.ECDH_FAILED,
+      8: CryptoErrorCode.SIGNING_FAILED,
+      9: CryptoErrorCode.VERIFICATION_FAILED,
+    };
+
+    const code = codeMap[wasmCode] || CryptoErrorCode.ENCRYPTION_FAILED;
+    return new CryptoError(code, `${operation} failed with code ${wasmCode}`);
+  }
+}
+
 // Key sizes
 export const KEY_SIZE = 32;
 export const IV_SIZE = 16;
 export const SHA256_SIZE = 32;
+export const HMAC_SIZE = 32;
 export const X25519_PRIVATE_KEY_SIZE = 32;
 export const X25519_PUBLIC_KEY_SIZE = 32;
 export const SECP256K1_PRIVATE_KEY_SIZE = 32;
@@ -35,6 +102,7 @@ export const P256_PUBLIC_KEY_SIZE = 33;
 export const ED25519_PRIVATE_KEY_SIZE = 64;
 export const ED25519_PUBLIC_KEY_SIZE = 32;
 export const ED25519_SIGNATURE_SIZE = 64;
+export const MAX_DER_SIGNATURE_SIZE = 72;
 
 /**
  * Initialize the encryption module with WASM
@@ -363,6 +431,102 @@ export function sha256(data) {
 }
 
 // =============================================================================
+// HMAC-SHA256
+// =============================================================================
+
+/**
+ * Compute HMAC-SHA256
+ * @param {Uint8Array} key - HMAC key
+ * @param {Uint8Array} data - Data to authenticate
+ * @returns {Uint8Array} - 32-byte HMAC tag
+ */
+export function hmacSha256(key, data) {
+  if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (!(key instanceof Uint8Array)) throw new Error('Key must be a Uint8Array');
+  if (!(data instanceof Uint8Array)) throw new Error('Data must be a Uint8Array');
+
+  // Check if WASM module has HMAC function
+  if (wasmModule.wasi_hmac_sha256) {
+    const keyPtr = allocate(key.length);
+    const dataPtr = allocate(data.length);
+    const macPtr = allocate(HMAC_SIZE);
+
+    try {
+      writeBytes(keyPtr, key);
+      writeBytes(dataPtr, data);
+      wasmModule.wasi_hmac_sha256(keyPtr, key.length, dataPtr, data.length, macPtr);
+      return readBytes(macPtr, HMAC_SIZE);
+    } finally {
+      secureDeallocate(keyPtr, key.length);
+      deallocate(dataPtr);
+      deallocate(macPtr);
+    }
+  }
+
+  // Fallback: implement HMAC-SHA256 using sha256
+  // HMAC(K, m) = H((K' ^ opad) || H((K' ^ ipad) || m))
+  const BLOCK_SIZE = 64;
+  let keyPrime;
+
+  if (key.length > BLOCK_SIZE) {
+    keyPrime = sha256(key);
+  } else {
+    keyPrime = new Uint8Array(BLOCK_SIZE);
+    keyPrime.set(key);
+  }
+
+  // Pad key to block size
+  if (keyPrime.length < BLOCK_SIZE) {
+    const padded = new Uint8Array(BLOCK_SIZE);
+    padded.set(keyPrime);
+    keyPrime = padded;
+  }
+
+  const ipad = new Uint8Array(BLOCK_SIZE);
+  const opad = new Uint8Array(BLOCK_SIZE);
+
+  for (let i = 0; i < BLOCK_SIZE; i++) {
+    ipad[i] = keyPrime[i] ^ 0x36;
+    opad[i] = keyPrime[i] ^ 0x5c;
+  }
+
+  // Inner hash: H((K' ^ ipad) || m)
+  const innerData = new Uint8Array(BLOCK_SIZE + data.length);
+  innerData.set(ipad);
+  innerData.set(data, BLOCK_SIZE);
+  const innerHash = sha256(innerData);
+
+  // Outer hash: H((K' ^ opad) || innerHash)
+  const outerData = new Uint8Array(BLOCK_SIZE + HMAC_SIZE);
+  outerData.set(opad);
+  outerData.set(innerHash, BLOCK_SIZE);
+
+  return sha256(outerData);
+}
+
+/**
+ * Verify HMAC-SHA256 in constant time
+ * @param {Uint8Array} key - HMAC key
+ * @param {Uint8Array} data - Data to verify
+ * @param {Uint8Array} expectedMac - Expected HMAC tag
+ * @returns {boolean} - True if MAC is valid
+ */
+export function hmacSha256Verify(key, data, expectedMac) {
+  if (expectedMac.length !== HMAC_SIZE) {
+    return false;
+  }
+
+  const computedMac = hmacSha256(key, data);
+
+  // Constant-time comparison to prevent timing attacks
+  let diff = 0;
+  for (let i = 0; i < HMAC_SIZE; i++) {
+    diff |= computedMac[i] ^ expectedMac[i];
+  }
+  return diff === 0;
+}
+
+// =============================================================================
 // AES-256-CTR Encryption
 // =============================================================================
 
@@ -373,12 +537,24 @@ export function sha256(data) {
  * @param {Uint8Array} iv - 16-byte IV
  */
 export function encryptBytes(data, key, iv) {
-  if (!wasmModule) throw new Error('Encryption module not initialized');
-  if (!(data instanceof Uint8Array)) throw new Error('Data must be a Uint8Array');
-  if (!(key instanceof Uint8Array)) throw new Error('Key must be a Uint8Array');
-  if (!(iv instanceof Uint8Array)) throw new Error('IV must be a Uint8Array');
-  if (key.length !== KEY_SIZE) throw new Error(`Key must be ${KEY_SIZE} bytes, got ${key.length}`);
-  if (iv.length !== IV_SIZE) throw new Error(`IV must be ${IV_SIZE} bytes, got ${iv.length}`);
+  if (!wasmModule) {
+    throw new CryptoError(CryptoErrorCode.NOT_INITIALIZED, 'Encryption module not initialized. Call loadEncryptionWasm() first.');
+  }
+  if (!(data instanceof Uint8Array)) {
+    throw new CryptoError(CryptoErrorCode.INVALID_INPUT, 'Data must be a Uint8Array');
+  }
+  if (!(key instanceof Uint8Array)) {
+    throw new CryptoError(CryptoErrorCode.INVALID_INPUT, 'Key must be a Uint8Array');
+  }
+  if (!(iv instanceof Uint8Array)) {
+    throw new CryptoError(CryptoErrorCode.INVALID_INPUT, 'IV must be a Uint8Array');
+  }
+  if (key.length !== KEY_SIZE) {
+    throw new CryptoError(CryptoErrorCode.INVALID_KEY_SIZE, `Key must be ${KEY_SIZE} bytes, got ${key.length}`);
+  }
+  if (iv.length !== IV_SIZE) {
+    throw new CryptoError(CryptoErrorCode.INVALID_IV_SIZE, `IV must be ${IV_SIZE} bytes, got ${iv.length}`);
+  }
   if (data.length === 0) return; // Nothing to encrypt - data is unchanged
 
   const keyPtr = allocate(KEY_SIZE);
@@ -391,7 +567,9 @@ export function encryptBytes(data, key, iv) {
     writeBytes(dataPtr, data);
 
     const result = wasmModule.wasi_encrypt_bytes(keyPtr, ivPtr, dataPtr, data.length);
-    if (result !== 0) throw new Error('Encryption failed');
+    if (result !== 0) {
+      throw CryptoError.fromWasmCode(result, 'AES-256-CTR encryption');
+    }
 
     data.set(readBytes(dataPtr, data.length));
   } finally {
@@ -407,6 +585,105 @@ export function encryptBytes(data, key, iv) {
  * Same as encryptBytes (CTR mode is symmetric)
  */
 export const decryptBytes = encryptBytes;
+
+// =============================================================================
+// Authenticated Encryption (Encrypt-then-MAC)
+// =============================================================================
+
+/**
+ * Encrypt data with authentication using AES-256-CTR + HMAC-SHA256 (Encrypt-then-MAC).
+ * Returns a new buffer containing: IV (16 bytes) + ciphertext + HMAC (32 bytes).
+ *
+ * @param {Uint8Array} plaintext - Data to encrypt
+ * @param {Uint8Array} key - 32-byte encryption key
+ * @param {Uint8Array} [associatedData] - Optional additional data to authenticate (not encrypted)
+ * @returns {Uint8Array} - Authenticated ciphertext (IV + ciphertext + HMAC)
+ */
+export function encryptAuthenticated(plaintext, key, associatedData) {
+  if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (!(plaintext instanceof Uint8Array)) throw new Error('Plaintext must be a Uint8Array');
+  if (!(key instanceof Uint8Array)) throw new Error('Key must be a Uint8Array');
+  if (key.length !== KEY_SIZE) throw new Error(`Key must be ${KEY_SIZE} bytes`);
+
+  // Derive separate keys for encryption and MAC (using HKDF)
+  const encKey = hkdf(key, null, textEncoder.encode('aes-key'), KEY_SIZE);
+  const macKey = hkdf(key, null, textEncoder.encode('mac-key'), KEY_SIZE);
+
+  // Generate random IV
+  const iv = getRandomBytes(IV_SIZE);
+
+  // Encrypt (copy plaintext to avoid modifying input)
+  const ciphertext = new Uint8Array(plaintext);
+  encryptBytes(ciphertext, encKey, iv);
+
+  // Compute HMAC over: IV || ciphertext || associatedData
+  const aadLen = associatedData ? associatedData.length : 0;
+  const macInput = new Uint8Array(IV_SIZE + ciphertext.length + aadLen);
+  macInput.set(iv, 0);
+  macInput.set(ciphertext, IV_SIZE);
+  if (associatedData) {
+    macInput.set(associatedData, IV_SIZE + ciphertext.length);
+  }
+  const mac = hmacSha256(macKey, macInput);
+
+  // Assemble output: IV + ciphertext + MAC
+  const output = new Uint8Array(IV_SIZE + ciphertext.length + HMAC_SIZE);
+  output.set(iv, 0);
+  output.set(ciphertext, IV_SIZE);
+  output.set(mac, IV_SIZE + ciphertext.length);
+
+  return output;
+}
+
+/**
+ * Decrypt and verify authenticated ciphertext.
+ * Input format: IV (16 bytes) + ciphertext + HMAC (32 bytes).
+ *
+ * @param {Uint8Array} authenticatedCiphertext - Output from encryptAuthenticated
+ * @param {Uint8Array} key - 32-byte encryption key
+ * @param {Uint8Array} [associatedData] - Optional additional authenticated data
+ * @returns {Uint8Array} - Decrypted plaintext
+ * @throws {Error} If authentication fails
+ */
+export function decryptAuthenticated(authenticatedCiphertext, key, associatedData) {
+  if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (!(authenticatedCiphertext instanceof Uint8Array)) throw new Error('Ciphertext must be a Uint8Array');
+  if (!(key instanceof Uint8Array)) throw new Error('Key must be a Uint8Array');
+  if (key.length !== KEY_SIZE) throw new Error(`Key must be ${KEY_SIZE} bytes`);
+
+  const minLen = IV_SIZE + HMAC_SIZE;
+  if (authenticatedCiphertext.length < minLen) {
+    throw new Error(`Authenticated ciphertext too short: expected at least ${minLen} bytes`);
+  }
+
+  // Derive keys
+  const encKey = hkdf(key, null, textEncoder.encode('aes-key'), KEY_SIZE);
+  const macKey = hkdf(key, null, textEncoder.encode('mac-key'), KEY_SIZE);
+
+  // Parse input
+  const iv = authenticatedCiphertext.subarray(0, IV_SIZE);
+  const ciphertext = authenticatedCiphertext.subarray(IV_SIZE, authenticatedCiphertext.length - HMAC_SIZE);
+  const receivedMac = authenticatedCiphertext.subarray(authenticatedCiphertext.length - HMAC_SIZE);
+
+  // Verify HMAC first (before decryption)
+  const aadLen = associatedData ? associatedData.length : 0;
+  const macInput = new Uint8Array(IV_SIZE + ciphertext.length + aadLen);
+  macInput.set(iv, 0);
+  macInput.set(ciphertext, IV_SIZE);
+  if (associatedData) {
+    macInput.set(associatedData, IV_SIZE + ciphertext.length);
+  }
+
+  if (!hmacSha256Verify(macKey, macInput, receivedMac)) {
+    throw new CryptoError(CryptoErrorCode.AUTHENTICATION_FAILED, 'Authentication failed: HMAC verification failed');
+  }
+
+  // Decrypt
+  const plaintext = new Uint8Array(ciphertext);
+  decryptBytes(plaintext, encKey, iv);
+
+  return plaintext;
+}
 
 // =============================================================================
 // HKDF Key Derivation
@@ -629,7 +906,7 @@ export function secp256k1Sign(privateKey, data) {
 
   const privPtr = allocate(SECP256K1_PRIVATE_KEY_SIZE);
   const dataPtr = allocate(data.length);
-  const sigPtr = allocate(72); // Max DER signature size
+  const sigPtr = allocate(MAX_DER_SIGNATURE_SIZE);
   const sigSizePtr = allocate(4);
 
   try {
@@ -779,7 +1056,7 @@ export function p256Sign(privateKey, data) {
 
   const privPtr = allocate(P256_PRIVATE_KEY_SIZE);
   const dataPtr = allocate(data.length);
-  const sigPtr = allocate(72); // Max DER signature size
+  const sigPtr = allocate(MAX_DER_SIGNATURE_SIZE);
   const sigSizePtr = allocate(4);
 
   try {
@@ -955,16 +1232,23 @@ export const KeyDerivationFunction = {
 /**
  * Encryption context for field-level key derivation.
  *
+ * IMPORTANT: Each encryption operation requires a unique nonce to prevent IV reuse.
+ * The nonce is combined with the field ID to derive unique IVs for each field.
+ *
  * WARNING: Methods that encrypt data modify the buffer in-place.
  */
 export class EncryptionContext {
   #key;
+  #nonce;
 
   /**
    * Create encryption context
    * @param {Uint8Array|string} key - 32-byte master key as Uint8Array or 64-char hex string
+   * @param {Uint8Array} [nonce] - Optional 16-byte nonce for IV derivation.
+   *   CRITICAL: A new random nonce MUST be used for each encryption operation.
+   *   If not provided, a random nonce is generated.
    */
-  constructor(key) {
+  constructor(key, nonce) {
     if (typeof key === 'string') {
       // Validate hex string
       if (!/^[0-9a-fA-F]*$/.test(key)) {
@@ -987,6 +1271,29 @@ export class EncryptionContext {
     } else {
       throw new Error('Key must be a Uint8Array or 64-character hex string');
     }
+
+    // Handle nonce - generate random if not provided
+    if (nonce !== undefined) {
+      if (!(nonce instanceof Uint8Array)) {
+        throw new Error('Nonce must be a Uint8Array');
+      }
+      if (nonce.length !== IV_SIZE) {
+        throw new Error(`Invalid nonce length: expected ${IV_SIZE} bytes, got ${nonce.length}`);
+      }
+      this.#nonce = new Uint8Array(nonce);
+    } else {
+      // Generate random nonce for safety
+      this.#nonce = getRandomBytes(IV_SIZE);
+    }
+  }
+
+  /**
+   * Get the nonce used by this context.
+   * This nonce must be stored/transmitted with the encrypted data for decryption.
+   * @returns {Uint8Array} The 16-byte nonce
+   */
+  getNonce() {
+    return new Uint8Array(this.#nonce);
   }
 
   /**
@@ -1000,9 +1307,10 @@ export class EncryptionContext {
   /**
    * Create from hex string
    * @param {string} hexKey - 64-character hex string
+   * @param {Uint8Array} [nonce] - Optional 16-byte nonce for IV derivation
    * @returns {EncryptionContext}
    */
-  static fromHex(hexKey) {
+  static fromHex(hexKey, nonce) {
     if (typeof hexKey !== 'string') {
       throw new Error('hexKey must be a string');
     }
@@ -1012,7 +1320,7 @@ export class EncryptionContext {
     if (hexKey.length !== 64) {
       throw new Error(`Invalid hex key length: expected 64 characters (32 bytes), got ${hexKey.length}`);
     }
-    return new EncryptionContext(hexKey);
+    return new EncryptionContext(hexKey, nonce);
   }
 
   /**
@@ -1030,15 +1338,19 @@ export class EncryptionContext {
 
   /**
    * Derive field-specific IV
+   * The IV is derived from the key, nonce, and field ID to ensure uniqueness.
    * @param {number} fieldId
    * @returns {Uint8Array}
    */
   deriveFieldIV(fieldId) {
-    const info = new Uint8Array(16);
+    // Combine nonce with field ID info for HKDF
+    // This ensures different IVs even when encrypting the same buffer multiple times
+    const info = new Uint8Array(18); // 'flatbuffers-iv' (14) + fieldId (2) + padding (2)
     textEncoder.encodeInto('flatbuffers-iv', info);
     info[14] = (fieldId >> 8) & 0xff;
     info[15] = fieldId & 0xff;
-    return hkdf(this.#key, null, info, IV_SIZE);
+    // Use nonce as salt to ensure IV uniqueness across encryption operations
+    return hkdf(this.#key, this.#nonce, info, IV_SIZE);
   }
 
   /**
@@ -1181,7 +1493,14 @@ const TYPE_SIZES = {
 const SCALAR_TYPES = new Set(Object.keys(TYPE_SIZES));
 
 /**
- * Parse a FlatBuffers schema to extract field encryption info
+ * Parse a FlatBuffers schema to extract field encryption info.
+ *
+ * Handles edge cases:
+ * - Comments (// and /* ... *\/)
+ * - Nested braces in default values
+ * - Multi-line table definitions
+ * - String default values containing special characters
+ *
  * @param {string} schemaContent - FlatBuffers schema content (.fbs)
  * @param {string} rootType - Name of the root type
  * @returns {Object} Parsed schema with encryption metadata
@@ -1189,32 +1508,72 @@ const SCALAR_TYPES = new Set(Object.keys(TYPE_SIZES));
 export function parseSchemaForEncryption(schemaContent, rootType) {
   const schema = { fields: [] };
 
-  // Find the table definition
-  const tableRegex = new RegExp(`table\\s+${rootType}\\s*\\{([^}]+)\\}`, 's');
-  const match = schemaContent.match(tableRegex);
-  if (!match) return schema;
+  // Remove comments first
+  let cleanContent = schemaContent
+    // Remove single-line comments
+    .replace(/\/\/[^\n]*/g, '')
+    // Remove multi-line comments
+    .replace(/\/\*[\s\S]*?\*\//g, '');
 
-  const tableBody = match[1];
-  // Match field definitions: name: type (attributes);
-  const fieldRegex = /(\w+)\s*:\s*(\[?\w+\]?)\s*(?:\(([^)]*)\))?/g;
+  // Find the table definition using a more robust approach
+  // Match 'table Name {' and then find the balanced closing brace
+  const tableStartRegex = new RegExp(`table\\s+${escapeRegex(rootType)}\\s*\\{`, 's');
+  const startMatch = cleanContent.match(tableStartRegex);
+  if (!startMatch) return schema;
+
+  const startIndex = startMatch.index + startMatch[0].length;
+
+  // Find matching closing brace (handle nested braces)
+  let braceCount = 1;
+  let endIndex = startIndex;
+  while (braceCount > 0 && endIndex < cleanContent.length) {
+    const char = cleanContent[endIndex];
+    if (char === '{') braceCount++;
+    else if (char === '}') braceCount--;
+    endIndex++;
+  }
+
+  if (braceCount !== 0) {
+    // Unbalanced braces - return empty schema
+    return schema;
+  }
+
+  const tableBody = cleanContent.substring(startIndex, endIndex - 1);
+
+  // Parse fields more carefully
+  // Field format: name : type [= default] [(attributes)] ;
+  // We need to handle string defaults that might contain special chars
+  const lines = tableBody.split(';').map(l => l.trim()).filter(l => l.length > 0);
+
   let fieldId = 0;
-  let fieldMatch;
+  for (const line of lines) {
+    // Skip empty lines or lines that are just whitespace
+    if (!line || /^\s*$/.test(line)) continue;
 
-  while ((fieldMatch = fieldRegex.exec(tableBody)) !== null) {
+    // Match: name : type ...
+    const fieldMatch = line.match(/^(\w+)\s*:\s*(\[?\w+(?:\.\w+)*\]?)/);
+    if (!fieldMatch) continue;
+
     const name = fieldMatch[1];
     const typeStr = fieldMatch[2];
-    const attributes = fieldMatch[3] || '';
 
-    const isEncrypted = attributes.includes('encrypted');
+    // Extract attributes from parentheses at the end
+    // Be careful to not match parentheses in default values
+    const attrMatch = line.match(/\(\s*([^)]*encrypted[^)]*)\s*\)\s*$/);
+    const attributes = attrMatch ? attrMatch[1] : '';
+
+    const isEncrypted = /\bencrypted\b/.test(attributes);
     const isVector = typeStr.startsWith('[') && typeStr.endsWith(']');
     const baseType = isVector ? typeStr.slice(1, -1) : typeStr;
+    // Handle namespaced types (e.g., MyGame.Sample.Monster)
+    const simpleBaseType = baseType.includes('.') ? baseType.split('.').pop() : baseType;
 
     let fieldType;
     if (isVector) {
       fieldType = 'vector';
-    } else if (SCALAR_TYPES.has(baseType)) {
-      fieldType = baseType;
-    } else if (baseType === 'string') {
+    } else if (SCALAR_TYPES.has(simpleBaseType)) {
+      fieldType = simpleBaseType;
+    } else if (simpleBaseType === 'string') {
       fieldType = 'string';
     } else {
       fieldType = 'struct';
@@ -1225,12 +1584,21 @@ export function parseSchemaForEncryption(schemaContent, rootType) {
       id: fieldId++,
       type: fieldType,
       encrypted: isEncrypted,
-      elementType: isVector ? (SCALAR_TYPES.has(baseType) ? baseType : 'struct') : undefined,
-      elementSize: TYPE_SIZES[baseType] || 1,
+      elementType: isVector ? (SCALAR_TYPES.has(simpleBaseType) ? simpleBaseType : 'struct') : undefined,
+      elementSize: TYPE_SIZES[simpleBaseType] || 1,
     });
   }
 
   return schema;
+}
+
+/**
+ * Escape special regex characters in a string
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -1306,9 +1674,13 @@ function processTable(buffer, tableOffset, schema, ctx) {
       const vecData = buffer.subarray(vecLoc + 4, vecLoc + 4 + vecLen * elemSize);
       encryptBytes(vecData, key, iv);
     } else if (field.type === 'struct') {
-      // Struct is inline - we need structSize, but for now encrypt as single block
-      // This is a simplification; real implementation should know struct size
-      console.warn(`Struct encryption for field '${field.name}' requires struct size`);
+      // Struct encryption requires knowing the struct size, which isn't available
+      // from schema parsing alone. Skip with a descriptive error in the field info.
+      // Users should use explicit field-level encryption for struct fields.
+      throw new CryptoError(
+        CryptoErrorCode.INVALID_INPUT,
+        `Cannot encrypt struct field '${field.name}': struct size is unknown. Use explicit field-level encryption instead.`
+      );
     }
   }
 }

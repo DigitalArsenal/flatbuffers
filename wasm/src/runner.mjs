@@ -182,8 +182,11 @@ export class FlatcRunner {
       cur += "/" + part;
       try {
         FS.mkdir(cur);
-      } catch {
-        // directory may already exist
+      } catch (e) {
+        // EEXIST (error code 20 in Emscripten) means directory already exists - that's OK
+        if (e.errno !== 20) {
+          throw e;
+        }
       }
     }
     FS.writeFile(
@@ -249,24 +252,34 @@ export class FlatcRunner {
   /**
    * Delete a file from the virtual filesystem.
    * @param {string} path - File path.
+   * @param {boolean} [ignoreNotFound=true] - If true, don't throw if file doesn't exist
    */
-  unlink(path) {
+  unlink(path, ignoreNotFound = true) {
     try {
       this.Module.FS.unlink(path);
-    } catch {
-      // ignore if file doesn't exist
+    } catch (e) {
+      // ENOENT (error code 44 in Emscripten) means file doesn't exist
+      if (ignoreNotFound && e.errno === 44) {
+        return;
+      }
+      throw e;
     }
   }
 
   /**
    * Remove a directory from the virtual filesystem.
    * @param {string} path - Directory path.
+   * @param {boolean} [ignoreNotFound=true] - If true, don't throw if directory doesn't exist
    */
-  rmdir(path) {
+  rmdir(path, ignoreNotFound = true) {
     try {
       this.Module.FS.rmdir(path);
-    } catch {
-      // ignore if directory doesn't exist
+    } catch (e) {
+      // ENOENT (error code 44 in Emscripten) means directory doesn't exist
+      if (ignoreNotFound && e.errno === 44) {
+        return;
+      }
+      throw e;
     }
   }
 

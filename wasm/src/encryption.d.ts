@@ -5,12 +5,53 @@
  */
 
 // =============================================================================
+// Error Types
+// =============================================================================
+
+/**
+ * Error codes for cryptographic operations
+ */
+export declare const CryptoErrorCode: {
+  NOT_INITIALIZED: 'NOT_INITIALIZED';
+  INVALID_KEY_SIZE: 'INVALID_KEY_SIZE';
+  INVALID_IV_SIZE: 'INVALID_IV_SIZE';
+  INVALID_NONCE_SIZE: 'INVALID_NONCE_SIZE';
+  INVALID_SIGNATURE: 'INVALID_SIGNATURE';
+  INVALID_PUBLIC_KEY: 'INVALID_PUBLIC_KEY';
+  INVALID_PRIVATE_KEY: 'INVALID_PRIVATE_KEY';
+  ENCRYPTION_FAILED: 'ENCRYPTION_FAILED';
+  DECRYPTION_FAILED: 'DECRYPTION_FAILED';
+  KEY_GENERATION_FAILED: 'KEY_GENERATION_FAILED';
+  ECDH_FAILED: 'ECDH_FAILED';
+  SIGNING_FAILED: 'SIGNING_FAILED';
+  VERIFICATION_FAILED: 'VERIFICATION_FAILED';
+  AUTHENTICATION_FAILED: 'AUTHENTICATION_FAILED';
+  MEMORY_ERROR: 'MEMORY_ERROR';
+  INVALID_INPUT: 'INVALID_INPUT';
+};
+
+export type CryptoErrorCodeType = typeof CryptoErrorCode[keyof typeof CryptoErrorCode];
+
+/**
+ * Custom error class for cryptographic operations
+ */
+export declare class CryptoError extends Error {
+  readonly code: CryptoErrorCodeType;
+  readonly cause?: Error;
+
+  constructor(code: CryptoErrorCodeType, message: string, cause?: Error);
+
+  static fromWasmCode(wasmCode: number, operation: string): CryptoError;
+}
+
+// =============================================================================
 // Constants
 // =============================================================================
 
 export declare const KEY_SIZE: 32;
 export declare const IV_SIZE: 16;
 export declare const SHA256_SIZE: 32;
+export declare const HMAC_SIZE: 32;
 export declare const X25519_PRIVATE_KEY_SIZE: 32;
 export declare const X25519_PUBLIC_KEY_SIZE: 32;
 export declare const SECP256K1_PRIVATE_KEY_SIZE: 32;
@@ -20,6 +61,7 @@ export declare const P256_PUBLIC_KEY_SIZE: 33;
 export declare const ED25519_PRIVATE_KEY_SIZE: 64;
 export declare const ED25519_PUBLIC_KEY_SIZE: 32;
 export declare const ED25519_SIGNATURE_SIZE: 64;
+export declare const MAX_DER_SIGNATURE_SIZE: 72;
 
 export declare const KeyExchangeAlgorithm: {
   X25519: 'x25519';
@@ -85,6 +127,31 @@ export declare function getVersion(): string;
 export declare function sha256(data: Uint8Array): Uint8Array;
 
 // =============================================================================
+// HMAC-SHA256
+// =============================================================================
+
+/**
+ * Compute HMAC-SHA256
+ * @param key - HMAC key
+ * @param data - Data to authenticate
+ * @returns 32-byte HMAC tag
+ */
+export declare function hmacSha256(key: Uint8Array, data: Uint8Array): Uint8Array;
+
+/**
+ * Verify HMAC-SHA256 in constant time
+ * @param key - HMAC key
+ * @param data - Data to verify
+ * @param expectedMac - Expected HMAC tag
+ * @returns true if MAC is valid
+ */
+export declare function hmacSha256Verify(
+  key: Uint8Array,
+  data: Uint8Array,
+  expectedMac: Uint8Array
+): boolean;
+
+// =============================================================================
 // Symmetric Encryption (AES-256-CTR)
 // =============================================================================
 
@@ -113,6 +180,45 @@ export declare function decryptBytes(
   key: Uint8Array,
   iv: Uint8Array
 ): void;
+
+// =============================================================================
+// Authenticated Encryption (Encrypt-then-MAC)
+// =============================================================================
+
+/**
+ * Encrypt data with authentication using AES-256-CTR + HMAC-SHA256 (Encrypt-then-MAC).
+ * Returns a new buffer containing: IV (16 bytes) + ciphertext + HMAC (32 bytes).
+ *
+ * @param plaintext - Data to encrypt
+ * @param key - 32-byte encryption key
+ * @param associatedData - Optional additional data to authenticate (not encrypted)
+ * @returns Authenticated ciphertext (IV + ciphertext + HMAC)
+ */
+export declare function encryptAuthenticated(
+  plaintext: Uint8Array,
+  key: Uint8Array,
+  associatedData?: Uint8Array
+): Uint8Array;
+
+/**
+ * Decrypt and verify authenticated ciphertext.
+ * Input format: IV (16 bytes) + ciphertext + HMAC (32 bytes).
+ *
+ * @param authenticatedCiphertext - Output from encryptAuthenticated
+ * @param key - 32-byte encryption key
+ * @param associatedData - Optional additional authenticated data
+ * @returns Decrypted plaintext
+ * @throws CryptoError with code AUTHENTICATION_FAILED if MAC verification fails
+ */
+export declare function decryptAuthenticated(
+  authenticatedCiphertext: Uint8Array,
+  key: Uint8Array,
+  associatedData?: Uint8Array
+): Uint8Array;
+
+// =============================================================================
+// HKDF Key Derivation
+// =============================================================================
 
 /**
  * Derive key using HKDF-SHA256
@@ -298,20 +404,34 @@ export declare function ed25519Verify(
 /**
  * Encryption context for FlatBuffer field encryption.
  *
+ * IMPORTANT: Each encryption operation requires a unique nonce to prevent IV reuse.
+ * The nonce is combined with the field ID to derive unique IVs for each field.
+ *
  * WARNING: Methods that encrypt data modify the buffer in-place.
  */
 export declare class EncryptionContext {
   /**
    * Create an encryption context
    * @param key - 32-byte key as Uint8Array or 64-character hex string
+   * @param nonce - Optional 16-byte nonce for IV derivation.
+   *   CRITICAL: A new random nonce MUST be used for each encryption operation.
+   *   If not provided, a random nonce is generated.
    */
-  constructor(key: Uint8Array | string);
+  constructor(key: Uint8Array | string, nonce?: Uint8Array);
 
   /**
    * Create from hex string
    * @param hexKey - 64-character hex string
+   * @param nonce - Optional 16-byte nonce for IV derivation
    */
-  static fromHex(hexKey: string): EncryptionContext;
+  static fromHex(hexKey: string, nonce?: Uint8Array): EncryptionContext;
+
+  /**
+   * Get the nonce used by this context.
+   * This nonce must be stored/transmitted with the encrypted data for decryption.
+   * @returns The 16-byte nonce
+   */
+  getNonce(): Uint8Array;
 
   /**
    * Check if context is valid
@@ -503,6 +623,10 @@ export declare function encryptionHeaderFromJSON(json: EncryptionHeaderJSON): En
 // =============================================================================
 
 declare const encryption: {
+  // Error types
+  CryptoError: typeof CryptoError;
+  CryptoErrorCode: typeof CryptoErrorCode;
+
   // Initialization
   initEncryption: typeof initEncryption;
   loadEncryptionWasm: typeof loadEncryptionWasm;
@@ -512,10 +636,14 @@ declare const encryption: {
 
   // Hash
   sha256: typeof sha256;
+  hmacSha256: typeof hmacSha256;
+  hmacSha256Verify: typeof hmacSha256Verify;
 
   // Symmetric encryption
   encryptBytes: typeof encryptBytes;
   decryptBytes: typeof decryptBytes;
+  encryptAuthenticated: typeof encryptAuthenticated;
+  decryptAuthenticated: typeof decryptAuthenticated;
   hkdf: typeof hkdf;
 
   // X25519

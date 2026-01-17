@@ -88,6 +88,27 @@ export {
   SHA256_SIZE,
 } from "./encryption.js";
 
+// Aligned codegen exports
+export {
+  parseSchema,
+  computeLayout,
+  generateCppHeader,
+  generateTypeScript,
+  generateJavaScript,
+  generateAlignedCode,
+} from "./aligned-codegen.js";
+
+// Streaming dispatcher exports
+export {
+  StreamingDispatcher,
+  createSizePrefixedMessage,
+  concatMessages,
+  MessageTypeInfo,
+  DispatcherStats,
+  InputBufferInfo,
+  DispatcherWasmModule,
+} from "./streaming-dispatcher.js";
+
 /**
  * Options for creating the WASM module.
  */

@@ -79,6 +79,8 @@ export interface GeneratedCode {
   cpp: string;
   /** TypeScript module content */
   ts: string;
+  /** Plain JavaScript module content (no types) */
+  js: string;
   /** Parsed schema */
   schema: ParsedSchema;
   /** Computed layouts for each struct */
@@ -126,6 +128,17 @@ export function generateTypeScript(
 ): string;
 
 /**
+ * Generate plain JavaScript view classes for aligned structs (no TypeScript types)
+ * @param schema - Parsed schema
+ * @param options - Generation options
+ * @returns JavaScript content
+ */
+export function generateJavaScript(
+  schema: ParsedSchema,
+  options?: GenerationOptions
+): string;
+
+/**
  * Generate aligned code from a FlatBuffers schema
  * @param schemaContent - The .fbs schema content
  * @param options - Generation options
@@ -141,6 +154,7 @@ declare const _default: {
   computeLayout: typeof computeLayout;
   generateCppHeader: typeof generateCppHeader;
   generateTypeScript: typeof generateTypeScript;
+  generateJavaScript: typeof generateJavaScript;
   generateAlignedCode: typeof generateAlignedCode;
 };
 

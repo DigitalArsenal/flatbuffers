@@ -462,6 +462,37 @@ async function runIntegrationTests() {
     assert(result.ts.includes('toObject()'), 'should have debug helper');
     assert(result.ts.includes('Symbol.iterator'), 'array view should be iterable');
   });
+
+  await test('generated TypeScript has conversion helpers', async () => {
+    const result = generateAlignedCode(SIMPLE_STRUCT_SCHEMA);
+
+    // Verify conversion methods
+    assert(result.ts.includes('copyFrom('), 'should have copyFrom method');
+    assert(result.ts.includes('copyTo('), 'should have copyTo method');
+    assert(result.ts.includes('getBytes()'), 'should have getBytes method');
+    assert(result.ts.includes('static allocate()'), 'should have allocate factory');
+  });
+
+  await test('generated JavaScript has conversion helpers', async () => {
+    const result = generateAlignedCode(SIMPLE_STRUCT_SCHEMA);
+
+    // Verify JS output has same conversion methods
+    assert(result.js.includes('copyFrom('), 'JS should have copyFrom method');
+    assert(result.js.includes('copyTo('), 'JS should have copyTo method');
+    assert(result.js.includes('getBytes()'), 'JS should have getBytes method');
+    assert(result.js.includes('static allocate()'), 'JS should have allocate factory');
+  });
+
+  await test('generated C++ has helper methods', async () => {
+    const result = generateAlignedCode(SIMPLE_STRUCT_SCHEMA);
+
+    // Verify C++ helper methods
+    assert(result.cpp.includes('#include <cstring>'), 'should include cstring');
+    assert(result.cpp.includes('static Vec3* fromBytes('), 'should have fromBytes');
+    assert(result.cpp.includes('void copyTo(void* dest)'), 'should have copyTo');
+    assert(result.cpp.includes('void copyFrom(const Vec3& src)'), 'should have copyFrom');
+    assert(result.cpp.includes('std::memcpy'), 'should use memcpy');
+  });
 }
 
 // =============================================================================

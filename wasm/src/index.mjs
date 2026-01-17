@@ -21,6 +21,13 @@ export {
   generateAlignedCode,
 } from "./aligned-codegen.mjs";
 
+// Streaming dispatcher exports
+export {
+  StreamingDispatcher,
+  createSizePrefixedMessage,
+  concatMessages,
+} from "./streaming-dispatcher.mjs";
+
 // Encryption exports
 export {
   // Error types

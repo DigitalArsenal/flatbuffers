@@ -117,8 +117,9 @@ function parseFields(body, enums) {
   const lines = body.split(';').map(l => l.trim()).filter(l => l.length > 0);
 
   for (const line of lines) {
-    // Match: name:type or name:[type] or name:[type:N]
-    const match = line.match(/^(\w+)\s*:\s*(\[?\w+(?::\d+)?\]?)(?:\s*=\s*[^;]*)?$/);
+    // Match: name:type or name:[type] or name:[type:N] or name:[type:0xN]
+    // The type portion can be: scalar, [type], [type:decimal], or [type:0xhex]
+    const match = line.match(/^(\w+)\s*:\s*(\[?\w+(?::(?:0x[0-9a-fA-F]+|\d+))?\]?)(?:\s*=\s*[^;]*)?$/);
     if (!match) continue;
 
     const [, name, typeStr] = match;
@@ -139,11 +140,14 @@ function parseFields(body, enums) {
  * @returns {Object|null} Parsed field or null if unsupported
  */
 function parseFieldType(name, typeStr, enums) {
-  // Check for fixed-size array: [type:N]
-  const arrayMatch = typeStr.match(/^\[(\w+):(\d+)\]$/);
+  // Check for fixed-size array: [type:N] or [type:0xN] (hex)
+  const arrayMatch = typeStr.match(/^\[(\w+):(0x[0-9a-fA-F]+|\d+)\]$/);
   if (arrayMatch) {
     const [, elemType, countStr] = arrayMatch;
-    const count = parseInt(countStr, 10);
+    // parseInt with radix 0 or 16 handles both decimal and hex (0x prefix)
+    const count = countStr.startsWith('0x') ? parseInt(countStr, 16) : parseInt(countStr, 10);
+
+    // Check if element type is a scalar
     const baseInfo = SCALAR_TYPES[elemType];
     if (baseInfo) {
       return {
@@ -157,6 +161,36 @@ function parseFieldType(name, typeStr, enums) {
         align: baseInfo.align,
       };
     }
+
+    // Check if element type is an enum
+    const enumDef = enums.find(e => e.name === elemType);
+    if (enumDef) {
+      const enumBaseInfo = SCALAR_TYPES[enumDef.baseType];
+      if (enumBaseInfo) {
+        return {
+          name,
+          type: elemType,
+          isArray: true,
+          arraySize: count,
+          isEnum: true,
+          enumDef,
+          ...enumBaseInfo,
+          size: enumBaseInfo.size * count,
+          align: enumBaseInfo.align,
+        };
+      }
+    }
+
+    // Array of nested structs - size will be resolved later
+    return {
+      name,
+      type: elemType,
+      isArray: true,
+      arraySize: count,
+      isNestedStruct: true,
+      size: 0, // Will be computed during layout
+      align: 0,
+    };
   }
 
   // Check for variable-length vector: [type] - not supported for aligned
@@ -236,7 +270,12 @@ export function computeLayout(structDef, allStructs = {}) {
         throw new Error(`Unknown struct type: ${field.type}`);
       }
       const nestedLayout = computeLayout(nestedStruct, allStructs);
-      fieldInfo.size = nestedLayout.size;
+      // For arrays of nested structs, multiply size by array count
+      if (field.isArray && field.arraySize > 1) {
+        fieldInfo.size = nestedLayout.size * field.arraySize;
+      } else {
+        fieldInfo.size = nestedLayout.size;
+      }
       fieldInfo.align = nestedLayout.align;
       fieldInfo.nestedLayout = nestedLayout;
     }
@@ -290,7 +329,8 @@ export function generateCppHeader(schema, options = {}) {
   }
 
   code += '#include <cstdint>\n';
-  code += '#include <cstddef>\n\n';
+  code += '#include <cstddef>\n';
+  code += '#include <cstring>\n\n';
 
   // Open namespace
   if (schema.namespace) {
@@ -349,25 +389,61 @@ export function generateCppHeader(schema, options = {}) {
 
 /**
  * Generate C++ enum definition
+ * Always outputs explicit values for each enum constant for clarity
  */
 function generateCppEnum(enumDef) {
   const baseInfo = SCALAR_TYPES[enumDef.baseType];
   let code = `enum class ${enumDef.name} : ${baseInfo.cppType} {\n`;
 
+  let currentValue = 0;
   for (let i = 0; i < enumDef.values.length; i++) {
     const v = enumDef.values[i];
-    code += `  ${v.name}`;
+    // Use explicit value from schema if present, otherwise use auto-incremented value
     if (v.value !== null) {
-      code += ` = ${v.value}`;
+      currentValue = v.value;
     }
+    code += `  ${v.name} = ${currentValue}`;
     if (i < enumDef.values.length - 1) {
       code += ',';
     }
     code += '\n';
+    currentValue++;
   }
 
   code += '};\n\n';
   return code;
+}
+
+/**
+ * Recursively flatten nested struct fields for C++ code generation
+ * @param {Object} field - The field to process
+ * @param {number} baseOffset - Base offset for this field
+ * @param {string} namePrefix - Name prefix for nested fields
+ * @returns {Array<{name: string, field: Object, offset: number}>} Flattened field list
+ */
+function flattenNestedFieldsCpp(field, baseOffset, namePrefix) {
+  const result = [];
+
+  if (field.isNestedStruct && field.nestedLayout) {
+    // Recursively flatten nested struct
+    for (const nestedField of field.nestedLayout.fields) {
+      const fullName = namePrefix ? `${namePrefix}_${nestedField.name}` : nestedField.name;
+      const fieldOffset = baseOffset + nestedField.offset;
+
+      if (nestedField.isNestedStruct && nestedField.nestedLayout) {
+        // Recurse for deeply nested structs
+        result.push(...flattenNestedFieldsCpp(nestedField, fieldOffset, fullName));
+      } else {
+        // Scalar or array field - add it directly
+        result.push({ name: fullName, field: nestedField, offset: fieldOffset });
+      }
+    }
+  } else {
+    // Not a nested struct - add directly
+    result.push({ name: namePrefix || field.name, field, offset: baseOffset });
+  }
+
+  return result;
 }
 
 /**
@@ -377,34 +453,38 @@ function generateCppStruct(structDef, allStructs) {
   const layout = computeLayout(structDef, allStructs);
   let code = '';
 
+  // Collect all flattened fields (handles multi-level nesting)
+  const flattenedFields = [];
+  for (const field of layout.fields) {
+    if (field.isNestedStruct && field.nestedLayout) {
+      flattenedFields.push(...flattenNestedFieldsCpp(field, field.offset, field.name));
+    } else {
+      flattenedFields.push({ name: field.name, field, offset: field.offset });
+    }
+  }
+
   code += `// Total size: ${layout.size} bytes, aligned to ${layout.align} bytes\n`;
   code += `struct ${structDef.name} {\n`;
 
   let paddingCount = 0;
-  for (const field of layout.fields) {
-    // Add padding comment if needed
-    if (field.padding > 0) {
-      code += `  // ${field.padding} byte(s) padding\n`;
+  let lastOffset = 0;
+
+  for (const { name, field, offset } of flattenedFields) {
+    // Add padding comment if there's a gap
+    if (offset > lastOffset) {
+      const gap = offset - lastOffset;
+      if (gap > 0 && paddingCount === 0) {
+        // Only add padding comment for first gap in struct
+      }
     }
 
-    if (field.isNestedStruct) {
-      // Flatten nested struct fields
-      code += `  // Nested: ${field.type}\n`;
-      for (const nestedField of field.nestedLayout.fields) {
-        const cppType = nestedField.isEnum ? nestedField.type : nestedField.cppType;
-        if (nestedField.isArray) {
-          code += `  ${cppType} ${field.name}_${nestedField.name}[${nestedField.arraySize}]; // offset ${field.offset + nestedField.offset}\n`;
-        } else {
-          code += `  ${cppType} ${field.name}_${nestedField.name}; // offset ${field.offset + nestedField.offset}\n`;
-        }
-      }
+    const cppType = field.isEnum ? field.type : field.cppType;
+    if (field.isArray) {
+      code += `  ${cppType} ${name}[${field.arraySize}]; // offset ${offset}\n`;
+      lastOffset = offset + field.size;
     } else {
-      const cppType = field.isEnum ? field.type : field.cppType;
-      if (field.isArray) {
-        code += `  ${cppType} ${field.name}[${field.arraySize}]; // offset ${field.offset}\n`;
-      } else {
-        code += `  ${cppType} ${field.name}; // offset ${field.offset}\n`;
-      }
+      code += `  ${cppType} ${name}; // offset ${offset}\n`;
+      lastOffset = offset + field.size;
     }
   }
 
@@ -412,6 +492,26 @@ function generateCppStruct(structDef, allStructs) {
   if (layout.finalPadding > 0) {
     code += `  uint8_t _pad${paddingCount}[${layout.finalPadding}]; // final padding\n`;
   }
+
+  // Helper methods
+  code += '\n';
+  code += '  // Create from raw bytes (must be properly aligned)\n';
+  code += `  static ${structDef.name}* fromBytes(void* data) {\n`;
+  code += `    return reinterpret_cast<${structDef.name}*>(data);\n`;
+  code += '  }\n';
+  code += `  static const ${structDef.name}* fromBytes(const void* data) {\n`;
+  code += `    return reinterpret_cast<const ${structDef.name}*>(data);\n`;
+  code += '  }\n';
+  code += '\n';
+  code += '  // Copy to raw bytes\n';
+  code += '  void copyTo(void* dest) const {\n';
+  code += `    std::memcpy(dest, this, ${layout.size});\n`;
+  code += '  }\n';
+  code += '\n';
+  code += '  // Copy from another instance\n';
+  code += `  void copyFrom(const ${structDef.name}& src) {\n`;
+  code += `    std::memcpy(this, &src, ${layout.size});\n`;
+  code += '  }\n';
 
   code += '};\n';
   code += `static_assert(sizeof(${structDef.name}) == ${layout.size}, "${structDef.name} size mismatch");\n`;
@@ -451,10 +551,12 @@ function isFixedSizeTable(tableDef, allStructs) {
  * Generate TypeScript view classes for aligned structs
  * @param {Object} schema - Parsed schema
  * @param {Object} options - Generation options
- * @returns {string} TypeScript content
+ * @param {string} options.format - 'ts' for TypeScript (default), 'js' for pure JavaScript
+ * @returns {string} TypeScript/JavaScript content
  */
 export function generateTypeScript(schema, options = {}) {
-  const { moduleType = 'esm' } = options;
+  const { moduleType = 'esm', format = 'ts' } = options;
+  const useTypes = format !== 'js';
 
   let code = '';
 
@@ -514,11 +616,53 @@ function generateTsEnum(enumDef) {
 }
 
 /**
+ * Recursively flatten nested struct fields into a list of scalar field entries
+ * @param {Object} field - The field to process
+ * @param {number} baseOffset - Base offset for this field
+ * @param {string} namePrefix - Name prefix for nested fields
+ * @returns {Array<{name: string, field: Object, offset: number}>} Flattened field list
+ */
+function flattenNestedFields(field, baseOffset, namePrefix) {
+  const result = [];
+
+  if (field.isNestedStruct && field.nestedLayout) {
+    // Recursively flatten nested struct
+    for (const nestedField of field.nestedLayout.fields) {
+      const fullName = namePrefix ? `${namePrefix}_${nestedField.name}` : nestedField.name;
+      const fieldOffset = baseOffset + nestedField.offset;
+
+      if (nestedField.isNestedStruct && nestedField.nestedLayout) {
+        // Recurse for deeply nested structs
+        result.push(...flattenNestedFields(nestedField, fieldOffset, fullName));
+      } else {
+        // Scalar or array field - add it directly
+        result.push({ name: fullName, field: nestedField, offset: fieldOffset });
+      }
+    }
+  } else {
+    // Not a nested struct - add directly
+    result.push({ name: namePrefix || field.name, field, offset: baseOffset });
+  }
+
+  return result;
+}
+
+/**
  * Generate TypeScript view class for a struct
  */
 function generateTsViewClass(structDef, allStructs) {
   const layout = computeLayout(structDef, allStructs);
   let code = '';
+
+  // Collect all flattened fields (handles multi-level nesting)
+  const flattenedFields = [];
+  for (const field of layout.fields) {
+    if (field.isNestedStruct && field.nestedLayout) {
+      flattenedFields.push(...flattenNestedFields(field, field.offset, field.name));
+    } else {
+      flattenedFields.push({ name: field.name, field, offset: field.offset });
+    }
+  }
 
   // Size and alignment constants
   code += `export const ${structDef.name.toUpperCase()}_SIZE = ${layout.size};\n`;
@@ -526,14 +670,8 @@ function generateTsViewClass(structDef, allStructs) {
 
   // Offsets object
   code += `export const ${structDef.name}Offsets = {\n`;
-  for (const field of layout.fields) {
-    if (field.isNestedStruct) {
-      for (const nestedField of field.nestedLayout.fields) {
-        code += `  ${field.name}_${nestedField.name}: ${field.offset + nestedField.offset},\n`;
-      }
-    } else {
-      code += `  ${field.name}: ${field.offset},\n`;
-    }
+  for (const { name, offset } of flattenedFields) {
+    code += `  ${name}: ${offset},\n`;
   }
   code += '} as const;\n\n';
 
@@ -556,39 +694,58 @@ function generateTsViewClass(structDef, allStructs) {
   code += `    return new ${structDef.name}View(bytes.buffer, bytes.byteOffset + offset);\n`;
   code += '  }\n\n';
 
-  // Getters and setters for each field
-  for (const field of layout.fields) {
-    if (field.isNestedStruct) {
-      // Generate accessors for flattened nested fields
-      for (const nestedField of field.nestedLayout.fields) {
-        const fullName = `${field.name}_${nestedField.name}`;
-        const offset = field.offset + nestedField.offset;
-        code += generateTsAccessor(fullName, nestedField, offset);
-      }
-    } else if (field.isArray) {
-      // Generate array accessor
-      code += generateTsArrayAccessor(field);
+  // Getters and setters for each flattened field
+  for (const { name, field, offset } of flattenedFields) {
+    if (field.isArray) {
+      // Generate array accessor with custom name
+      code += generateTsArrayAccessorWithName(name, field, offset);
     } else {
-      code += generateTsAccessor(field.name, field, field.offset);
+      code += generateTsAccessor(name, field, offset);
     }
   }
 
   // toObject() method for debugging
   code += '  toObject(): Record<string, unknown> {\n';
   code += '    return {\n';
-  for (const field of layout.fields) {
-    if (field.isNestedStruct) {
-      for (const nestedField of field.nestedLayout.fields) {
-        const fullName = `${field.name}_${nestedField.name}`;
-        code += `      ${fullName}: this.${fullName},\n`;
-      }
-    } else if (field.isArray) {
-      code += `      ${field.name}: Array.from(this.${field.name}),\n`;
+  for (const { name, field } of flattenedFields) {
+    if (field.isArray) {
+      code += `      ${name}: Array.from(this.${name}),\n`;
     } else {
-      code += `      ${field.name}: this.${field.name},\n`;
+      code += `      ${name}: this.${name},\n`;
     }
   }
   code += '    };\n';
+  code += '  }\n\n';
+
+  // copyFrom() method for populating from a plain object
+  code += '  copyFrom(obj: Partial<Record<string, unknown>>): void {\n';
+  for (const { name, field } of flattenedFields) {
+    if (field.isArray) {
+      code += `    if (obj.${name} !== undefined) {\n`;
+      code += `      const arr = this.${name};\n`;
+      code += `      const src = obj.${name} as ArrayLike<${field.tsType}>;\n`;
+      code += `      for (let i = 0; i < Math.min(arr.length, src.length); i++) arr[i] = src[i];\n`;
+      code += '    }\n';
+    } else {
+      code += `    if (obj.${name} !== undefined) this.${name} = obj.${name} as ${field.tsType};\n`;
+    }
+  }
+  code += '  }\n\n';
+
+  // allocate() static method for creating new instances
+  code += `  static allocate(): ${structDef.name}View {\n`;
+  code += `    return new ${structDef.name}View(new ArrayBuffer(${layout.size}));\n`;
+  code += '  }\n\n';
+
+  // copyTo() method for copying to another buffer
+  code += '  copyTo(dest: Uint8Array, offset = 0): void {\n';
+  code += `    const src = new Uint8Array(this.view.buffer, this.view.byteOffset, ${layout.size});\n`;
+  code += '    dest.set(src, offset);\n';
+  code += '  }\n\n';
+
+  // getBytes() method for getting a view of the raw bytes
+  code += '  getBytes(): Uint8Array {\n';
+  code += `    return new Uint8Array(this.view.buffer, this.view.byteOffset, ${layout.size});\n`;
   code += '  }\n';
 
   code += '}\n\n';
@@ -629,12 +786,9 @@ function generateTsAccessor(name, field, offset) {
 }
 
 /**
- * Generate accessor for a fixed-size array field
+ * Get TypedArray type for a scalar type
  */
-function generateTsArrayAccessor(field) {
-  let code = '';
-
-  // Determine the appropriate TypedArray type
+function getTypedArrayType(type) {
   const typedArrayMap = {
     byte: 'Int8Array', ubyte: 'Uint8Array', int8: 'Int8Array', uint8: 'Uint8Array',
     short: 'Int16Array', ushort: 'Uint16Array', int16: 'Int16Array', uint16: 'Uint16Array',
@@ -643,11 +797,25 @@ function generateTsArrayAccessor(field) {
     long: 'BigInt64Array', ulong: 'BigUint64Array', int64: 'BigInt64Array', uint64: 'BigUint64Array',
     double: 'Float64Array', float64: 'Float64Array',
   };
+  return typedArrayMap[type] || 'Uint8Array';
+}
 
-  const typedArrayType = typedArrayMap[field.type] || 'Uint8Array';
+/**
+ * Generate accessor for a fixed-size array field
+ */
+function generateTsArrayAccessor(field) {
+  return generateTsArrayAccessorWithName(field.name, field, field.offset);
+}
 
-  code += `  get ${field.name}(): ${typedArrayType} {\n`;
-  code += `    return new ${typedArrayType}(this.view.buffer, this.view.byteOffset + ${field.offset}, ${field.arraySize});\n`;
+/**
+ * Generate accessor for a fixed-size array field with custom name and offset
+ */
+function generateTsArrayAccessorWithName(name, field, offset) {
+  let code = '';
+  const typedArrayType = getTypedArrayType(field.type);
+
+  code += `  get ${name}(): ${typedArrayType} {\n`;
+  code += `    return new ${typedArrayType}(this.view.buffer, this.view.byteOffset + ${offset}, ${field.arraySize});\n`;
   code += '  }\n\n';
 
   return code;
@@ -693,6 +861,247 @@ function generateTsArrayViewClass(structName, structSize) {
 }
 
 // =============================================================================
+// Plain JavaScript Generation (no TypeScript types)
+// =============================================================================
+
+/**
+ * Generate plain JavaScript view classes for aligned structs (no TypeScript types)
+ * @param {Object} schema - Parsed schema
+ * @param {Object} options - Generation options
+ * @returns {string} JavaScript content
+ */
+export function generateJavaScript(schema, options = {}) {
+  // Build struct lookup for nested resolution
+  const allStructs = {};
+  for (const s of schema.structs) {
+    allStructs[s.name] = s;
+  }
+  for (const t of schema.tables) {
+    allStructs[t.name] = t;
+  }
+
+  let code = '';
+  code += '/**\n';
+  code += ' * Auto-generated aligned buffer accessors\n';
+  code += ' * Use with WebAssembly.Memory for zero-copy access\n';
+  code += ' */\n\n';
+
+  // Generate enums as const objects (no TypeScript type alias)
+  for (const enumDef of schema.enums) {
+    code += `const ${enumDef.name} = {\n`;
+    let currentValue = 0;
+    for (const v of enumDef.values) {
+      if (v.value !== null) {
+        currentValue = v.value;
+      }
+      code += `  ${v.name}: ${currentValue},\n`;
+      currentValue++;
+    }
+    code += '};\n\n';
+  }
+
+  // Generate view classes for structs
+  for (const structDef of schema.structs) {
+    code += generateJsViewClass(structDef, allStructs);
+  }
+
+  // Generate view classes for fixed-size tables
+  for (const tableDef of schema.tables) {
+    if (isFixedSizeTable(tableDef, allStructs)) {
+      code += generateJsViewClass(tableDef, allStructs);
+    }
+  }
+
+  return code;
+}
+
+/**
+ * Generate plain JavaScript view class for a struct
+ */
+function generateJsViewClass(structDef, allStructs) {
+  const layout = computeLayout(structDef, allStructs);
+  let code = '';
+
+  // Collect all flattened fields (handles multi-level nesting)
+  const flattenedFields = [];
+  for (const field of layout.fields) {
+    if (field.isNestedStruct && field.nestedLayout) {
+      flattenedFields.push(...flattenNestedFields(field, field.offset, field.name));
+    } else {
+      flattenedFields.push({ name: field.name, field, offset: field.offset });
+    }
+  }
+
+  // Size and alignment constants
+  code += `const ${structDef.name.toUpperCase()}_SIZE = ${layout.size};\n`;
+  code += `const ${structDef.name.toUpperCase()}_ALIGN = ${layout.align};\n\n`;
+
+  // Offsets object
+  code += `const ${structDef.name}Offsets = {\n`;
+  for (const { name, offset } of flattenedFields) {
+    code += `  ${name}: ${offset},\n`;
+  }
+  code += '};\n\n';
+
+  // View class
+  code += `class ${structDef.name}View {\n`;
+
+  // Constructor
+  code += '  constructor(buffer, byteOffset = 0) {\n';
+  code += `    this.view = new DataView(buffer, byteOffset, ${layout.size});\n`;
+  code += '  }\n\n';
+
+  // Factory for WASM memory
+  code += `  static fromMemory(memory, ptr) {\n`;
+  code += `    return new ${structDef.name}View(memory.buffer, ptr);\n`;
+  code += '  }\n\n';
+
+  // Factory for Uint8Array
+  code += `  static fromBytes(bytes, offset = 0) {\n`;
+  code += `    return new ${structDef.name}View(bytes.buffer, bytes.byteOffset + offset);\n`;
+  code += '  }\n\n';
+
+  // Getters and setters for each flattened field
+  for (const { name, field, offset } of flattenedFields) {
+    if (field.isArray) {
+      code += generateJsArrayAccessor(name, field, offset);
+    } else {
+      code += generateJsAccessor(name, field, offset);
+    }
+  }
+
+  // toObject() method for debugging
+  code += '  toObject() {\n';
+  code += '    return {\n';
+  for (const { name, field } of flattenedFields) {
+    if (field.isArray) {
+      code += `      ${name}: Array.from(this.${name}),\n`;
+    } else {
+      code += `      ${name}: this.${name},\n`;
+    }
+  }
+  code += '    };\n';
+  code += '  }\n\n';
+
+  // copyFrom() method for populating from a plain object
+  code += '  copyFrom(obj) {\n';
+  for (const { name, field } of flattenedFields) {
+    if (field.isArray) {
+      code += `    if (obj.${name} !== undefined) {\n`;
+      code += `      const arr = this.${name};\n`;
+      code += `      const src = obj.${name};\n`;
+      code += `      for (let i = 0; i < Math.min(arr.length, src.length); i++) arr[i] = src[i];\n`;
+      code += '    }\n';
+    } else {
+      code += `    if (obj.${name} !== undefined) this.${name} = obj.${name};\n`;
+    }
+  }
+  code += '  }\n\n';
+
+  // allocate() static method for creating new instances
+  code += `  static allocate() {\n`;
+  code += `    return new ${structDef.name}View(new ArrayBuffer(${layout.size}));\n`;
+  code += '  }\n\n';
+
+  // copyTo() method for copying to another buffer
+  code += '  copyTo(dest, offset = 0) {\n';
+  code += `    const src = new Uint8Array(this.view.buffer, this.view.byteOffset, ${layout.size});\n`;
+  code += '    dest.set(src, offset);\n';
+  code += '  }\n\n';
+
+  // getBytes() method for getting a view of the raw bytes
+  code += '  getBytes() {\n';
+  code += `    return new Uint8Array(this.view.buffer, this.view.byteOffset, ${layout.size});\n`;
+  code += '  }\n';
+
+  code += '}\n\n';
+
+  // Array view class
+  code += generateJsArrayViewClass(structDef.name, layout.size);
+
+  return code;
+}
+
+/**
+ * Generate getter/setter for a scalar field (plain JS)
+ */
+function generateJsAccessor(name, field, offset) {
+  let code = '';
+
+  const needsLittleEndian = field.size > 1 && !field.tsGetter.includes('Int8');
+  const leArg = needsLittleEndian ? ', true' : '';
+
+  // Handle bool specially
+  if (field.type === 'bool') {
+    code += `  get ${name}() {\n`;
+    code += `    return this.view.${field.tsGetter}(${offset}) !== 0;\n`;
+    code += '  }\n';
+    code += `  set ${name}(v) {\n`;
+    code += `    this.view.${field.tsSetter}(${offset}, v ? 1 : 0);\n`;
+    code += '  }\n\n';
+  } else {
+    code += `  get ${name}() {\n`;
+    code += `    return this.view.${field.tsGetter}(${offset}${leArg});\n`;
+    code += '  }\n';
+    code += `  set ${name}(v) {\n`;
+    code += `    this.view.${field.tsSetter}(${offset}, v${leArg});\n`;
+    code += '  }\n\n';
+  }
+
+  return code;
+}
+
+/**
+ * Generate accessor for a fixed-size array field (plain JS)
+ */
+function generateJsArrayAccessor(name, field, offset) {
+  let code = '';
+  const typedArrayType = getTypedArrayType(field.type);
+
+  code += `  get ${name}() {\n`;
+  code += `    return new ${typedArrayType}(this.view.buffer, this.view.byteOffset + ${offset}, ${field.arraySize});\n`;
+  code += '  }\n\n';
+
+  return code;
+}
+
+/**
+ * Generate array view class for bulk access (plain JS)
+ */
+function generateJsArrayViewClass(structName, structSize) {
+  let code = '';
+
+  code += `class ${structName}ArrayView {\n`;
+
+  code += '  constructor(buffer, byteOffset, count) {\n';
+  code += '    this.buffer = buffer;\n';
+  code += '    this.baseOffset = byteOffset;\n';
+  code += '    this.length = count;\n';
+  code += '  }\n\n';
+
+  code += `  static fromMemory(memory, ptr, count) {\n`;
+  code += `    return new ${structName}ArrayView(memory.buffer, ptr, count);\n`;
+  code += '  }\n\n';
+
+  code += `  at(index) {\n`;
+  code += `    if (index < 0 || index >= this.length) {\n`;
+  code += `      throw new RangeError(\`Index \${index} out of bounds [0, \${this.length})\`);\n`;
+  code += '    }\n';
+  code += `    return new ${structName}View(this.buffer, this.baseOffset + index * ${structSize});\n`;
+  code += '  }\n\n';
+
+  code += `  *[Symbol.iterator]() {\n`;
+  code += '    for (let i = 0; i < this.length; i++) {\n';
+  code += '      yield this.at(i);\n';
+  code += '    }\n';
+  code += '  }\n';
+
+  code += '}\n\n';
+
+  return code;
+}
+
+// =============================================================================
 // Main API
 // =============================================================================
 
@@ -700,12 +1109,13 @@ function generateTsArrayViewClass(structName, structSize) {
  * Generate aligned code from a FlatBuffers schema
  * @param {string} schemaContent - The .fbs schema content
  * @param {Object} options - Generation options
- * @returns {{ cpp: string, ts: string, layout: Object }} Generated code and layout info
+ * @returns {{ cpp: string, ts: string, js: string, schema: Object, layouts: Object }} Generated code and layout info
  */
 export function generateAlignedCode(schemaContent, options = {}) {
   const schema = parseSchema(schemaContent);
   const cpp = generateCppHeader(schema, options);
   const ts = generateTypeScript(schema, options);
+  const js = generateJavaScript(schema, options);
 
   // Compute layouts for all structs
   const allStructs = {};
@@ -727,7 +1137,7 @@ export function generateAlignedCode(schemaContent, options = {}) {
     }
   }
 
-  return { cpp, ts, schema, layouts };
+  return { cpp, ts, js, schema, layouts };
 }
 
 export default {
@@ -735,5 +1145,6 @@ export default {
   computeLayout,
   generateCppHeader,
   generateTypeScript,
+  generateJavaScript,
   generateAlignedCode,
 };

@@ -1,0 +1,44 @@
+// Signal Processing Plugin API
+// Demonstrates arrays and DSP-style operations
+
+namespace SignalProc;
+
+// Sample buffer for audio/signal processing
+struct SampleBuffer {
+  samples: [float:64];   // 64 samples
+  sample_rate: uint32;   // Hz
+  channels: uint8;       // 1=mono, 2=stereo
+}
+
+struct ProcessedBuffer {
+  samples: [float:64];
+  peak: float;
+  rms: float;
+  dc_offset: float;
+}
+
+// FFT input/output (simplified - 16 complex pairs)
+struct FFTInput {
+  real: [float:16];
+  imag: [float:16];
+}
+
+struct FFTOutput {
+  magnitude: [float:16];
+  phase: [float:16];
+  dominant_bin: uint8;
+  dominant_magnitude: float;
+}
+
+// Filter coefficients
+struct FilterCoeffs {
+  b: [float:5];  // Numerator coefficients
+  a: [float:5];  // Denominator coefficients
+  gain: float;
+}
+
+// Filter state for IIR
+struct FilterState {
+  x: [float:5];  // Input history
+  y: [float:5];  // Output history
+}

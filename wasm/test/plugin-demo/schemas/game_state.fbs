@@ -1,0 +1,90 @@
+// Game State Plugin API
+// Demonstrates nested structs, enums, and complex state
+
+namespace GameState;
+
+// Entity state enum
+enum EntityState : uint8 {
+  Idle = 0,
+  Moving = 1,
+  Attacking = 2,
+  Defending = 3,
+  Dead = 4
+}
+
+// Direction enum
+enum Direction : uint8 {
+  North = 0,
+  East = 1,
+  South = 2,
+  West = 3
+}
+
+// Basic position
+struct Position {
+  x: float;
+  y: float;
+  z: float;
+}
+
+// Velocity vector
+struct Velocity {
+  dx: float;
+  dy: float;
+  dz: float;
+}
+
+// Entity transform (nested structs)
+struct Transform {
+  pos: Position;
+  vel: Velocity;
+  rotation: float;
+  scale: float;
+}
+
+// Entity stats
+struct Stats {
+  health: uint16;
+  max_health: uint16;
+  mana: uint16;
+  max_mana: uint16;
+  attack: uint16;
+  defense: uint16;
+  speed: uint16;
+  level: uint8;
+}
+
+// Complete entity state
+struct EntityInput {
+  transform: Transform;
+  stats: Stats;
+  state: EntityState;
+  direction: Direction;
+  entity_id: uint32;
+}
+
+// Processed entity output
+struct EntityOutput {
+  new_transform: Transform;
+  new_stats: Stats;
+  new_state: EntityState;
+  damage_dealt: uint16;
+  damage_taken: uint16;
+  flags: uint8;  // Bit flags for various conditions
+}
+
+// Collision detection input
+struct CollisionInput {
+  entity_a: Transform;
+  entity_b: Transform;
+  radius_a: float;
+  radius_b: float;
+}
+
+struct CollisionOutput {
+  collides: bool;
+  penetration_depth: float;
+  normal_x: float;
+  normal_y: float;
+  normal_z: float;
+}

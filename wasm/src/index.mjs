@@ -17,6 +17,7 @@ export {
   computeLayout,
   generateCppHeader,
   generateTypeScript,
+  generateJavaScript,
   generateAlignedCode,
 } from "./aligned-codegen.mjs";
 

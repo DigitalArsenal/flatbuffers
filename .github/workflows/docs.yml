@@ -35,7 +35,12 @@ jobs:
       - name: Build browser-wallet demo
         working-directory: wasm/examples/browser-wallet
         run: |
+          echo "=== Checking required files ==="
+          ls -la ../../src/
+          ls -la ../../dist/
+          echo "=== Installing dependencies ==="
           npm ci
+          echo "=== Building demo ==="
           npm run build
 
       # Setup Python for mkdocs

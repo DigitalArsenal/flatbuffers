@@ -34,7 +34,7 @@ jobs:
       - run: pip install mkdocs-material
       - run: pip install mkdocs-redirects
       - name: Build mkdocs site
-        run: mkdocs build -f docs/mkdocs.yml -d ../site
+        run: mkdocs build -f mkdocs.yml -d ../site
         working-directory: docs
       - name: Copy demo to site
         run: cp -r docs/source/demo site/demo

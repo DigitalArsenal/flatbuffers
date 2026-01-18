@@ -146,6 +146,7 @@ yarn-error.log
 /flatbuffers.lib
 .cmake/
 **/dist
+!wasm/dist/
 **/vendor
 **/go.sum
 flatbuffers.pc

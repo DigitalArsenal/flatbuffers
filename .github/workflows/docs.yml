@@ -9,7 +9,8 @@ on:
       - master
     paths:
       - 'docs/**'
-      - 'wasm/examples/**'
+      - 'wasm/**'
+      - '.github/workflows/docs.yml'
 
 permissions:
   contents: write

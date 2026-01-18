@@ -137,6 +137,7 @@ grpc/google/
 **/Package.resolved
 .clangd/**
 package-lock.json
+!wasm/examples/browser-wallet/package-lock.json
 /*.ilk
 /*.pdb
 .clwb

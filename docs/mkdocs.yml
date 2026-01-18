@@ -53,9 +53,6 @@ extra:
     - icon: fontawesome/brands/x-twitter
       link: https://twitter.com/dbaileychess
 
-exclude_docs: |
-  demo/
-
 plugins:
   # Use redirects to update links from the original docs to the new ones.
   #

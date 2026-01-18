@@ -31,6 +31,17 @@ jobs:
           path: .cache
           restore-keys: |
             mkdocs-material-
-      - run: pip install mkdocs-material 
+      - run: pip install mkdocs-material
       - run: pip install mkdocs-redirects
-      - run: mkdocs gh-deploy --force -f docs/mkdocs.yml
+      - name: Build mkdocs site
+        run: mkdocs build -f docs/mkdocs.yml -d ../site
+        working-directory: docs
+      - name: Copy demo to site
+        run: cp -r docs/source/demo site/demo
+      - name: Deploy to gh-pages
+        run: |
+          cd site
+          git init
+          git add -A
+          git commit -m "Deploy docs"
+          git push -f https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git HEAD:gh-pages

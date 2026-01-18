@@ -10,12 +10,12 @@
  */
 
 import * as bip39 from 'bip39';
-import HDKey from 'hdkey';
+import { HDKey } from '@scure/bip32';
 import QRCode from 'qrcode';
 import { Buffer } from 'buffer';
 import { createV3 } from 'vcard-cryptoperson';
 
-// Make Buffer available globally for bip39 and hdkey
+// Make Buffer available globally for bip39
 window.Buffer = Buffer;
 
 import {
@@ -395,7 +395,7 @@ async function deriveKeysFromPassword(username, password) {
   // Create 64-byte seed for HD wallet (password-based, not BIP39)
   const hdSeed = hkdf(masterKey, new Uint8Array(0), encoder.encode('hd-wallet-seed'), 64);
   state.masterSeed = hdSeed;
-  state.hdRoot = HDKey.fromMasterSeed(Buffer.from(hdSeed));
+  state.hdRoot = HDKey.fromMasterSeed(hdSeed);
 
   const keys = {
     x25519: x25519GenerateKeyPair(),
@@ -423,7 +423,7 @@ async function deriveKeysFromSeed(seedPhrase) {
 
   // Store seed for HD wallet derivation (BIP39 standard)
   state.masterSeed = new Uint8Array(seed);
-  state.hdRoot = HDKey.fromMasterSeed(Buffer.from(seed));
+  state.hdRoot = HDKey.fromMasterSeed(new Uint8Array(seed));
 
   const keys = {
     x25519: x25519GenerateKeyPair(),
@@ -455,6 +455,7 @@ function deriveHDKey(path) {
   if (!state.hdRoot) {
     throw new Error('HD wallet not initialized');
   }
+  // @scure/bip32 uses derivePath method
   return state.hdRoot.derive(path);
 }
 

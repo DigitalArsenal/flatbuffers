@@ -9,7 +9,7 @@ on:
       - master
     paths:
       - 'docs/**'
-      - 'wasm/examples/browser-wallet/**'
+      - 'wasm/examples/**'
 
 permissions:
   contents: write

@@ -53,6 +53,9 @@ extra:
     - icon: fontawesome/brands/x-twitter
       link: https://twitter.com/dbaileychess
 
+exclude_docs: |
+  demo/
+
 plugins:
   # Use redirects to update links from the original docs to the new ones.
   #
@@ -157,4 +160,5 @@ nav:
     - Annotating Buffers (.afb): "annotation.md"
     - Benchmarks: "benchmarks.md"
   - FlexBuffers (Schema-less version): "flexbuffers.md"
+  - Encryption Demo: "demo/index.html"
   - Contributing: "contributing.md"

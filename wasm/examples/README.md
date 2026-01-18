@@ -45,7 +45,8 @@ All these examples use the same Crypto++ WASM module, ensuring identical cryptog
 | [csharp-wasi/](csharp-wasi/) | **C#** | Wasmtime | C#/.NET using Wasmtime |
 | [swift-wasi/](swift-wasi/) | **Swift** | WasmKit | Swift using WasmKit runtime |
 | [node-encryption/](node-encryption/) | **Node.js** | V8 | Node.js with native WASM |
-| [browser-encryption/](browser-encryption/) | **Browser** | V8/SpiderMonkey | Interactive web demo |
+| [browser-encryption/](browser-encryption/) | **Browser** | V8/SpiderMonkey | Interactive encryption demo |
+| [browser-wallet/](browser-wallet/) | **Browser** | V8/SpiderMonkey | Crypto wallet with BIP39, QR codes |
 
 ### Multi-Language Examples
 
@@ -253,13 +254,53 @@ npm install
 npm test
 ```
 
-### Browser
+### Browser Encryption Demo
 
 ```bash
 cd browser-encryption
 npx serve .
 # Open http://localhost:3000
 ```
+
+### Browser Crypto Wallet Demo
+
+A full-featured crypto wallet demo showing:
+- BIP39 seed phrase generation/import
+- Key derivation from username/password with entropy display
+- Multiple key types (X25519, Ed25519, secp256k1, P-256)
+- vCard QR code generation with public keys
+- Buffer generation stress tests
+
+```bash
+cd browser-wallet
+npm install
+npm run dev
+# Open http://localhost:3000
+```
+
+## CMake Targets
+
+You can also run browser demos via CMake after building with WASM support:
+
+```bash
+# From flatbuffers root - configure with WASM support
+cmake -B build -S . -DFLATBUFFERS_BUILD_WASM=ON
+cmake --build build --target flatc
+
+# Build encryption WASM module
+./build/wasm/wasm_build.sh flatc_wasm_wasi
+
+# Run browser wallet demo
+cmake --build build --target browser_wallet_serve
+```
+
+Available CMake targets:
+
+| Target | Description |
+|--------|-------------|
+| `browser_wallet_serve` | Start crypto wallet demo (port 3000) |
+| `browser_wallet_build` | Build wallet demo for production |
+| `browser_examples` | Start all browser demos |
 
 ## License
 

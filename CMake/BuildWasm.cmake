@@ -372,6 +372,51 @@ module.exports.default = createModule;
 
   message(STATUS "  flatc_wasm_wasi   - WASI standalone module (with Crypto++) -> ${WASM_OUTPUT_DIR}/")
 
+  # Browser example targets (also available in Emscripten build)
+  find_program(NPM_EXECUTABLE npm)
+  if(NPM_EXECUTABLE AND NODE_EXECUTABLE)
+    set(BROWSER_EXAMPLES_DIR "${CMAKE_SOURCE_DIR}/wasm/examples")
+    set(BROWSER_WALLET_DIR "${BROWSER_EXAMPLES_DIR}/browser-wallet")
+
+    add_custom_target(browser_wallet_install
+      COMMAND ${NPM_EXECUTABLE} install
+      WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
+      COMMENT "Installing browser-wallet npm dependencies"
+    )
+
+    add_custom_target(browser_wallet_setup
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${BROWSER_WALLET_DIR}/public"
+      COMMAND ${CMAKE_COMMAND} -E create_symlink
+        "${WASM_OUTPUT_DIR}/flatc-encryption.wasm"
+        "${BROWSER_WALLET_DIR}/public/flatc-encryption.wasm"
+      DEPENDS browser_wallet_install
+      COMMENT "Setting up browser-wallet WASM files"
+    )
+
+    add_custom_target(browser_wallet_serve
+      COMMAND ${NPM_EXECUTABLE} run dev
+      WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
+      DEPENDS browser_wallet_setup
+      USES_TERMINAL
+      COMMENT "Starting browser-wallet development server (http://localhost:3000)"
+    )
+
+    add_custom_target(browser_wallet_build
+      COMMAND ${NPM_EXECUTABLE} run build
+      WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
+      DEPENDS browser_wallet_setup
+      COMMENT "Building browser-wallet for production"
+    )
+
+    add_custom_target(browser_examples DEPENDS browser_wallet_serve)
+
+    message(STATUS "")
+    message(STATUS "Browser example targets:")
+    message(STATUS "  browser_wallet_serve - Start crypto wallet demo (port 3000)")
+    message(STATUS "  browser_wallet_build - Build wallet demo for production")
+    message(STATUS "  browser_examples     - Start all browser demos")
+  endif()
+
   return()
 endif()
 
@@ -518,3 +563,60 @@ endif()
 message(STATUS "")
 message(STATUS "Build with: cmake --build . --target flatc_wasm")
 message(STATUS "")
+
+# =============================================================================
+# Browser Example Targets
+# =============================================================================
+
+find_program(NPM_EXECUTABLE npm)
+
+if(NPM_EXECUTABLE AND NODE_EXECUTABLE)
+  set(BROWSER_EXAMPLES_DIR "${CMAKE_SOURCE_DIR}/wasm/examples")
+  set(BROWSER_WALLET_DIR "${BROWSER_EXAMPLES_DIR}/browser-wallet")
+
+  # Browser wallet demo - install dependencies
+  add_custom_target(browser_wallet_install
+    COMMAND ${NPM_EXECUTABLE} install
+    WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
+    COMMENT "Installing browser-wallet npm dependencies"
+  )
+
+  # Browser wallet demo - setup (symlink WASM files)
+  add_custom_target(browser_wallet_setup
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${BROWSER_WALLET_DIR}/public"
+    COMMAND ${CMAKE_COMMAND} -E create_symlink
+      "${WASM_OUTPUT_DIR}/flatc-encryption.wasm"
+      "${BROWSER_WALLET_DIR}/public/flatc-encryption.wasm"
+    DEPENDS browser_wallet_install
+    COMMENT "Setting up browser-wallet WASM files"
+  )
+
+  # Browser wallet demo - serve (development mode)
+  add_custom_target(browser_wallet_serve
+    COMMAND ${NPM_EXECUTABLE} run dev
+    WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
+    DEPENDS browser_wallet_setup
+    USES_TERMINAL
+    COMMENT "Starting browser-wallet development server (http://localhost:3000)"
+  )
+
+  # Browser wallet demo - build for production
+  add_custom_target(browser_wallet_build
+    COMMAND ${NPM_EXECUTABLE} run build
+    WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
+    DEPENDS browser_wallet_setup
+    COMMENT "Building browser-wallet for production"
+  )
+
+  # Combined browser examples target
+  add_custom_target(browser_examples
+    DEPENDS browser_wallet_serve
+    COMMENT "Starting browser examples"
+  )
+
+  message(STATUS "Browser example targets:")
+  message(STATUS "  browser_wallet_serve - Start crypto wallet demo (port 3000)")
+  message(STATUS "  browser_wallet_build - Build wallet demo for production")
+  message(STATUS "  browser_examples     - Start all browser demos")
+  message(STATUS "")
+endif()

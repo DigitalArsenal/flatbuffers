@@ -1,0 +1,16 @@
+// Basic schema from FlatBuffers goldens
+// Used for field-level encryption demo
+
+namespace flatbuffers.goldens;
+
+table Galaxy {
+  num_stars:long;
+}
+
+table Universe {
+  age:double;
+  galaxies:[Galaxy];
+}
+
+root_type Universe;
+file_identifier "UNIV";

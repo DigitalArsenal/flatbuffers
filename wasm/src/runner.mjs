@@ -6,6 +6,7 @@
  */
 
 import createFlatcModule from "../dist/flatc-wasm.js";
+import { generateAlignedCode as generateAligned } from "./aligned-codegen.mjs";
 
 /**
  * Validates that a path is safe and doesn't contain path traversal attempts.
@@ -558,6 +559,48 @@ export class FlatcRunner {
       throw new Error("No JSON Schema output generated");
     }
     return files[0];
+  }
+
+  /**
+   * Generate aligned C++ header and TypeScript view classes for zero-copy WASM interop.
+   *
+   * This generates a simpler, fixed-size binary format from FlatBuffers schemas,
+   * optimized for direct TypedArray views into WASM linear memory. Unlike standard
+   * FlatBuffers, this format has no vtables or pointer offsets - just aligned structs.
+   *
+   * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput - Schema files
+   * @param {Object} [options={}] - Generation options
+   * @param {boolean} [options.pragmaOnce=true] - Use #pragma once in C++ header
+   * @param {boolean} [options.includeGuard=true] - Include traditional #ifndef guard
+   * @returns {{ cpp: string, ts: string, layouts: Object }} Generated code and layout info
+   *
+   * @example
+   * const flatc = await FlatcRunner.init();
+   * const schema = {
+   *   entry: 'game.fbs',
+   *   files: {
+   *     'game.fbs': `
+   *       namespace Game;
+   *       struct Vec3 { x:float; y:float; z:float; }
+   *       table Player { id:uint; pos:Vec3; health:ushort; }
+   *     `
+   *   }
+   * };
+   * const { cpp, ts, layouts } = flatc.generateAlignedCode(schema);
+   * // cpp: C++ header with aligned structs
+   * // ts: TypeScript with DataView-based accessors
+   * // layouts: computed sizes/offsets for each struct
+   */
+  generateAlignedCode(schemaInput, options = {}) {
+    validateSchemaInput(schemaInput);
+
+    // Get the schema content from the entry file
+    const schemaContent = schemaInput.files[schemaInput.entry];
+    if (typeof schemaContent !== 'string') {
+      throw new Error('Schema content must be a string for aligned code generation');
+    }
+
+    return generateAligned(schemaContent, options);
   }
 
   /**

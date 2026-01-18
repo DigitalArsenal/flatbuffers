@@ -9,6 +9,7 @@ The encryption module works in any JavaScript environment, including browsers. T
 ## Running the Demo
 
 1. Build flatc-wasm:
+
    ```bash
    cd /path/to/flatbuffers
    cmake -B build/wasm -S . -DFLATBUFFERS_BUILD_WASM=ON
@@ -16,6 +17,7 @@ The encryption module works in any JavaScript environment, including browsers. T
    ```
 
 2. Serve the examples directory:
+
    ```bash
    cd wasm/examples/browser-encryption
    npx serve .
@@ -66,11 +68,13 @@ async function main() {
 ### Browser Compatibility
 
 The encryption module uses:
+
 - `crypto.getRandomValues()` for random key generation
 - Pure JavaScript AES implementation (no WebCrypto dependency)
 - ES modules
 
 Supported browsers:
+
 - Chrome 61+
 - Firefox 60+
 - Safari 11+

@@ -210,8 +210,31 @@ body {
   font-size: 22px;
   font-weight: 400;
   color: var(--white-80);
-  margin-bottom: 48px;
+  margin-bottom: 24px;
   line-height: 1.4;
+}
+
+.ci-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.ci-badges a {
+  display: inline-block;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.ci-badges a:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+.ci-badges img {
+  height: 22px;
+  border-radius: 4px;
 }
 
 .hero-stats {

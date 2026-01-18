@@ -222,25 +222,16 @@ function updateAddressDisplay() {
   const address = state.addresses[crypto];
   const config = cryptoConfig[crypto];
 
-  const addressEl = $('wallet-address');
-  const balanceEl = $('wallet-balance');
+  // Update hero stats
+  const walletTypeEl = $('hero-wallet-type');
+  const heroAddressEl = $('hero-address');
 
-  if (address) {
-    addressEl.textContent = truncateAddress(address);
-    addressEl.href = config.explorer + address;
-    addressEl.title = address;
-
-    balanceEl.textContent = 'loading...';
-    balanceEl.className = 'wallet-balance loading';
-
-    fetchBalance(crypto, address).then(balance => {
-      if (balance) {
-        balanceEl.textContent = balance;
-        balanceEl.className = 'wallet-balance';
-      } else {
-        balanceEl.textContent = '';
-      }
-    });
+  if (walletTypeEl) {
+    walletTypeEl.textContent = config.name;
+  }
+  if (heroAddressEl && address) {
+    heroAddressEl.textContent = truncateAddress(address);
+    heroAddressEl.title = address;
   }
 }
 
@@ -285,40 +276,34 @@ function updatePasswordStrength(password) {
   const entropy = calculateEntropy(password);
   const fill = $('strength-fill');
   const bits = $('entropy-bits');
-  const status = $('entropy-status');
   const btn = $('derive-from-password');
 
-  bits.textContent = `${entropy} bits`;
-  fill.className = 'strength-fill';
-  status.className = 'status-text';
+  if (bits) bits.textContent = `${entropy}`;
+  if (fill) fill.className = 'entropy-fill';
 
-  let strength, label, percentage;
+  let strength, percentage;
 
   if (entropy < 28) {
     strength = 'weak';
-    label = 'Weak';
     percentage = Math.min(25, (entropy / 28) * 25);
   } else if (entropy < 60) {
     strength = 'fair';
-    label = 'Fair';
     percentage = 25 + ((entropy - 28) / 32) * 25;
   } else if (entropy < 128) {
     strength = 'good';
-    label = 'Good';
     percentage = 50 + ((entropy - 60) / 68) * 25;
   } else {
     strength = 'strong';
-    label = 'Strong';
     percentage = 75 + Math.min(25, ((entropy - 128) / 128) * 25);
   }
 
-  fill.classList.add(strength);
-  fill.style.width = `${percentage}%`;
-  status.classList.add(strength);
-  status.textContent = label;
+  if (fill) {
+    fill.classList.add(strength);
+    fill.style.width = `${percentage}%`;
+  }
 
   const username = $('wallet-username').value;
-  btn.disabled = !username || password.length < 24;
+  if (btn) btn.disabled = !username || password.length < 24;
 }
 
 // =============================================================================
@@ -388,15 +373,22 @@ function login(keys) {
   state.addresses = generateAddresses(keys);
   state.selectedCrypto = 'btc';
 
-  $('login-screen').style.display = 'none';
+  // Hide login card, show hero stats
+  $('login-card').style.display = 'none';
+  $('hero-stats').style.display = 'flex';
+
+  // Update hero stats display
+  $('hero-wallet-type').textContent = cryptoConfig[state.selectedCrypto].name;
+  $('hero-address').textContent = truncateAddress(state.addresses[state.selectedCrypto]);
+
+  // Show main app content
   $('main-app').style.display = 'block';
 
-  document.querySelectorAll('input[name="crypto"]').forEach(radio => {
-    radio.checked = radio.value === 'btc';
-  });
+  // Show nav action buttons
+  $('nav-keys').style.display = 'flex';
+  $('nav-logout').style.display = 'flex';
 
-  updateAddressDisplay();
-
+  // Update keys modal display
   $('wallet-x25519-pub').textContent = toHexCompact(keys.x25519.publicKey);
   $('wallet-ed25519-pub').textContent = toHexCompact(keys.ed25519.publicKey);
   $('wallet-secp256k1-pub').textContent = toHexCompact(keys.secp256k1.publicKey);
@@ -412,14 +404,30 @@ function logout() {
   state.currentFieldData = null;
   state.showFieldDecrypted = false;
 
+  // Hide main app content
   $('main-app').style.display = 'none';
-  $('login-screen').style.display = 'block';
+
+  // Hide hero stats, show login card
+  $('hero-stats').style.display = 'none';
+  $('login-card').style.display = 'block';
+
+  // Hide nav action buttons
+  $('nav-keys').style.display = 'none';
+  $('nav-logout').style.display = 'none';
+
+  // Clear form inputs
   $('wallet-username').value = '';
   $('wallet-password').value = '';
   $('seed-phrase').value = '';
   updatePasswordStrength('');
   clearBufferDisplay();
   clearFieldDisplay();
+
+  // Reset to first tab
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  document.querySelector('.nav-link[data-tab="fields"]').classList.add('active');
+  document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+  $('fields-tab').classList.add('active');
 }
 
 // =============================================================================
@@ -1134,19 +1142,13 @@ function setupLoginHandlers() {
 }
 
 function setupMainAppHandlers() {
-  $('logout').addEventListener('click', logout);
-
-  document.querySelectorAll('input[name="crypto"]').forEach(radio => {
-    radio.addEventListener('change', (e) => {
-      state.selectedCrypto = e.target.value;
-      updateAddressDisplay();
-    });
-  });
-
-  $('show-keys').addEventListener('click', () => {
+  // Nav actions
+  $('nav-logout').addEventListener('click', logout);
+  $('nav-keys').addEventListener('click', () => {
     $('keys-modal').classList.add('active');
   });
 
+  // Modal close handlers
   document.querySelectorAll('.modal').forEach(modal => {
     modal.addEventListener('click', (e) => {
       if (e.target === modal || e.target.classList.contains('modal-close')) {
@@ -1155,12 +1157,14 @@ function setupMainAppHandlers() {
     });
   });
 
-  document.querySelectorAll('.tabs .tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      tab.classList.add('active');
-      $(`${tab.dataset.tab}-tab`).classList.add('active');
+  // Navigation tabs (now links)
+  document.querySelectorAll('.nav-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+      document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+      link.classList.add('active');
+      $(`${link.dataset.tab}-tab`).classList.add('active');
     });
   });
 
@@ -1254,11 +1258,49 @@ function setupHelpModals() {
 }
 
 // =============================================================================
+// HLS Video Background
+// =============================================================================
+
+function initVideoBackground() {
+  const video = $('bg-video');
+  if (!video) return;
+
+  const videoSrc = video.querySelector('source')?.src;
+  if (!videoSrc) return;
+
+  // Check if HLS.js is available and needed
+  if (videoSrc.includes('.m3u8')) {
+    if (window.Hls && Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        backBufferLength: 90,
+      });
+      hls.loadSource(videoSrc);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        video.play().catch(() => {}); // Ignore autoplay errors
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native HLS support (Safari)
+      video.src = videoSrc;
+      video.addEventListener('loadedmetadata', () => {
+        video.play().catch(() => {});
+      });
+    }
+  }
+}
+
+// =============================================================================
 // Initialization
 // =============================================================================
 
 async function init() {
   const status = $('status');
+  const loadingOverlay = $('loading-overlay');
+
+  // Initialize video background immediately
+  initVideoBackground();
 
   try {
     // Load encryption WASM
@@ -1273,8 +1315,19 @@ async function init() {
     setupStreamingDemo();
 
     state.initialized = true;
-    status.textContent = 'Ready';
-    status.className = 'status ready';
+
+    // Update nav status
+    const navStatus = $('nav-status');
+    if (navStatus) {
+      navStatus.textContent = 'Ready';
+      navStatus.className = 'nav-status ready';
+    }
+
+    // Hide loading overlay with fade
+    loadingOverlay.classList.add('hidden');
+    setTimeout(() => {
+      loadingOverlay.style.display = 'none';
+    }, 500);
 
     setupLoginHandlers();
     setupMainAppHandlers();
@@ -1283,7 +1336,9 @@ async function init() {
   } catch (err) {
     console.error('Init failed:', err);
     status.textContent = `Failed to load: ${err.message}`;
-    status.className = 'status error';
+
+    // Show error state in loading overlay
+    loadingOverlay.classList.add('error');
   }
 }
 

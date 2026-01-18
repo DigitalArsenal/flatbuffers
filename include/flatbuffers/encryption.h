@@ -164,6 +164,10 @@ class EncryptionContext {
 
   ~EncryptionContext();
 
+  // Move constructor and assignment
+  EncryptionContext(EncryptionContext&& other) noexcept;
+  EncryptionContext& operator=(EncryptionContext&& other) noexcept;
+
   /**
    * Check if the context is valid
    */

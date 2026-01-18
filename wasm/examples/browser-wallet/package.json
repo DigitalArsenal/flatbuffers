@@ -9,10 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@scure/bip32": "^2.0.1",
     "bip39": "^3.1.0",
-    "hdkey": "^2.1.0",
-    "qrcode": "^1.5.3",
     "buffer": "^6.0.3",
+    "qrcode": "^1.5.3",
     "vcard-cryptoperson": "^1.1.10"
   },
   "devDependencies": {

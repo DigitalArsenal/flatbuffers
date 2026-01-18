@@ -5,10 +5,28 @@
  * - FlatcRunner: High-level wrapper with typed methods for schema operations
  * - createFlatcModule: Low-level factory for direct WASM module access
  * - Encryption utilities for field-level encryption
+ * - Aligned codegen for zero-copy WASM interop
  */
 
 export { FlatcRunner } from "./runner.mjs";
 import createFlatcModule from "../dist/flatc-wasm.js";
+
+// Aligned codegen exports (zero-copy WASM interop)
+export {
+  parseSchema,
+  computeLayout,
+  generateCppHeader,
+  generateTypeScript,
+  generateJavaScript,
+  generateAlignedCode,
+} from "./aligned-codegen.mjs";
+
+// Streaming dispatcher exports
+export {
+  StreamingDispatcher,
+  createSizePrefixedMessage,
+  concatMessages,
+} from "./streaming-dispatcher.mjs";
 
 // Encryption exports
 export {

@@ -1,0 +1,55 @@
+// Math Operations Plugin API
+// Demonstrates various numeric types and operations
+
+namespace MathOps;
+
+// Vector operations
+struct Vec2Input {
+  a_x: float;
+  a_y: float;
+  b_x: float;
+  b_y: float;
+}
+
+struct Vec2Output {
+  x: float;
+  y: float;
+  magnitude: float;
+}
+
+// Matrix operations (2x2)
+struct Matrix2x2Input {
+  m: [float:4];  // Row-major: [m00, m01, m10, m11]
+  v: [float:2];  // Vector to transform
+}
+
+struct Matrix2x2Output {
+  result: [float:2];
+  determinant: float;
+}
+
+// Integer arithmetic with overflow checking
+struct IntArithInput {
+  a: int32;
+  b: int32;
+  op: uint8;  // 0=add, 1=sub, 2=mul, 3=div
+}
+
+struct IntArithOutput {
+  result: int32;
+  overflow: bool;
+  error: uint8;  // 0=ok, 1=div_by_zero, 2=overflow
+}
+
+// 64-bit operations
+struct BigIntInput {
+  a: int64;
+  b: int64;
+}
+
+struct BigIntOutput {
+  sum: int64;
+  product: int64;
+  quotient: int64;
+  remainder: int64;
+}

@@ -10,11 +10,12 @@
  */
 
 import * as bip39 from 'bip39';
+import HDKey from 'hdkey';
 import QRCode from 'qrcode';
 import { Buffer } from 'buffer';
 import { createV3 } from 'vcard-cryptoperson';
 
-// Make Buffer available globally for bip39
+// Make Buffer available globally for bip39 and hdkey
 window.Buffer = Buffer;
 
 import {
@@ -60,6 +61,9 @@ const state = {
     secp256k1: null,
     p256: null,
   },
+  // HD wallet state
+  masterSeed: null,
+  hdRoot: null,
   // FlatBuffer state
   flatcRunner: null,
   buffers: [],
@@ -139,23 +143,90 @@ file_identifier "GALX";
 const cryptoConfig = {
   btc: {
     name: 'Bitcoin',
+    symbol: 'BTC',
+    coinType: 0,
     explorer: 'https://blockstream.info/address/',
     balanceApi: 'https://blockstream.info/api/address/',
     formatBalance: (satoshis) => `${(satoshis / 100000000).toFixed(8)} BTC`,
   },
   eth: {
     name: 'Ethereum',
+    symbol: 'ETH',
+    coinType: 60,
     explorer: 'https://etherscan.io/address/',
     balanceApi: null,
     formatBalance: (wei) => `${(parseFloat(wei) / 1e18).toFixed(6)} ETH`,
   },
   sol: {
     name: 'Solana',
+    symbol: 'SOL',
+    coinType: 501,
     explorer: 'https://solscan.io/account/',
     balanceApi: null,
     formatBalance: (lamports) => `${(lamports / 1e9).toFixed(4)} SOL`,
   },
+  ltc: {
+    name: 'Litecoin',
+    symbol: 'LTC',
+    coinType: 2,
+    explorer: 'https://blockchair.com/litecoin/address/',
+    balanceApi: null,
+    formatBalance: (lits) => `${(lits / 100000000).toFixed(8)} LTC`,
+  },
+  bch: {
+    name: 'Bitcoin Cash',
+    symbol: 'BCH',
+    coinType: 145,
+    explorer: 'https://blockchair.com/bitcoin-cash/address/',
+    balanceApi: null,
+    formatBalance: (sats) => `${(sats / 100000000).toFixed(8)} BCH`,
+  },
+  doge: {
+    name: 'Dogecoin',
+    symbol: 'DOGE',
+    coinType: 3,
+    explorer: 'https://dogechain.info/address/',
+    balanceApi: null,
+    formatBalance: (sats) => `${(sats / 100000000).toFixed(4)} DOGE`,
+  },
+  atom: {
+    name: 'Cosmos',
+    symbol: 'ATOM',
+    coinType: 118,
+    explorer: 'https://www.mintscan.io/cosmos/address/',
+    balanceApi: null,
+    formatBalance: (uatom) => `${(uatom / 1e6).toFixed(6)} ATOM`,
+  },
+  algo: {
+    name: 'Algorand',
+    symbol: 'ALGO',
+    coinType: 330,
+    explorer: 'https://algoexplorer.io/address/',
+    balanceApi: null,
+    formatBalance: (microalgos) => `${(microalgos / 1e6).toFixed(6)} ALGO`,
+  },
+  dot: {
+    name: 'Polkadot',
+    symbol: 'DOT',
+    coinType: 354,
+    explorer: 'https://polkascan.io/polkadot/account/',
+    balanceApi: null,
+    formatBalance: (planks) => `${(planks / 1e10).toFixed(4)} DOT`,
+  },
+  ada: {
+    name: 'Cardano',
+    symbol: 'ADA',
+    coinType: 1815,
+    explorer: 'https://cardanoscan.io/address/',
+    balanceApi: null,
+    formatBalance: (lovelace) => `${(lovelace / 1e6).toFixed(6)} ADA`,
+  },
 };
+
+// Coin type to config mapping
+const coinTypeToConfig = Object.fromEntries(
+  Object.entries(cryptoConfig).map(([key, config]) => [config.coinType, { key, ...config }])
+);
 
 function generateBtcAddress(publicKey) {
   const hash = sha256(publicKey);
@@ -321,6 +392,11 @@ async function deriveKeysFromPassword(username, password) {
   state.encryptionKey = hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-key'), 32);
   state.encryptionIV = hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-iv'), 16);
 
+  // Create 64-byte seed for HD wallet (password-based, not BIP39)
+  const hdSeed = hkdf(masterKey, new Uint8Array(0), encoder.encode('hd-wallet-seed'), 64);
+  state.masterSeed = hdSeed;
+  state.hdRoot = HDKey.fromMasterSeed(Buffer.from(hdSeed));
+
   const keys = {
     x25519: x25519GenerateKeyPair(),
     ed25519: ed25519GenerateKeyPair(),
@@ -345,6 +421,10 @@ async function deriveKeysFromSeed(seedPhrase) {
   state.encryptionKey = hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-key'), 32);
   state.encryptionIV = hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-iv'), 16);
 
+  // Store seed for HD wallet derivation (BIP39 standard)
+  state.masterSeed = new Uint8Array(seed);
+  state.hdRoot = HDKey.fromMasterSeed(Buffer.from(seed));
+
   const keys = {
     x25519: x25519GenerateKeyPair(),
     ed25519: ed25519GenerateKeyPair(),
@@ -361,6 +441,151 @@ function generateSeedPhrase() {
 
 function validateSeedPhrase(phrase) {
   return bip39.validateMnemonic(phrase.trim().toLowerCase());
+}
+
+// =============================================================================
+// HD Wallet Derivation
+// =============================================================================
+
+/**
+ * Derive a child key from the HD root using BIP44 path
+ * Path format: m/purpose'/coin_type'/account'/change/address_index
+ */
+function deriveHDKey(path) {
+  if (!state.hdRoot) {
+    throw new Error('HD wallet not initialized');
+  }
+  return state.hdRoot.derive(path);
+}
+
+/**
+ * Generate address from public key based on coin type
+ */
+function generateAddressForCoin(publicKey, coinType) {
+  const config = coinTypeToConfig[coinType];
+  if (!config) {
+    // Default to hex representation
+    return toHexCompact(publicKey);
+  }
+
+  switch (coinType) {
+    case 0:   // Bitcoin
+    case 2:   // Litecoin
+    case 3:   // Dogecoin
+    case 145: // Bitcoin Cash
+      return generateBtcAddress(publicKey);
+
+    case 60:  // Ethereum
+      return generateEthAddress(publicKey);
+
+    case 501: // Solana
+      return generateSolAddress(publicKey);
+
+    default:
+      // For unsupported coins, return a truncated public key hash
+      const hash = sha256(publicKey);
+      return toHexCompact(hash.slice(0, 20));
+  }
+}
+
+/**
+ * Get full BIP44 path from UI inputs
+ */
+function getHDPathFromUI() {
+  const purpose = $('hd-purpose').value;
+  const coin = $('hd-coin').value;
+  const account = $('hd-account').value || '0';
+  const change = $('hd-change').value;
+  const index = $('hd-index').value || '0';
+
+  return `m/${purpose}'/${coin}'/${account}'/${change}/${index}`;
+}
+
+/**
+ * Update the path display from UI inputs
+ */
+function updatePathDisplay() {
+  const path = getHDPathFromUI();
+  $('full-path').textContent = path;
+}
+
+/**
+ * Derive and display address from current path
+ */
+async function deriveAndDisplayAddress() {
+  const path = getHDPathFromUI();
+  const coinType = parseInt($('hd-coin').value);
+  const coinOption = $('hd-coin').selectedOptions[0];
+  const cryptoName = coinOption.dataset.name || 'Unknown';
+  const cryptoSymbol = coinOption.dataset.symbol || '???';
+
+  try {
+    const childKey = deriveHDKey(path);
+    const publicKey = childKey.publicKey;
+    const address = generateAddressForCoin(publicKey, coinType);
+
+    // Get config for explorer link
+    const config = coinTypeToConfig[coinType];
+    const explorerUrl = config ? config.explorer + address : null;
+
+    // Update UI
+    $('derived-result').style.display = 'block';
+    $('derived-crypto-name').textContent = cryptoName;
+    $('derived-icon').textContent = cryptoSymbol.substring(0, 2);
+    $('derived-pubkey').textContent = toHexCompact(publicKey);
+    $('derived-address').textContent = address;
+
+    // Update explorer link
+    const explorerLink = $('derived-explorer-link');
+    if (explorerUrl) {
+      explorerLink.href = explorerUrl;
+      explorerLink.style.display = 'flex';
+    } else {
+      explorerLink.style.display = 'none';
+    }
+
+    // Generate QR code
+    try {
+      await QRCode.toCanvas($('address-qr'), address, {
+        width: 128,
+        margin: 2,
+        color: { dark: '#1e293b', light: '#ffffff' },
+      });
+    } catch (qrErr) {
+      console.warn('QR generation failed:', qrErr);
+    }
+
+    // Fetch balance if API available
+    if (config && config.balanceApi) {
+      $('balance-row').style.display = 'flex';
+      $('derived-balance').textContent = 'Loading...';
+      try {
+        const balance = await fetchBalance(config.key, address);
+        $('derived-balance').textContent = balance || 'Unable to fetch';
+      } catch (err) {
+        $('derived-balance').textContent = 'Error';
+      }
+    } else {
+      $('balance-row').style.display = 'none';
+    }
+
+  } catch (err) {
+    console.error('Derivation failed:', err);
+    alert('Failed to derive address: ' + err.message);
+  }
+}
+
+/**
+ * Quick derive for a specific coin
+ */
+function quickDerive(coinType, purpose) {
+  $('hd-purpose').value = purpose;
+  $('hd-coin').value = coinType;
+  $('hd-account').value = '0';
+  $('hd-change').value = '0';
+  $('hd-index').value = '0';
+  updatePathDisplay();
+  deriveAndDisplayAddress();
 }
 
 // =============================================================================
@@ -403,6 +628,9 @@ function logout() {
   state.encryptionIV = null;
   state.currentFieldData = null;
   state.showFieldDecrypted = false;
+  // Clear HD wallet state
+  state.masterSeed = null;
+  state.hdRoot = null;
 
   // Hide main app content
   $('main-app').style.display = 'none';
@@ -423,11 +651,16 @@ function logout() {
   clearBufferDisplay();
   clearFieldDisplay();
 
+  // Clear HD wallet UI
+  $('derived-result').style.display = 'none';
+
   // Reset to first tab
-  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-  document.querySelector('.nav-link[data-tab="fields"]').classList.add('active');
+  document.querySelectorAll('.nav-link[data-tab]').forEach(l => l.classList.remove('active'));
+  const firstLink = document.querySelector('.nav-link[data-tab="fields"]');
+  if (firstLink) firstLink.classList.add('active');
   document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-  $('fields-tab').classList.add('active');
+  const fieldsTab = $('fields-tab');
+  if (fieldsTab) fieldsTab.classList.add('active');
 }
 
 // =============================================================================
@@ -1157,14 +1390,45 @@ function setupMainAppHandlers() {
     });
   });
 
-  // Navigation tabs (now links)
-  document.querySelectorAll('.nav-link').forEach(link => {
+  // Navigation tabs (now links) - only for links with data-tab
+  document.querySelectorAll('.nav-link[data-tab]').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
-      document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+      document.querySelectorAll('.nav-link[data-tab]').forEach(l => l.classList.remove('active'));
       document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
       link.classList.add('active');
-      $(`${link.dataset.tab}-tab`).classList.add('active');
+      const tabEl = $(`${link.dataset.tab}-tab`);
+      if (tabEl) tabEl.classList.add('active');
+    });
+  });
+
+  // HD Wallet Derivation handlers
+  const hdPurpose = $('hd-purpose');
+  const hdCoin = $('hd-coin');
+  const hdAccount = $('hd-account');
+  const hdChange = $('hd-change');
+  const hdIndex = $('hd-index');
+  const deriveBtn = $('derive-address');
+
+  // Update path display on any change
+  [hdPurpose, hdCoin, hdAccount, hdChange, hdIndex].forEach(el => {
+    if (el) el.addEventListener('change', updatePathDisplay);
+    if (el) el.addEventListener('input', updatePathDisplay);
+  });
+
+  // Derive button
+  if (deriveBtn) {
+    deriveBtn.addEventListener('click', deriveAndDisplayAddress);
+  }
+
+  // Quick derive buttons
+  document.querySelectorAll('.quick-derive .glass-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const coin = btn.dataset.coin;
+      const purpose = btn.dataset.purpose;
+      if (coin !== undefined && purpose !== undefined) {
+        quickDerive(coin, purpose);
+      }
     });
   });
 

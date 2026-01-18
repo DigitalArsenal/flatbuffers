@@ -3,415 +3,432 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FlatBuffers Crypto Wallet Demo</title>
-  <script type="module" crossorigin src="./assets/main-TNWNzKOB.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/main-Ca0nRxbb.css">
+  <title>FlatBuffers Encryption Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&family=SF+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script type="module" crossorigin src="./assets/main-Dy5XYGcN.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/main-CJez-OQ1.css">
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>FlatBuffers Crypto Wallet</h1>
-      <div id="status" class="status loading">Loading WASM modules...</div>
-    </header>
+  <!-- Video Background -->
+  <div class="video-background">
+    <video autoplay loop muted playsinline id="bg-video">
+      <source src="https://customer-cbeadsgr09pnsezs.cloudflarestream.com/90bb1b34646b81b3b63e5a854ea00da3/manifest/video.m3u8" type="application/x-mpegURL">
+    </video>
+    <div class="video-overlay"></div>
+  </div>
 
-    <!-- Login Screen (shown first) -->
-    <section id="login-screen" class="login-screen">
-      <div class="card login-card">
-        <h2>Create or Restore Wallet</h2>
-        <p>Your keys are used to encrypt and decrypt all data in this demo.</p>
+  <!-- Navigation -->
+  <nav class="nav-bar">
+    <div class="nav-content">
+      <div class="nav-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+        </svg>
+        <span>FlatBuffers</span>
+      </div>
+      <div class="nav-links">
+        <a href="#" class="nav-link active" data-tab="fields">Encryption</a>
+        <a href="#" class="nav-link" data-tab="buffers">Generation</a>
+        <a href="#" class="nav-link" data-tab="streaming">Streaming</a>
+        <a href="#" class="nav-link" data-tab="identity">Identity</a>
+      </div>
+      <div class="nav-actions">
+        <span id="nav-status" class="nav-status"></span>
+        <button id="nav-keys" class="nav-btn glass-btn" style="display: none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
+          </svg>
+        </button>
+        <button id="nav-logout" class="nav-btn glass-btn" style="display: none;">Logout</button>
+      </div>
+    </div>
+  </nav>
 
+  <!-- Hero / Login Section -->
+  <section id="hero-section" class="hero-section">
+    <div class="hero-content">
+      <h1 class="hero-title">Field-Level<br>Encryption</h1>
+      <p class="hero-subtitle">Real FlatBuffer binary encryption with zero-copy WASM interop</p>
+
+      <div class="login-glass" id="login-card">
         <div class="method-tabs">
-          <button class="method-tab active" data-method="password">Username + Password</button>
+          <button class="method-tab active" data-method="password">Password</button>
           <button class="method-tab" data-method="seed">Seed Phrase</button>
         </div>
 
-        <!-- Password Method -->
         <div id="password-method" class="method-content active">
-          <div class="form-group">
-            <label for="wallet-username">Username</label>
-            <input type="text" id="wallet-username" placeholder="Enter your username" autocomplete="username">
+          <div class="glass-input-group">
+            <input type="text" id="wallet-username" class="glass-input" placeholder="Username" autocomplete="username">
           </div>
-
-          <div class="form-group">
-            <label for="wallet-password">
-              Password
-              <button class="help-btn" data-help="entropy">?</button>
-            </label>
-            <input type="password" id="wallet-password" placeholder="Minimum 24 characters for secure entropy" autocomplete="new-password">
-            <div class="password-strength">
-              <div class="strength-bar">
-                <div class="strength-fill" id="strength-fill"></div>
-              </div>
-              <div class="strength-info">
-                <span id="entropy-bits">0 bits</span>
-                <span id="entropy-status" class="status-text"></span>
-              </div>
+          <div class="glass-input-group">
+            <input type="password" id="wallet-password" class="glass-input" placeholder="Password (24+ chars)" autocomplete="new-password">
+            <div class="entropy-bar">
+              <div class="entropy-fill" id="strength-fill"></div>
             </div>
+            <span class="entropy-label"><span id="entropy-bits">0</span> bits entropy</span>
           </div>
-
-          <button id="derive-from-password" class="btn btn-primary btn-full" disabled>
-            Login / Create Wallet
+          <button id="derive-from-password" class="glass-btn primary full-width" disabled>
+            Enter Demo
           </button>
         </div>
 
-        <!-- Seed Phrase Method -->
         <div id="seed-method" class="method-content">
-          <div class="form-group">
-            <label>Seed Phrase (BIP39)</label>
-            <textarea id="seed-phrase" rows="3" placeholder="Enter your 12 or 24 word seed phrase..."></textarea>
+          <div class="glass-input-group">
+            <textarea id="seed-phrase" class="glass-input glass-textarea" rows="3" placeholder="Enter 12 or 24 word seed phrase..."></textarea>
             <div class="seed-actions">
-              <button id="generate-seed" class="btn btn-secondary">Generate New</button>
-              <button id="validate-seed" class="btn btn-secondary">Validate</button>
+              <button id="generate-seed" class="glass-btn small">Generate</button>
+              <button id="validate-seed" class="glass-btn small">Validate</button>
             </div>
           </div>
-
-          <button id="derive-from-seed" class="btn btn-primary btn-full" disabled>
-            Login with Seed Phrase
+          <button id="derive-from-seed" class="glass-btn primary full-width" disabled>
+            Enter Demo
           </button>
         </div>
       </div>
+
+      <div class="hero-stats" id="hero-stats" style="display: none;">
+        <div class="stat-item">
+          <span class="stat-value" id="hero-wallet-type">BTC</span>
+          <span class="stat-label">Network</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" id="hero-address">--</span>
+          <span class="stat-label">Address</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="scroll-indicator">
+      <span>Scroll to explore</span>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 5v14M19 12l-7 7-7-7"></path>
+      </svg>
+    </div>
+  </section>
+
+  <!-- Main App Content -->
+  <main id="main-app" class="main-app" style="display: none;">
+
+    <!-- Field Encryption Section -->
+    <section id="fields-tab" class="content-section active">
+      <div class="section-header">
+        <h2 class="section-title">Field-Level Encryption</h2>
+        <p class="section-desc">Generate FlatBuffer records and visualize individual field encryption</p>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-controls">
+          <select id="schema-select" class="glass-select">
+            <option value="monster">Monster Schema</option>
+            <option value="weapon">Weapon Schema</option>
+            <option value="galaxy">Galaxy Schema</option>
+          </select>
+          <button id="generate-single" class="glass-btn primary">Generate Record</button>
+          <button id="toggle-field-decrypt" class="glass-btn" disabled>Decrypt</button>
+        </div>
+
+        <!-- FlatBuffer Header -->
+        <div class="fb-header-display" id="fb-header" style="display: none;">
+          <h3 class="card-subtitle">Binary Structure</h3>
+          <div class="header-grid">
+            <div class="header-cell">
+              <span class="header-label">Root Offset</span>
+              <code class="header-hex" id="root-offset-hex">--</code>
+              <span class="header-value" id="root-offset-val">--</span>
+            </div>
+            <div class="header-cell">
+              <span class="header-label">File ID</span>
+              <code class="header-hex" id="file-id-hex">--</code>
+              <span class="header-value" id="file-id-val">--</span>
+            </div>
+            <div class="header-cell">
+              <span class="header-label">VTable Size</span>
+              <code class="header-hex" id="vtable-size-hex">--</code>
+              <span class="header-value" id="vtable-size-val">--</span>
+            </div>
+            <div class="header-cell">
+              <span class="header-label">Table Size</span>
+              <code class="header-hex" id="table-size-hex">--</code>
+              <span class="header-value" id="table-size-val">--</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Field Table -->
+        <div class="field-table-wrap" id="field-table-container" style="display: none;">
+          <table class="field-table" id="field-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Offset</th>
+                <th>Encrypted</th>
+                <th class="decrypt-col">Decrypted</th>
+                <th class="decrypt-col">Value</th>
+              </tr>
+            </thead>
+            <tbody id="field-body"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
-    <!-- Main App (shown after login) -->
-    <section id="main-app" class="main-app" style="display: none;">
-      <!-- Wallet Info Bar -->
-      <div class="wallet-bar">
-        <div class="wallet-info">
-          <div class="crypto-selector">
-            <label class="crypto-radio">
-              <input type="radio" name="crypto" value="btc" checked>
-              <span class="crypto-label">BTC</span>
-            </label>
-            <label class="crypto-radio">
-              <input type="radio" name="crypto" value="eth">
-              <span class="crypto-label">ETH</span>
-            </label>
-            <label class="crypto-radio">
-              <input type="radio" name="crypto" value="sol">
-              <span class="crypto-label">SOL</span>
-            </label>
-          </div>
-          <div class="address-display">
-            <a id="wallet-address" class="wallet-address" href="#" target="_blank" rel="noopener"></a>
-            <span id="wallet-balance" class="wallet-balance"></span>
-          </div>
-        </div>
-        <div class="wallet-actions">
-          <button id="show-keys" class="btn btn-secondary btn-sm">Show Keys</button>
-          <button id="logout" class="btn btn-secondary btn-sm">Logout</button>
-        </div>
+    <!-- Bulk Generation Section -->
+    <section id="buffers-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Bulk Generation</h2>
+        <p class="section-desc">Generate up to 1 million encrypted FlatBuffer records</p>
       </div>
 
-      <!-- Keys Modal -->
-      <div id="keys-modal" class="modal">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h3>Your Keys</h3>
-            <button class="modal-close">&times;</button>
+      <div class="glass-card">
+        <div class="card-controls">
+          <select id="bulk-schema" class="glass-select">
+            <option value="monster">Monster</option>
+            <option value="weapon">Weapon</option>
+            <option value="galaxy">Galaxy</option>
+          </select>
+          <select id="buffer-count" class="glass-select">
+            <option value="100">100 records</option>
+            <option value="1000">1,000 records</option>
+            <option value="10000">10,000 records</option>
+            <option value="100000">100,000 records</option>
+            <option value="1000000">1,000,000 records</option>
+          </select>
+          <button id="generate-buffers" class="glass-btn primary">Generate</button>
+          <button id="toggle-encryption" class="glass-btn" disabled>Decrypt</button>
+          <button id="clear-buffers" class="glass-btn" disabled>Clear</button>
+        </div>
+
+        <div class="stats-grid" id="stats-bar" style="display: none;">
+          <div class="stat-cell">
+            <span class="stat-number" id="stat-count">0</span>
+            <span class="stat-label">Records</span>
           </div>
-          <div class="modal-body">
-            <div class="key-display">
-              <div class="key-item">
-                <label>X25519 Public Key (Encryption)</label>
-                <div class="key-value" id="wallet-x25519-pub"></div>
-              </div>
-              <div class="key-item">
-                <label>Ed25519 Public Key (Signing)</label>
-                <div class="key-value" id="wallet-ed25519-pub"></div>
-              </div>
-              <div class="key-item">
-                <label>secp256k1 Public Key (Bitcoin/Ethereum)</label>
-                <div class="key-value" id="wallet-secp256k1-pub"></div>
-              </div>
-            </div>
-            <div class="warning-box">
-              <strong>Warning:</strong> Private keys are stored in memory only. They will be lost on page refresh.
-            </div>
+          <div class="stat-cell">
+            <span class="stat-number" id="stat-size">0 KB</span>
+            <span class="stat-label">Total Size</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-number" id="stat-time">0 ms</span>
+            <span class="stat-label">Generation Time</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-number" id="stat-memory">--</span>
+            <span class="stat-label">Memory Used</span>
           </div>
         </div>
       </div>
 
-      <!-- Tabs -->
-      <nav class="tabs">
-        <button class="tab active" data-tab="fields">Field Encryption</button>
-        <button class="tab" data-tab="buffers">Bulk Generation</button>
-        <button class="tab" data-tab="streaming">Streaming Demo</button>
-        <button class="tab" data-tab="identity">Identity / vCard</button>
-      </nav>
+      <div class="glass-card" id="data-card" style="display: none;">
+        <h3 class="card-subtitle">Generated Records <span id="visible-range" class="range-label"></span></h3>
+        <div class="virtual-table-wrapper" id="virtual-table-wrapper"></div>
+      </div>
+    </section>
 
-      <!-- Field Encryption Tab -->
-      <section id="fields-tab" class="tab-content active">
-        <div class="card">
-          <h2>Field-Level Encryption</h2>
-          <p>Generate a FlatBuffer record and see individual field encryption with hex values.</p>
+    <!-- Streaming Section -->
+    <section id="streaming-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Streaming Dispatcher</h2>
+        <p class="section-desc">Route mixed FlatBuffer messages to ring buffers by type</p>
+      </div>
 
+      <div class="glass-card">
+        <div class="streaming-grid">
+          <div class="stream-config">
+            <label>Monster (MONS)</label>
+            <input type="number" id="stream-monster-count" class="glass-input" value="1000" min="0" max="100000" step="100">
+          </div>
+          <div class="stream-config">
+            <label>Weapon (WEAP)</label>
+            <input type="number" id="stream-weapon-count" class="glass-input" value="500" min="0" max="100000" step="100">
+          </div>
+          <div class="stream-config">
+            <label>Galaxy (GALX)</label>
+            <input type="number" id="stream-galaxy-count" class="glass-input" value="200" min="0" max="100000" step="100">
+          </div>
+          <div class="stream-config">
+            <label>Batch Size</label>
+            <input type="number" id="stream-batch-size" class="glass-input" value="100" min="1" max="1000">
+          </div>
+          <div class="stream-config">
+            <label>Delay (ms)</label>
+            <input type="number" id="stream-delay" class="glass-input" value="10" min="0" max="1000">
+          </div>
+        </div>
+
+        <div class="card-controls">
+          <button id="start-streaming" class="glass-btn primary">Start Stream</button>
+          <button id="stop-streaming" class="glass-btn" disabled>Stop</button>
+          <button id="clear-streaming" class="glass-btn">Reset</button>
+        </div>
+
+        <!-- Progress -->
+        <div class="stream-progress" id="stream-progress" style="display: none;">
+          <div class="progress-track">
+            <div class="progress-fill" id="stream-progress-fill"></div>
+          </div>
+          <div class="progress-label">
+            <span id="stream-processed">0</span> / <span id="stream-total">0</span> messages
+            <span class="progress-bytes">(<span id="stream-bytes">0 KB</span>)</span>
+          </div>
+        </div>
+
+        <!-- Ring Buffer Stats -->
+        <div class="ring-stats-grid" id="ring-buffer-stats">
+          <div class="ring-card monster" data-type="MONS">
+            <div class="ring-header">
+              <span class="ring-dot"></span>
+              <span class="ring-title">Monster (MONS)</span>
+            </div>
+            <div class="ring-bar">
+              <div class="ring-fill" id="ring-fill-MONS"></div>
+            </div>
+            <div class="ring-numbers">
+              <span><span id="ring-count-MONS">0</span> / <span id="ring-capacity-MONS">1000</span></span>
+              <span class="ring-total">Total: <span id="ring-total-MONS">0</span></span>
+            </div>
+          </div>
+          <div class="ring-card weapon" data-type="WEAP">
+            <div class="ring-header">
+              <span class="ring-dot"></span>
+              <span class="ring-title">Weapon (WEAP)</span>
+            </div>
+            <div class="ring-bar">
+              <div class="ring-fill" id="ring-fill-WEAP"></div>
+            </div>
+            <div class="ring-numbers">
+              <span><span id="ring-count-WEAP">0</span> / <span id="ring-capacity-WEAP">500</span></span>
+              <span class="ring-total">Total: <span id="ring-total-WEAP">0</span></span>
+            </div>
+          </div>
+          <div class="ring-card galaxy" data-type="GALX">
+            <div class="ring-header">
+              <span class="ring-dot"></span>
+              <span class="ring-title">Galaxy (GALX)</span>
+            </div>
+            <div class="ring-bar">
+              <div class="ring-fill" id="ring-fill-GALX"></div>
+            </div>
+            <div class="ring-numbers">
+              <span><span id="ring-count-GALX">0</span> / <span id="ring-capacity-GALX">200</span></span>
+              <span class="ring-total">Total: <span id="ring-total-GALX">0</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Completion -->
+        <div class="completion-card" id="completion-stats" style="display: none;">
+          <h4>Stream Complete</h4>
+          <div class="completion-grid">
+            <span>Messages</span><span id="complete-messages">--</span>
+            <span>Bytes</span><span id="complete-bytes">--</span>
+            <span>Time</span><span id="complete-time">--</span>
+            <span>Throughput</span><span id="complete-throughput">--</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Identity Section -->
+    <section id="identity-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Cryptographic Identity</h2>
+        <p class="section-desc">Generate a vCard with your public keys for secure sharing</p>
+      </div>
+
+      <div class="glass-card">
+        <div class="identity-form">
           <div class="form-row">
-            <div class="form-group">
-              <label>Schema</label>
-              <select id="schema-select">
-                <option value="monster">Monster (MyGame.Sample)</option>
-                <option value="weapon">Weapon</option>
-                <option value="galaxy">Galaxy</option>
-              </select>
-            </div>
-            <div class="form-group btn-group">
-              <button id="generate-single" class="btn btn-primary">Generate Record</button>
-              <button id="toggle-field-decrypt" class="btn btn-secondary" disabled>Show Decrypted</button>
-            </div>
-          </div>
-
-          <!-- FlatBuffer Header Display -->
-          <div class="flatbuffer-header" id="fb-header" style="display: none;">
-            <h3>FlatBuffer Structure</h3>
-            <div class="header-grid">
-              <div class="header-item">
-                <span class="header-label">Root Offset</span>
-                <code class="header-hex" id="root-offset-hex">--</code>
-                <span class="header-val" id="root-offset-val">--</span>
-              </div>
-              <div class="header-item">
-                <span class="header-label">File ID</span>
-                <code class="header-hex" id="file-id-hex">--</code>
-                <span class="header-val" id="file-id-val">--</span>
-              </div>
-              <div class="header-item">
-                <span class="header-label">VTable Size</span>
-                <code class="header-hex" id="vtable-size-hex">--</code>
-                <span class="header-val" id="vtable-size-val">--</span>
-              </div>
-              <div class="header-item">
-                <span class="header-label">Table Size</span>
-                <code class="header-hex" id="table-size-hex">--</code>
-                <span class="header-val" id="table-size-val">--</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Field Table -->
-          <div class="field-table-container" id="field-table-container" style="display: none;">
-            <table class="field-table" id="field-table">
-              <thead>
-                <tr>
-                  <th>Field</th>
-                  <th>Type</th>
-                  <th>Offset</th>
-                  <th>Encrypted Hex</th>
-                  <th class="decrypt-col">Decrypted Hex</th>
-                  <th class="decrypt-col">Value</th>
-                </tr>
-              </thead>
-              <tbody id="field-body"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- Bulk Generation Tab -->
-      <section id="buffers-tab" class="tab-content">
-        <div class="card">
-          <h2>Bulk FlatBuffer Generation</h2>
-          <p>Generate thousands of FlatBuffer records with field-level encryption.</p>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>Schema</label>
-              <select id="bulk-schema">
-                <option value="monster">Monster</option>
-                <option value="weapon">Weapon</option>
-                <option value="galaxy">Galaxy</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Count</label>
-              <select id="buffer-count">
-                <option value="100">100</option>
-                <option value="1000">1,000</option>
-                <option value="10000">10,000</option>
-                <option value="100000">100,000</option>
-                <option value="1000000">1,000,000</option>
-              </select>
-            </div>
-          </div>
-
-          <button id="generate-buffers" class="btn btn-primary">Generate & Encrypt</button>
-          <button id="toggle-encryption" class="btn btn-secondary" disabled>Show Decrypted</button>
-          <button id="clear-buffers" class="btn btn-secondary" disabled>Clear</button>
-
-          <div class="stats-bar" id="stats-bar" style="display: none;">
-            <span><strong>Count:</strong> <span id="stat-count">0</span></span>
-            <span><strong>Size:</strong> <span id="stat-size">0 KB</span></span>
-            <span><strong>Time:</strong> <span id="stat-time">0 ms</span></span>
-            <span><strong>Memory:</strong> <span id="stat-memory">--</span></span>
-          </div>
-        </div>
-
-        <!-- Virtual Scroll Data Table -->
-        <div class="card" id="data-card" style="display: none;">
-          <h2>Generated Records <span id="visible-range" class="text-muted"></span></h2>
-          <div class="virtual-table-wrapper" id="virtual-table-wrapper">
-            <!-- Virtual scroller will be mounted here -->
-          </div>
-        </div>
-      </section>
-
-      <!-- Streaming Demo Tab -->
-      <section id="streaming-tab" class="tab-content">
-        <div class="card">
-          <h2>Streaming Message Dispatcher</h2>
-          <p>Generate mixed message streams and watch them sort into linear arrays by type.</p>
-
-          <div class="streaming-config">
-            <div class="config-row">
-              <label>Monster (MONS)</label>
-              <input type="number" id="stream-monster-count" value="1000" min="0" max="100000" step="100">
-            </div>
-            <div class="config-row">
-              <label>Weapon (WEAP)</label>
-              <input type="number" id="stream-weapon-count" value="500" min="0" max="100000" step="100">
-            </div>
-            <div class="config-row">
-              <label>Galaxy (GALX)</label>
-              <input type="number" id="stream-galaxy-count" value="200" min="0" max="100000" step="100">
-            </div>
-            <div class="config-row">
-              <label>Batch Size</label>
-              <input type="number" id="stream-batch-size" value="100" min="1" max="1000" step="10">
-            </div>
-            <div class="config-row">
-              <label>Delay (ms)</label>
-              <input type="number" id="stream-delay" value="10" min="0" max="1000" step="5">
-            </div>
-          </div>
-
-          <div class="btn-group">
-            <button id="start-streaming" class="btn btn-primary">Start Streaming</button>
-            <button id="stop-streaming" class="btn btn-secondary" disabled>Stop</button>
-            <button id="clear-streaming" class="btn btn-secondary">Clear</button>
-          </div>
-
-          <!-- Progress -->
-          <div class="stream-progress" id="stream-progress" style="display: none;">
-            <div class="progress-bar">
-              <div class="progress-fill" id="stream-progress-fill"></div>
-            </div>
-            <div class="progress-stats">
-              <span id="stream-processed">0</span> / <span id="stream-total">0</span> messages
-              (<span id="stream-bytes">0 KB</span>)
-            </div>
-          </div>
-
-          <!-- Ring Buffer Stats -->
-          <div class="ring-buffer-stats" id="ring-buffer-stats">
-            <div class="stat-card" data-type="MONS">
-              <h4>Monster (MONS)</h4>
-              <div class="ring-buffer-bar">
-                <div class="ring-fill" id="ring-fill-MONS"></div>
-              </div>
-              <div class="ring-stats">
-                <span class="ring-count"><span id="ring-count-MONS">0</span> / <span id="ring-capacity-MONS">1000</span></span>
-                <span class="ring-total">Total: <span id="ring-total-MONS">0</span></span>
-              </div>
-            </div>
-            <div class="stat-card" data-type="WEAP">
-              <h4>Weapon (WEAP)</h4>
-              <div class="ring-buffer-bar">
-                <div class="ring-fill" id="ring-fill-WEAP"></div>
-              </div>
-              <div class="ring-stats">
-                <span class="ring-count"><span id="ring-count-WEAP">0</span> / <span id="ring-capacity-WEAP">500</span></span>
-                <span class="ring-total">Total: <span id="ring-total-WEAP">0</span></span>
-              </div>
-            </div>
-            <div class="stat-card" data-type="GALX">
-              <h4>Galaxy (GALX)</h4>
-              <div class="ring-buffer-bar">
-                <div class="ring-fill" id="ring-fill-GALX"></div>
-              </div>
-              <div class="ring-stats">
-                <span class="ring-count"><span id="ring-count-GALX">0</span> / <span id="ring-capacity-GALX">200</span></span>
-                <span class="ring-total">Total: <span id="ring-total-GALX">0</span></span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Completion Stats -->
-          <div class="completion-stats" id="completion-stats" style="display: none;">
-            <h4>Streaming Complete</h4>
-            <div class="completion-grid">
-              <span>Total Messages:</span><span id="complete-messages">--</span>
-              <span>Total Bytes:</span><span id="complete-bytes">--</span>
-              <span>Elapsed Time:</span><span id="complete-time">--</span>
-              <span>Throughput:</span><span id="complete-throughput">--</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Identity Tab -->
-      <section id="identity-tab" class="tab-content">
-        <div class="card">
-          <h2>Identity / vCard</h2>
-          <p>Generate a vCard with your public keys for easy sharing.</p>
-
-          <div class="form-row">
-            <div class="form-group">
+            <div class="glass-input-group">
               <label>Full Name</label>
-              <input type="text" id="vcard-name" placeholder="John Doe">
+              <input type="text" id="vcard-name" class="glass-input" placeholder="John Doe">
             </div>
-            <div class="form-group">
+            <div class="glass-input-group">
               <label>Email</label>
-              <input type="email" id="vcard-email" placeholder="john@example.com">
+              <input type="email" id="vcard-email" class="glass-input" placeholder="john@example.com">
             </div>
           </div>
-
           <div class="form-row">
-            <div class="form-group">
+            <div class="glass-input-group">
               <label>Organization</label>
-              <input type="text" id="vcard-org" placeholder="Company Name">
+              <input type="text" id="vcard-org" class="glass-input" placeholder="Company Name">
             </div>
-            <div class="form-group">
+            <div class="glass-input-group">
               <label>Title</label>
-              <input type="text" id="vcard-title" placeholder="Software Engineer">
+              <input type="text" id="vcard-title" class="glass-input" placeholder="Software Engineer">
             </div>
           </div>
-
-          <div class="form-group">
-            <label>
-              <input type="checkbox" id="include-keys" checked>
-              Include public keys in vCard
-            </label>
-          </div>
-
-          <button id="generate-vcard" class="btn btn-primary">Generate vCard QR Code</button>
-
-          <div id="vcard-result" style="display: none;">
-            <div class="qr-container">
-              <canvas id="qr-code"></canvas>
-            </div>
-            <div class="vcard-actions">
-              <button id="download-vcard" class="btn btn-secondary">Download .vcf</button>
-              <button id="copy-vcard" class="btn btn-secondary">Copy vCard</button>
-            </div>
-            <details>
-              <summary>View vCard Data</summary>
-              <pre id="vcard-preview"></pre>
-            </details>
-          </div>
+          <label class="checkbox-label">
+            <input type="checkbox" id="include-keys" checked>
+            <span>Include cryptographic public keys</span>
+          </label>
         </div>
-      </section>
+
+        <button id="generate-vcard" class="glass-btn primary">Generate vCard</button>
+
+        <div id="vcard-result" class="vcard-result" style="display: none;">
+          <div class="qr-container">
+            <canvas id="qr-code"></canvas>
+          </div>
+          <div class="vcard-actions">
+            <button id="download-vcard" class="glass-btn">Download .vcf</button>
+            <button id="copy-vcard" class="glass-btn">Copy</button>
+          </div>
+          <details class="vcard-details">
+            <summary>View Raw vCard</summary>
+            <pre id="vcard-preview"></pre>
+          </details>
+        </div>
+      </div>
     </section>
+  </main>
 
-    <!-- Help Modal -->
-    <div id="help-modal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3 id="help-title"></h3>
-          <button class="modal-close">&times;</button>
+  <!-- Keys Modal -->
+  <div id="keys-modal" class="modal">
+    <div class="modal-glass">
+      <div class="modal-header">
+        <h3>Your Keys</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="key-item">
+          <label>X25519 Public Key (Encryption)</label>
+          <code id="wallet-x25519-pub"></code>
         </div>
-        <div class="modal-body" id="help-body"></div>
+        <div class="key-item">
+          <label>Ed25519 Public Key (Signing)</label>
+          <code id="wallet-ed25519-pub"></code>
+        </div>
+        <div class="key-item">
+          <label>secp256k1 Public Key (Bitcoin/Ethereum)</label>
+          <code id="wallet-secp256k1-pub"></code>
+        </div>
+        <div class="key-warning">
+          Private keys are stored in memory only and will be lost on refresh.
+        </div>
       </div>
     </div>
   </div>
 
+  <!-- Help Modal -->
+  <div id="help-modal" class="modal">
+    <div class="modal-glass">
+      <div class="modal-header">
+        <h3 id="help-title"></h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="help-body"></div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <span id="status">Loading WASM modules...</span>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </body>
 </html>

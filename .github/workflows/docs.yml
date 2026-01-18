@@ -1,14 +1,15 @@
 name: docs
 on:
   # For manual pushes.
-  workflow_dispatch: 
+  workflow_dispatch:
 
-  # Pushes to main that touch the documentation directory.
+  # Pushes to master that touch docs or wasm/examples/browser-wallet
   push:
     branches:
       - master
     paths:
       - 'docs/**'
+      - 'wasm/examples/browser-wallet/**'
 
 permissions:
   contents: write
@@ -17,31 +18,65 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
       - name: Configure Git Credentials
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+
+      # Setup Node.js for browser-wallet demo build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: wasm/examples/browser-wallet/package-lock.json
+
+      # Build browser-wallet demo (this will be the landing page)
+      - name: Build browser-wallet demo
+        working-directory: wasm/examples/browser-wallet
+        run: |
+          npm ci
+          npm run build
+
+      # Setup Python for mkdocs
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
-      - run: echo "cache_id=$(date --utc '+%V')" >> $GITHUB_ENV 
+
+      - run: echo "cache_id=$(date --utc '+%V')" >> $GITHUB_ENV
+
       - uses: actions/cache@v4
         with:
           key: mkdocs-material-${{ env.cache_id }}
           path: .cache
           restore-keys: |
             mkdocs-material-
-      - run: pip install mkdocs-material
-      - run: pip install mkdocs-redirects
+
+      - run: pip install mkdocs-material mkdocs-redirects
+
+      # Build mkdocs documentation
       - name: Build mkdocs site
-        run: mkdocs build -f mkdocs.yml -d ../site
+        run: mkdocs build -f mkdocs.yml -d ../mkdocs-site
         working-directory: docs
-      - name: Copy demo to site
-        run: cp -r docs/source/demo site/demo
+
+      # Assemble final site: browser-wallet as root, mkdocs docs in /docs/
+      - name: Assemble site
+        run: |
+          mkdir -p site
+          # Copy browser-wallet demo as the root landing page
+          cp -r wasm/examples/browser-wallet/dist/* site/
+          # Copy mkdocs documentation to /docs/ subdirectory
+          mkdir -p site/docs
+          cp -r mkdocs-site/* site/docs/
+          # Add CNAME if it exists
+          if [ -f docs/source/CNAME ]; then
+            cp docs/source/CNAME site/
+          fi
+
       - name: Deploy to gh-pages
         run: |
           cd site
           git init
           git add -A
-          git commit -m "Deploy docs"
+          git commit -m "Deploy site"
           git push -f https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git HEAD:gh-pages

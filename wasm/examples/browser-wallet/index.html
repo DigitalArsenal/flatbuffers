@@ -21,17 +21,19 @@
   <!-- Navigation -->
   <nav class="nav-bar">
     <div class="nav-content">
-      <div class="nav-logo">
+      <a href="https://flatbuffers.dev" target="_blank" class="nav-logo">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
         </svg>
         <span>FlatBuffers</span>
-      </div>
-      <div class="nav-links">
-        <a href="#" class="nav-link active" data-tab="fields">Encryption</a>
-        <a href="#" class="nav-link" data-tab="buffers">Generation</a>
-        <a href="#" class="nav-link" data-tab="streaming">Streaming</a>
-        <a href="#" class="nav-link" data-tab="identity">Identity</a>
+      </a>
+      <div class="nav-links" id="demo-nav-links">
+        <a href="#fields" class="nav-link active" data-tab="fields">Encryption</a>
+        <a href="#buffers" class="nav-link" data-tab="buffers">Generation</a>
+        <a href="#streaming" class="nav-link" data-tab="streaming">Streaming</a>
+        <a href="#identity" class="nav-link" data-tab="identity">Identity</a>
+        <span class="nav-divider"></span>
+        <a href="https://flatbuffers.dev" target="_blank" class="nav-link nav-link-external">Docs</a>
       </div>
       <div class="nav-actions">
         <span id="nav-status" class="nav-status"></span>
@@ -48,8 +50,8 @@
   <!-- Hero / Login Section -->
   <section id="hero-section" class="hero-section">
     <div class="hero-content">
-      <h1 class="hero-title">Field-Level<br>Encryption</h1>
-      <p class="hero-subtitle">Real FlatBuffer binary encryption with zero-copy WASM interop</p>
+      <h1 class="hero-title">FlatBuffers<br>Encryption</h1>
+      <p class="hero-subtitle">Binary serialization with field-level encryption, HD wallet derivation, and streaming dispatch</p>
 
       <div class="login-glass" id="login-card">
         <div class="method-tabs">
@@ -386,24 +388,130 @@
 
   <!-- Keys Modal -->
   <div id="keys-modal" class="modal">
-    <div class="modal-glass">
+    <div class="modal-glass modal-wide">
       <div class="modal-header">
         <h3>Your Keys</h3>
         <button class="modal-close">&times;</button>
       </div>
       <div class="modal-body">
-        <div class="key-item">
-          <label>X25519 Public Key (Encryption)</label>
-          <code id="wallet-x25519-pub"></code>
+        <!-- Base Keys Section -->
+        <div class="keys-section">
+          <h4 class="section-label">Base Keys</h4>
+          <div class="key-item">
+            <label>X25519 Public Key (Encryption)</label>
+            <code id="wallet-x25519-pub"></code>
+          </div>
+          <div class="key-item">
+            <label>Ed25519 Public Key (Signing)</label>
+            <code id="wallet-ed25519-pub"></code>
+          </div>
+          <div class="key-item">
+            <label>secp256k1 Public Key (Bitcoin/Ethereum)</label>
+            <code id="wallet-secp256k1-pub"></code>
+          </div>
         </div>
-        <div class="key-item">
-          <label>Ed25519 Public Key (Signing)</label>
-          <code id="wallet-ed25519-pub"></code>
+
+        <!-- HD Wallet Section -->
+        <div class="keys-section hd-section">
+          <h4 class="section-label">HD Wallet Derivation (BIP44)</h4>
+
+          <div class="hd-path-builder">
+            <div class="path-display">
+              <span class="path-prefix">m/</span>
+              <span class="path-segment">
+                <select id="hd-purpose" class="glass-select compact">
+                  <option value="44">44' (BIP44)</option>
+                  <option value="49">49' (BIP49 SegWit)</option>
+                  <option value="84">84' (BIP84 Native SegWit)</option>
+                </select>
+              </span>
+              <span class="path-sep">/</span>
+              <span class="path-segment">
+                <select id="hd-coin" class="glass-select compact">
+                  <option value="0" data-symbol="BTC" data-name="Bitcoin">0' (Bitcoin)</option>
+                  <option value="60" data-symbol="ETH" data-name="Ethereum">60' (Ethereum)</option>
+                  <option value="501" data-symbol="SOL" data-name="Solana">501' (Solana)</option>
+                  <option value="2" data-symbol="LTC" data-name="Litecoin">2' (Litecoin)</option>
+                  <option value="145" data-symbol="BCH" data-name="Bitcoin Cash">145' (Bitcoin Cash)</option>
+                  <option value="3" data-symbol="DOGE" data-name="Dogecoin">3' (Dogecoin)</option>
+                  <option value="118" data-symbol="ATOM" data-name="Cosmos">118' (Cosmos)</option>
+                  <option value="330" data-symbol="ALGO" data-name="Algorand">330' (Algorand)</option>
+                  <option value="354" data-symbol="DOT" data-name="Polkadot">354' (Polkadot)</option>
+                  <option value="1815" data-symbol="ADA" data-name="Cardano">1815' (Cardano)</option>
+                </select>
+              </span>
+              <span class="path-sep">/</span>
+              <span class="path-segment">
+                <input type="number" id="hd-account" class="glass-input compact" value="0" min="0" max="2147483647">
+                <span class="hardened-mark">'</span>
+              </span>
+              <span class="path-sep">/</span>
+              <span class="path-segment">
+                <select id="hd-change" class="glass-select compact">
+                  <option value="0">0 (External)</option>
+                  <option value="1">1 (Change)</option>
+                </select>
+              </span>
+              <span class="path-sep">/</span>
+              <span class="path-segment">
+                <input type="number" id="hd-index" class="glass-input compact" value="0" min="0" max="2147483647">
+              </span>
+            </div>
+
+            <div class="path-summary">
+              <code id="full-path">m/44'/0'/0'/0/0</code>
+              <button id="derive-address" class="glass-btn primary small">Derive</button>
+            </div>
+          </div>
+
+          <!-- Derived Address Display -->
+          <div id="derived-result" class="derived-result" style="display: none;">
+            <div class="derived-header">
+              <span class="crypto-icon" id="derived-icon"></span>
+              <span class="crypto-name" id="derived-crypto-name">Bitcoin</span>
+            </div>
+
+            <div class="key-item">
+              <label>Public Key</label>
+              <code id="derived-pubkey"></code>
+            </div>
+
+            <div class="key-item">
+              <label>Address</label>
+              <div class="address-row">
+                <code id="derived-address"></code>
+                <a id="derived-explorer-link" href="#" target="_blank" class="explorer-link glass-btn small">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                  </svg>
+                  View on Explorer
+                </a>
+              </div>
+            </div>
+
+            <div class="balance-row" id="balance-row" style="display: none;">
+              <span class="balance-label">Balance:</span>
+              <span class="balance-value" id="derived-balance">Loading...</span>
+            </div>
+
+            <div class="qr-row">
+              <canvas id="address-qr" width="128" height="128"></canvas>
+            </div>
+          </div>
+
+          <!-- Quick Derive Buttons -->
+          <div class="quick-derive">
+            <span class="quick-label">Quick derive:</span>
+            <button class="glass-btn small" data-coin="0" data-purpose="84">BTC</button>
+            <button class="glass-btn small" data-coin="60" data-purpose="44">ETH</button>
+            <button class="glass-btn small" data-coin="501" data-purpose="44">SOL</button>
+            <button class="glass-btn small" data-coin="2" data-purpose="44">LTC</button>
+            <button class="glass-btn small" data-coin="3" data-purpose="44">DOGE</button>
+          </div>
         </div>
-        <div class="key-item">
-          <label>secp256k1 Public Key (Bitcoin/Ethereum)</label>
-          <code id="wallet-secp256k1-pub"></code>
-        </div>
+
         <div class="key-warning">
           Private keys are stored in memory only and will be lost on refresh.
         </div>

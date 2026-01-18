@@ -39,8 +39,8 @@ import { StreamingDemo, MessageTypes, formatBytes, formatThroughput } from './st
 import monsterSchema from './schemas/monster.fbs?raw';
 import basicSchema from './schemas/basic.fbs?raw';
 
-// Paths
-const ENCRYPTION_WASM_PATH = '/flatc-encryption.wasm';
+// Paths - use relative path for GitHub Pages compatibility
+const ENCRYPTION_WASM_PATH = './flatc-encryption.wasm';
 
 // =============================================================================
 // State

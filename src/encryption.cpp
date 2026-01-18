@@ -708,7 +708,7 @@ KeyPair GenerateKeyPair(KeyExchangeAlgorithm algorithm) {
 
 bool ComputeSharedSecret(
     KeyExchangeAlgorithm algorithm,
-    const uint8_t* private_key, size_t private_key_size,
+    const uint8_t* private_key, size_t /* private_key_size */,
     const uint8_t* public_key, size_t public_key_size,
     uint8_t* shared_secret) {
   switch (algorithm) {
@@ -725,7 +725,7 @@ bool ComputeSharedSecret(
 
 Signature Sign(
     SignatureAlgorithm algorithm,
-    const uint8_t* private_key, size_t private_key_size,
+    const uint8_t* private_key, size_t /* private_key_size */,
     const uint8_t* data, size_t data_size) {
   switch (algorithm) {
     case SignatureAlgorithm::Ed25519:
@@ -788,6 +788,29 @@ EncryptionContext::~EncryptionContext() {
   for (size_t i = 0; i < kEncryptionKeySize; i++) p[i] = 0;
 }
 
+EncryptionContext::EncryptionContext(EncryptionContext&& other) noexcept
+    : valid_(other.valid_) {
+  std::memcpy(key_, other.key_, kEncryptionKeySize);
+  // Clear the source
+  std::memset(other.key_, 0, kEncryptionKeySize);
+  other.valid_ = false;
+}
+
+EncryptionContext& EncryptionContext::operator=(EncryptionContext&& other) noexcept {
+  if (this != &other) {
+    // Clear our current key
+    volatile uint8_t* p = key_;
+    for (size_t i = 0; i < kEncryptionKeySize; i++) p[i] = 0;
+    // Move from other
+    std::memcpy(key_, other.key_, kEncryptionKeySize);
+    valid_ = other.valid_;
+    // Clear the source
+    std::memset(other.key_, 0, kEncryptionKeySize);
+    other.valid_ = false;
+  }
+  return *this;
+}
+
 void EncryptionContext::DeriveFieldKey(uint16_t field_id, uint8_t* out_key) const {
   uint8_t info[32] = "flatbuffers-field";
   info[17] = static_cast<uint8_t>(field_id >> 8);
@@ -843,7 +866,7 @@ bool IsFieldEncrypted(const reflection::Field* field) {
   if (!attrs) return false;
   for (size_t i = 0; i < attrs->size(); i++) {
     auto kv = attrs->Get(i);
-    if (kv && kv->key() && kv->key()->string_view() == "encrypted") {
+    if (kv && kv->key() && kv->key()->str() == "encrypted") {
       return true;
     }
   }
@@ -864,7 +887,7 @@ std::vector<uint16_t> GetEncryptedFieldIds(
   const reflection::Object* root_object = nullptr;
   if (root_type_name) {
     for (auto obj : *objects) {
-      if (obj && obj->name() && obj->name()->string_view() == root_type_name) {
+      if (obj && obj->name() && obj->name()->str() == root_type_name) {
         root_object = obj;
         break;
       }

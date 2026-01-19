@@ -1259,8 +1259,20 @@ function generatePKIKeyPairs() {
       generateFn = x25519GenerateKeyPair;
   }
 
-  state.pki.alice = generateFn();
-  state.pki.bob = generateFn();
+  try {
+    state.pki.alice = generateFn();
+    state.pki.bob = generateFn();
+    console.log('Generated PKI keys:', {
+      alicePub: state.pki.alice?.publicKey?.length,
+      alicePriv: state.pki.alice?.privateKey?.length,
+      bobPub: state.pki.bob?.publicKey?.length,
+      bobPriv: state.pki.bob?.privateKey?.length,
+    });
+  } catch (e) {
+    console.error('Failed to generate PKI keys:', e);
+    alert('Failed to generate keys: ' + e.message);
+    return;
+  }
 
   // Save keys to localStorage
   savePKIKeys();

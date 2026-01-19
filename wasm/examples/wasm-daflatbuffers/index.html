@@ -237,7 +237,14 @@
           </div>
           <div class="spec-row">
             <span class="spec-label">Runtime</span>
-            <span class="spec-value">WebAssembly (libsodium)</span>
+            <span class="spec-value" id="crypto-runtime">WebAssembly (Crypto++)</span>
+          </div>
+          <div class="spec-row" id="fips-mode-row" style="display: none;">
+            <span class="spec-label">FIPS 140-3</span>
+            <span class="spec-value fips-indicator" id="fips-mode-value">
+              <span class="fips-badge">FIPS Mode</span>
+              OpenSSL Provider (P-256, AES-256-GCM)
+            </span>
           </div>
         </div>
       </div>

@@ -387,6 +387,8 @@
       </div>
 
       <div class="glass-card">
+        <h3 class="card-subtitle">Export to File (Memory Efficient)</h3>
+        <p class="card-desc">Generate records and download directly - no memory accumulation.</p>
         <div class="card-controls">
           <select id="bulk-schema" class="glass-select">
             <option value="monster">Monster</option>
@@ -400,6 +402,65 @@
             <option value="100000">100,000 records</option>
             <option value="1000000">1,000,000 records</option>
           </select>
+          <button id="download-encrypted" class="glass-btn primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download Encrypted
+          </button>
+          <button id="download-plain" class="glass-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download Plain
+          </button>
+        </div>
+
+        <!-- Download Progress -->
+        <div class="progress-container" id="download-progress" style="display: none;">
+          <div class="progress-track">
+            <div class="progress-fill" id="download-progress-fill"></div>
+          </div>
+          <span class="progress-text" id="download-progress-text">Preparing...</span>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Import from File</h3>
+        <p class="card-desc">Upload an .efbs file to decrypt and verify records.</p>
+        <div class="card-controls">
+          <input type="file" id="upload-file" accept=".efbs" class="file-input" />
+          <label for="upload-file" class="glass-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Choose File
+          </label>
+          <span id="upload-filename" class="file-label">No file selected</span>
+        </div>
+
+        <!-- Upload Progress -->
+        <div class="progress-container" id="upload-progress" style="display: none;">
+          <div class="progress-track">
+            <div class="progress-fill" id="upload-progress-fill"></div>
+          </div>
+          <span class="progress-text" id="upload-progress-text">Reading file...</span>
+        </div>
+
+        <!-- Upload Results -->
+        <div id="upload-results" class="upload-results" style="display: none;"></div>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Generate in Memory (Small Datasets)</h3>
+        <p class="card-desc">Generate records in memory for inspection. Best for &lt;10,000 records.</p>
+        <div class="card-controls">
           <button id="generate-buffers" class="glass-btn primary">Encrypt for Bob</button>
           <button id="generate-plain" class="glass-btn">Plain (No Encryption)</button>
           <button id="toggle-encryption" class="glass-btn" disabled>Bob Decrypts</button>
@@ -417,11 +478,11 @@
           </div>
           <div class="stat-cell">
             <span class="stat-number" id="stat-time">0 ms</span>
-            <span class="stat-label">Generation Time</span>
+            <span class="stat-label">Time</span>
           </div>
           <div class="stat-cell">
             <span class="stat-number" id="stat-memory">--</span>
-            <span class="stat-label">Memory Used</span>
+            <span class="stat-label">Throughput</span>
           </div>
         </div>
       </div>

@@ -3363,47 +3363,111 @@ table Weapon {
 root_type Monster;
 `;
 
-// Sample multi-file project
+// Sample multi-file project demonstrating FlatBuffers features
 const SAMPLE_PROJECT_FILES = {
-  'schema.fbs': `// Main schema file
+  'schema.fbs': `// Main schema file - Entry point for compilation
+// This demonstrates includes, which allow splitting schemas across files
+
 include "types/common.fbs";
 include "types/monster.fbs";
+include "services/game_service.fbs";
 
 namespace MyGame;
 
 root_type Monster;
 file_identifier "GAME";
+file_extension "bin";
 `,
-  'types/common.fbs': `// Common types
+
+  'types/common.fbs': `// Common shared types used across the project
 namespace MyGame.Types;
 
-enum Color : byte { Red = 0, Green, Blue }
+/// Color enumeration for various game objects
+enum Color : byte {
+  Red = 0,
+  Green = 1,
+  Blue = 2
+}
 
+/// Equipment types that can be wielded
+union Equipment { Weapon, Armor }
+
+/// 3D vector for positions and directions
 struct Vec3 {
   x: float;
   y: float;
   z: float;
 }
 `,
-  'types/monster.fbs': `// Monster definitions
+
+  'types/monster.fbs': `// Monster and equipment definitions
 include "common.fbs";
 
 namespace MyGame;
 
+/// A weapon that can be equipped
 table Weapon {
   name: string;
   damage: short;
 }
 
+/// Protective armor
+table Armor {
+  name: string;
+  defense: short;
+}
+
+/// A monster in the game world
 table Monster {
+  /// Position in 3D space
   pos: Types.Vec3;
+  /// Magic points (default: 150)
   mana: short = 150;
+  /// Health points (default: 100)
   hp: short = 100;
+  /// Monster's name (required)
   name: string (required);
-  friendly: bool = false;
+  /// Is this monster friendly?
+  friendly: bool = false (deprecated);
+  /// Items in inventory
   inventory: [ubyte];
+  /// Monster's color
   color: Types.Color = Blue;
+  /// Weapons carried
   weapons: [Weapon];
+  /// Currently equipped item
+  equipped: Types.Equipment;
+  /// Waypoint path
+  path: [Types.Vec3];
+}
+`,
+
+  'services/game_service.fbs': `// RPC service definitions for the game server
+include "../types/monster.fbs";
+
+namespace MyGame.Services;
+
+/// Request to spawn a monster
+table SpawnRequest {
+  name: string;
+  x: float;
+  y: float;
+  z: float;
+}
+
+/// Response with spawned monster info
+table SpawnResponse {
+  success: bool;
+  monster: Monster;
+  error_message: string;
+}
+
+/// Game server RPC service
+rpc_service GameService {
+  /// Spawn a new monster
+  SpawnMonster(SpawnRequest): SpawnResponse;
+  /// Stream monster updates
+  WatchMonsters(SpawnRequest): SpawnResponse (streaming: "server");
 }
 `
 };
@@ -3718,19 +3782,24 @@ function attachFileTreeListeners() {
   });
 }
 
-function loadSampleProject() {
-  if (Object.keys(schemaFiles.files).length > 0) {
-    if (!confirm('This will replace all current files. Continue?')) return;
-  }
-
+// Load sample project without confirmation (for initial load)
+function loadSampleProjectSilent() {
   schemaFiles.files = {};
   for (const [path, content] of Object.entries(SAMPLE_PROJECT_FILES)) {
     schemaFiles.files[path] = { content, modified: false };
   }
   schemaFiles.entryPoint = 'schema.fbs';
   schemaFiles.currentFile = 'schema.fbs';
-
   saveSchemaFilesToStorage();
+}
+
+// Load sample project with user confirmation
+function loadSampleProject() {
+  if (Object.keys(schemaFiles.files).length > 0) {
+    if (!confirm('This will replace all current files. Continue?')) return;
+  }
+
+  loadSampleProjectSilent();
   renderSchemaFileTree();
   selectSchemaFile('schema.fbs');
   setStudioStatus('Sample project loaded', 'success');
@@ -3749,8 +3818,12 @@ function initStudio() {
     });
   });
 
-  // Initialize file tree - load from storage or start empty
-  loadSchemaFilesFromStorage();
+  // Initialize file tree - load from storage or load sample project
+  const hasStoredFiles = loadSchemaFilesFromStorage();
+  if (!hasStoredFiles || Object.keys(schemaFiles.files).length === 0) {
+    // Load sample project by default so users have something to work with
+    loadSampleProjectSilent();
+  }
   renderSchemaFileTree();
   if (schemaFiles.currentFile) {
     selectSchemaFile(schemaFiles.currentFile);

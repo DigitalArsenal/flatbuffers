@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&family=SF+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="./assets/main-BuBAoKI8.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/main-BGHPailK.css">
+  <script type="module" crossorigin src="./assets/main-CgWJwiqX.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/main-DWk2MNQv.css">
 </head>
 <body>
   <!-- Video Background -->
@@ -79,7 +79,7 @@
           <button class="method-tab" data-method="seed">Seed Phrase</button>
         </div>
 
-        <div id="password-method" class="method-content active">
+        <form id="password-method" class="method-content active" onsubmit="return false;">
           <div class="glass-input-group">
             <input type="text" id="wallet-username" class="glass-input" placeholder="Username" autocomplete="username">
           </div>
@@ -90,10 +90,10 @@
             </div>
             <span class="entropy-label"><span id="entropy-bits">0</span> bits entropy</span>
           </div>
-          <button id="derive-from-password" class="glass-btn primary full-width" disabled>
+          <button id="derive-from-password" class="glass-btn primary full-width" disabled type="button">
             Enter Demo
           </button>
-        </div>
+        </form>
 
         <div id="seed-method" class="method-content">
           <div class="glass-input-group">

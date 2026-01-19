@@ -18,6 +18,31 @@ include(FetchContent)
 # Options
 option(FLATBUFFERS_BUILD_WASM "Build WebAssembly version of flatc" OFF)
 
+# =============================================================================
+# Standalone Demo Target (always available, doesn't require WASM build)
+# =============================================================================
+# This target runs the demo directly with npm, no Emscripten needed
+
+find_program(NPM_EXECUTABLE_DEMO npm)
+if(NPM_EXECUTABLE_DEMO)
+  set(WASM_DEMO_DIR "${CMAKE_SOURCE_DIR}/wasm/examples/wasm-daflatbuffers")
+
+  add_custom_target(wasm_demo
+    COMMAND ${NPM_EXECUTABLE_DEMO} install
+    COMMAND ${NPM_EXECUTABLE_DEMO} run dev
+    WORKING_DIRECTORY ${WASM_DEMO_DIR}
+    USES_TERMINAL
+    COMMENT "Starting wasm-daflatbuffers demo (http://localhost:3000)"
+  )
+
+  add_custom_target(wasm_demo_build
+    COMMAND ${NPM_EXECUTABLE_DEMO} install
+    COMMAND ${NPM_EXECUTABLE_DEMO} run build
+    WORKING_DIRECTORY ${WASM_DEMO_DIR}
+    COMMENT "Building wasm-daflatbuffers demo for production"
+  )
+endif()
+
 if(NOT FLATBUFFERS_BUILD_WASM)
   return()
 endif()
@@ -376,12 +401,12 @@ module.exports.default = createModule;
   find_program(NPM_EXECUTABLE npm)
   if(NPM_EXECUTABLE AND NODE_EXECUTABLE)
     set(BROWSER_EXAMPLES_DIR "${CMAKE_SOURCE_DIR}/wasm/examples")
-    set(BROWSER_WALLET_DIR "${BROWSER_EXAMPLES_DIR}/browser-wallet")
+    set(BROWSER_WALLET_DIR "${BROWSER_EXAMPLES_DIR}/wasm-daflatbuffers")
 
     add_custom_target(browser_wallet_install
       COMMAND ${NPM_EXECUTABLE} install
       WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
-      COMMENT "Installing browser-wallet npm dependencies"
+      COMMENT "Installing wasm-daflatbuffers npm dependencies"
     )
 
     add_custom_target(browser_wallet_setup
@@ -390,7 +415,7 @@ module.exports.default = createModule;
         "${WASM_OUTPUT_DIR}/flatc-encryption.wasm"
         "${BROWSER_WALLET_DIR}/public/flatc-encryption.wasm"
       DEPENDS browser_wallet_install
-      COMMENT "Setting up browser-wallet WASM files"
+      COMMENT "Setting up wasm-daflatbuffers WASM files"
     )
 
     add_custom_target(browser_wallet_serve
@@ -398,14 +423,14 @@ module.exports.default = createModule;
       WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
       DEPENDS browser_wallet_setup
       USES_TERMINAL
-      COMMENT "Starting browser-wallet development server (http://localhost:3000)"
+      COMMENT "Starting wasm-daflatbuffers development server (http://localhost:3000)"
     )
 
     add_custom_target(browser_wallet_build
       COMMAND ${NPM_EXECUTABLE} run build
       WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
       DEPENDS browser_wallet_setup
-      COMMENT "Building browser-wallet for production"
+      COMMENT "Building wasm-daflatbuffers for production"
     )
 
     add_custom_target(browser_examples DEPENDS browser_wallet_serve)
@@ -572,13 +597,13 @@ find_program(NPM_EXECUTABLE npm)
 
 if(NPM_EXECUTABLE AND NODE_EXECUTABLE)
   set(BROWSER_EXAMPLES_DIR "${CMAKE_SOURCE_DIR}/wasm/examples")
-  set(BROWSER_WALLET_DIR "${BROWSER_EXAMPLES_DIR}/browser-wallet")
+  set(BROWSER_WALLET_DIR "${BROWSER_EXAMPLES_DIR}/wasm-daflatbuffers")
 
   # Browser wallet demo - install dependencies
   add_custom_target(browser_wallet_install
     COMMAND ${NPM_EXECUTABLE} install
     WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
-    COMMENT "Installing browser-wallet npm dependencies"
+    COMMENT "Installing wasm-daflatbuffers npm dependencies"
   )
 
   # Browser wallet demo - setup (symlink WASM files)
@@ -588,7 +613,7 @@ if(NPM_EXECUTABLE AND NODE_EXECUTABLE)
       "${WASM_OUTPUT_DIR}/flatc-encryption.wasm"
       "${BROWSER_WALLET_DIR}/public/flatc-encryption.wasm"
     DEPENDS browser_wallet_install
-    COMMENT "Setting up browser-wallet WASM files"
+    COMMENT "Setting up wasm-daflatbuffers WASM files"
   )
 
   # Browser wallet demo - serve (development mode)
@@ -597,7 +622,7 @@ if(NPM_EXECUTABLE AND NODE_EXECUTABLE)
     WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
     DEPENDS browser_wallet_setup
     USES_TERMINAL
-    COMMENT "Starting browser-wallet development server (http://localhost:3000)"
+    COMMENT "Starting wasm-daflatbuffers development server (http://localhost:3000)"
   )
 
   # Browser wallet demo - build for production
@@ -605,7 +630,7 @@ if(NPM_EXECUTABLE AND NODE_EXECUTABLE)
     COMMAND ${NPM_EXECUTABLE} run build
     WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
     DEPENDS browser_wallet_setup
-    COMMENT "Building browser-wallet for production"
+    COMMENT "Building wasm-daflatbuffers for production"
   )
 
   # Combined browser examples target
@@ -620,3 +645,4 @@ if(NPM_EXECUTABLE AND NODE_EXECUTABLE)
   message(STATUS "  browser_examples     - Start all browser demos")
   message(STATUS "")
 endif()
+

@@ -33,6 +33,7 @@
         <a href="#pki" class="nav-link active" data-tab="pki">PKI</a>
         <a href="#fields" class="nav-link" data-tab="fields">Field Encryption</a>
         <a href="#buffers" class="nav-link" data-tab="buffers">Bulk Generation</a>
+        <a href="#schema" class="nav-link" data-tab="schema">Schema</a>
         <a href="#streaming" class="nav-link" data-tab="streaming">Streaming</a>
         <a href="#identity" class="nav-link" data-tab="identity">Identity</a>
         <span class="nav-divider"></span>
@@ -139,13 +140,11 @@
       </div>
 
       <div class="glass-card">
-        <div class="card-controls">
-          <select id="pki-algorithm" class="glass-select">
-            <option value="x25519">X25519 (Curve25519)</option>
-            <option value="secp256k1">secp256k1 (Bitcoin/Ethereum)</option>
-            <option value="p256">P-256 (NIST)</option>
-          </select>
-          <button id="pki-generate-keys" class="glass-btn primary">Generate Key Pairs</button>
+        <div class="card-controls" id="pki-controls" style="display: none;">
+          <div class="algorithm-display">
+            <span class="algorithm-label">Algorithm:</span>
+            <span id="pki-algorithm-display" class="algorithm-value">X25519</span>
+          </div>
           <button id="pki-clear-keys" class="glass-btn" style="display: none;">Clear Saved Keys</button>
         </div>
 
@@ -155,6 +154,10 @@
             <div class="party-header">
               <span class="party-icon">A</span>
               <span class="party-name">Alice (Sender)</span>
+            </div>
+            <div class="derivation-path">
+              <label>HD Path</label>
+              <code id="alice-path">m/44'/0'/0'/0/0</code>
             </div>
             <div class="key-item">
               <label>Public Key</label>
@@ -178,6 +181,10 @@
               <span class="party-icon">B</span>
               <span class="party-name">Bob (Recipient)</span>
             </div>
+            <div class="derivation-path">
+              <label>HD Path</label>
+              <code id="bob-path">m/44'/0'/0'/0/1</code>
+            </div>
             <div class="key-item">
               <label>Public Key</label>
               <code id="bob-public-key">--</code>
@@ -186,6 +193,55 @@
               <label>Private Key <span class="key-warning-badge">Secret</span></label>
               <code id="bob-private-key" class="blur-key">--</code>
             </div>
+          </div>
+        </div>
+
+        <!-- How It Works Explanation -->
+        <div class="encryption-explainer" id="encryption-explainer" style="display: none;">
+          <h3 class="card-subtitle">How ECIES Encryption Works</h3>
+          <div class="explainer-grid">
+            <div class="explainer-card">
+              <div class="explainer-icon">1</div>
+              <div class="explainer-content">
+                <h4>Ephemeral Key Generation</h4>
+                <p>Alice generates a one-time ephemeral key pair for each encryption. This provides <strong>forward secrecy</strong> - if Alice's main key is compromised, past messages remain secure.</p>
+              </div>
+            </div>
+            <div class="explainer-card">
+              <div class="explainer-icon">2</div>
+              <div class="explainer-content">
+                <h4>ECDH Key Exchange</h4>
+                <p>Alice uses her ephemeral private key and Bob's public key to compute a <strong>shared secret</strong> via Elliptic Curve Diffie-Hellman. Only Alice and Bob can derive this shared secret.</p>
+              </div>
+            </div>
+            <div class="explainer-card">
+              <div class="explainer-icon">3</div>
+              <div class="explainer-content">
+                <h4>HKDF Key Derivation</h4>
+                <p>The shared secret is passed through <strong>HKDF-SHA256</strong> to derive a symmetric AES-256 key and nonce. This stretches the shared secret into cryptographically strong key material.</p>
+              </div>
+            </div>
+            <div class="explainer-card">
+              <div class="explainer-icon">4</div>
+              <div class="explainer-content">
+                <h4>AES-256-CTR Encryption</h4>
+                <p>Data is encrypted using <strong>AES-256 in CTR mode</strong>. CTR mode is a stream cipher that preserves plaintext length - critical for FlatBuffers where field sizes must remain constant.</p>
+              </div>
+            </div>
+            <div class="explainer-card">
+              <div class="explainer-icon">5</div>
+              <div class="explainer-content">
+                <h4>Header Transmission</h4>
+                <p>The ephemeral public key and nonce are sent as a <strong>header</strong> alongside the ciphertext. Bob uses this header plus his private key to derive the same symmetric key and decrypt.</p>
+              </div>
+            </div>
+          </div>
+          <div class="explainer-note">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 16v-4M12 8h.01"/>
+            </svg>
+            <span><strong>Why CTR mode?</strong> FlatBuffers uses fixed-size fields with known offsets. CTR mode encrypts each field to the same length as the plaintext, preserving the binary structure. Block cipher modes like CBC would add padding and break the schema.</span>
           </div>
         </div>
 
@@ -327,7 +383,7 @@
     <section id="buffers-tab" class="content-section">
       <div class="section-header">
         <h2 class="section-title">Bulk Generation</h2>
-        <p class="section-desc">Generate up to 1 million FlatBuffer records encrypted with Bob's public key</p>
+        <p class="section-desc">Generate up to 1 million FlatBuffer records - encrypted or plain</p>
       </div>
 
       <div class="glass-card">
@@ -345,6 +401,7 @@
             <option value="1000000">1,000,000 records</option>
           </select>
           <button id="generate-buffers" class="glass-btn primary">Encrypt for Bob</button>
+          <button id="generate-plain" class="glass-btn">Plain (No Encryption)</button>
           <button id="toggle-encryption" class="glass-btn" disabled>Bob Decrypts</button>
           <button id="clear-buffers" class="glass-btn" disabled>Clear</button>
         </div>
@@ -372,6 +429,95 @@
       <div class="glass-card" id="data-card" style="display: none;">
         <h3 class="card-subtitle">Generated Records <span id="visible-range" class="range-label"></span></h3>
         <div class="virtual-table-wrapper" id="virtual-table-wrapper"></div>
+
+        <!-- Record Detail Panel -->
+        <div id="record-detail-panel" class="detail-panel" style="display: none;">
+          <div class="detail-header">
+            <h4 id="detail-record-index">Record #1</h4>
+            <button id="close-detail-panel" class="close-btn">&times;</button>
+          </div>
+          <div class="detail-grid">
+            <div class="detail-section">
+              <h5>JSON Data</h5>
+              <pre id="detail-json" class="code-block"></pre>
+            </div>
+            <div class="detail-section">
+              <h5>FlatBuffer Hex <span id="detail-size" class="size-badge"></span></h5>
+              <pre id="detail-hex" class="code-block hex"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Schema Viewer Section -->
+    <section id="schema-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Schema Viewer</h2>
+        <p class="section-desc">View FlatBuffers schema (.fbs) and equivalent JSON Schema</p>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-controls">
+          <select id="schema-type-select" class="glass-select">
+            <option value="monster">Monster Schema</option>
+            <option value="weapon">Weapon Schema</option>
+            <option value="galaxy">Galaxy Schema</option>
+          </select>
+        </div>
+
+        <div class="schema-grid">
+          <div class="schema-panel">
+            <div class="schema-header">
+              <h4>.fbs Schema</h4>
+              <button id="copy-fbs" class="glass-btn small">Copy</button>
+            </div>
+            <pre id="fbs-content" class="code-block fbs"></pre>
+          </div>
+          <div class="schema-panel">
+            <div class="schema-header">
+              <h4>JSON Schema</h4>
+              <button id="copy-json-schema" class="glass-btn small">Copy</button>
+            </div>
+            <pre id="json-schema-content" class="code-block json"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- JSON <-> FlatBuffer Conversion -->
+      <div class="glass-card">
+        <h3 class="card-subtitle">Convert JSON &harr; FlatBuffer</h3>
+        <div class="card-controls">
+          <select id="convert-schema-select" class="glass-select">
+            <option value="monster">Monster</option>
+            <option value="weapon">Weapon</option>
+            <option value="galaxy">Galaxy</option>
+          </select>
+        </div>
+
+        <div class="conversion-grid">
+          <div class="conversion-panel">
+            <h5>JSON Input</h5>
+            <textarea id="json-input" class="code-input" placeholder='{"name": "Orc", "hp": 100, "mana": 50}'></textarea>
+            <button id="json-to-fb" class="glass-btn primary">Convert to FlatBuffer &rarr;</button>
+          </div>
+          <div class="conversion-panel">
+            <h5>Hex Input (FlatBuffer)</h5>
+            <textarea id="fb-hex-input" class="code-input" placeholder="0C 00 00 00 4D 4F 4E 53 ..."></textarea>
+            <button id="fb-to-json" class="glass-btn primary">&larr; Convert to JSON</button>
+          </div>
+        </div>
+
+        <div id="conversion-result" class="conversion-result" style="display: none;">
+          <div class="result-section">
+            <h5>FlatBuffer Output <span id="fb-output-size" class="size-badge"></span></h5>
+            <pre id="fb-output" class="code-block hex"></pre>
+          </div>
+          <div class="result-section">
+            <h5>JSON Output</h5>
+            <pre id="json-output" class="code-block json"></pre>
+          </div>
+        </div>
       </div>
     </section>
 

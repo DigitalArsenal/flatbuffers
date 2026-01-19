@@ -24,7 +24,7 @@ message(STATUS "node: ${NODE_EXECUTABLE}")
 # =============================================================================
 # Paths
 # =============================================================================
-set(DEMO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/browser-wallet")
+set(DEMO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/wasm-daflatbuffers")
 set(WASM_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../src")
 set(WASM_DIST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../dist")
 set(REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../..")

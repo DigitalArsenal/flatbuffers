@@ -483,15 +483,24 @@ body {
 
 .main-app {
   padding-top: 56px;
+  scroll-snap-type: y mandatory;
+  overflow-y: scroll;
+  height: calc(100vh - 56px);
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 .content-section {
-  display: none;
+  display: block;
   padding: 80px 24px var(--section-padding);
   max-width: 1200px;
   margin: 0 auto;
+  min-height: calc(100vh - 56px);
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 
+/* Remove the old active-based hiding */
 .content-section.active {
   display: block;
 }
@@ -1494,6 +1503,11 @@ body {
 
   .content-section {
     padding: 48px 16px 80px;
+    min-height: calc(100vh - 56px);
+  }
+
+  .main-app {
+    height: calc(100vh - 56px);
   }
 
   .section-header {

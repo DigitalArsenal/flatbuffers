@@ -633,6 +633,25 @@ function login(keys) {
   $('wallet-x25519-pub').textContent = toHexCompact(keys.x25519.publicKey);
   $('wallet-ed25519-pub').textContent = toHexCompact(keys.ed25519.publicKey);
   $('wallet-secp256k1-pub').textContent = toHexCompact(keys.secp256k1.publicKey);
+
+  // Load or generate PKI keys for Alice/Bob demo
+  // Check if keys were already loaded during init
+  if (state.pki.alice && state.pki.bob) {
+    console.log('PKI keys already loaded, updating UI...');
+    // Just update the UI since keys are already in state
+    $('alice-public-key').textContent = toHexCompact(state.pki.alice.publicKey);
+    $('alice-private-key').textContent = toHexCompact(state.pki.alice.privateKey);
+    $('bob-public-key').textContent = toHexCompact(state.pki.bob.publicKey);
+    $('bob-private-key').textContent = toHexCompact(state.pki.bob.privateKey);
+    $('pki-algorithm').value = state.pki.algorithm;
+    $('pki-parties').style.display = 'grid';
+    $('pki-demo').style.display = 'block';
+    $('pki-security').style.display = 'block';
+    $('pki-clear-keys').style.display = 'inline-flex';
+  } else if (!loadPKIKeys()) {
+    console.log('No saved PKI keys, generating new ones...');
+    generatePKIKeyPairs();
+  }
 }
 
 function logout() {
@@ -670,13 +689,12 @@ function logout() {
   // Clear HD wallet UI
   $('derived-result').style.display = 'none';
 
-  // Reset to first tab
+  // Reset to first tab and scroll to top
   document.querySelectorAll('.nav-link[data-tab]').forEach(l => l.classList.remove('active'));
   const firstLink = document.querySelector('.nav-link[data-tab="fields"]');
   if (firstLink) firstLink.classList.add('active');
-  document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
-  const fieldsTab = $('fields-tab');
-  if (fieldsTab) fieldsTab.classList.add('active');
+  const mainApp = $('main-app');
+  if (mainApp) mainApp.scrollTop = 0;
 }
 
 // =============================================================================
@@ -1124,6 +1142,12 @@ function savePKIKeys() {
     savedAt: new Date().toISOString(),
   };
 
+  // Also save encryption key and IV if available
+  if (state.encryptionKey && state.encryptionIV) {
+    data.encryptionKey = toHexCompact(state.encryptionKey);
+    data.encryptionIV = toHexCompact(state.encryptionIV);
+  }
+
   try {
     localStorage.setItem(PKI_STORAGE_KEY, JSON.stringify(data));
     console.log('Saved PKI keys to localStorage:', data.algorithm);
@@ -1171,6 +1195,13 @@ function loadPKIKeys() {
       publicKey: hexToBytes(data.bob.publicKey),
       privateKey: hexToBytes(data.bob.privateKey),
     };
+
+    // Restore encryption key and IV if available
+    if (data.encryptionKey && data.encryptionIV) {
+      state.encryptionKey = hexToBytes(data.encryptionKey);
+      state.encryptionIV = hexToBytes(data.encryptionIV);
+      console.log('Loaded encryption key and IV from localStorage');
+    }
 
     // Update UI elements (with null checks)
     const pkiAlgorithm = $('pki-algorithm');
@@ -1240,7 +1271,9 @@ function clearPKIKeys() {
 }
 
 function generatePKIKeyPairs() {
+  console.log('generatePKIKeyPairs called');
   const algorithm = $('pki-algorithm').value;
+  console.log('Algorithm selected:', algorithm);
   state.pki.algorithm = algorithm;
 
   // Generate key pairs for Alice and Bob
@@ -1815,24 +1848,46 @@ function setupMainAppHandlers() {
     });
   });
 
-  // Navigation tabs (now links) - only for links with data-tab
+  // Navigation tabs (now links) - scroll to sections instead of hide/show
   document.querySelectorAll('.nav-link[data-tab]').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
       document.querySelectorAll('.nav-link[data-tab]').forEach(l => l.classList.remove('active'));
-      document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
       link.classList.add('active');
       const tabEl = $(`${link.dataset.tab}-tab`);
       if (tabEl) {
-        tabEl.classList.add('active');
-        // Scroll to the main app content area, hiding the hero section
-        const mainApp = $('main-app');
-        if (mainApp) {
-          mainApp.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
+        // Scroll the section into view within the main-app container
+        tabEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     });
   });
+
+  // Update active nav link based on scroll position
+  const mainApp = $('main-app');
+  if (mainApp) {
+    const sections = document.querySelectorAll('.content-section');
+    const navLinks = document.querySelectorAll('.nav-link[data-tab]');
+
+    mainApp.addEventListener('scroll', () => {
+      let currentSection = '';
+      const scrollTop = mainApp.scrollTop;
+
+      sections.forEach(section => {
+        const sectionTop = section.offsetTop - mainApp.offsetTop;
+        const sectionHeight = section.offsetHeight;
+        if (scrollTop >= sectionTop - 100 && scrollTop < sectionTop + sectionHeight - 100) {
+          currentSection = section.id.replace('-tab', '');
+        }
+      });
+
+      navLinks.forEach(link => {
+        link.classList.remove('active');
+        if (link.dataset.tab === currentSection) {
+          link.classList.add('active');
+        }
+      });
+    });
+  }
 
   // HD Wallet Derivation handlers
   const hdPurpose = $('hd-purpose');
@@ -1874,11 +1929,20 @@ function setupMainAppHandlers() {
   $('clear-buffers').addEventListener('click', clearBufferDisplay);
 
   // PKI Tab
-  $('pki-generate-keys').addEventListener('click', generatePKIKeyPairs);
-  $('pki-clear-keys').addEventListener('click', clearPKIKeys);
-  $('pki-encrypt').addEventListener('click', pkiEncrypt);
-  $('pki-decrypt').addEventListener('click', pkiDecrypt);
-  $('pki-wrong-key').addEventListener('click', pkiTryWrongKey);
+  const pkiBtn = $('pki-generate-keys');
+  console.log('PKI generate button:', pkiBtn);
+  if (pkiBtn) {
+    pkiBtn.addEventListener('click', () => {
+      console.log('PKI button clicked!');
+      generatePKIKeyPairs();
+    });
+  } else {
+    console.error('PKI generate button not found!');
+  }
+  $('pki-clear-keys')?.addEventListener('click', clearPKIKeys);
+  $('pki-encrypt')?.addEventListener('click', pkiEncrypt);
+  $('pki-decrypt')?.addEventListener('click', pkiDecrypt);
+  $('pki-wrong-key')?.addEventListener('click', pkiTryWrongKey);
 
   // Streaming Tab
   $('start-streaming').addEventListener('click', startStreaming);
@@ -2018,7 +2082,8 @@ async function init() {
     setupStreamingDemo();
 
     // Load saved PKI keys if available
-    if (loadPKIKeys()) {
+    const hasSavedKeys = loadPKIKeys();
+    if (hasSavedKeys) {
       console.log('Loaded PKI keys from localStorage');
     }
 
@@ -2040,6 +2105,33 @@ async function init() {
     setupLoginHandlers();
     setupMainAppHandlers();
     setupHelpModals();
+
+    // Auto-login if we have saved PKI keys (skip login screen)
+    if (hasSavedKeys) {
+      console.log('Auto-logging in with saved keys...');
+      // Generate temporary wallet keys for the session
+      const tempKeys = {
+        x25519: x25519GenerateKeyPair(),
+        ed25519: ed25519GenerateKeyPair(),
+        secp256k1: secp256k1GenerateKeyPair(),
+        p256: p256GenerateKeyPair(),
+      };
+
+      // Generate encryption key and IV if not loaded from storage
+      if (!state.encryptionKey || !state.encryptionIV) {
+        console.log('Generating new encryption key and IV for session...');
+        const encoder = new TextEncoder();
+        // Use a random seed for session-based encryption
+        const randomSeed = new Uint8Array(32);
+        crypto.getRandomValues(randomSeed);
+        state.encryptionKey = hkdf(randomSeed, new Uint8Array(0), encoder.encode('buffer-encryption-key'), 32);
+        state.encryptionIV = hkdf(randomSeed, new Uint8Array(0), encoder.encode('buffer-encryption-iv'), 16);
+        // Save the keys so they persist
+        savePKIKeys();
+      }
+
+      login(tempKeys);
+    }
 
   } catch (err) {
     console.error('Init failed:', err);

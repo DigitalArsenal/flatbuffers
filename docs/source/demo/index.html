@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&family=SF+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="./assets/main-81NH-AIw.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/main-CKqywt6y.css">
+  <script type="module" crossorigin src="./assets/main-_B-HGB3m.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/main-BGHPailK.css">
 </head>
 <body>
   <!-- Video Background -->
@@ -32,6 +32,7 @@
       </a>
       <div class="nav-links" id="demo-nav-links">
         <a href="#fields" class="nav-link active" data-tab="fields">Encryption</a>
+        <a href="#pki" class="nav-link" data-tab="pki">PKI</a>
         <a href="#buffers" class="nav-link" data-tab="buffers">Generation</a>
         <a href="#streaming" class="nav-link" data-tab="streaming">Streaming</a>
         <a href="#identity" class="nav-link" data-tab="identity">Identity</a>
@@ -191,6 +192,133 @@
             </thead>
             <tbody id="field-body"></tbody>
           </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- PKI Section (Alice/Bob Public Key Encryption) -->
+    <section id="pki-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Public Key Infrastructure</h2>
+        <p class="section-desc">Alice encrypts data with Bob's public key. Only Bob can decrypt with his private key.</p>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-controls">
+          <select id="pki-algorithm" class="glass-select">
+            <option value="x25519">X25519 (Curve25519)</option>
+            <option value="secp256k1">secp256k1 (Bitcoin/Ethereum)</option>
+            <option value="p256">P-256 (NIST)</option>
+          </select>
+          <button id="pki-generate-keys" class="glass-btn primary">Generate Key Pairs</button>
+        </div>
+
+        <!-- Key Pairs Display -->
+        <div class="pki-parties" id="pki-parties" style="display: none;">
+          <div class="pki-party alice">
+            <div class="party-header">
+              <span class="party-icon">A</span>
+              <span class="party-name">Alice (Sender)</span>
+            </div>
+            <div class="key-item">
+              <label>Public Key</label>
+              <code id="alice-public-key">--</code>
+            </div>
+            <div class="key-item private-key">
+              <label>Private Key <span class="key-warning-badge">Secret</span></label>
+              <code id="alice-private-key" class="blur-key">--</code>
+            </div>
+          </div>
+
+          <div class="pki-arrow">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+            <span>Encrypted with Bob's Public Key</span>
+          </div>
+
+          <div class="pki-party bob">
+            <div class="party-header">
+              <span class="party-icon">B</span>
+              <span class="party-name">Bob (Recipient)</span>
+            </div>
+            <div class="key-item">
+              <label>Public Key</label>
+              <code id="bob-public-key">--</code>
+            </div>
+            <div class="key-item private-key">
+              <label>Private Key <span class="key-warning-badge">Secret</span></label>
+              <code id="bob-private-key" class="blur-key">--</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Encryption Demo -->
+        <div class="pki-demo" id="pki-demo" style="display: none;">
+          <h3 class="card-subtitle">Encryption Flow</h3>
+
+          <div class="pki-step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+              <label>Alice's Message (Plaintext)</label>
+              <textarea id="pki-plaintext" class="glass-input glass-textarea" rows="2" placeholder="Enter a secret message for Bob..."></textarea>
+            </div>
+          </div>
+
+          <div class="pki-step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+              <button id="pki-encrypt" class="glass-btn primary">Encrypt for Bob</button>
+              <p class="step-desc">Alice encrypts using Bob's public key. An ephemeral key pair is generated for forward secrecy.</p>
+            </div>
+          </div>
+
+          <div class="pki-step" id="pki-ciphertext-step" style="display: none;">
+            <div class="step-number">3</div>
+            <div class="step-content">
+              <label>Ciphertext (Sent to Bob)</label>
+              <code id="pki-ciphertext" class="hex-display">--</code>
+              <label style="margin-top: 0.5rem;">Encryption Header (ECIES Metadata)</label>
+              <pre id="pki-header" class="header-json">--</pre>
+            </div>
+          </div>
+
+          <div class="pki-step" id="pki-decrypt-step" style="display: none;">
+            <div class="step-number">4</div>
+            <div class="step-content">
+              <button id="pki-decrypt" class="glass-btn">Bob Decrypts</button>
+              <p class="step-desc">Bob uses his private key to decrypt the message.</p>
+            </div>
+          </div>
+
+          <div class="pki-step" id="pki-result-step" style="display: none;">
+            <div class="step-number">5</div>
+            <div class="step-content">
+              <label>Decrypted Message (Bob sees)</label>
+              <div id="pki-decrypted" class="decrypted-result">--</div>
+              <div class="verification-badge" id="pki-verification">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                  <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+                <span>Decryption successful - Messages match!</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Wrong Key Demo -->
+        <div class="pki-security" id="pki-security" style="display: none;">
+          <h3 class="card-subtitle">Security Demonstration</h3>
+          <button id="pki-wrong-key" class="glass-btn">Try Decrypting with Alice's Key</button>
+          <div id="pki-wrong-result" class="wrong-key-result" style="display: none;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="15" y1="9" x2="9" y2="15"/>
+              <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            <span>Decryption failed - Only Bob's private key can decrypt!</span>
+          </div>
         </div>
       </div>
     </section>

@@ -10,6 +10,10 @@ DIST_DIR="${SCRIPT_DIR}/dist"
 OPENSSL_VERSION="3.0.9"  # FIPS 140-3 validated version
 OPENSSL_DIR="${BUILD_DIR}/openssl-${OPENSSL_VERSION}"
 
+# Local Emscripten SDK path (installed via CMake FetchContent)
+EMSDK_DIR="${SCRIPT_DIR}/../../build/wasm/_deps/emsdk-src"
+EMSCRIPTEN_DIR="${EMSDK_DIR}/upstream/emscripten"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -32,9 +36,16 @@ log_error() {
 check_prerequisites() {
     log_info "Checking prerequisites..."
 
-    if ! command -v emcc &> /dev/null; then
-        log_error "Emscripten (emcc) not found. Please activate emsdk:"
-        echo "  source /path/to/emsdk/emsdk_env.sh"
+    # Check for local Emscripten first, then system PATH
+    if [ -f "${EMSCRIPTEN_DIR}/emcc" ]; then
+        log_info "Using local Emscripten from build directory"
+        export PATH="${EMSCRIPTEN_DIR}:${PATH}"
+        export EMSDK="${EMSDK_DIR}"
+        export EM_CONFIG="${EMSDK_DIR}/.emscripten"
+    elif ! command -v emcc &> /dev/null; then
+        log_error "Emscripten (emcc) not found."
+        log_error "Expected at: ${EMSCRIPTEN_DIR}/emcc"
+        log_error "Run the main CMake build first to download Emscripten, or activate emsdk manually."
         exit 1
     fi
 
@@ -86,9 +97,14 @@ configure_openssl() {
     #   no-engine    - No engine support (deprecated in 3.x anyway)
     #   no-async     - No async support (avoids pthread requirements)
     #   enable-fips  - Enable FIPS provider
-    #   -Os          - Optimize for size
 
-    emconfigure ./Configure linux-generic32 \
+    # Set environment variables for emconfigure
+    export CC=emcc
+    export AR=emar
+    export RANLIB=emranlib
+    export CFLAGS="-Os -fno-exceptions -DOPENSSL_NO_SECURE_MEMORY -DOPENSSL_SMALL_FOOTPRINT -D__STDC_NO_ATOMICS__"
+
+    ./Configure linux-generic32 \
         --prefix="${DIST_DIR}" \
         --openssldir="${DIST_DIR}/ssl" \
         no-asm \
@@ -101,15 +117,7 @@ configure_openssl() {
         no-dgram \
         no-tests \
         no-ui-console \
-        enable-fips \
-        -Os \
-        -DOPENSSL_NO_SECURE_MEMORY \
-        -DOPENSSL_SMALL_FOOTPRINT \
-        -D__STDC_NO_ATOMICS__ \
-        CFLAGS="-Os -fno-exceptions" \
-        CC=emcc \
-        AR=emar \
-        RANLIB=emranlib
+        enable-fips
 
     log_info "OpenSSL configured for WebAssembly build"
 }
@@ -166,6 +174,9 @@ create_wasm_wrapper() {
 #include <openssl/err.h>
 #include <openssl/provider.h>
 #include <openssl/core_names.h>
+#include <openssl/ec.h>
+#include <openssl/bn.h>
+#include <openssl/param_build.h>
 #include <string.h>
 #include <emscripten.h>
 

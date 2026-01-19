@@ -3174,6 +3174,49 @@ const studioState = {
   currentBuffer: null,
 };
 
+// Schema Builder State
+const schemaBuilder = {
+  namespace: '',
+  rootType: '',
+  fileIdentifier: '',  // 4-character file identifier
+  fileExtension: '',   // file extension (without dot)
+  items: [],
+  selectedIndex: -1,
+  previewFormat: 'fbs',
+  validationError: null,  // Last validation error from flatc
+};
+
+// Canonical FlatBuffers scalar types (per grammar.md)
+// Note: int8/uint8/etc. are aliases but we use the canonical names
+const SCALAR_TYPES = [
+  'bool', 'byte', 'ubyte', 'short', 'ushort', 'int', 'uint',
+  'long', 'ulong', 'float', 'double', 'string'
+];
+
+// Mapping from aliases to canonical names (for parsing imported schemas)
+const TYPE_ALIASES = {
+  'int8': 'byte',
+  'uint8': 'ubyte',
+  'int16': 'short',
+  'uint16': 'ushort',
+  'int32': 'int',
+  'uint32': 'uint',
+  'int64': 'long',
+  'uint64': 'ulong',
+  'float32': 'float',
+  'float64': 'double',
+};
+
+// All scalar types including aliases (for validation)
+const ALL_SCALAR_TYPES = [
+  ...SCALAR_TYPES,
+  'int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32', 'int64', 'uint64',
+  'float32', 'float64'
+];
+
+const INTEGER_TYPES = ['byte', 'ubyte', 'short', 'ushort', 'int', 'uint', 'long', 'ulong'];
+const ENUM_BASE_TYPES = ['byte', 'ubyte', 'short', 'ushort', 'int', 'uint', 'long', 'ulong'];
+
 const SAMPLE_FBS_SCHEMA = `// Sample FlatBuffers Schema
 namespace MyGame.Sample;
 
@@ -3252,7 +3295,11 @@ function initStudio() {
   $('studio-download-code')?.addEventListener('click', () => {
     const code = $('studio-generated-code')?.value || '';
     const lang = $('studio-codegen-lang')?.value || 'ts';
-    const ext = lang === 'ts' ? 'ts' : lang === 'js' ? 'js' : 'json';
+    const extMap = {
+      ts: 'ts', python: 'py', cpp: 'h', rust: 'rs', go: 'go',
+      java: 'java', csharp: 'cs', kotlin: 'kt', swift: 'swift', jsonschema: 'json'
+    };
+    const ext = extMap[lang] || 'txt';
     downloadTextFile(code, `generated.${ext}`);
   });
 
@@ -3277,6 +3324,9 @@ function initStudio() {
   $('studio-download-enc-js')?.addEventListener('click', () => {
     downloadFile('../../src/encryption.mjs', 'encryption.mjs');
   });
+
+  // Initialize Schema Builder
+  initSchemaBuilder();
 }
 
 function setStudioStatus(message, type) {
@@ -3439,49 +3489,53 @@ async function generateStudioCode() {
 
   const lang = $('studio-codegen-lang')?.value || 'ts';
   const codeOutput = $('studio-generated-code');
+  const genMutable = $('studio-opt-mutable')?.checked ?? true;
+  const genObjectApi = $('studio-opt-object-api')?.checked ?? true;
 
-  // For now, generate a simple placeholder
-  // In a full implementation, this would use the WASM flatc
-  let code = '';
-
-  if (lang === 'ts' || lang === 'js') {
-    code = `// Generated ${lang === 'ts' ? 'TypeScript' : 'JavaScript'} code
-// Schema: ${studioState.parsedSchema?.namespace || 'Unknown'}
-// Tables: ${studioState.tables.map(t => t.name).join(', ')}
-
-import * as flatbuffers from 'flatbuffers';
-
-`;
-    for (const table of studioState.tables) {
-      code += `export class ${table.name} {\n`;
-      code += `  bb: flatbuffers.ByteBuffer | null = null;\n`;
-      code += `  bb_pos = 0;\n\n`;
-      for (const field of table.fields) {
-        const tsType = fbsTypeToTS(field.type);
-        code += `  ${field.name}(): ${tsType} { /* ... */ }\n`;
-      }
-      code += `}\n\n`;
-    }
-  } else if (lang === 'json-schema') {
-    const jsonSchema = {
-      $schema: 'http://json-schema.org/draft-07/schema#',
-      definitions: {},
-    };
-    for (const table of studioState.tables) {
-      jsonSchema.definitions[table.name] = {
-        type: 'object',
-        properties: {},
-      };
-      for (const field of table.fields) {
-        jsonSchema.definitions[table.name].properties[field.name] = {
-          type: fbsTypeToJSONSchema(field.type),
-        };
-      }
-    }
-    code = JSON.stringify(jsonSchema, null, 2);
+  // Check if WASM flatc is available
+  if (!state.flatcRunner) {
+    if (codeOutput) codeOutput.value = '// Error: FlatBuffers WASM not initialized\n// Please wait for initialization to complete.';
+    return;
   }
 
-  if (codeOutput) codeOutput.value = code;
+  try {
+    const schemaInput = { entry: 'schema.fbs', files: { 'schema.fbs': content } };
+    const options = {
+      genMutable,
+      genObjectApi,
+    };
+
+    let code = '';
+
+    if (lang === 'jsonschema') {
+      // Use generateJsonSchema for JSON Schema output
+      code = state.flatcRunner.generateJsonSchema(schemaInput, { includeXFlatbuffers: true });
+    } else {
+      // Use generateCode for all other languages
+      const files = state.flatcRunner.generateCode(schemaInput, lang, options);
+
+      // Combine all generated files into output
+      const fileList = Object.keys(files);
+      if (fileList.length === 0) {
+        code = '// No code generated. Check your schema for errors.';
+      } else if (fileList.length === 1) {
+        // Single file output
+        code = files[fileList[0]];
+      } else {
+        // Multiple files - show each with a header
+        code = fileList.map(filename => {
+          return `// ===== ${filename} =====\n\n${files[filename]}`;
+        }).join('\n\n');
+      }
+    }
+
+    if (codeOutput) codeOutput.value = code;
+  } catch (err) {
+    console.error('Code generation error:', err);
+    if (codeOutput) {
+      codeOutput.value = `// Error generating code:\n// ${err.message}\n\n// Make sure your schema is valid FlatBuffers IDL.`;
+    }
+  }
 }
 
 function fbsTypeToTS(type) {
@@ -3691,6 +3745,904 @@ async function downloadFile(path, filename) {
     console.error('Download failed:', err);
     alert('Download failed: ' + err.message);
   }
+}
+
+// =============================================================================
+// Schema Builder Functions
+// =============================================================================
+
+function initSchemaBuilder() {
+  // Add button dropdown toggle
+  const addBtn = $('builder-add-btn');
+  const addMenu = $('builder-add-menu');
+
+  if (addBtn && addMenu) {
+    addBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      addMenu.style.display = addMenu.style.display === 'none' ? 'block' : 'none';
+    });
+
+    // Close menu when clicking outside
+    document.addEventListener('click', () => {
+      addMenu.style.display = 'none';
+    });
+
+    // Add item buttons
+    addMenu.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const itemType = btn.dataset.itemType;
+        addSchemaItem(itemType);
+        addMenu.style.display = 'none';
+      });
+    });
+  }
+
+  // Namespace input
+  const namespaceInput = $('builder-namespace');
+  if (namespaceInput) {
+    namespaceInput.addEventListener('input', (e) => {
+      schemaBuilder.namespace = e.target.value;
+      renderBuilderPreview();
+    });
+  }
+
+  // Root type selector
+  const rootTypeSelect = $('builder-root-type');
+  if (rootTypeSelect) {
+    rootTypeSelect.addEventListener('change', (e) => {
+      schemaBuilder.rootType = e.target.value;
+      renderBuilderPreview();
+    });
+  }
+
+  // File identifier input (4 characters exactly)
+  const fileIdentifierInput = $('builder-file-identifier');
+  if (fileIdentifierInput) {
+    fileIdentifierInput.addEventListener('input', (e) => {
+      // Limit to 4 characters
+      let val = e.target.value.slice(0, 4);
+      e.target.value = val;
+      schemaBuilder.fileIdentifier = val;
+      renderBuilderPreview();
+    });
+  }
+
+  // File extension input
+  const fileExtensionInput = $('builder-file-extension');
+  if (fileExtensionInput) {
+    fileExtensionInput.addEventListener('input', (e) => {
+      // Remove leading dot if present
+      let val = e.target.value.replace(/^\./, '');
+      e.target.value = val;
+      schemaBuilder.fileExtension = val;
+      renderBuilderPreview();
+    });
+  }
+
+  // Preview format toggle
+  const fbsToggle = $('builder-preview-fbs');
+  const jsonToggle = $('builder-preview-json');
+
+  if (fbsToggle) {
+    fbsToggle.addEventListener('click', () => {
+      schemaBuilder.previewFormat = 'fbs';
+      fbsToggle.classList.add('active');
+      jsonToggle?.classList.remove('active');
+      renderBuilderPreview();
+    });
+  }
+
+  if (jsonToggle) {
+    jsonToggle.addEventListener('click', () => {
+      schemaBuilder.previewFormat = 'json';
+      jsonToggle.classList.add('active');
+      fbsToggle?.classList.remove('active');
+      renderBuilderPreview();
+    });
+  }
+
+  // Copy button
+  const copyBtn = $('builder-copy-code');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      const preview = $('builder-preview-code');
+      if (preview) {
+        navigator.clipboard.writeText(preview.textContent);
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+      }
+    });
+  }
+
+  // Export to Editor button
+  const exportBtn = $('builder-export-editor');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', exportToSchemaEditor);
+  }
+}
+
+function addSchemaItem(type) {
+  let name = `New${type.charAt(0).toUpperCase() + type.slice(1)}`;
+  let counter = 1;
+  while (schemaBuilder.items.some(i => i.name === name)) {
+    name = `New${type.charAt(0).toUpperCase() + type.slice(1)}${counter++}`;
+  }
+
+  const item = { type, name };
+
+  if (type === 'table') {
+    item.fields = [];
+  } else if (type === 'enum') {
+    item.baseType = 'int';  // Use canonical FlatBuffers type name
+    item.values = [{ name: 'Value0', value: 0 }];
+  } else if (type === 'struct') {
+    item.fields = [];
+  } else if (type === 'union') {
+    item.members = [];
+  }
+
+  schemaBuilder.items.push(item);
+  schemaBuilder.selectedIndex = schemaBuilder.items.length - 1;
+
+  // Auto-set root_type to first table if not already set
+  if (type === 'table' && !schemaBuilder.rootType) {
+    schemaBuilder.rootType = item.name;
+  }
+
+  renderBuilderItemList();
+  renderBuilderEditor();
+  renderBuilderPreview();
+  updateRootTypeSelector();
+}
+
+function deleteSchemaItem(index) {
+  const item = schemaBuilder.items[index];
+  if (!confirm(`Delete ${item.type} "${item.name}"?`)) return;
+
+  schemaBuilder.items.splice(index, 1);
+
+  if (schemaBuilder.selectedIndex === index) {
+    schemaBuilder.selectedIndex = -1;
+  } else if (schemaBuilder.selectedIndex > index) {
+    schemaBuilder.selectedIndex--;
+  }
+
+  // Clear root type if deleted
+  if (schemaBuilder.rootType === item.name) {
+    schemaBuilder.rootType = '';
+  }
+
+  renderBuilderItemList();
+  renderBuilderEditor();
+  renderBuilderPreview();
+  updateRootTypeSelector();
+}
+
+function selectSchemaItem(index) {
+  schemaBuilder.selectedIndex = index;
+  renderBuilderItemList();
+  renderBuilderEditor();
+}
+
+function renderBuilderItemList() {
+  const container = $('builder-item-list');
+  if (!container) return;
+
+  if (schemaBuilder.items.length === 0) {
+    container.innerHTML = '<div class="empty-state">Add a table, enum, or struct to begin</div>';
+    return;
+  }
+
+  container.innerHTML = schemaBuilder.items.map((item, index) => `
+    <div class="builder-item ${index === schemaBuilder.selectedIndex ? 'selected' : ''}" data-index="${index}">
+      <span class="builder-item-icon ${item.type}">${item.type.charAt(0).toUpperCase()}</span>
+      <span class="builder-item-name">${item.name}</span>
+      <button class="builder-item-delete" data-index="${index}" title="Delete">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  `).join('');
+
+  // Add click handlers
+  container.querySelectorAll('.builder-item').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (!e.target.closest('.builder-item-delete')) {
+        selectSchemaItem(parseInt(el.dataset.index));
+      }
+    });
+  });
+
+  container.querySelectorAll('.builder-item-delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteSchemaItem(parseInt(btn.dataset.index));
+    });
+  });
+}
+
+function renderBuilderEditor() {
+  const container = $('builder-editor-content');
+  const title = $('builder-editor-title');
+  if (!container) return;
+
+  if (schemaBuilder.selectedIndex < 0 || schemaBuilder.selectedIndex >= schemaBuilder.items.length) {
+    container.innerHTML = '<div class="empty-state">Select an item to edit</div>';
+    if (title) title.textContent = 'Item Editor';
+    return;
+  }
+
+  const item = schemaBuilder.items[schemaBuilder.selectedIndex];
+  if (title) title.textContent = `Edit ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}`;
+
+  let html = `
+    <div class="builder-item-header">
+      <input type="text" class="glass-input" id="builder-item-name" value="${item.name}" placeholder="Name">
+      <span class="builder-item-type-badge ${item.type}">${item.type}</span>
+    </div>
+  `;
+
+  if (item.type === 'table' || item.type === 'struct') {
+    html += renderFieldEditor(item);
+  } else if (item.type === 'enum') {
+    html += renderEnumEditor(item);
+  } else if (item.type === 'union') {
+    html += renderUnionEditor(item);
+  }
+
+  container.innerHTML = html;
+  attachEditorListeners(item);
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderFieldEditor(item) {
+  const isStruct = item.type === 'struct';
+  const availableTypes = getAvailableTypes(isStruct);
+
+  let html = '<div class="builder-field-list">';
+
+  if (item.fields.length === 0) {
+    html += '<div class="empty-state" style="min-height: 100px;">No fields yet. Add a field below.</div>';
+  } else {
+    html += item.fields.map((field, index) => {
+      // Normalize field type first (convert aliases to canonical names if needed)
+      if (TYPE_ALIASES[field.fieldType]) {
+        field.fieldType = TYPE_ALIASES[field.fieldType];
+      }
+      // If type is not in available types, default to 'int'
+      if (!availableTypes.includes(field.fieldType)) {
+        field.fieldType = 'int';
+      }
+
+      // Now determine field characteristics based on normalized type
+      const isVector = field.fieldType.startsWith('[') && field.fieldType.endsWith(']');
+      const isString = field.fieldType === 'string';
+      const isReference = schemaBuilder.items.some(i => i.name === field.fieldType && (i.type === 'table' || i.type === 'struct'));
+      // Scalars can have defaults; use "null" for optional scalars
+      const canHaveDefault = !isVector && !isString && !isReference;
+
+      return `
+      <div class="builder-field-row" data-field-index="${index}">
+        <div class="builder-field-cell">
+          <input type="text" class="glass-input builder-field-name" value="${escapeHtml(field.name)}" placeholder="Field name">
+          <span class="field-label">name</span>
+        </div>
+        <div class="builder-field-cell">
+          <select class="glass-select builder-field-type">
+            ${availableTypes.map(t => `<option value="${escapeHtml(t)}" ${field.fieldType === t ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('')}
+          </select>
+          <span class="field-label">type</span>
+        </div>
+        ${!isStruct ? `
+          <div class="builder-field-cell">
+            <input type="text" class="glass-input builder-field-default" value="${escapeHtml(field.default || '')}" placeholder="${canHaveDefault ? '0' : 'N/A'}" ${canHaveDefault ? '' : 'disabled'}>
+            <span class="field-label">default</span>
+          </div>
+          <div class="builder-field-cell">
+            <input type="number" class="glass-input builder-field-id" value="${field.id !== undefined && field.id !== null ? field.id : ''}" placeholder="#" min="0">
+            <span class="field-label">id</span>
+          </div>
+          <div class="builder-field-attrs">
+            <label class="builder-field-attr" title="Mark field as key (sorting)">
+              <input type="checkbox" ${field.key ? 'checked' : ''} data-prop="key">
+              key
+            </label>
+            <label class="builder-field-attr" title="Field is required (non-scalar only)">
+              <input type="checkbox" ${field.required ? 'checked' : ''} data-prop="required">
+              req
+            </label>
+            <label class="builder-field-attr" title="Field is deprecated">
+              <input type="checkbox" ${field.deprecated ? 'checked' : ''} data-prop="deprecated">
+              dep
+            </label>
+          </div>
+        ` : '<div></div><div></div><div></div>'}
+        <button class="builder-field-delete" data-field-index="${index}" title="Delete field">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    `}).join('');
+  }
+
+  html += '</div>';
+  html += `
+    <button class="glass-btn small builder-add-field">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+      Add Field
+    </button>
+  `;
+
+  return html;
+}
+
+function renderEnumEditor(item) {
+  let html = `
+    <div class="builder-enum-config">
+      <div class="glass-input-group">
+        <label>Base Type</label>
+        <select class="glass-select" id="builder-enum-base-type">
+          ${ENUM_BASE_TYPES.map(t => `<option value="${t}" ${item.baseType === t ? 'selected' : ''}>${t}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <label style="display: block; margin-bottom: 8px; font-size: 13px; color: var(--white-60);">Values</label>
+    <div class="builder-enum-values">
+  `;
+
+  if (item.values.length === 0) {
+    html += '<div class="empty-state" style="min-height: 80px;">No values yet. Add a value below.</div>';
+  } else {
+    html += item.values.map((val, index) => `
+      <div class="builder-enum-row" data-value-index="${index}">
+        <input type="text" class="glass-input" value="${val.name}" placeholder="Name" data-prop="name">
+        <input type="number" class="glass-input" value="${val.value}" placeholder="Value" data-prop="value">
+        <button class="builder-field-delete" data-value-index="${index}" title="Delete value">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    `).join('');
+  }
+
+  html += '</div>';
+  html += `
+    <button class="glass-btn small builder-add-field" style="margin-top: 12px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+      Add Value
+    </button>
+  `;
+
+  return html;
+}
+
+function renderUnionEditor(item) {
+  const tables = schemaBuilder.items.filter(i => i.type === 'table');
+
+  let html = `
+    <label style="display: block; margin-bottom: 8px; font-size: 13px; color: var(--white-60);">Member Tables</label>
+    <div class="builder-union-members">
+  `;
+
+  if (item.members.length === 0) {
+    html += '<div class="empty-state" style="min-height: 80px;">No members yet. Add a table reference below.</div>';
+  } else {
+    html += item.members.map((member, index) => `
+      <div class="builder-union-row" data-member-index="${index}">
+        <select class="glass-select" data-prop="member">
+          <option value="">Select table...</option>
+          ${tables.map(t => `<option value="${t.name}" ${member === t.name ? 'selected' : ''}>${t.name}</option>`).join('')}
+        </select>
+        <button class="builder-field-delete" data-member-index="${index}" title="Delete member">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    `).join('');
+  }
+
+  html += '</div>';
+  html += `
+    <button class="glass-btn small builder-add-field" style="margin-top: 12px;" ${tables.length === 0 ? 'disabled' : ''}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+      Add Member
+    </button>
+    ${tables.length === 0 ? '<p style="font-size: 12px; color: var(--white-40); margin-top: 8px;">Create a table first to add union members.</p>' : ''}
+  `;
+
+  return html;
+}
+
+function attachEditorListeners(item) {
+  const index = schemaBuilder.selectedIndex;
+
+  // Item name
+  const nameInput = $('builder-item-name');
+  if (nameInput) {
+    nameInput.addEventListener('input', (e) => {
+      item.name = e.target.value;
+      renderBuilderItemList();
+      renderBuilderPreview();
+      updateRootTypeSelector();
+    });
+  }
+
+  // Add field/value/member button
+  const addBtn = document.querySelector('.builder-add-field');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      if (item.type === 'table' || item.type === 'struct') {
+        item.fields.push({
+          name: `field${item.fields.length}`,
+          fieldType: 'int',  // Use canonical FlatBuffers type name
+          default: '',       // Use "null" for optional scalars
+          id: null,         // Field ID for explicit ordering
+          key: false,       // Sorting key
+          required: false,
+          deprecated: false,
+        });
+      } else if (item.type === 'enum') {
+        const nextVal = item.values.length > 0 ? Math.max(...item.values.map(v => v.value)) + 1 : 0;
+        item.values.push({ name: `Value${item.values.length}`, value: nextVal });
+      } else if (item.type === 'union') {
+        item.members.push('');
+      }
+      renderBuilderEditor();
+      renderBuilderPreview();
+    });
+  }
+
+  // Field inputs
+  document.querySelectorAll('.builder-field-row').forEach(row => {
+    const fieldIndex = parseInt(row.dataset.fieldIndex);
+    const field = item.fields[fieldIndex];
+    if (!field) return;
+
+    const nameInput = row.querySelector('input.builder-field-name');
+    const typeSelect = row.querySelector('select.builder-field-type');
+    const defaultInput = row.querySelector('input.builder-field-default');
+
+    // Name input handler
+    if (nameInput) {
+      nameInput.addEventListener('input', () => {
+        field.name = nameInput.value;
+        renderBuilderPreview();
+      });
+    }
+
+    // Type select handler
+    if (typeSelect) {
+      typeSelect.addEventListener('change', () => {
+        field.fieldType = typeSelect.value;
+        // Update default input state based on new type
+        if (defaultInput) {
+          const isVector = field.fieldType.startsWith('[') && field.fieldType.endsWith(']');
+          const isString = field.fieldType === 'string';
+          const isReference = schemaBuilder.items.some(i => i.name === field.fieldType && (i.type === 'table' || i.type === 'struct'));
+          const canHaveDefault = !isVector && !isString && !isReference;
+          defaultInput.disabled = !canHaveDefault;
+          if (!canHaveDefault) {
+            defaultInput.value = '';
+            defaultInput.placeholder = 'N/A';
+            field.default = '';
+          } else {
+            defaultInput.placeholder = 'Default';
+          }
+        }
+        renderBuilderPreview();
+      });
+    }
+
+    // Default input handler
+    if (defaultInput) {
+      defaultInput.addEventListener('input', () => {
+        field.default = defaultInput.value;
+        renderBuilderPreview();
+      });
+    }
+
+    // Field ID input handler
+    const idInput = row.querySelector('input.builder-field-id');
+    if (idInput) {
+      idInput.addEventListener('input', () => {
+        const val = idInput.value.trim();
+        const newId = val === '' ? null : parseInt(val, 10);
+
+        // Check for duplicate ID
+        if (newId !== null) {
+          const duplicate = item.fields.some((f, i) => i !== fieldIndex && f.id === newId);
+          if (duplicate) {
+            idInput.classList.add('input-error');
+            idInput.title = `ID ${newId} is already used by another field`;
+            return; // Don't update the field
+          }
+        }
+
+        idInput.classList.remove('input-error');
+        idInput.title = 'Field ID (for explicit ordering)';
+        field.id = newId;
+        renderBuilderPreview();
+      });
+    }
+
+    // Checkbox handlers (key, required, deprecated, optional)
+    row.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+      const prop = checkbox.dataset.prop;
+      if (!prop) return;
+      checkbox.addEventListener('change', () => {
+        field[prop] = checkbox.checked;
+        renderBuilderPreview();
+      });
+    });
+  });
+
+  // Field delete buttons
+  document.querySelectorAll('.builder-field-row .builder-field-delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fieldIndex = parseInt(btn.dataset.fieldIndex);
+      item.fields.splice(fieldIndex, 1);
+      renderBuilderEditor();
+      renderBuilderPreview();
+    });
+  });
+
+  // Enum base type
+  const enumBaseType = $('builder-enum-base-type');
+  if (enumBaseType) {
+    enumBaseType.addEventListener('change', (e) => {
+      item.baseType = e.target.value;
+      renderBuilderPreview();
+    });
+  }
+
+  // Enum value inputs
+  document.querySelectorAll('.builder-enum-row').forEach(row => {
+    const valueIndex = parseInt(row.dataset.valueIndex);
+
+    row.querySelectorAll('input').forEach(input => {
+      const prop = input.dataset.prop;
+      if (!prop) return;
+
+      input.addEventListener('input', () => {
+        if (prop === 'value') {
+          item.values[valueIndex][prop] = parseInt(input.value) || 0;
+        } else {
+          item.values[valueIndex][prop] = input.value;
+        }
+        renderBuilderPreview();
+      });
+    });
+  });
+
+  // Enum value delete buttons
+  document.querySelectorAll('.builder-enum-row .builder-field-delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const valueIndex = parseInt(btn.dataset.valueIndex);
+      item.values.splice(valueIndex, 1);
+      renderBuilderEditor();
+      renderBuilderPreview();
+    });
+  });
+
+  // Union member selects
+  document.querySelectorAll('.builder-union-row select').forEach(select => {
+    const memberIndex = parseInt(select.closest('.builder-union-row').dataset.memberIndex);
+    select.addEventListener('change', () => {
+      item.members[memberIndex] = select.value;
+      renderBuilderPreview();
+    });
+  });
+
+  // Union member delete buttons
+  document.querySelectorAll('.builder-union-row .builder-field-delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const memberIndex = parseInt(btn.dataset.memberIndex);
+      item.members.splice(memberIndex, 1);
+      renderBuilderEditor();
+      renderBuilderPreview();
+    });
+  });
+}
+
+function getAvailableTypes(structOnly = false) {
+  const types = [...SCALAR_TYPES];
+
+  // Add defined enums, structs, and tables
+  for (const item of schemaBuilder.items) {
+    if (item.type === 'enum' || item.type === 'struct') {
+      types.push(item.name);
+    } else if (item.type === 'table' && !structOnly) {
+      types.push(item.name);
+    }
+  }
+
+  // Add vector types (only for tables, not structs)
+  if (!structOnly) {
+    const vectorTypes = [...SCALAR_TYPES];
+    for (const item of schemaBuilder.items) {
+      if (item.type === 'enum' || item.type === 'struct' || item.type === 'table') {
+        vectorTypes.push(item.name);
+      }
+    }
+    vectorTypes.forEach(t => types.push(`[${t}]`));
+  }
+
+  return types;
+}
+
+function updateRootTypeSelector() {
+  const select = $('builder-root-type');
+  const group = $('builder-root-type-group');
+  if (!select) return;
+
+  const tables = schemaBuilder.items.filter(i => i.type === 'table');
+
+  // Show/hide the root type selector based on whether tables exist
+  if (group) {
+    group.style.display = tables.length > 0 ? 'block' : 'none';
+  }
+
+  select.innerHTML = '<option value="">Select root type...</option>' +
+    tables.map(t => `<option value="${t.name}" ${schemaBuilder.rootType === t.name ? 'selected' : ''}>${t.name}</option>`).join('');
+}
+
+function generateFBSFromBuilder() {
+  const { namespace, rootType, fileIdentifier, fileExtension, items } = schemaBuilder;
+  let output = '';
+
+  if (namespace) {
+    output += `namespace ${namespace};\n\n`;
+  }
+
+  // Enums first
+  for (const item of items.filter(i => i.type === 'enum')) {
+    output += `enum ${item.name} : ${item.baseType} {\n`;
+    output += item.values.map(v => `  ${v.name} = ${v.value}`).join(',\n');
+    output += '\n}\n\n';
+  }
+
+  // Structs (fields use "name: type;" format with space after colon)
+  for (const item of items.filter(i => i.type === 'struct')) {
+    output += `struct ${item.name} {\n`;
+    output += item.fields.map(f => `  ${f.name}: ${f.fieldType};`).join('\n');
+    if (item.fields.length > 0) output += '\n';
+    output += '}\n\n';
+  }
+
+  // Unions
+  for (const item of items.filter(i => i.type === 'union')) {
+    const validMembers = item.members.filter(m => m);
+    if (validMembers.length > 0) {
+      output += `union ${item.name} { ${validMembers.join(', ')} }\n\n`;
+    }
+  }
+
+  // Tables
+  for (const item of items.filter(i => i.type === 'table')) {
+    output += `table ${item.name} {\n`;
+    for (const f of item.fields) {
+      let line = `  ${f.name}: ${f.fieldType}`;
+      // Only scalar types and enums can have defaults (not vectors, strings, tables, or structs)
+      // Per FlatBuffers spec: "Only scalar values can have explicit defaults"
+      const isVector = f.fieldType.startsWith('[') && f.fieldType.endsWith(']');
+      const isString = f.fieldType === 'string';
+      const isReference = schemaBuilder.items.some(i => i.name === f.fieldType && (i.type === 'table' || i.type === 'struct'));
+      const isEnum = schemaBuilder.items.some(i => i.name === f.fieldType && i.type === 'enum');
+
+      if (f.default && !isVector && !isString && !isReference) {
+        // Validate the default value based on type
+        const val = f.default.trim();
+        let validDefault = null;
+
+        if (isEnum) {
+          // Enum defaults are identifiers (e.g., Blue, Red)
+          if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(val)) {
+            validDefault = val;
+          }
+        } else if (f.fieldType === 'bool') {
+          if (val === 'true' || val === 'false') {
+            validDefault = val;
+          }
+        } else if (f.fieldType === 'float' || f.fieldType === 'double' ||
+                   f.fieldType === 'float32' || f.fieldType === 'float64') {
+          if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(val) || val === 'inf' || val === '-inf' || val === 'nan') {
+            validDefault = val;
+          }
+        } else {
+          // Integer types (canonical and aliases)
+          if (/^-?\d+$/.test(val)) {
+            validDefault = val;
+          }
+        }
+
+        if (validDefault !== null) {
+          line += ` = ${validDefault}`;
+        }
+      }
+
+      // Handle "= null" for optional scalars (user types "null" in default field)
+      if (f.default && f.default.trim().toLowerCase() === 'null' && !isVector && !isString && !isReference) {
+        line += ` = null`;
+      }
+
+      // Build field attributes (only valid FlatBuffers attributes)
+      const attrs = [];
+      if (typeof f.id === 'number') attrs.push(`id: ${f.id}`);
+      if (f.key) attrs.push('key');
+      if (f.required) attrs.push('required');
+      if (f.deprecated) attrs.push('deprecated');
+      if (attrs.length > 0) line += ` (${attrs.join(', ')})`;
+      line += ';';
+      output += line + '\n';
+    }
+    output += '}\n\n';
+  }
+
+  // root_type is required for valid FlatBuffers schema
+  // Default to first table if not explicitly set
+  const tables = items.filter(i => i.type === 'table');
+  const effectiveRootType = rootType || (tables.length > 0 ? tables[0].name : '');
+  if (effectiveRootType) {
+    output += `root_type ${effectiveRootType};\n`;
+  }
+
+  // File identifier (must be exactly 4 characters)
+  if (fileIdentifier && fileIdentifier.length === 4) {
+    output += `file_identifier "${fileIdentifier}";\n`;
+  }
+
+  // File extension (without leading dot)
+  if (fileExtension) {
+    output += `file_extension "${fileExtension}";\n`;
+  }
+
+  return output || '// Add tables, enums, or structs to generate schema';
+}
+
+function generateJSONSchemaFromBuilder() {
+  // Generate FBS first, then use the official WASM to convert to JSON Schema
+  const fbs = generateFBSFromBuilder();
+
+  // If no valid FBS content, return placeholder
+  if (!fbs || fbs.startsWith('//')) {
+    return '// Add tables, enums, or structs to generate JSON Schema';
+  }
+
+  // Check if flatcRunner is available
+  if (!state.flatcRunner) {
+    return JSON.stringify({ error: 'FlatBuffers WASM not initialized' }, null, 2);
+  }
+
+  try {
+    const jsonSchema = state.flatcRunner.generateJsonSchema(
+      { entry: 'schema.fbs', files: { 'schema.fbs': fbs } },
+      { includeXFlatbuffers: true }
+    );
+    return jsonSchema;
+  } catch (err) {
+    // If WASM fails (e.g., invalid FBS syntax), show the error
+    return JSON.stringify({ error: err.message }, null, 2);
+  }
+}
+
+function renderBuilderPreview() {
+  const preview = $('builder-preview-code');
+  const statusEl = $('builder-validation-status');
+  if (!preview) return;
+
+  const fbs = generateFBSFromBuilder();
+
+  if (schemaBuilder.previewFormat === 'fbs') {
+    preview.textContent = fbs;
+  } else {
+    preview.textContent = generateJSONSchemaFromBuilder();
+  }
+
+  // Sync to Schema Editor so Code Generator can use it
+  const schemaInput = $('studio-schema-input');
+  if (schemaInput && fbs && !fbs.startsWith('//')) {
+    schemaInput.value = fbs;
+  }
+
+  // Validate the schema using WASM flatc
+  validateSchemaWithWasm(fbs, statusEl);
+}
+
+// Debounced validation to avoid excessive WASM calls
+let validationTimeout = null;
+function validateSchemaWithWasm(fbs, statusEl) {
+  if (validationTimeout) {
+    clearTimeout(validationTimeout);
+  }
+
+  validationTimeout = setTimeout(() => {
+    if (!state.flatcRunner) {
+      schemaBuilder.validationError = 'WASM not initialized';
+      if (statusEl) {
+        statusEl.textContent = 'WASM not ready';
+        statusEl.className = 'builder-validation-status warning';
+      }
+      return;
+    }
+
+    // If no content yet, don't validate
+    if (!fbs || fbs.startsWith('//')) {
+      schemaBuilder.validationError = null;
+      if (statusEl) {
+        statusEl.textContent = '';
+        statusEl.className = 'builder-validation-status';
+      }
+      return;
+    }
+
+    try {
+      // Use generateJsonSchema to validate - if it succeeds, schema is valid
+      state.flatcRunner.generateJsonSchema(
+        { entry: 'schema.fbs', files: { 'schema.fbs': fbs } },
+        { includeXFlatbuffers: true }
+      );
+      schemaBuilder.validationError = null;
+      if (statusEl) {
+        statusEl.textContent = 'Valid';
+        statusEl.className = 'builder-validation-status success';
+      }
+    } catch (err) {
+      schemaBuilder.validationError = err.message;
+      if (statusEl) {
+        // Extract the error message (usually "error: ...")
+        const errorMsg = err.message.split('\n')[0] || err.message;
+        statusEl.textContent = errorMsg;
+        statusEl.className = 'builder-validation-status error';
+        statusEl.title = err.message; // Full error on hover
+      }
+    }
+  }, 300); // 300ms debounce
+}
+
+function exportToSchemaEditor() {
+  const fbs = generateFBSFromBuilder();
+
+  // Set the schema editor content
+  const schemaInput = $('studio-schema-input');
+  if (schemaInput) {
+    schemaInput.value = fbs;
+  }
+
+  // Switch to schema editor tab
+  document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.studio-panel').forEach(p => p.classList.remove('active'));
+
+  const editorTab = document.querySelector('[data-studio-tab="schema-editor"]');
+  const editorPanel = $('studio-schema-editor');
+
+  if (editorTab) editorTab.classList.add('active');
+  if (editorPanel) editorPanel.classList.add('active');
+
+  // Update schema type selector
+  const schemaTypeSelect = $('studio-schema-type');
+  if (schemaTypeSelect) schemaTypeSelect.value = 'fbs';
 }
 
 init();

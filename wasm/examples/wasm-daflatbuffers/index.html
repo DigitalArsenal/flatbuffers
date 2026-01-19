@@ -943,6 +943,7 @@
         <!-- Studio Tabs -->
         <div class="studio-tabs">
           <button class="studio-tab active" data-studio-tab="schema-editor">Schema Editor</button>
+          <button class="studio-tab" data-studio-tab="schema-builder">Schema Builder</button>
           <button class="studio-tab" data-studio-tab="code-gen">Code Generator</button>
           <button class="studio-tab" data-studio-tab="data-builder">Data Builder</button>
           <button class="studio-tab" data-studio-tab="downloads">Downloads</button>
@@ -987,6 +988,92 @@
           </div>
         </div>
 
+        <!-- Schema Builder Panel -->
+        <div id="studio-schema-builder" class="studio-panel">
+          <div class="schema-builder-layout">
+            <!-- Left: Item List -->
+            <div class="schema-builder-sidebar">
+              <div class="builder-config">
+                <div class="glass-input-group">
+                  <label>Namespace</label>
+                  <input type="text" id="builder-namespace" class="glass-input" placeholder="MyGame.Sample">
+                </div>
+                <div class="glass-input-group" id="builder-root-type-group" style="display: none;">
+                  <label>Root Type</label>
+                  <select id="builder-root-type" class="glass-select">
+                    <option value="">Select root type...</option>
+                  </select>
+                </div>
+                <div class="glass-input-group">
+                  <label>File Identifier <span class="label-hint">(4 chars)</span></label>
+                  <input type="text" id="builder-file-identifier" class="glass-input" placeholder="XXXX" maxlength="4" style="width: 80px; font-family: monospace;">
+                </div>
+                <div class="glass-input-group">
+                  <label>File Extension</label>
+                  <input type="text" id="builder-file-extension" class="glass-input" placeholder="bin" style="width: 80px;">
+                </div>
+              </div>
+              <div class="builder-add-section">
+                <div class="builder-add-dropdown">
+                  <button id="builder-add-btn" class="glass-btn small">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add Item
+                  </button>
+                  <div id="builder-add-menu" class="builder-add-menu" style="display: none;">
+                    <button data-item-type="table">Table</button>
+                    <button data-item-type="enum">Enum</button>
+                    <button data-item-type="struct">Struct</button>
+                    <button data-item-type="union">Union</button>
+                  </div>
+                </div>
+              </div>
+              <div id="builder-item-list" class="builder-item-list">
+                <div class="empty-state">Add a table, enum, or struct to begin</div>
+              </div>
+            </div>
+
+            <!-- Center: Item Editor -->
+            <div class="schema-builder-editor">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4 id="builder-editor-title">Item Editor</h4>
+                </div>
+                <div class="pane-body">
+                  <div id="builder-editor-content" class="builder-editor-content">
+                    <div class="empty-state">Select an item to edit</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Preview -->
+            <div class="schema-builder-preview">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4>Preview</h4>
+                  <div class="pane-actions">
+                    <div class="builder-preview-toggle">
+                      <button id="builder-preview-fbs" class="toggle-btn active">FBS</button>
+                      <button id="builder-preview-json" class="toggle-btn">JSON Schema</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="pane-body">
+                  <pre id="builder-preview-code" class="builder-preview-code">// Schema preview will appear here...</pre>
+                </div>
+                <div class="pane-footer">
+                  <span id="builder-validation-status" class="builder-validation-status"></span>
+                  <button id="builder-copy-code" class="glass-btn small">Copy</button>
+                  <button id="builder-export-editor" class="glass-btn small primary">Export to Editor</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Code Generator Panel -->
         <div id="studio-code-gen" class="studio-panel">
           <div class="studio-split options-layout">
@@ -999,8 +1086,15 @@
                   <label>Target Language</label>
                   <select id="studio-codegen-lang" class="glass-select">
                     <option value="ts">TypeScript</option>
-                    <option value="js">JavaScript</option>
-                    <option value="json-schema">JSON Schema</option>
+                    <option value="python">Python</option>
+                    <option value="cpp">C++</option>
+                    <option value="rust">Rust</option>
+                    <option value="go">Go</option>
+                    <option value="java">Java</option>
+                    <option value="csharp">C#</option>
+                    <option value="kotlin">Kotlin</option>
+                    <option value="swift">Swift</option>
+                    <option value="jsonschema">JSON Schema</option>
                   </select>
                 </div>
                 <div class="glass-input-group">

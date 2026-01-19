@@ -73,6 +73,7 @@ const state = {
   flatcRunner: null,
   buffers: [],
   encryptedBuffers: [],
+  encryptionHeaders: [], // ECIES headers for each encrypted buffer
   showEncrypted: true,
   encryptionKey: null,
   encryptionIV: null,
@@ -689,9 +690,9 @@ function logout() {
   // Clear HD wallet UI
   $('derived-result').style.display = 'none';
 
-  // Reset to first tab and scroll to top
+  // Reset to first tab (PKI) and scroll to top
   document.querySelectorAll('.nav-link[data-tab]').forEach(l => l.classList.remove('active'));
-  const firstLink = document.querySelector('.nav-link[data-tab="fields"]');
+  const firstLink = document.querySelector('.nav-link[data-tab="pki"]');
   if (firstLink) firstLink.classList.add('active');
   const mainApp = $('main-app');
   if (mainApp) mainApp.scrollTop = 0;
@@ -718,15 +719,46 @@ async function generateFlatBuffer(schemaType, data) {
   return binary;
 }
 
-function encryptFieldBytes(bytes) {
+/**
+ * Encrypt field bytes using Bob's public key (ECIES)
+ * Returns { encrypted, header } for later decryption
+ */
+function encryptFieldBytesWithPKI(bytes) {
+  if (!state.pki.bob || !state.pki.bob.publicKey) {
+    throw new Error('PKI keys not available');
+  }
+
+  const encryptCtx = EncryptionContext.forEncryption(state.pki.bob.publicKey, {
+    algorithm: state.pki.algorithm,
+    context: 'flatbuffers-field-encryption-v1',
+  });
+
   const encrypted = new Uint8Array(bytes);
-  encryptBytes(encrypted, state.encryptionKey, state.encryptionIV);
-  return encrypted;
+  encryptBytes(encrypted, encryptCtx.key, encryptCtx.nonce);
+
+  return {
+    encrypted,
+    header: encryptCtx.getHeaderJSON(),
+  };
 }
 
-function decryptFieldBytes(bytes) {
-  const decrypted = new Uint8Array(bytes);
-  decryptBytes(decrypted, state.encryptionKey, state.encryptionIV);
+/**
+ * Decrypt field bytes using Bob's private key
+ */
+function decryptFieldBytesWithPKI(encrypted, headerJSON) {
+  if (!state.pki.bob || !state.pki.bob.privateKey) {
+    throw new Error('PKI keys not available');
+  }
+
+  const header = encryptionHeaderFromJSON(headerJSON);
+  const decryptCtx = EncryptionContext.forDecryption(
+    state.pki.bob.privateKey,
+    header,
+    'flatbuffers-field-encryption-v1'
+  );
+
+  const decrypted = new Uint8Array(encrypted);
+  decryptBytes(decrypted, decryptCtx.key, decryptCtx.nonce);
   return decrypted;
 }
 
@@ -738,6 +770,12 @@ async function generateSingleRecord() {
   const schemaType = $('schema-select').value;
   const config = schemaConfig[schemaType];
 
+  // Check if PKI keys are available
+  if (!state.pki.bob || !state.pki.bob.publicKey) {
+    alert('Please generate PKI key pairs first (in the PKI section above)');
+    return;
+  }
+
   try {
     const data = config.sampleData(0);
     const binary = await generateFlatBuffer(schemaType, data);
@@ -745,12 +783,14 @@ async function generateSingleRecord() {
     const parser = new FlatBufferParser(binary);
     const parsed = parseWithSchema(parser, config.parserSchema.fields);
 
-    // Encrypt each field
+    // Encrypt each field using Bob's public key (ECIES)
     const encryptedFields = parsed.fields.map(field => {
       if (field.bytes && field.bytes.length > 0) {
+        const { encrypted, header } = encryptFieldBytesWithPKI(field.bytes);
         return {
           ...field,
-          encryptedBytes: encryptFieldBytes(field.bytes),
+          encryptedBytes: encrypted,
+          encryptionHeader: header,
         };
       }
       return field;
@@ -767,7 +807,7 @@ async function generateSingleRecord() {
 
     renderFieldDisplay();
     $('toggle-field-decrypt').disabled = false;
-    $('toggle-field-decrypt').textContent = 'Show Decrypted';
+    $('toggle-field-decrypt').textContent = 'Bob Decrypts';
 
   } catch (err) {
     console.error('Failed to generate record:', err);
@@ -844,11 +884,17 @@ function renderFieldDisplay() {
     encTd.className = 'hex encrypted-hex';
     tr.appendChild(encTd);
 
-    // Decrypted hex (decrypt-col)
+    // Decrypted hex (decrypt-col) - decrypt using Bob's private key
     const decHexTd = document.createElement('td');
     decHexTd.className = 'hex decrypt-col';
-    if (field.bytes && state.showFieldDecrypted) {
-      decHexTd.textContent = toHex(field.bytes);
+    if (field.encryptedBytes && field.encryptionHeader && state.showFieldDecrypted) {
+      try {
+        const decrypted = decryptFieldBytesWithPKI(field.encryptedBytes, field.encryptionHeader);
+        decHexTd.textContent = toHex(decrypted);
+      } catch (e) {
+        decHexTd.textContent = '(decrypt failed)';
+        decHexTd.title = e.message;
+      }
     } else {
       decHexTd.textContent = '--';
     }
@@ -893,7 +939,7 @@ function formatFieldValue(value, type) {
 
 function toggleFieldDecrypt() {
   state.showFieldDecrypted = !state.showFieldDecrypted;
-  $('toggle-field-decrypt').textContent = state.showFieldDecrypted ? 'Show Encrypted' : 'Show Decrypted';
+  $('toggle-field-decrypt').textContent = state.showFieldDecrypted ? 'Show Encrypted' : 'Bob Decrypts';
   renderFieldDisplay();
 }
 
@@ -925,9 +971,15 @@ async function generateBulkBuffers() {
   const count = parseInt($('buffer-count').value);
   const config = schemaConfig[schemaType];
 
+  // Check if PKI keys are available
+  if (!state.pki.bob || !state.pki.bob.publicKey) {
+    alert('Please generate PKI key pairs first (in the PKI section above)');
+    return;
+  }
+
   const btn = $('generate-buffers');
   btn.disabled = true;
-  btn.textContent = 'Generating...';
+  btn.textContent = 'Encrypting...';
 
   const startTime = performance.now();
 
@@ -935,6 +987,7 @@ async function generateBulkBuffers() {
     // Clear previous data to free memory
     state.buffers = [];
     state.encryptedBuffers = [];
+    state.encryptionHeaders = []; // Store ECIES headers for each record
 
     const batchSize = Math.min(100, count);
     let totalSize = 0;
@@ -947,17 +1000,23 @@ async function generateBulkBuffers() {
         const data = config.sampleData(j);
         const binary = await generateFlatBuffer(schemaType, data);
 
-        // Encrypt the entire buffer
-        const encrypted = new Uint8Array(binary);
-        encryptBytes(encrypted, state.encryptionKey, state.encryptionIV);
+        // Encrypt using Bob's public key (ECIES)
+        const encryptCtx = EncryptionContext.forEncryption(state.pki.bob.publicKey, {
+          algorithm: state.pki.algorithm,
+          context: 'flatbuffers-bulk-encryption-v1',
+        });
 
-        // Store data and encrypted buffer (not original binary to save memory)
+        const encrypted = new Uint8Array(binary);
+        encryptBytes(encrypted, encryptCtx.key, encryptCtx.nonce);
+
+        // Store data, encrypted buffer, and header
         state.buffers.push({
           index: j,
           data,
           size: binary.length,
         });
         state.encryptedBuffers.push(encrypted);
+        state.encryptionHeaders.push(encryptCtx.getHeaderJSON());
         totalSize += binary.length;
 
         runnerResetCounter++;
@@ -972,7 +1031,7 @@ async function generateBulkBuffers() {
 
       // Update progress and yield to UI
       const progress = Math.round((batchEnd / count) * 100);
-      btn.textContent = `Generating... ${progress}%`;
+      btn.textContent = `Encrypting... ${progress}%`;
       await new Promise(r => setTimeout(r, 0));
     }
 
@@ -987,7 +1046,7 @@ async function generateBulkBuffers() {
 
     // Enable buttons
     $('toggle-encryption').disabled = false;
-    $('toggle-encryption').textContent = 'Show Decrypted';
+    $('toggle-encryption').textContent = 'Bob Decrypts';
     $('clear-buffers').disabled = false;
     state.showEncrypted = true;
 
@@ -1000,7 +1059,7 @@ async function generateBulkBuffers() {
     alert('Error generating buffers: ' + err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Generate & Encrypt';
+    btn.textContent = 'Encrypt for Bob';
   }
 }
 
@@ -1071,7 +1130,7 @@ function renderBulkTable(schemaType) {
 
 function toggleEncryption() {
   state.showEncrypted = !state.showEncrypted;
-  $('toggle-encryption').textContent = state.showEncrypted ? 'Show Decrypted' : 'Show Encrypted';
+  $('toggle-encryption').textContent = state.showEncrypted ? 'Bob Decrypts' : 'Show Encrypted';
 
   // Update virtual table columns if needed
   if (state.virtualTable && state.virtualTable.columns && state.virtualTable.columns.length > 0) {
@@ -1079,15 +1138,15 @@ function toggleEncryption() {
     const lastCol = columns[columns.length - 1];
 
     if (state.showEncrypted) {
-      lastCol.label = 'Encrypted Bytes';
+      lastCol.label = 'Encrypted (for Bob)';
       lastCol.format = (_, record) => {
         const enc = state.encryptedBuffers[record.index];
         return toHex(enc.slice(0, 16)) + (enc.length > 16 ? '...' : '');
       };
     } else {
-      lastCol.label = 'Decrypted Bytes';
+      lastCol.label = 'Decrypted (by Bob)';
       lastCol.format = (_, record) => {
-        const dec = decryptFieldBytes(state.encryptedBuffers[record.index]);
+        const dec = decryptBulkRecord(record.index);
         return toHex(dec.slice(0, 16)) + (dec.length > 16 ? '...' : '');
       };
     }
@@ -1097,9 +1156,36 @@ function toggleEncryption() {
   }
 }
 
+/**
+ * Decrypt a bulk record using Bob's private key
+ */
+function decryptBulkRecord(index) {
+  if (!state.pki.bob || !state.pki.bob.privateKey) {
+    console.error('Bob\'s private key not available');
+    return new Uint8Array(0);
+  }
+
+  try {
+    const header = encryptionHeaderFromJSON(state.encryptionHeaders[index]);
+    const decryptCtx = EncryptionContext.forDecryption(
+      state.pki.bob.privateKey,
+      header,
+      'flatbuffers-bulk-encryption-v1'
+    );
+
+    const decrypted = new Uint8Array(state.encryptedBuffers[index]);
+    decryptBytes(decrypted, decryptCtx.key, decryptCtx.nonce);
+    return decrypted;
+  } catch (error) {
+    console.error('Decryption failed for record', index, error);
+    return new Uint8Array(0);
+  }
+}
+
 function clearBufferDisplay() {
   state.buffers = [];
   state.encryptedBuffers = [];
+  state.encryptionHeaders = [];
   state.showEncrypted = true;
 
   if (state.virtualTable) {

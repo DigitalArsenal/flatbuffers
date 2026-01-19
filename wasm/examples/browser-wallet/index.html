@@ -30,9 +30,9 @@
         <span>DA FlatBuffers</span>
       </a>
       <div class="nav-links" id="demo-nav-links">
-        <a href="#fields" class="nav-link active" data-tab="fields">Encryption</a>
-        <a href="#pki" class="nav-link" data-tab="pki">PKI</a>
-        <a href="#buffers" class="nav-link" data-tab="buffers">Generation</a>
+        <a href="#pki" class="nav-link active" data-tab="pki">PKI</a>
+        <a href="#fields" class="nav-link" data-tab="fields">Field Encryption</a>
+        <a href="#buffers" class="nav-link" data-tab="buffers">Bulk Generation</a>
         <a href="#streaming" class="nav-link" data-tab="streaming">Streaming</a>
         <a href="#identity" class="nav-link" data-tab="identity">Identity</a>
         <span class="nav-divider"></span>
@@ -78,7 +78,7 @@
           <button class="method-tab" data-method="seed">Seed Phrase</button>
         </div>
 
-        <div id="password-method" class="method-content active">
+        <form id="password-method" class="method-content active" onsubmit="return false;">
           <div class="glass-input-group">
             <input type="text" id="wallet-username" class="glass-input" placeholder="Username" autocomplete="username">
           </div>
@@ -89,10 +89,10 @@
             </div>
             <span class="entropy-label"><span id="entropy-bits">0</span> bits entropy</span>
           </div>
-          <button id="derive-from-password" class="glass-btn primary full-width" disabled>
+          <button id="derive-from-password" class="glass-btn primary full-width" disabled type="button">
             Enter Demo
           </button>
-        </div>
+        </form>
 
         <div id="seed-method" class="method-content">
           <div class="glass-input-group">
@@ -131,72 +131,8 @@
   <!-- Main App Content -->
   <main id="main-app" class="main-app" style="display: none;">
 
-    <!-- Field Encryption Section -->
-    <section id="fields-tab" class="content-section active">
-      <div class="section-header">
-        <h2 class="section-title">Field-Level Encryption</h2>
-        <p class="section-desc">Generate FlatBuffer records and visualize individual field encryption</p>
-      </div>
-
-      <div class="glass-card">
-        <div class="card-controls">
-          <select id="schema-select" class="glass-select">
-            <option value="monster">Monster Schema</option>
-            <option value="weapon">Weapon Schema</option>
-            <option value="galaxy">Galaxy Schema</option>
-          </select>
-          <button id="generate-single" class="glass-btn primary">Generate Record</button>
-          <button id="toggle-field-decrypt" class="glass-btn" disabled>Decrypt</button>
-        </div>
-
-        <!-- FlatBuffer Header -->
-        <div class="fb-header-display" id="fb-header" style="display: none;">
-          <h3 class="card-subtitle">Binary Structure</h3>
-          <div class="header-grid">
-            <div class="header-cell">
-              <span class="header-label">Root Offset</span>
-              <code class="header-hex" id="root-offset-hex">--</code>
-              <span class="header-value" id="root-offset-val">--</span>
-            </div>
-            <div class="header-cell">
-              <span class="header-label">File ID</span>
-              <code class="header-hex" id="file-id-hex">--</code>
-              <span class="header-value" id="file-id-val">--</span>
-            </div>
-            <div class="header-cell">
-              <span class="header-label">VTable Size</span>
-              <code class="header-hex" id="vtable-size-hex">--</code>
-              <span class="header-value" id="vtable-size-val">--</span>
-            </div>
-            <div class="header-cell">
-              <span class="header-label">Table Size</span>
-              <code class="header-hex" id="table-size-hex">--</code>
-              <span class="header-value" id="table-size-val">--</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Field Table -->
-        <div class="field-table-wrap" id="field-table-container" style="display: none;">
-          <table class="field-table" id="field-table">
-            <thead>
-              <tr>
-                <th>Field</th>
-                <th>Type</th>
-                <th>Offset</th>
-                <th>Encrypted</th>
-                <th class="decrypt-col">Decrypted</th>
-                <th class="decrypt-col">Value</th>
-              </tr>
-            </thead>
-            <tbody id="field-body"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- PKI Section (Alice/Bob Public Key Encryption) -->
-    <section id="pki-tab" class="content-section">
+    <!-- PKI Section (Alice/Bob Public Key Encryption) - First, introduces the concept -->
+    <section id="pki-tab" class="content-section active">
       <div class="section-header">
         <h2 class="section-title">Public Key Infrastructure</h2>
         <p class="section-desc">Alice encrypts data with Bob's public key. Only Bob can decrypt with his private key.</p>
@@ -323,11 +259,75 @@
       </div>
     </section>
 
+    <!-- Field Encryption Section - Second, shows field-level detail -->
+    <section id="fields-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Field-Level Encryption</h2>
+        <p class="section-desc">Generate FlatBuffer records and visualize individual field encryption using Alice/Bob keys</p>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-controls">
+          <select id="schema-select" class="glass-select">
+            <option value="monster">Monster Schema</option>
+            <option value="weapon">Weapon Schema</option>
+            <option value="galaxy">Galaxy Schema</option>
+          </select>
+          <button id="generate-single" class="glass-btn primary">Generate Record</button>
+          <button id="toggle-field-decrypt" class="glass-btn" disabled>Decrypt</button>
+        </div>
+
+        <!-- FlatBuffer Header -->
+        <div class="fb-header-display" id="fb-header" style="display: none;">
+          <h3 class="card-subtitle">Binary Structure</h3>
+          <div class="header-grid">
+            <div class="header-cell">
+              <span class="header-label">Root Offset</span>
+              <code class="header-hex" id="root-offset-hex">--</code>
+              <span class="header-value" id="root-offset-val">--</span>
+            </div>
+            <div class="header-cell">
+              <span class="header-label">File ID</span>
+              <code class="header-hex" id="file-id-hex">--</code>
+              <span class="header-value" id="file-id-val">--</span>
+            </div>
+            <div class="header-cell">
+              <span class="header-label">VTable Size</span>
+              <code class="header-hex" id="vtable-size-hex">--</code>
+              <span class="header-value" id="vtable-size-val">--</span>
+            </div>
+            <div class="header-cell">
+              <span class="header-label">Table Size</span>
+              <code class="header-hex" id="table-size-hex">--</code>
+              <span class="header-value" id="table-size-val">--</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Field Table -->
+        <div class="field-table-wrap" id="field-table-container" style="display: none;">
+          <table class="field-table" id="field-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Offset</th>
+                <th>Encrypted</th>
+                <th class="decrypt-col">Decrypted</th>
+                <th class="decrypt-col">Value</th>
+              </tr>
+            </thead>
+            <tbody id="field-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- Bulk Generation Section -->
     <section id="buffers-tab" class="content-section">
       <div class="section-header">
         <h2 class="section-title">Bulk Generation</h2>
-        <p class="section-desc">Generate up to 1 million encrypted FlatBuffer records</p>
+        <p class="section-desc">Generate up to 1 million FlatBuffer records encrypted with Bob's public key</p>
       </div>
 
       <div class="glass-card">
@@ -344,8 +344,8 @@
             <option value="100000">100,000 records</option>
             <option value="1000000">1,000,000 records</option>
           </select>
-          <button id="generate-buffers" class="glass-btn primary">Generate</button>
-          <button id="toggle-encryption" class="glass-btn" disabled>Decrypt</button>
+          <button id="generate-buffers" class="glass-btn primary">Encrypt for Bob</button>
+          <button id="toggle-encryption" class="glass-btn" disabled>Bob Decrypts</button>
           <button id="clear-buffers" class="glass-btn" disabled>Clear</button>
         </div>
 

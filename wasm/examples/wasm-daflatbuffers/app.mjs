@@ -615,9 +615,10 @@ function login(keys) {
   state.addresses = generateAddresses(keys);
   state.selectedCrypto = 'btc';
 
-  // Hide login card, show hero stats
+  // Hide login card, show hero stats and scroll indicator
   $('login-card').style.display = 'none';
   $('hero-stats').style.display = 'flex';
+  $('scroll-indicator').style.display = 'flex';
 
   // Update hero stats display
   $('hero-wallet-type').textContent = cryptoConfig[state.selectedCrypto].name;
@@ -683,8 +684,9 @@ function logout() {
   // Hide main app content
   $('main-app').style.display = 'none';
 
-  // Hide hero stats, show login card
+  // Hide hero stats and scroll indicator, show login card
   $('hero-stats').style.display = 'none';
+  $('scroll-indicator').style.display = 'none';
   $('login-card').style.display = 'block';
 
   // Hide nav action buttons

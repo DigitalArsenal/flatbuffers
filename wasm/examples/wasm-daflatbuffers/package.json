@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@noble/curves": "^1.9.7",
     "@scure/bip32": "^2.0.1",
     "bip39": "^3.1.0",
     "buffer": "^6.0.3",

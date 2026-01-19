@@ -11,6 +11,9 @@
 
 import * as bip39 from 'bip39';
 import { HDKey } from '@scure/bip32';
+import { x25519 } from '@noble/curves/ed25519';
+import { secp256k1 } from '@noble/curves/secp256k1';
+import { p256 } from '@noble/curves/p256';
 import QRCode from 'qrcode';
 import { Buffer } from 'buffer';
 import { createV3 } from 'vcard-cryptoperson';
@@ -2117,27 +2120,34 @@ function derivePKIKeysFromHD() {
   state.pki.algorithm = algorithm;
 
   try {
-    // Generate key pairs based on algorithm using WASM module
-    // Keys are saved to localStorage for persistence across sessions
+    // Derive deterministic seeds from HD wallet for Alice (index 0) and Bob (index 1)
+    // This ensures consistent keys across sessions while keeping them different
+    const alicePath = "m/44'/0'/0'/0/0";
+    const bobPath = "m/44'/0'/0'/0/1";
+
+    const aliceSeed = deriveKeyFromPath(alicePath);
+    const bobSeed = deriveKeyFromPath(bobPath);
+
+    // Generate key pairs based on algorithm using derived seeds
     switch (algorithm) {
       case 'x25519': {
-        state.pki.alice = deriveX25519FromSeed();
-        state.pki.bob = deriveX25519FromSeed();
+        state.pki.alice = deriveX25519FromSeed(aliceSeed);
+        state.pki.bob = deriveX25519FromSeed(bobSeed);
         break;
       }
       case 'secp256k1': {
-        state.pki.alice = deriveSecp256k1FromPrivate();
-        state.pki.bob = deriveSecp256k1FromPrivate();
+        state.pki.alice = deriveSecp256k1FromSeed(aliceSeed);
+        state.pki.bob = deriveSecp256k1FromSeed(bobSeed);
         break;
       }
       case 'p256': {
-        state.pki.alice = deriveP256FromPrivate();
-        state.pki.bob = deriveP256FromPrivate();
+        state.pki.alice = deriveP256FromSeed(aliceSeed);
+        state.pki.bob = deriveP256FromSeed(bobSeed);
         break;
       }
       default:
-        state.pki.alice = deriveX25519FromSeed();
-        state.pki.bob = deriveX25519FromSeed();
+        state.pki.alice = deriveX25519FromSeed(aliceSeed);
+        state.pki.bob = deriveX25519FromSeed(bobSeed);
     }
 
     return true;
@@ -2148,39 +2158,54 @@ function derivePKIKeysFromHD() {
 }
 
 /**
- * Derive X25519 key pair
- * Uses the WASM module to generate a proper key pair with correct public key
+ * Derive a 32-byte key from HD wallet path
  */
-function deriveX25519FromSeed() {
-  // Generate key pair using the WASM module (computes proper public key via scalar mult)
-  const keyPair = x25519GenerateKeyPair();
+function deriveKeyFromPath(path) {
+  if (!state.hdRoot) {
+    throw new Error('HD wallet not initialized');
+  }
+  const derived = state.hdRoot.derivePath(path);
+  return derived.privateKey;
+}
+
+/**
+ * Derive X25519 key pair from a seed using @noble/curves (pure JS)
+ * Uses the seed as the private key and computes the public key via scalar multiplication
+ */
+function deriveX25519FromSeed(seed) {
+  // Use @noble/curves for deterministic key derivation from HD seed
+  // x25519.getPublicKey handles the clamping internally
+  const privateKey = new Uint8Array(seed);
+  const publicKey = x25519.getPublicKey(privateKey);
   return {
-    privateKey: new Uint8Array(keyPair.privateKey),
-    publicKey: new Uint8Array(keyPair.publicKey),
+    privateKey,
+    publicKey: new Uint8Array(publicKey),
   };
 }
 
 /**
- * Derive secp256k1 key pair
- * Uses the WASM module to generate a proper key pair
+ * Derive secp256k1 key pair from a seed using @noble/curves (pure JS)
  */
-function deriveSecp256k1FromPrivate() {
-  const keyPair = secp256k1GenerateKeyPair();
+function deriveSecp256k1FromSeed(seed) {
+  // Use @noble/curves for deterministic key derivation
+  const privateKey = new Uint8Array(seed);
+  const publicKey = secp256k1.getPublicKey(privateKey, true); // compressed
   return {
-    privateKey: new Uint8Array(keyPair.privateKey),
-    publicKey: new Uint8Array(keyPair.publicKey),
+    privateKey,
+    publicKey: new Uint8Array(publicKey),
   };
 }
 
 /**
- * Derive P-256 key pair
- * Uses the WASM module to generate a proper key pair
+ * Derive P-256 key pair from a seed using @noble/curves (pure JS)
  */
-function deriveP256FromPrivate() {
-  const keyPair = p256GenerateKeyPair();
+function deriveP256FromSeed(seed) {
+  // Use @noble/curves for deterministic key derivation
+  const privateKey = new Uint8Array(seed);
+  const publicKey = p256.getPublicKey(privateKey, true); // compressed
   return {
-    privateKey: new Uint8Array(keyPair.privateKey),
-    publicKey: new Uint8Array(keyPair.publicKey),
+    privateKey,
+    publicKey: new Uint8Array(publicKey),
   };
 }
 

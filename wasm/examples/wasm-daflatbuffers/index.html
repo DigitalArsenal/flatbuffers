@@ -30,7 +30,8 @@
         <span>DA FlatBuffers</span>
       </a>
       <div class="nav-links" id="demo-nav-links">
-        <a href="#pki" class="nav-link active" data-tab="pki">PKI</a>
+        <a href="#overview" class="nav-link active" data-tab="overview">Overview</a>
+        <a href="#pki" class="nav-link" data-tab="pki">PKI</a>
         <a href="#fields" class="nav-link" data-tab="fields">Field Encryption</a>
         <a href="#buffers" class="nav-link" data-tab="buffers">Bulk Generation</a>
         <a href="#schema" class="nav-link" data-tab="schema">Schema</a>
@@ -132,8 +133,171 @@
   <!-- Main App Content -->
   <main id="main-app" class="main-app" style="display: none;">
 
-    <!-- PKI Section (Alice/Bob Public Key Encryption) - First, introduces the concept -->
-    <section id="pki-tab" class="content-section active">
+    <!-- Overview Section - Compliance and capabilities -->
+    <section id="overview-tab" class="content-section active">
+      <div class="section-header">
+        <h2 class="section-title">Field-Level Encryption for FlatBuffers</h2>
+        <p class="section-desc">AES-256 encryption with HD wallet key derivation, meeting federal data-at-rest requirements</p>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Capabilities</h3>
+        <div class="overview-grid">
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+            <div class="overview-content">
+              <h4>Field-Level Encryption</h4>
+              <p>Encrypt individual fields within FlatBuffer records. The binary structure stays intact so upstream code can read encrypted values without schema changes.</p>
+            </div>
+          </div>
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+              </svg>
+            </div>
+            <div class="overview-content">
+              <h4>HD Wallet Key Derivation</h4>
+              <p>Keys derived from BIP-39 seed phrases using HKDF-SHA256. Each field can have its own derived key for granular access control.</p>
+            </div>
+          </div>
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+            </div>
+            <div class="overview-content">
+              <h4>High Performance</h4>
+              <p>Generate and encrypt 1 million records at 50+ MB/s using WebAssembly. Streaming export avoids memory accumulation.</p>
+            </div>
+          </div>
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v6l4 2"/>
+              </svg>
+            </div>
+            <div class="overview-content">
+              <h4>Zero Server Dependency</h4>
+              <p>All cryptographic operations run client-side in the browser. No data leaves your device unless you explicitly export it.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Cryptographic Implementation</h3>
+        <div class="crypto-specs">
+          <div class="spec-row">
+            <span class="spec-label">Symmetric Encryption</span>
+            <span class="spec-value">AES-256-CTR</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Key Derivation</span>
+            <span class="spec-value">HKDF-SHA256</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Key Exchange</span>
+            <span class="spec-value">X25519 ECDH (Curve25519)</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Digital Signatures</span>
+            <span class="spec-value">Ed25519</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">HD Wallet</span>
+            <span class="spec-value">BIP-39 / BIP-32 / BIP-44</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Runtime</span>
+            <span class="spec-value">WebAssembly (libsodium)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Federal Compliance Standards</h3>
+        <p class="card-desc">This implementation uses cryptographic algorithms approved for protecting federal data at rest:</p>
+
+        <div class="compliance-grid">
+          <a href="https://media.defense.gov/2022/Sep/07/2003071836/-1/-1/0/CSI_CNSA_2.0_FAQ_.PDF" target="_blank" class="compliance-card">
+            <div class="compliance-header">
+              <span class="compliance-badge">NSA</span>
+              <h4>CNSA 2.0</h4>
+            </div>
+            <p>Commercial National Security Algorithm Suite 2.0 mandates AES-256 for all National Security Systems. Quantum-resistant algorithm support required by 2025.</p>
+            <span class="compliance-link">View PDF &rarr;</span>
+          </a>
+
+          <a href="https://csrc.nist.gov/pubs/sp/800/111/final" target="_blank" class="compliance-card">
+            <div class="compliance-header">
+              <span class="compliance-badge">NIST</span>
+              <h4>SP 800-111</h4>
+            </div>
+            <p>Guide to Storage Encryption Technologies for End User Devices. Endorses AES-256 for data at rest with proper key management.</p>
+            <span class="compliance-link">View Publication &rarr;</span>
+          </a>
+
+          <a href="https://csrc.nist.gov/pubs/fips/140-3/final" target="_blank" class="compliance-card">
+            <div class="compliance-header">
+              <span class="compliance-badge">FIPS</span>
+              <h4>140-3</h4>
+            </div>
+            <p>Security Requirements for Cryptographic Modules. AES-256 is approved for all security levels (1-4) in federal cryptographic modules.</p>
+            <span class="compliance-link">View Standard &rarr;</span>
+          </a>
+
+          <a href="https://www.cyber.mil/stigs" target="_blank" class="compliance-card">
+            <div class="compliance-header">
+              <span class="compliance-badge">DoD</span>
+              <h4>STIGs</h4>
+            </div>
+            <p>Security Technical Implementation Guides require FIPS 140-validated AES encryption for protecting CUI and classified information.</p>
+            <span class="compliance-link">View STIG Library &rarr;</span>
+          </a>
+        </div>
+
+        <div class="compliance-note">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+          <span><strong>Note:</strong> While this implementation uses FIPS-approved algorithms (AES-256, SHA-256, HKDF), the WebAssembly runtime itself is not FIPS 140-3 validated. For systems requiring validated modules, use this as a reference implementation.</span>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Use Cases</h3>
+        <div class="usecases-grid">
+          <div class="usecase-item">
+            <h4>Defense &amp; Intelligence</h4>
+            <p>Field-level encryption for mission data with per-user key derivation and need-to-know access control.</p>
+          </div>
+          <div class="usecase-item">
+            <h4>Healthcare (HIPAA)</h4>
+            <p>Encrypt PHI fields while leaving non-sensitive metadata readable for indexing and routing.</p>
+          </div>
+          <div class="usecase-item">
+            <h4>Financial Services</h4>
+            <p>Protect PII and transaction data at rest with audit-ready key management from HD wallets.</p>
+          </div>
+          <div class="usecase-item">
+            <h4>Zero-Trust Architectures</h4>
+            <p>Data remains encrypted until the authorized recipient decrypts with their derived key.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PKI Section (Alice/Bob Public Key Encryption) -->
+    <section id="pki-tab" class="content-section">
       <div class="section-header">
         <h2 class="section-title">Public Key Infrastructure</h2>
         <p class="section-desc">Alice encrypts data with Bob's public key. Only Bob can decrypt with his private key.</p>

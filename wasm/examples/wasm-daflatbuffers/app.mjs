@@ -705,9 +705,9 @@ function logout() {
   // Clear HD wallet UI
   $('derived-result').style.display = 'none';
 
-  // Reset to first tab (PKI) and scroll to top
+  // Reset to first tab (Overview) and scroll to top
   document.querySelectorAll('.nav-link[data-tab]').forEach(l => l.classList.remove('active'));
-  const firstLink = document.querySelector('.nav-link[data-tab="pki"]');
+  const firstLink = document.querySelector('.nav-link[data-tab="overview"]');
   if (firstLink) firstLink.classList.add('active');
   const mainApp = $('main-app');
   if (mainApp) mainApp.scrollTop = 0;

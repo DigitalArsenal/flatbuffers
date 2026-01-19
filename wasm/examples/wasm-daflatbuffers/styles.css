@@ -2829,7 +2829,7 @@ body {
   display: grid;
   grid-template-columns: 200px 1fr 280px;
   gap: 16px;
-  min-height: 500px;
+  height: 600px;
 }
 
 .schema-file-tree {
@@ -2977,12 +2977,14 @@ body {
 .schema-editor-main {
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .schema-editor-main .studio-pane {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .current-file-indicator {
@@ -2995,12 +2997,21 @@ body {
 .schema-parsed-pane {
   display: flex;
   flex-direction: column;
+  min-height: 0; /* Allow flex child to shrink */
 }
 
 .schema-parsed-pane .studio-pane {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+}
+
+.schema-parsed-pane .pane-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* Icon buttons */

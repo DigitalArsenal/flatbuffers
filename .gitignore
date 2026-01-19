@@ -147,6 +147,7 @@ yarn-error.log
 .cmake/
 **/dist
 !wasm/dist/
+!wasm/openssl-fips/dist/
 **/vendor
 **/go.sum
 flatbuffers.pc

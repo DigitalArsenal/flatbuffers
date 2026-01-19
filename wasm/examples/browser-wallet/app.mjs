@@ -728,7 +728,12 @@ function encryptFieldBytesWithPKI(bytes) {
     throw new Error('PKI keys not available');
   }
 
-  const encryptCtx = EncryptionContext.forEncryption(state.pki.bob.publicKey, {
+  // Ensure publicKey is a Uint8Array
+  const publicKey = state.pki.bob.publicKey instanceof Uint8Array
+    ? state.pki.bob.publicKey
+    : new Uint8Array(state.pki.bob.publicKey);
+
+  const encryptCtx = EncryptionContext.forEncryption(publicKey, {
     algorithm: state.pki.algorithm,
     context: 'flatbuffers-field-encryption-v1',
   });
@@ -750,9 +755,14 @@ function decryptFieldBytesWithPKI(encrypted, headerJSON) {
     throw new Error('PKI keys not available');
   }
 
+  // Ensure privateKey is a Uint8Array
+  const privateKey = state.pki.bob.privateKey instanceof Uint8Array
+    ? state.pki.bob.privateKey
+    : new Uint8Array(state.pki.bob.privateKey);
+
   const header = encryptionHeaderFromJSON(headerJSON);
   const decryptCtx = EncryptionContext.forDecryption(
-    state.pki.bob.privateKey,
+    privateKey,
     header,
     'flatbuffers-field-encryption-v1'
   );
@@ -1001,7 +1011,12 @@ async function generateBulkBuffers() {
         const binary = await generateFlatBuffer(schemaType, data);
 
         // Encrypt using Bob's public key (ECIES)
-        const encryptCtx = EncryptionContext.forEncryption(state.pki.bob.publicKey, {
+        // Ensure publicKey is a Uint8Array
+        const publicKey = state.pki.bob.publicKey instanceof Uint8Array
+          ? state.pki.bob.publicKey
+          : new Uint8Array(state.pki.bob.publicKey);
+
+        const encryptCtx = EncryptionContext.forEncryption(publicKey, {
           algorithm: state.pki.algorithm,
           context: 'flatbuffers-bulk-encryption-v1',
         });
@@ -1166,9 +1181,14 @@ function decryptBulkRecord(index) {
   }
 
   try {
+    // Ensure privateKey is a Uint8Array
+    const privateKey = state.pki.bob.privateKey instanceof Uint8Array
+      ? state.pki.bob.privateKey
+      : new Uint8Array(state.pki.bob.privateKey);
+
     const header = encryptionHeaderFromJSON(state.encryptionHeaders[index]);
     const decryptCtx = EncryptionContext.forDecryption(
-      state.pki.bob.privateKey,
+      privateKey,
       header,
       'flatbuffers-bulk-encryption-v1'
     );

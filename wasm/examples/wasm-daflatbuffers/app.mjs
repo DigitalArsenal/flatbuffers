@@ -26,10 +26,7 @@ import {
   ed25519GenerateKeyPair,
   secp256k1GenerateKeyPair,
   p256GenerateKeyPair,
-  encryptBytes,
-  decryptBytes,
   EncryptionContext,
-  encryptionHeaderToJSON,
   encryptionHeaderFromJSON,
   encryptBuffer,
   decryptBuffer,
@@ -37,7 +34,7 @@ import {
 
 import { FlatcRunner } from '../../src/runner.mjs';
 import { FlatBufferParser, parseWithSchema, Schemas, toHex, toHexCompact } from './flatbuffer-parser.mjs';
-import { VirtualTable } from './virtual-scroller.mjs';
+import { PaginatedTable } from './virtual-scroller.mjs';
 import { StreamingDemo, MessageTypes, formatBytes, formatThroughput } from './streaming-demo.mjs';
 
 // Import schemas as raw text
@@ -77,11 +74,14 @@ const state = {
   showEncrypted: true,
   encryptionKey: null,
   encryptionIV: null,
+  encryptionEnabled: true, // Toggle for encrypted vs plain FlatBuffers
   // Field display state
   currentFieldData: null,
   showFieldDecrypted: false,
-  // Virtual table
+  // Virtual table / Paginated table
   virtualTable: null,
+  paginatedTable: null,
+  selectedRecord: null, // Currently selected record for detail view
   // Streaming demo
   streamingDemo: null,
   // PKI Demo state
@@ -647,8 +647,16 @@ function login(keys) {
     $('alice-private-key').textContent = toHexCompact(state.pki.alice.privateKey);
     $('bob-public-key').textContent = toHexCompact(state.pki.bob.publicKey);
     $('bob-private-key').textContent = toHexCompact(state.pki.bob.privateKey);
-    $('pki-algorithm').value = state.pki.algorithm;
+    // Display algorithm
+    const algorithmNames = {
+      x25519: 'X25519 (Curve25519)',
+      secp256k1: 'secp256k1 (Bitcoin)',
+      p256: 'P-256 (NIST)',
+    };
+    $('pki-algorithm-display').textContent = algorithmNames[state.pki.algorithm] || state.pki.algorithm;
+    $('pki-controls').style.display = 'flex';
     $('pki-parties').style.display = 'grid';
+    $('encryption-explainer').style.display = 'block';
     $('pki-demo').style.display = 'block';
     $('pki-security').style.display = 'block';
     $('pki-clear-keys').style.display = 'inline-flex';
@@ -656,6 +664,9 @@ function login(keys) {
     console.log('No saved PKI keys, generating new ones...');
     generatePKIKeyPairs();
   }
+
+  // Initialize schema viewer
+  updateSchemaViewer();
 }
 
 function logout() {
@@ -726,23 +737,23 @@ async function generateFlatBuffer(schemaType, data) {
  * Encrypt field bytes using Bob's public key (ECIES)
  * Returns { encrypted, header } for later decryption
  */
-function encryptFieldBytesWithPKI(bytes) {
+function encryptFieldBytesWithPKI(bytes, fieldId = 0) {
   if (!state.pki.bob || !state.pki.bob.publicKey) {
     throw new Error('PKI keys not available');
   }
 
   // Ensure publicKey is a Uint8Array
-  const publicKey = state.pki.bob.publicKey instanceof Uint8Array
-    ? state.pki.bob.publicKey
-    : new Uint8Array(state.pki.bob.publicKey);
+  const publicKey = ensureUint8Array(state.pki.bob.publicKey);
 
   const encryptCtx = EncryptionContext.forEncryption(publicKey, {
     algorithm: state.pki.algorithm,
     context: 'flatbuffers-field-encryption-v1',
   });
 
+  // Create a buffer copy and encrypt in-place using the context's method
   const encrypted = new Uint8Array(bytes);
-  encryptBytes(encrypted, encryptCtx.key, encryptCtx.nonce);
+  // Use encryptScalar which properly derives per-field keys from the context
+  encryptCtx.encryptScalar(encrypted, 0, encrypted.length, fieldId);
 
   return {
     encrypted,
@@ -751,17 +762,28 @@ function encryptFieldBytesWithPKI(bytes) {
 }
 
 /**
+ * Helper to ensure a value is a Uint8Array
+ * Handles localStorage deserialization which produces plain objects
+ */
+function ensureUint8Array(value) {
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+  if (typeof value === 'object' && value !== null) {
+    return new Uint8Array(Object.values(value));
+  }
+  return new Uint8Array(value);
+}
+
+/**
  * Decrypt field bytes using Bob's private key
  */
-function decryptFieldBytesWithPKI(encrypted, headerJSON) {
+function decryptFieldBytesWithPKI(encrypted, headerJSON, fieldId = 0) {
   if (!state.pki.bob || !state.pki.bob.privateKey) {
     throw new Error('PKI keys not available');
   }
 
-  // Ensure privateKey is a Uint8Array
-  const privateKey = state.pki.bob.privateKey instanceof Uint8Array
-    ? state.pki.bob.privateKey
-    : new Uint8Array(state.pki.bob.privateKey);
+  const privateKey = ensureUint8Array(state.pki.bob.privateKey);
 
   const header = encryptionHeaderFromJSON(headerJSON);
   const decryptCtx = EncryptionContext.forDecryption(
@@ -770,8 +792,10 @@ function decryptFieldBytesWithPKI(encrypted, headerJSON) {
     'flatbuffers-field-encryption-v1'
   );
 
+  // Create a buffer copy and decrypt in-place using the context's method
+  // Note: encryptScalar/decryptScalar are the same for CTR mode (symmetric)
   const decrypted = new Uint8Array(encrypted);
-  decryptBytes(decrypted, decryptCtx.key, decryptCtx.nonce);
+  decryptCtx.encryptScalar(decrypted, 0, decrypted.length, fieldId);
   return decrypted;
 }
 
@@ -983,16 +1007,19 @@ async function generateBulkBuffers() {
   const schemaType = $('bulk-schema').value;
   const count = parseInt($('buffer-count').value);
   const config = schemaConfig[schemaType];
+  const encrypt = state.encryptionEnabled;
 
-  // Check if PKI keys are available
-  if (!state.pki.bob || !state.pki.bob.publicKey) {
+  // Check if PKI keys are available when encryption is enabled
+  if (encrypt && (!state.pki.bob || !state.pki.bob.publicKey)) {
     alert('Please generate PKI key pairs first (in the PKI section above)');
     return;
   }
 
   const btn = $('generate-buffers');
+  const plainBtn = $('generate-plain');
   btn.disabled = true;
-  btn.textContent = 'Encrypting...';
+  if (plainBtn) plainBtn.disabled = true;
+  btn.textContent = encrypt ? 'Encrypting...' : 'Generating...';
 
   const startTime = performance.now();
 
@@ -1013,28 +1040,38 @@ async function generateBulkBuffers() {
         const data = config.sampleData(j);
         const binary = await generateFlatBuffer(schemaType, data);
 
-        // Encrypt using Bob's public key (ECIES)
-        // Ensure publicKey is a Uint8Array
-        const publicKey = state.pki.bob.publicKey instanceof Uint8Array
-          ? state.pki.bob.publicKey
-          : new Uint8Array(state.pki.bob.publicKey);
+        if (encrypt) {
+          // Encrypt using Bob's public key (ECIES)
+          // Ensure publicKey is a Uint8Array (may be plain object from localStorage)
+          let publicKey = state.pki.bob.publicKey;
+          if (!(publicKey instanceof Uint8Array)) {
+            if (typeof publicKey === 'object' && publicKey !== null) {
+              publicKey = new Uint8Array(Object.values(publicKey));
+            } else {
+              publicKey = new Uint8Array(publicKey);
+            }
+          }
 
-        const encryptCtx = EncryptionContext.forEncryption(publicKey, {
-          algorithm: state.pki.algorithm,
-          context: 'flatbuffers-bulk-encryption-v1',
-        });
+          const encryptCtx = EncryptionContext.forEncryption(publicKey, {
+            algorithm: state.pki.algorithm,
+            context: 'flatbuffers-bulk-encryption-v1',
+          });
 
-        const encrypted = new Uint8Array(binary);
-        encryptBytes(encrypted, encryptCtx.key, encryptCtx.nonce);
+          // Encrypt the buffer using the context's method
+          const encrypted = new Uint8Array(binary);
+          encryptCtx.encryptScalar(encrypted, 0, encrypted.length, j % 65536);
 
-        // Store data, encrypted buffer, and header
+          state.encryptedBuffers.push(encrypted);
+          state.encryptionHeaders.push(encryptCtx.getHeaderJSON());
+        }
+
+        // Store data and binary buffer
         state.buffers.push({
           index: j,
           data,
+          binary: new Uint8Array(binary), // Keep original binary for plain mode
           size: binary.length,
         });
-        state.encryptedBuffers.push(encrypted);
-        state.encryptionHeaders.push(encryptCtx.getHeaderJSON());
         totalSize += binary.length;
 
         runnerResetCounter++;
@@ -1049,7 +1086,7 @@ async function generateBulkBuffers() {
 
       // Update progress and yield to UI
       const progress = Math.round((batchEnd / count) * 100);
-      btn.textContent = `Encrypting... ${progress}%`;
+      btn.textContent = encrypt ? `Encrypting... ${progress}%` : `Generating... ${progress}%`;
       await new Promise(r => setTimeout(r, 0));
     }
 
@@ -1062,13 +1099,18 @@ async function generateBulkBuffers() {
     $('stat-memory').textContent = formatSize(performance.memory?.usedJSHeapSize || 0);
     $('stats-bar').style.display = 'flex';
 
-    // Enable buttons
-    $('toggle-encryption').disabled = false;
-    $('toggle-encryption').textContent = 'Bob Decrypts';
+    // Enable/disable buttons based on encryption mode
+    if (encrypt) {
+      $('toggle-encryption').disabled = false;
+      $('toggle-encryption').textContent = 'Bob Decrypts';
+    } else {
+      $('toggle-encryption').disabled = true;
+      $('toggle-encryption').textContent = 'N/A (Plain)';
+    }
     $('clear-buffers').disabled = false;
     state.showEncrypted = true;
 
-    // Render virtual table
+    // Render paginated table
     renderBulkTable(schemaType);
     $('data-card').style.display = 'block';
 
@@ -1077,100 +1119,149 @@ async function generateBulkBuffers() {
     alert('Error generating buffers: ' + err.message);
   } finally {
     btn.disabled = false;
+    if (plainBtn) plainBtn.disabled = false;
     btn.textContent = 'Encrypt for Bob';
   }
 }
 
 function renderBulkTable(schemaType) {
-  const config = schemaConfig[schemaType];
   const container = $('virtual-table-wrapper');
+
+  // Helper to wrap value in span for styling
+  const wrapSpan = (text) => {
+    const span = document.createElement('span');
+    span.textContent = text;
+    return span;
+  };
 
   // Define columns based on schema
   let columns;
   if (schemaType === 'monster') {
     columns = [
-      { key: 'name', label: 'Name', width: '120px' },
-      { key: 'hp', label: 'HP', width: '60px' },
-      { key: 'mana', label: 'Mana', width: '60px' },
-      { key: 'pos', label: 'Position', format: (v) => v ? `(${v.x.toFixed(1)}, ${v.y.toFixed(1)}, ${v.z.toFixed(1)})` : '--' },
-      { key: 'encrypted', label: 'Encrypted Bytes', className: 'encrypted-hex', format: (_, record) => {
-        const enc = state.encryptedBuffers[record.index];
-        return toHex(enc.slice(0, 16)) + (enc.length > 16 ? '...' : '');
-      }},
+      { key: 'name', label: 'Name', className: 'col-name' },
+      { key: 'hp', label: 'HP', className: 'col-numeric' },
+      { key: 'mana', label: 'Mana', className: 'col-numeric' },
+      { key: 'pos', label: 'Position', className: 'col-position', format: (v) => v ? wrapSpan(`${v.x.toFixed(1)}, ${v.y.toFixed(1)}, ${v.z.toFixed(1)}`) : '--' },
     ];
   } else if (schemaType === 'weapon') {
     columns = [
-      { key: 'name', label: 'Name', width: '150px' },
-      { key: 'damage', label: 'Damage', width: '80px' },
-      { key: 'encrypted', label: 'Encrypted Bytes', className: 'encrypted-hex', format: (_, record) => {
-        const enc = state.encryptedBuffers[record.index];
-        return toHex(enc.slice(0, 16)) + (enc.length > 16 ? '...' : '');
-      }},
+      { key: 'name', label: 'Name', className: 'col-name' },
+      { key: 'damage', label: 'Damage', className: 'col-numeric' },
     ];
   } else if (schemaType === 'galaxy') {
     columns = [
-      { key: 'num_stars', label: 'Stars', format: (v) => typeof v === 'bigint' ? v.toLocaleString() : String(v) },
-      { key: 'encrypted', label: 'Encrypted Bytes', className: 'encrypted-hex', format: (_, record) => {
-        const enc = state.encryptedBuffers[record.index];
-        return toHex(enc);
-      }},
+      { key: 'num_stars', label: 'Stars', className: 'col-numeric', format: (v) => typeof v === 'bigint' ? v.toLocaleString() : String(v) },
     ];
   }
 
-  // Destroy old virtual table
-  if (state.virtualTable) {
-    state.virtualTable.destroy();
+  // Add bytes column based on encryption state
+  if (state.encryptionEnabled) {
+    columns.push({
+      key: 'bytes',
+      label: 'Encrypted Bytes',
+      className: 'col-hex',
+      format: (_, record) => {
+        const enc = state.encryptedBuffers[record.index];
+        if (!enc) return wrapSpan('--');
+        return wrapSpan(toHex(enc.slice(0, 20)) + (enc.length > 20 ? '...' : ''));
+      },
+    });
+  } else {
+    columns.push({
+      key: 'bytes',
+      label: 'FlatBuffer Bytes',
+      className: 'col-hex',
+      format: (_, record) => {
+        const buf = state.buffers[record.index]?.binary;
+        if (!buf) return wrapSpan('--');
+        return wrapSpan(toHex(buf.slice(0, 20)) + (buf.length > 20 ? '...' : ''));
+      },
+    });
   }
 
-  // Create new virtual table
-  state.virtualTable = new VirtualTable(container, {
+  // Destroy old paginated table
+  if (state.paginatedTable) {
+    state.paginatedTable.destroy();
+  }
+
+  // Create new paginated table with page size of 10
+  state.paginatedTable = new PaginatedTable(container, {
     columns,
-    rowHeight: 36,
+    pageSize: 10,
     onRowClick: (record, index) => {
-      console.log('Clicked record:', record, 'at index:', index);
+      showRecordDetail(record, index);
+    },
+    onPageChange: (page, totalPages) => {
+      const info = state.paginatedTable.getPageInfo();
+      $('visible-range').textContent = `(showing ${info.start + 1}-${info.end} of ${info.total})`;
     },
   });
 
   // Prepare records
   const records = state.buffers.map(b => ({ ...b.data, index: b.index }));
-  state.virtualTable.setData(records);
+  state.paginatedTable.setData(records);
 
-  // Update visible range display
-  const updateRange = () => {
-    const range = state.virtualTable.getVisibleRange();
-    $('visible-range').textContent = `(showing ${range.start + 1}-${range.end} of ${range.total})`;
-  };
-  updateRange();
-
-  // Update on scroll
-  state.virtualTable.scrollWrapper.addEventListener('scroll', updateRange);
+  // Update range display
+  const info = state.paginatedTable.getPageInfo();
+  $('visible-range').textContent = `(showing ${info.start + 1}-${info.end} of ${info.total})`;
 }
 
 function toggleEncryption() {
   state.showEncrypted = !state.showEncrypted;
   $('toggle-encryption').textContent = state.showEncrypted ? 'Bob Decrypts' : 'Show Encrypted';
 
-  // Update virtual table columns if needed
-  if (state.virtualTable && state.virtualTable.columns && state.virtualTable.columns.length > 0) {
-    const columns = state.virtualTable.columns;
+  // Helper to wrap value in span
+  const wrapSpan = (text) => {
+    const span = document.createElement('span');
+    span.textContent = text;
+    return span;
+  };
+
+  // Update paginated table columns if needed
+  if (state.paginatedTable && state.paginatedTable.columns && state.paginatedTable.columns.length > 0) {
+    const columns = state.paginatedTable.columns;
     const lastCol = columns[columns.length - 1];
 
     if (state.showEncrypted) {
       lastCol.label = 'Encrypted (for Bob)';
       lastCol.format = (_, record) => {
         const enc = state.encryptedBuffers[record.index];
-        return toHex(enc.slice(0, 16)) + (enc.length > 16 ? '...' : '');
+        if (!enc) return wrapSpan('--');
+        return wrapSpan(toHex(enc.slice(0, 20)) + (enc.length > 20 ? '...' : ''));
       };
     } else {
       lastCol.label = 'Decrypted (by Bob)';
       lastCol.format = (_, record) => {
         const dec = decryptBulkRecord(record.index);
-        return toHex(dec.slice(0, 16)) + (dec.length > 16 ? '...' : '');
+        if (!dec) return wrapSpan('--');
+        return wrapSpan(toHex(dec.slice(0, 20)) + (dec.length > 20 ? '...' : ''));
       };
     }
 
-    state.virtualTable.setColumns(columns);
-    state.virtualTable.render();
+    state.paginatedTable.setColumns(columns);
+    state.paginatedTable.render();
+  }
+}
+
+/**
+ * Show detailed view of a record with FlatBuffer <-> JSON conversion
+ */
+function showRecordDetail(record, index) {
+  const binary = state.buffers[index]?.binary;
+  if (!binary) return;
+
+  // Store selected record for conversion tools
+  state.selectedRecord = { record, index, binary };
+
+  // Show the detail panel
+  const detailPanel = $('record-detail-panel');
+  if (detailPanel) {
+    detailPanel.style.display = 'block';
+    $('detail-record-index').textContent = `Record #${index + 1}`;
+    $('detail-json').textContent = JSON.stringify(record, (key, value) =>
+      typeof value === 'bigint' ? value.toString() : value, 2);
+    $('detail-hex').textContent = toHex(binary);
+    $('detail-size').textContent = `${binary.length} bytes`;
   }
 }
 
@@ -1184,10 +1275,7 @@ function decryptBulkRecord(index) {
   }
 
   try {
-    // Ensure privateKey is a Uint8Array
-    const privateKey = state.pki.bob.privateKey instanceof Uint8Array
-      ? state.pki.bob.privateKey
-      : new Uint8Array(state.pki.bob.privateKey);
+    const privateKey = ensureUint8Array(state.pki.bob.privateKey);
 
     const header = encryptionHeaderFromJSON(state.encryptionHeaders[index]);
     const decryptCtx = EncryptionContext.forDecryption(
@@ -1196,8 +1284,9 @@ function decryptBulkRecord(index) {
       'flatbuffers-bulk-encryption-v1'
     );
 
+    // Decrypt using the context's method (CTR mode is symmetric)
     const decrypted = new Uint8Array(state.encryptedBuffers[index]);
-    decryptBytes(decrypted, decryptCtx.key, decryptCtx.nonce);
+    decryptCtx.encryptScalar(decrypted, 0, decrypted.length, index % 65536);
     return decrypted;
   } catch (error) {
     console.error('Decryption failed for record', index, error);
@@ -1210,10 +1299,11 @@ function clearBufferDisplay() {
   state.encryptedBuffers = [];
   state.encryptionHeaders = [];
   state.showEncrypted = true;
+  state.selectedRecord = null;
 
-  if (state.virtualTable) {
-    state.virtualTable.destroy();
-    state.virtualTable = null;
+  if (state.paginatedTable) {
+    state.paginatedTable.destroy();
+    state.paginatedTable = null;
   }
 
   $('data-card').style.display = 'none';
@@ -1221,6 +1311,189 @@ function clearBufferDisplay() {
   $('toggle-encryption').disabled = true;
   $('clear-buffers').disabled = true;
   $('visible-range').textContent = '';
+
+  // Hide detail panel if open
+  const detailPanel = $('record-detail-panel');
+  if (detailPanel) detailPanel.style.display = 'none';
+}
+
+// =============================================================================
+// Schema Viewer & JSON Conversion
+// =============================================================================
+
+/**
+ * Convert FlatBuffers schema to JSON Schema
+ */
+function fbsToJsonSchema(schemaType) {
+  const schemas = {
+    monster: {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      $id: 'https://flatbuffers.dev/schemas/monster.json',
+      title: 'Monster',
+      description: 'MyGame.Sample.Monster - A monster entity',
+      type: 'object',
+      properties: {
+        pos: {
+          type: 'object',
+          description: 'Vec3 - Position in 3D space',
+          properties: {
+            x: { type: 'number', format: 'float' },
+            y: { type: 'number', format: 'float' },
+            z: { type: 'number', format: 'float' },
+          },
+          required: ['x', 'y', 'z'],
+        },
+        mana: { type: 'integer', format: 'int16', default: 150 },
+        hp: { type: 'integer', format: 'int16', default: 100 },
+        name: { type: 'string' },
+        friendly: { type: 'boolean', default: false },
+        inventory: {
+          type: 'array',
+          items: { type: 'integer', format: 'uint8', minimum: 0, maximum: 255 },
+        },
+        color: {
+          type: 'integer',
+          format: 'int8',
+          enum: [0, 1, 2],
+          enumNames: ['Red', 'Green', 'Blue'],
+          default: 2,
+        },
+        weapons: {
+          type: 'array',
+          items: { $ref: '#/$defs/Weapon' },
+        },
+      },
+      $defs: {
+        Weapon: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            damage: { type: 'integer', format: 'int16' },
+          },
+        },
+      },
+    },
+    weapon: {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      $id: 'https://flatbuffers.dev/schemas/weapon.json',
+      title: 'Weapon',
+      description: 'MyGame.Sample.Weapon',
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        damage: { type: 'integer', format: 'int16' },
+      },
+    },
+    galaxy: {
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      $id: 'https://flatbuffers.dev/schemas/galaxy.json',
+      title: 'Galaxy',
+      description: 'flatbuffers.goldens.Galaxy',
+      type: 'object',
+      properties: {
+        num_stars: { type: 'integer', format: 'int64' },
+      },
+    },
+  };
+
+  return schemas[schemaType] || schemas.monster;
+}
+
+/**
+ * Update schema viewer with selected schema
+ */
+function updateSchemaViewer() {
+  const schemaType = $('schema-type-select')?.value || 'monster';
+  const config = schemaConfig[schemaType];
+
+  // Display .fbs content
+  const fbsContent = $('fbs-content');
+  if (fbsContent && config) {
+    const fbsText = Object.values(config.files)[0] || '';
+    fbsContent.textContent = fbsText.trim();
+  }
+
+  // Display JSON Schema
+  const jsonSchemaContent = $('json-schema-content');
+  if (jsonSchemaContent) {
+    const jsonSchema = fbsToJsonSchema(schemaType);
+    jsonSchemaContent.textContent = JSON.stringify(jsonSchema, null, 2);
+  }
+}
+
+/**
+ * Copy text to clipboard
+ */
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    // Brief visual feedback could be added here
+  } catch (err) {
+    console.error('Failed to copy:', err);
+  }
+}
+
+/**
+ * Convert JSON input to FlatBuffer binary
+ */
+async function convertJsonToFlatBuffer() {
+  const jsonInput = $('json-input')?.value;
+  const schemaType = $('convert-schema-select')?.value || 'monster';
+
+  if (!jsonInput) {
+    alert('Please enter JSON data');
+    return;
+  }
+
+  try {
+    const data = JSON.parse(jsonInput);
+    const binary = await generateFlatBuffer(schemaType, data);
+
+    // Display result
+    $('fb-output').textContent = toHex(binary);
+    $('fb-output-size').textContent = `${binary.length} bytes`;
+    $('conversion-result').style.display = 'block';
+  } catch (err) {
+    alert('Conversion error: ' + err.message);
+  }
+}
+
+/**
+ * Convert FlatBuffer binary (hex) to JSON
+ */
+function convertFlatBufferToJson() {
+  const hexInput = $('fb-hex-input')?.value?.replace(/\s+/g, '');
+  const schemaType = $('convert-schema-select')?.value || 'monster';
+
+  if (!hexInput) {
+    alert('Please enter hex data');
+    return;
+  }
+
+  try {
+    // Parse hex to bytes
+    const bytes = new Uint8Array(hexInput.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+
+    // Parse using schema
+    const config = schemaConfig[schemaType];
+    const parser = new FlatBufferParser(bytes);
+    const parsed = parseWithSchema(parser, config.parserSchema.fields);
+
+    // Extract values from parsed fields
+    const result = {};
+    for (const field of parsed.fields) {
+      if (field.present && field.value !== null) {
+        result[field.name] = field.value;
+      }
+    }
+
+    // Display result
+    $('json-output').textContent = JSON.stringify(result, (key, value) =>
+      typeof value === 'bigint' ? value.toString() : value, 2);
+    $('conversion-result').style.display = 'block';
+  } catch (err) {
+    alert('Conversion error: ' + err.message);
+  }
 }
 
 // =============================================================================
@@ -1363,12 +1636,13 @@ function clearPKIKeys() {
   state.pki.decrypted = null;
 
   // Reset UI
-  $('pki-algorithm').value = 'x25519';
   $('alice-public-key').textContent = '--';
   $('alice-private-key').textContent = '--';
   $('bob-public-key').textContent = '--';
   $('bob-private-key').textContent = '--';
+  $('pki-controls').style.display = 'none';
   $('pki-parties').style.display = 'none';
+  $('encryption-explainer').style.display = 'none';
   $('pki-demo').style.display = 'none';
   $('pki-security').style.display = 'none';
   $('pki-clear-keys').style.display = 'none';
@@ -1394,38 +1668,27 @@ function derivePKIKeysFromHD() {
   state.pki.algorithm = algorithm;
 
   try {
-    // Derive keys from fixed HD paths
-    // Using m/44'/0'/0'/0/N for PKI keys (coin type 0 = Bitcoin, but we use the private key bytes)
-    const aliceHD = state.hdRoot.derive("m/44'/0'/0'/0/0");
-    const bobHD = state.hdRoot.derive("m/44'/0'/0'/0/1");
-
-    // The HD key's privateKey is 32 bytes - perfect for deriving curve keys
-    const alicePriv = new Uint8Array(aliceHD.privateKey);
-    const bobPriv = new Uint8Array(bobHD.privateKey);
-
-    // Derive public keys based on algorithm
+    // Generate key pairs based on algorithm using WASM module
+    // Keys are saved to localStorage for persistence across sessions
     switch (algorithm) {
       case 'x25519': {
-        // Derive deterministic X25519 keys from HD seed
-        state.pki.alice = deriveX25519FromSeed(alicePriv);
-        state.pki.bob = deriveX25519FromSeed(bobPriv);
+        state.pki.alice = deriveX25519FromSeed();
+        state.pki.bob = deriveX25519FromSeed();
         break;
       }
       case 'secp256k1': {
-        // secp256k1 private keys are 32 bytes, same as HD key
-        state.pki.alice = deriveSecp256k1FromPrivate(alicePriv);
-        state.pki.bob = deriveSecp256k1FromPrivate(bobPriv);
+        state.pki.alice = deriveSecp256k1FromPrivate();
+        state.pki.bob = deriveSecp256k1FromPrivate();
         break;
       }
       case 'p256': {
-        // P-256 also uses 32-byte private keys
-        state.pki.alice = deriveP256FromPrivate(alicePriv);
-        state.pki.bob = deriveP256FromPrivate(bobPriv);
+        state.pki.alice = deriveP256FromPrivate();
+        state.pki.bob = deriveP256FromPrivate();
         break;
       }
       default:
-        state.pki.alice = deriveX25519FromSeed(alicePriv);
-        state.pki.bob = deriveX25519FromSeed(bobPriv);
+        state.pki.alice = deriveX25519FromSeed();
+        state.pki.bob = deriveX25519FromSeed();
     }
 
     console.log('Derived PKI keys from HD paths:', {
@@ -1442,43 +1705,39 @@ function derivePKIKeysFromHD() {
 }
 
 /**
- * Derive X25519 key pair from a 32-byte seed
- * Uses HKDF to create deterministic private/public key bytes
+ * Derive X25519 key pair
+ * Uses the WASM module to generate a proper key pair with correct public key
  */
-function deriveX25519FromSeed(seed) {
-  const encoder = new TextEncoder();
-  const fullSeed = hkdf(seed, new Uint8Array(0), encoder.encode('x25519-keypair'), 64);
-
+function deriveX25519FromSeed() {
+  // Generate key pair using the WASM module (computes proper public key via scalar mult)
+  const keyPair = x25519GenerateKeyPair();
   return {
-    privateKey: new Uint8Array(fullSeed.slice(0, 32)),
-    publicKey: new Uint8Array(fullSeed.slice(32, 64)),
+    privateKey: new Uint8Array(keyPair.privateKey),
+    publicKey: new Uint8Array(keyPair.publicKey),
   };
 }
 
 /**
- * Derive secp256k1 key pair from a 32-byte private key
+ * Derive secp256k1 key pair
+ * Uses the WASM module to generate a proper key pair
  */
-function deriveSecp256k1FromPrivate(privateKey) {
-  // Use the encryption module's key generation but seed it deterministically
-  const encoder = new TextEncoder();
-  const fullSeed = hkdf(privateKey, new Uint8Array(0), encoder.encode('secp256k1-keypair'), 64);
-
+function deriveSecp256k1FromPrivate() {
+  const keyPair = secp256k1GenerateKeyPair();
   return {
-    privateKey: new Uint8Array(fullSeed.slice(0, 32)),
-    publicKey: new Uint8Array(fullSeed.slice(32, 64)),
+    privateKey: new Uint8Array(keyPair.privateKey),
+    publicKey: new Uint8Array(keyPair.publicKey),
   };
 }
 
 /**
- * Derive P-256 key pair from a 32-byte private key
+ * Derive P-256 key pair
+ * Uses the WASM module to generate a proper key pair
  */
-function deriveP256FromPrivate(privateKey) {
-  const encoder = new TextEncoder();
-  const fullSeed = hkdf(privateKey, new Uint8Array(0), encoder.encode('p256-keypair'), 64);
-
+function deriveP256FromPrivate() {
+  const keyPair = p256GenerateKeyPair();
   return {
-    privateKey: new Uint8Array(fullSeed.slice(0, 32)),
-    publicKey: new Uint8Array(fullSeed.slice(32, 64)),
+    privateKey: new Uint8Array(keyPair.privateKey),
+    publicKey: new Uint8Array(keyPair.publicKey),
   };
 }
 
@@ -1535,8 +1794,18 @@ function generatePKIKeyPairs() {
   $('bob-public-key').textContent = toHexCompact(state.pki.bob.publicKey);
   $('bob-private-key').textContent = toHexCompact(state.pki.bob.privateKey);
 
+  // Display algorithm
+  const algorithmNames = {
+    x25519: 'X25519 (Curve25519)',
+    secp256k1: 'secp256k1 (Bitcoin)',
+    p256: 'P-256 (NIST)',
+  };
+  $('pki-algorithm-display').textContent = algorithmNames[state.pki.algorithm] || state.pki.algorithm;
+
   // Show UI sections
+  $('pki-controls').style.display = 'flex';
   $('pki-parties').style.display = 'grid';
+  $('encryption-explainer').style.display = 'block';
   $('pki-demo').style.display = 'block';
   $('pki-security').style.display = 'block';
   $('pki-clear-keys').style.display = 'inline-flex';
@@ -1575,14 +1844,24 @@ function pkiEncrypt() {
   state.pki.plaintext = encoder.encode(plaintext);
 
   // Create encryption context using Bob's public key (Alice encrypts FOR Bob)
-  const encryptCtx = EncryptionContext.forEncryption(state.pki.bob.publicKey, {
+  // Ensure publicKey is a Uint8Array (may be plain object from localStorage)
+  let publicKey = state.pki.bob.publicKey;
+  if (!(publicKey instanceof Uint8Array)) {
+    if (typeof publicKey === 'object' && publicKey !== null) {
+      publicKey = new Uint8Array(Object.values(publicKey));
+    } else {
+      publicKey = new Uint8Array(publicKey);
+    }
+  }
+
+  const encryptCtx = EncryptionContext.forEncryption(publicKey, {
     algorithm: state.pki.algorithm,
     context: 'flatbuffers-pki-demo-v1',
   });
 
-  // Encrypt the data
+  // Encrypt the data using the context's method (key and nonce are private fields)
   const ciphertext = new Uint8Array(state.pki.plaintext);
-  encryptBytes(ciphertext, encryptCtx.key, encryptCtx.nonce);
+  encryptCtx.encryptScalar(ciphertext, 0, ciphertext.length, 0);
   state.pki.ciphertext = ciphertext;
 
   // Get the header (contains ephemeral public key, etc.)
@@ -1615,15 +1894,25 @@ function pkiDecrypt() {
     const header = encryptionHeaderFromJSON(state.pki.header);
 
     // Create decryption context using Bob's private key
+    // Ensure privateKey is a Uint8Array (may be plain object from localStorage)
+    let privateKey = state.pki.bob.privateKey;
+    if (!(privateKey instanceof Uint8Array)) {
+      if (typeof privateKey === 'object' && privateKey !== null) {
+        privateKey = new Uint8Array(Object.values(privateKey));
+      } else {
+        privateKey = new Uint8Array(privateKey);
+      }
+    }
+
     const decryptCtx = EncryptionContext.forDecryption(
-      state.pki.bob.privateKey,
+      privateKey,
       header,
       'flatbuffers-pki-demo-v1'
     );
 
-    // Decrypt the data
+    // Decrypt the data using the context's method (AES-CTR is symmetric, so encryptScalar works for both)
     const decrypted = new Uint8Array(state.pki.ciphertext);
-    decryptBytes(decrypted, decryptCtx.key, decryptCtx.nonce);
+    decryptCtx.encryptScalar(decrypted, 0, decrypted.length, 0);
     state.pki.decrypted = decrypted;
 
     // Convert back to string
@@ -1656,16 +1945,26 @@ function pkiTryWrongKey() {
     // Parse the header
     const header = encryptionHeaderFromJSON(state.pki.header);
 
+    // Ensure Alice's private key is a Uint8Array (may be plain object from localStorage)
+    let privateKey = state.pki.alice.privateKey;
+    if (!(privateKey instanceof Uint8Array)) {
+      if (typeof privateKey === 'object' && privateKey !== null) {
+        privateKey = new Uint8Array(Object.values(privateKey));
+      } else {
+        privateKey = new Uint8Array(privateKey);
+      }
+    }
+
     // Try to decrypt with Alice's private key (WRONG - should fail)
     const decryptCtx = EncryptionContext.forDecryption(
-      state.pki.alice.privateKey,
+      privateKey,
       header,
       'flatbuffers-pki-demo-v1'
     );
 
-    // Attempt decryption
+    // Attempt decryption using the context's method (AES-CTR is symmetric)
     const attemptedDecrypt = new Uint8Array(state.pki.ciphertext);
-    decryptBytes(attemptedDecrypt, decryptCtx.key, decryptCtx.nonce);
+    decryptCtx.encryptScalar(attemptedDecrypt, 0, attemptedDecrypt.length, 0);
 
     // Check if it matches original (it shouldn't)
     const decoder = new TextDecoder();
@@ -2143,21 +2442,31 @@ function setupMainAppHandlers() {
   $('toggle-field-decrypt').addEventListener('click', toggleFieldDecrypt);
 
   // Bulk Generation Tab
-  $('generate-buffers').addEventListener('click', generateBulkBuffers);
+  $('generate-buffers').addEventListener('click', () => {
+    state.encryptionEnabled = true;
+    generateBulkBuffers();
+  });
+  $('generate-plain')?.addEventListener('click', () => {
+    state.encryptionEnabled = false;
+    generateBulkBuffers();
+  });
   $('toggle-encryption').addEventListener('click', toggleEncryption);
   $('clear-buffers').addEventListener('click', clearBufferDisplay);
 
-  // PKI Tab
-  const pkiBtn = $('pki-generate-keys');
-  console.log('PKI generate button:', pkiBtn);
-  if (pkiBtn) {
-    pkiBtn.addEventListener('click', () => {
-      console.log('PKI button clicked!');
-      generatePKIKeyPairs();
-    });
-  } else {
-    console.error('PKI generate button not found!');
-  }
+  // Schema Viewer Tab
+  $('schema-type-select')?.addEventListener('change', updateSchemaViewer);
+  $('copy-fbs')?.addEventListener('click', () => copyToClipboard($('fbs-content')?.textContent || ''));
+  $('copy-json-schema')?.addEventListener('click', () => copyToClipboard($('json-schema-content')?.textContent || ''));
+
+  // FlatBuffer <-> JSON Conversion
+  $('json-to-fb')?.addEventListener('click', convertJsonToFlatBuffer);
+  $('fb-to-json')?.addEventListener('click', convertFlatBufferToJson);
+  $('close-detail-panel')?.addEventListener('click', () => {
+    const panel = $('record-detail-panel');
+    if (panel) panel.style.display = 'none';
+  });
+
+  // PKI Tab - Keys are derived from HD wallet automatically on login
   $('pki-clear-keys')?.addEventListener('click', clearPKIKeys);
   $('pki-encrypt')?.addEventListener('click', pkiEncrypt);
   $('pki-decrypt')?.addEventListener('click', pkiDecrypt);

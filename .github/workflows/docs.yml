@@ -3,7 +3,7 @@ on:
   # For manual pushes.
   workflow_dispatch:
 
-  # Pushes to master that touch docs or wasm/examples/browser-wallet
+  # Pushes to master that touch docs or wasm/examples/wasm-daflatbuffers
   push:
     branches:
       - master
@@ -25,16 +25,16 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
 
-      # Setup Node.js for browser-wallet demo build
+      # Setup Node.js for wasm-daflatbuffers demo build
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: wasm/examples/browser-wallet/package-lock.json
+          cache-dependency-path: wasm/examples/wasm-daflatbuffers/package-lock.json
 
-      # Build browser-wallet demo (this will be the landing page)
-      - name: Build browser-wallet demo
-        working-directory: wasm/examples/browser-wallet
+      # Build wasm-daflatbuffers demo (this will be the landing page)
+      - name: Build wasm-daflatbuffers demo
+        working-directory: wasm/examples/wasm-daflatbuffers
         run: |
           echo "=== Checking required files ==="
           ls -la ../../src/
@@ -65,12 +65,12 @@ jobs:
         run: mkdocs build -f mkdocs.yml -d ../mkdocs-site
         working-directory: docs
 
-      # Assemble final site: browser-wallet as root, mkdocs docs in /docs/
+      # Assemble final site: wasm-daflatbuffers as root, mkdocs docs in /docs/
       - name: Assemble site
         run: |
           mkdir -p site
-          # Copy browser-wallet demo as the root landing page
-          cp -r wasm/examples/browser-wallet/dist/* site/
+          # Copy wasm-daflatbuffers demo as the root landing page
+          cp -r wasm/examples/wasm-daflatbuffers/dist/* site/
           # Copy mkdocs documentation to /docs/ subdirectory
           mkdir -p site/docs
           cp -r mkdocs-site/* site/docs/

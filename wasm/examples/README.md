@@ -46,7 +46,7 @@ All these examples use the same Crypto++ WASM module, ensuring identical cryptog
 | [swift-wasi/](swift-wasi/) | **Swift** | WasmKit | Swift using WasmKit runtime |
 | [node-encryption/](node-encryption/) | **Node.js** | V8 | Node.js with native WASM |
 | [browser-encryption/](browser-encryption/) | **Browser** | V8/SpiderMonkey | Interactive encryption demo |
-| [browser-wallet/](browser-wallet/) | **Browser** | V8/SpiderMonkey | Crypto wallet with BIP39, QR codes |
+| [wasm-daflatbuffers/](wasm-daflatbuffers/) | **Browser** | V8/SpiderMonkey | Crypto wallet with BIP39, QR codes |
 
 ### Multi-Language Examples
 
@@ -272,7 +272,7 @@ A full-featured crypto wallet demo showing:
 - Buffer generation stress tests
 
 ```bash
-cd browser-wallet
+cd wasm-daflatbuffers
 npm install
 npm run dev
 # Open http://localhost:3000

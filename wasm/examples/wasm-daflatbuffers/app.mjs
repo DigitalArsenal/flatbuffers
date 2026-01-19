@@ -3906,7 +3906,7 @@ function initStudio() {
   // Code generation
   $('studio-generate-code')?.addEventListener('click', generateStudioCode);
   $('studio-copy-code')?.addEventListener('click', () => {
-    const code = $('studio-generated-code')?.value || '';
+    const code = $('studio-generated-code')?.textContent || '';
     navigator.clipboard.writeText(code);
   });
   $('studio-download-code')?.addEventListener('click', async () => {
@@ -4355,6 +4355,87 @@ function updateStudioTableSelectors() {
 
 // Store last generated files for download
 let lastGeneratedFiles = null;
+let selectedGeneratedFile = null;
+
+function renderCodegenFileTree() {
+  const container = $('codegen-file-tree');
+  const countBadge = $('codegen-file-count');
+  const titleEl = $('codegen-current-file');
+
+  if (!container) return;
+
+  if (!lastGeneratedFiles || Object.keys(lastGeneratedFiles).length === 0) {
+    container.innerHTML = '<div class="empty-state small">Generate code to see files</div>';
+    if (countBadge) countBadge.textContent = '';
+    if (titleEl) titleEl.textContent = 'Generated Code';
+    return;
+  }
+
+  const files = Object.keys(lastGeneratedFiles).sort();
+  if (countBadge) countBadge.textContent = `${files.length} file${files.length !== 1 ? 's' : ''}`;
+
+  // Auto-select first file if none selected
+  if (!selectedGeneratedFile || !lastGeneratedFiles[selectedGeneratedFile]) {
+    selectedGeneratedFile = files[0];
+  }
+
+  const fileIcon = `<svg class="file-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+    <polyline points="14 2 14 8 20 8"></polyline>
+  </svg>`;
+
+  container.innerHTML = files.map(filename => {
+    const size = lastGeneratedFiles[filename].length;
+    const sizeStr = size > 1024 ? `${(size / 1024).toFixed(1)}KB` : `${size}B`;
+    const isActive = filename === selectedGeneratedFile;
+    return `<div class="codegen-file-item${isActive ? ' active' : ''}" data-file="${filename}">
+      ${fileIcon}
+      <span class="file-name" title="${filename}">${filename}</span>
+      <span class="file-size">${sizeStr}</span>
+    </div>`;
+  }).join('');
+
+  // Add click handlers
+  container.querySelectorAll('.codegen-file-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const filename = item.dataset.file;
+      selectGeneratedFile(filename);
+    });
+  });
+
+  // Update display
+  updateCodegenDisplay();
+}
+
+function selectGeneratedFile(filename) {
+  if (!lastGeneratedFiles || !lastGeneratedFiles[filename]) return;
+  selectedGeneratedFile = filename;
+
+  // Update active state in tree
+  const container = $('codegen-file-tree');
+  if (container) {
+    container.querySelectorAll('.codegen-file-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.file === filename);
+    });
+  }
+
+  updateCodegenDisplay();
+}
+
+function updateCodegenDisplay() {
+  const codeEl = $('studio-generated-code');
+  const titleEl = $('codegen-current-file');
+
+  if (!lastGeneratedFiles || !selectedGeneratedFile) {
+    if (codeEl) codeEl.textContent = '// Generated code will appear here...';
+    if (titleEl) titleEl.textContent = 'Generated Code';
+    return;
+  }
+
+  const content = lastGeneratedFiles[selectedGeneratedFile] || '';
+  if (codeEl) codeEl.textContent = content;
+  if (titleEl) titleEl.textContent = selectedGeneratedFile;
+}
 
 async function generateStudioCode() {
   // Save current editor content first
@@ -4390,12 +4471,14 @@ async function generateStudioCode() {
   const genMutable = $('studio-opt-mutable')?.checked ?? true;
   const genObjectApi = $('studio-opt-object-api')?.checked ?? true;
 
-  // Reset stored files
+  // Reset stored files and selection
   lastGeneratedFiles = null;
+  selectedGeneratedFile = null;
 
   // Check if WASM flatc is available
   if (!state.flatcRunner) {
-    if (codeOutput) codeOutput.value = '// Error: FlatBuffers WASM not initialized\n// Please wait for initialization to complete.';
+    if (codeOutput) codeOutput.textContent = '// Error: FlatBuffers WASM not initialized\n// Please wait for initialization to complete.';
+    renderCodegenFileTree();
     return;
   }
 
@@ -4406,39 +4489,33 @@ async function generateStudioCode() {
       genObjectApi,
     };
 
-    let code = '';
-
     if (lang === 'jsonschema') {
       // Use generateJsonSchema for JSON Schema output
-      code = state.flatcRunner.generateJsonSchema(schemaInput, { includeXFlatbuffers: true });
+      const code = state.flatcRunner.generateJsonSchema(schemaInput, { includeXFlatbuffers: true });
       lastGeneratedFiles = { 'schema.json': code };
     } else {
       // Use generateCode for all other languages
       const generatedFiles = state.flatcRunner.generateCode(schemaInput, lang, options);
-      lastGeneratedFiles = generatedFiles;
 
-      // Combine all generated files into output
-      const fileList = Object.keys(generatedFiles);
-      if (fileList.length === 0) {
-        code = '// No code generated. Check your schema for errors.';
+      if (Object.keys(generatedFiles).length === 0) {
         lastGeneratedFiles = null;
-      } else if (fileList.length === 1) {
-        // Single file output
-        code = generatedFiles[fileList[0]];
-      } else {
-        // Multiple files - show each with a header
-        code = fileList.map(filename => {
-          return `// ===== ${filename} =====\n\n${generatedFiles[filename]}`;
-        }).join('\n\n');
+        if (codeOutput) codeOutput.textContent = '// No code generated. Check your schema for errors.';
+        renderCodegenFileTree();
+        return;
       }
+
+      lastGeneratedFiles = generatedFiles;
     }
 
-    if (codeOutput) codeOutput.value = code;
+    // Render the file tree and display first file
+    renderCodegenFileTree();
   } catch (err) {
     console.error('Code generation error:', err);
     lastGeneratedFiles = null;
+    selectedGeneratedFile = null;
+    renderCodegenFileTree();
     if (codeOutput) {
-      codeOutput.value = `// Error generating code:\n// ${err.message}\n\n// Make sure your schema is valid FlatBuffers IDL.`;
+      codeOutput.textContent = `// Error generating code:\n// ${err.message}\n\n// Make sure your schema is valid FlatBuffers IDL.`;
     }
   }
 }

@@ -999,7 +999,7 @@
                     <span id="schema-current-file" class="current-file-indicator"></span>
                   </div>
                 </div>
-                <div class="pane-body">
+                <div class="pane-body code-editor-body">
                   <textarea id="studio-schema-input" class="code-textarea" spellcheck="false" placeholder="// Select or create a file to begin editing..."></textarea>
                 </div>
                 <div class="pane-footer">
@@ -1127,51 +1127,77 @@
 
         <!-- Code Generator Panel -->
         <div id="studio-code-gen" class="studio-panel">
-          <div class="studio-split options-layout">
-            <div class="studio-pane studio-pane-options">
-              <div class="pane-header">
-                <h4>Generation Options</h4>
-              </div>
-              <div class="pane-body">
-                <div class="glass-input-group">
-                  <label>Target Language</label>
-                  <select id="studio-codegen-lang" class="glass-select">
-                    <option value="ts">TypeScript</option>
-                    <option value="python">Python</option>
-                    <option value="cpp">C++</option>
-                    <option value="rust">Rust</option>
-                    <option value="go">Go</option>
-                    <option value="java">Java</option>
-                    <option value="csharp">C#</option>
-                    <option value="kotlin">Kotlin</option>
-                    <option value="swift">Swift</option>
-                    <option value="jsonschema">JSON Schema</option>
-                  </select>
+          <div class="code-gen-layout">
+            <!-- Left: Options -->
+            <div class="code-gen-options">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4>Options</h4>
                 </div>
-                <div class="glass-input-group">
-                  <label>Options</label>
-                  <label class="checkbox-label">
-                    <input type="checkbox" id="studio-opt-mutable" checked>
-                    <span>Generate Mutable APIs</span>
-                  </label>
-                  <label class="checkbox-label">
-                    <input type="checkbox" id="studio-opt-object-api" checked>
-                    <span>Generate Object API</span>
-                  </label>
+                <div class="pane-body">
+                  <div class="codegen-options-content">
+                    <div class="glass-input-group">
+                      <label>Target Language</label>
+                      <select id="studio-codegen-lang" class="glass-select">
+                        <option value="ts">TypeScript</option>
+                        <option value="python">Python</option>
+                        <option value="cpp">C++</option>
+                        <option value="rust">Rust</option>
+                        <option value="go">Go</option>
+                        <option value="java">Java</option>
+                        <option value="csharp">C#</option>
+                        <option value="kotlin">Kotlin</option>
+                        <option value="swift">Swift</option>
+                        <option value="jsonschema">JSON Schema</option>
+                      </select>
+                    </div>
+                    <div class="glass-input-group">
+                      <label>Options</label>
+                      <label class="checkbox-label">
+                        <input type="checkbox" id="studio-opt-mutable" checked>
+                        <span>Generate Mutable APIs</span>
+                      </label>
+                      <label class="checkbox-label">
+                        <input type="checkbox" id="studio-opt-object-api" checked>
+                        <span>Generate Object API</span>
+                      </label>
+                    </div>
+                    <button id="studio-generate-code" class="glass-btn primary full-width">Generate Code</button>
+                  </div>
                 </div>
-                <button id="studio-generate-code" class="glass-btn primary full-width">Generate Code</button>
               </div>
             </div>
-            <div class="studio-pane">
-              <div class="pane-header">
-                <h4>Generated Code</h4>
-                <div class="pane-actions">
-                  <button id="studio-copy-code" class="glass-btn small">Copy</button>
-                  <button id="studio-download-code" class="glass-btn small">Download</button>
+
+            <!-- Center: File Tree -->
+            <div class="code-gen-files">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4>Generated Files</h4>
+                  <span id="codegen-file-count" class="file-count-badge"></span>
+                </div>
+                <div class="pane-body">
+                  <div id="codegen-file-tree" class="codegen-file-tree">
+                    <div class="empty-state small">Generate code to see files</div>
+                  </div>
+                </div>
+                <div class="pane-footer">
+                  <button id="studio-download-code" class="glass-btn small full-width">Download All</button>
                 </div>
               </div>
-              <div class="pane-body">
-                <textarea id="studio-generated-code" class="code-textarea" readonly placeholder="// Generated code will appear here..."></textarea>
+            </div>
+
+            <!-- Right: Code View -->
+            <div class="code-gen-content">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4 id="codegen-current-file">Generated Code</h4>
+                  <div class="pane-actions">
+                    <button id="studio-copy-code" class="glass-btn small">Copy</button>
+                  </div>
+                </div>
+                <div class="pane-body code-view-body">
+                  <pre id="studio-generated-code" class="code-display">// Generated code will appear here...</pre>
+                </div>
               </div>
             </div>
           </div>

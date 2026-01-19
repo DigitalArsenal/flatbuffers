@@ -3113,10 +3113,139 @@ body {
   background: rgba(210, 153, 34, 0.15);
 }
 
+/* Code Generator Layout */
+.code-gen-layout {
+  display: grid;
+  grid-template-columns: 240px 220px 1fr;
+  gap: 16px;
+  height: 600px;
+}
+
+.code-gen-options .studio-pane,
+.code-gen-files .studio-pane,
+.code-gen-content .studio-pane {
+  height: 100%;
+}
+
+.codegen-options-content {
+  padding: 16px;
+}
+
+.codegen-options-content .glass-input-group {
+  margin-bottom: 16px;
+}
+
+/* Code Generator File Tree */
+.codegen-file-tree {
+  padding: 8px;
+}
+
+.codegen-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--white-70);
+}
+
+.codegen-file-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.codegen-file-item.active {
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--white-90);
+}
+
+.codegen-file-item .file-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.codegen-file-item.active .file-icon {
+  opacity: 1;
+}
+
+.codegen-file-item .file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codegen-file-item .file-size {
+  font-size: 10px;
+  color: var(--white-40);
+  flex-shrink: 0;
+}
+
+.file-count-badge {
+  font-size: 11px;
+  color: var(--white-50);
+  font-weight: 400;
+}
+
+/* Code Display (replaces textarea for readonly) */
+.code-view-body {
+  overflow: auto;
+}
+
+.code-display {
+  margin: 0;
+  padding: 16px;
+  background: transparent;
+  color: var(--white-90);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+  min-height: 100%;
+}
+
+@media (max-width: 1200px) {
+  .code-gen-layout {
+    grid-template-columns: 200px 180px 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .code-gen-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr;
+    height: auto;
+  }
+
+  .code-gen-options .studio-pane,
+  .code-gen-files .studio-pane {
+    height: auto;
+  }
+
+  .code-gen-content .studio-pane {
+    min-height: 400px;
+  }
+
+  .codegen-file-tree {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .codegen-file-item {
+    flex: 0 0 auto;
+  }
+}
+
 .code-textarea {
   width: 100%;
-  height: 100%;
-  min-height: 400px;
+  flex: 1;
   padding: 16px;
   background: transparent;
   border: none;
@@ -3126,6 +3255,14 @@ body {
   line-height: 1.6;
   resize: none;
   outline: none;
+  overflow: auto;
+}
+
+/* Pane body that directly contains a code textarea - no double scroll */
+.pane-body.code-editor-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .code-textarea::placeholder {

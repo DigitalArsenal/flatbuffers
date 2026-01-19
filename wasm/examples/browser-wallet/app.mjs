@@ -28,6 +28,11 @@ import {
   p256GenerateKeyPair,
   encryptBytes,
   decryptBytes,
+  EncryptionContext,
+  encryptionHeaderToJSON,
+  encryptionHeaderFromJSON,
+  encryptBuffer,
+  decryptBuffer,
 } from '../../src/encryption.mjs';
 
 import { FlatcRunner } from '../../src/runner.mjs';
@@ -78,6 +83,16 @@ const state = {
   virtualTable: null,
   // Streaming demo
   streamingDemo: null,
+  // PKI Demo state
+  pki: {
+    alice: null,  // { privateKey, publicKey }
+    bob: null,    // { privateKey, publicKey }
+    algorithm: 'x25519',
+    plaintext: null,
+    ciphertext: null,
+    header: null,
+    decrypted: null,
+  },
 };
 
 // =============================================================================
@@ -1082,6 +1097,189 @@ function clearBufferDisplay() {
 }
 
 // =============================================================================
+// PKI Demo (Alice/Bob Public Key Encryption)
+// =============================================================================
+
+function generatePKIKeyPairs() {
+  const algorithm = $('pki-algorithm').value;
+  state.pki.algorithm = algorithm;
+
+  // Generate key pairs for Alice and Bob
+  let generateFn;
+  switch (algorithm) {
+    case 'x25519':
+      generateFn = x25519GenerateKeyPair;
+      break;
+    case 'secp256k1':
+      generateFn = secp256k1GenerateKeyPair;
+      break;
+    case 'p256':
+      generateFn = p256GenerateKeyPair;
+      break;
+    default:
+      generateFn = x25519GenerateKeyPair;
+  }
+
+  state.pki.alice = generateFn();
+  state.pki.bob = generateFn();
+
+  // Display keys
+  $('alice-public-key').textContent = toHexCompact(state.pki.alice.publicKey);
+  $('alice-private-key').textContent = toHexCompact(state.pki.alice.privateKey);
+  $('bob-public-key').textContent = toHexCompact(state.pki.bob.publicKey);
+  $('bob-private-key').textContent = toHexCompact(state.pki.bob.privateKey);
+
+  // Show UI sections
+  $('pki-parties').style.display = 'grid';
+  $('pki-demo').style.display = 'block';
+  $('pki-security').style.display = 'block';
+
+  // Reset encryption state
+  resetPKIDemo();
+}
+
+function resetPKIDemo() {
+  state.pki.plaintext = null;
+  state.pki.ciphertext = null;
+  state.pki.header = null;
+  state.pki.decrypted = null;
+
+  $('pki-plaintext').value = '';
+  $('pki-ciphertext-step').style.display = 'none';
+  $('pki-decrypt-step').style.display = 'none';
+  $('pki-result-step').style.display = 'none';
+  $('pki-wrong-result').style.display = 'none';
+}
+
+function pkiEncrypt() {
+  const plaintext = $('pki-plaintext').value;
+  if (!plaintext.trim()) {
+    alert('Please enter a message to encrypt');
+    return;
+  }
+
+  if (!state.pki.bob) {
+    alert('Please generate key pairs first');
+    return;
+  }
+
+  // Convert plaintext to bytes
+  const encoder = new TextEncoder();
+  state.pki.plaintext = encoder.encode(plaintext);
+
+  // Create encryption context using Bob's public key (Alice encrypts FOR Bob)
+  const encryptCtx = EncryptionContext.forEncryption(state.pki.bob.publicKey, {
+    algorithm: state.pki.algorithm,
+    context: 'flatbuffers-pki-demo-v1',
+  });
+
+  // Encrypt the data
+  const ciphertext = new Uint8Array(state.pki.plaintext);
+  encryptBytes(ciphertext, encryptCtx.key, encryptCtx.nonce);
+  state.pki.ciphertext = ciphertext;
+
+  // Get the header (contains ephemeral public key, etc.)
+  state.pki.header = encryptCtx.getHeaderJSON();
+
+  // Display results
+  $('pki-ciphertext').textContent = toHexCompact(ciphertext);
+  $('pki-header').textContent = JSON.stringify(state.pki.header, null, 2);
+
+  // Show next steps
+  $('pki-ciphertext-step').style.display = 'flex';
+  $('pki-decrypt-step').style.display = 'flex';
+  $('pki-result-step').style.display = 'none';
+  $('pki-wrong-result').style.display = 'none';
+}
+
+function pkiDecrypt() {
+  if (!state.pki.ciphertext || !state.pki.header) {
+    alert('Please encrypt a message first');
+    return;
+  }
+
+  if (!state.pki.bob) {
+    alert('Key pairs not available');
+    return;
+  }
+
+  try {
+    // Parse the header
+    const header = encryptionHeaderFromJSON(state.pki.header);
+
+    // Create decryption context using Bob's private key
+    const decryptCtx = EncryptionContext.forDecryption(
+      state.pki.bob.privateKey,
+      header,
+      'flatbuffers-pki-demo-v1'
+    );
+
+    // Decrypt the data
+    const decrypted = new Uint8Array(state.pki.ciphertext);
+    decryptBytes(decrypted, decryptCtx.key, decryptCtx.nonce);
+    state.pki.decrypted = decrypted;
+
+    // Convert back to string
+    const decoder = new TextDecoder();
+    const decryptedText = decoder.decode(decrypted);
+
+    // Display result
+    $('pki-decrypted').textContent = decryptedText;
+    $('pki-result-step').style.display = 'flex';
+    $('pki-verification').style.display = 'flex';
+
+  } catch (error) {
+    console.error('Decryption failed:', error);
+    alert('Decryption failed: ' + error.message);
+  }
+}
+
+function pkiTryWrongKey() {
+  if (!state.pki.ciphertext || !state.pki.header) {
+    alert('Please encrypt a message first');
+    return;
+  }
+
+  if (!state.pki.alice) {
+    alert('Key pairs not available');
+    return;
+  }
+
+  try {
+    // Parse the header
+    const header = encryptionHeaderFromJSON(state.pki.header);
+
+    // Try to decrypt with Alice's private key (WRONG - should fail)
+    const decryptCtx = EncryptionContext.forDecryption(
+      state.pki.alice.privateKey,
+      header,
+      'flatbuffers-pki-demo-v1'
+    );
+
+    // Attempt decryption
+    const attemptedDecrypt = new Uint8Array(state.pki.ciphertext);
+    decryptBytes(attemptedDecrypt, decryptCtx.key, decryptCtx.nonce);
+
+    // Check if it matches original (it shouldn't)
+    const decoder = new TextDecoder();
+    const result = decoder.decode(attemptedDecrypt);
+    const original = decoder.decode(state.pki.plaintext);
+
+    if (result === original) {
+      // This should never happen!
+      alert('WARNING: Decryption succeeded with wrong key - this is a bug!');
+    } else {
+      // Expected: decryption produces garbage
+      $('pki-wrong-result').style.display = 'flex';
+    }
+
+  } catch (error) {
+    // Expected: decryption might throw an error
+    $('pki-wrong-result').style.display = 'flex';
+  }
+}
+
+// =============================================================================
 // Streaming Demo
 // =============================================================================
 
@@ -1448,6 +1646,12 @@ function setupMainAppHandlers() {
   $('generate-buffers').addEventListener('click', generateBulkBuffers);
   $('toggle-encryption').addEventListener('click', toggleEncryption);
   $('clear-buffers').addEventListener('click', clearBufferDisplay);
+
+  // PKI Tab
+  $('pki-generate-keys').addEventListener('click', generatePKIKeyPairs);
+  $('pki-encrypt').addEventListener('click', pkiEncrypt);
+  $('pki-decrypt').addEventListener('click', pkiDecrypt);
+  $('pki-wrong-key').addEventListener('click', pkiTryWrongKey);
 
   // Streaming Tab
   $('start-streaming').addEventListener('click', startStreaming);

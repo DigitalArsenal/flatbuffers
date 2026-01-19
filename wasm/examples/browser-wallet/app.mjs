@@ -1106,7 +1106,10 @@ const PKI_STORAGE_KEY = 'flatbuffers-pki-keys';
  * Save PKI keys to localStorage (encrypted keys stored as hex)
  */
 function savePKIKeys() {
-  if (!state.pki.alice || !state.pki.bob) return;
+  if (!state.pki.alice || !state.pki.bob) {
+    console.warn('Cannot save PKI keys: alice or bob is null');
+    return;
+  }
 
   const data = {
     algorithm: state.pki.algorithm,
@@ -1123,6 +1126,7 @@ function savePKIKeys() {
 
   try {
     localStorage.setItem(PKI_STORAGE_KEY, JSON.stringify(data));
+    console.log('Saved PKI keys to localStorage:', data.algorithm);
   } catch (e) {
     console.warn('Failed to save PKI keys to localStorage:', e);
   }
@@ -1146,10 +1150,16 @@ function hexToBytes(hex) {
 function loadPKIKeys() {
   try {
     const stored = localStorage.getItem(PKI_STORAGE_KEY);
-    if (!stored) return false;
+    if (!stored) {
+      console.log('No PKI keys found in localStorage');
+      return false;
+    }
 
     const data = JSON.parse(stored);
-    if (!data.alice || !data.bob || !data.algorithm) return false;
+    if (!data.alice || !data.bob || !data.algorithm) {
+      console.warn('Invalid PKI data in localStorage');
+      return false;
+    }
 
     // Restore keys from hex
     state.pki.algorithm = data.algorithm;
@@ -1162,19 +1172,30 @@ function loadPKIKeys() {
       privateKey: hexToBytes(data.bob.privateKey),
     };
 
-    // Update UI
-    $('pki-algorithm').value = data.algorithm;
-    $('alice-public-key').textContent = data.alice.publicKey;
-    $('alice-private-key').textContent = data.alice.privateKey;
-    $('bob-public-key').textContent = data.bob.publicKey;
-    $('bob-private-key').textContent = data.bob.privateKey;
+    // Update UI elements (with null checks)
+    const pkiAlgorithm = $('pki-algorithm');
+    const alicePublicKey = $('alice-public-key');
+    const alicePrivateKey = $('alice-private-key');
+    const bobPublicKey = $('bob-public-key');
+    const bobPrivateKey = $('bob-private-key');
+    const pkiParties = $('pki-parties');
+    const pkiDemo = $('pki-demo');
+    const pkiSecurity = $('pki-security');
+    const pkiClearKeys = $('pki-clear-keys');
+
+    if (pkiAlgorithm) pkiAlgorithm.value = data.algorithm;
+    if (alicePublicKey) alicePublicKey.textContent = data.alice.publicKey;
+    if (alicePrivateKey) alicePrivateKey.textContent = data.alice.privateKey;
+    if (bobPublicKey) bobPublicKey.textContent = data.bob.publicKey;
+    if (bobPrivateKey) bobPrivateKey.textContent = data.bob.privateKey;
 
     // Show UI sections
-    $('pki-parties').style.display = 'grid';
-    $('pki-demo').style.display = 'block';
-    $('pki-security').style.display = 'block';
-    $('pki-clear-keys').style.display = 'inline-flex';
+    if (pkiParties) pkiParties.style.display = 'grid';
+    if (pkiDemo) pkiDemo.style.display = 'block';
+    if (pkiSecurity) pkiSecurity.style.display = 'block';
+    if (pkiClearKeys) pkiClearKeys.style.display = 'inline-flex';
 
+    console.log('Loaded PKI keys:', data.algorithm, 'Alice:', data.alice.publicKey.slice(0, 16) + '...');
     return true;
   } catch (e) {
     console.warn('Failed to load PKI keys from localStorage:', e);

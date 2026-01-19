@@ -3156,6 +3156,541 @@ async function init() {
     // Show error state in loading overlay
     loadingOverlay.classList.add('error');
   }
+
+  // Initialize Studio functionality
+  initStudio();
+}
+
+// =============================================================================
+// Studio Functionality
+// =============================================================================
+
+const studioState = {
+  schemaType: 'fbs',
+  parsedSchema: null,
+  tables: [],
+  enums: [],
+  structs: [],
+  currentBuffer: null,
+};
+
+const SAMPLE_FBS_SCHEMA = `// Sample FlatBuffers Schema
+namespace MyGame.Sample;
+
+enum Color : byte { Red = 0, Green, Blue = 2 }
+
+struct Vec3 {
+  x: float;
+  y: float;
+  z: float;
+}
+
+table Monster {
+  pos: Vec3;
+  mana: short = 150;
+  hp: short = 100;
+  name: string;
+  friendly: bool = false;
+  inventory: [ubyte];
+  color: Color = Blue;
+}
+
+table Weapon {
+  name: string;
+  damage: short;
+}
+
+root_type Monster;
+`;
+
+function initStudio() {
+  // Studio tab switching
+  document.querySelectorAll('.studio-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabId = tab.dataset.studioTab;
+      document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.studio-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      const panel = document.getElementById(`studio-${tabId}`);
+      if (panel) panel.classList.add('active');
+    });
+  });
+
+  // Load sample schema
+  $('studio-load-sample')?.addEventListener('click', () => {
+    const schemaInput = $('studio-schema-input');
+    if (schemaInput) {
+      schemaInput.value = SAMPLE_FBS_SCHEMA;
+      setStudioStatus('Sample schema loaded', 'success');
+    }
+  });
+
+  // Upload schema
+  $('studio-upload-schema')?.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const schemaInput = $('studio-schema-input');
+      if (schemaInput) {
+        schemaInput.value = event.target.result;
+        setStudioStatus(`Loaded ${file.name}`, 'success');
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  // Parse schema
+  $('studio-parse-schema')?.addEventListener('click', parseStudioSchema);
+
+  // Code generation
+  $('studio-generate-code')?.addEventListener('click', generateStudioCode);
+  $('studio-copy-code')?.addEventListener('click', () => {
+    const code = $('studio-generated-code')?.value || '';
+    navigator.clipboard.writeText(code);
+  });
+  $('studio-download-code')?.addEventListener('click', () => {
+    const code = $('studio-generated-code')?.value || '';
+    const lang = $('studio-codegen-lang')?.value || 'ts';
+    const ext = lang === 'ts' ? 'ts' : lang === 'js' ? 'js' : 'json';
+    downloadTextFile(code, `generated.${ext}`);
+  });
+
+  // Builder
+  $('studio-builder-table')?.addEventListener('change', (e) => {
+    if (e.target.value) buildStudioForm(e.target.value);
+  });
+  $('studio-build-buffer')?.addEventListener('click', buildStudioBuffer);
+  $('studio-clear-form')?.addEventListener('click', clearStudioForm);
+  $('studio-download-buffer')?.addEventListener('click', downloadStudioBuffer);
+
+  // Downloads
+  $('studio-download-flatc-wasm')?.addEventListener('click', () => {
+    downloadFile('../../dist/flatc.wasm', 'flatc.wasm');
+  });
+  $('studio-download-flatc-js')?.addEventListener('click', () => {
+    downloadFile('../../src/runner.mjs', 'flatc-runner.mjs');
+  });
+  $('studio-download-enc-wasm')?.addEventListener('click', () => {
+    downloadFile('../../dist/flatc-encryption.wasm', 'flatc-encryption.wasm');
+  });
+  $('studio-download-enc-js')?.addEventListener('click', () => {
+    downloadFile('../../src/encryption.mjs', 'encryption.mjs');
+  });
+}
+
+function setStudioStatus(message, type) {
+  const status = $('studio-schema-status');
+  if (status) {
+    status.textContent = message;
+    status.className = 'status-text';
+    if (type) status.classList.add(type);
+  }
+}
+
+function parseStudioSchema() {
+  const schemaInput = $('studio-schema-input');
+  const content = schemaInput?.value || '';
+
+  if (!content.trim()) {
+    setStudioStatus('Schema is empty', 'error');
+    return;
+  }
+
+  try {
+    const schema = parseFBSSchemaContent(content);
+    studioState.parsedSchema = schema;
+    studioState.tables = schema.tables;
+    studioState.enums = schema.enums;
+    studioState.structs = schema.structs;
+
+    updateStudioParsedView(schema);
+    updateStudioTableSelectors();
+    setStudioStatus('Schema parsed successfully', 'success');
+  } catch (err) {
+    console.error('Parse error:', err);
+    setStudioStatus(err.message, 'error');
+  }
+}
+
+function parseFBSSchemaContent(content) {
+  const schema = {
+    namespace: '',
+    tables: [],
+    structs: [],
+    enums: [],
+    rootType: '',
+  };
+
+  // Parse namespace
+  const nsMatch = content.match(/namespace\s+([\w.]+)\s*;/);
+  if (nsMatch) schema.namespace = nsMatch[1];
+
+  // Parse root_type
+  const rootMatch = content.match(/root_type\s+(\w+)\s*;/);
+  if (rootMatch) schema.rootType = rootMatch[1];
+
+  // Parse enums
+  const enumRegex = /enum\s+(\w+)\s*:\s*(\w+)\s*\{([^}]+)\}/g;
+  let match;
+  while ((match = enumRegex.exec(content)) !== null) {
+    const values = match[3].split(',').map(v => {
+      const parts = v.trim().split('=');
+      return { name: parts[0].trim(), value: parts[1] ? parseInt(parts[1].trim()) : null };
+    }).filter(v => v.name);
+    schema.enums.push({ name: match[1], type: match[2], values });
+  }
+
+  // Parse structs
+  const structRegex = /struct\s+(\w+)\s*\{([^}]+)\}/g;
+  while ((match = structRegex.exec(content)) !== null) {
+    const fields = parseSchemaFields(match[2]);
+    schema.structs.push({ name: match[1], fields });
+  }
+
+  // Parse tables
+  const tableRegex = /table\s+(\w+)\s*\{([^}]+)\}/g;
+  while ((match = tableRegex.exec(content)) !== null) {
+    const fields = parseSchemaFields(match[2]);
+    schema.tables.push({ name: match[1], fields });
+  }
+
+  return schema;
+}
+
+function parseSchemaFields(fieldsStr) {
+  const fields = [];
+  const lines = fieldsStr.split(';').filter(l => l.trim());
+  for (const line of lines) {
+    const match = line.trim().match(/(\w+)\s*:\s*([^=]+)(?:=\s*(.+))?/);
+    if (match) {
+      fields.push({ name: match[1], type: match[2].trim(), default: match[3]?.trim() });
+    }
+  }
+  return fields;
+}
+
+function updateStudioParsedView(schema) {
+  const container = $('studio-parsed-view');
+  if (!container) return;
+
+  let html = '';
+
+  if (schema.namespace) {
+    html += `<div class="tree-node"><strong>namespace:</strong> ${schema.namespace}</div>`;
+  }
+
+  if (schema.enums.length) {
+    html += '<div class="tree-section">Enums</div>';
+    for (const e of schema.enums) {
+      html += `<div class="tree-node"><span class="tree-icon enum">E</span><span class="tree-name">${e.name}</span><span class="tree-type">: ${e.type}</span></div>`;
+      html += '<div class="tree-children">';
+      for (const v of e.values) {
+        html += `<div class="tree-node"><span class="tree-icon field">=</span>${v.name}${v.value !== null ? ` = ${v.value}` : ''}</div>`;
+      }
+      html += '</div>';
+    }
+  }
+
+  if (schema.structs.length) {
+    html += '<div class="tree-section">Structs</div>';
+    for (const s of schema.structs) {
+      html += `<div class="tree-node"><span class="tree-icon struct">S</span><span class="tree-name">${s.name}</span></div>`;
+      html += '<div class="tree-children">';
+      for (const f of s.fields) {
+        html += `<div class="tree-node"><span class="tree-icon field">-</span>${f.name}<span class="tree-type">: ${f.type}</span></div>`;
+      }
+      html += '</div>';
+    }
+  }
+
+  if (schema.tables.length) {
+    html += '<div class="tree-section">Tables</div>';
+    for (const t of schema.tables) {
+      html += `<div class="tree-node"><span class="tree-icon table">T</span><span class="tree-name">${t.name}</span>${schema.rootType === t.name ? ' <span class="tree-type">(root)</span>' : ''}</div>`;
+      html += '<div class="tree-children">';
+      for (const f of t.fields) {
+        html += `<div class="tree-node"><span class="tree-icon field">-</span>${f.name}<span class="tree-type">: ${f.type}</span>${f.default ? ` = ${f.default}` : ''}</div>`;
+      }
+      html += '</div>';
+    }
+  }
+
+  container.innerHTML = html || '<div class="empty-state">No schema parsed</div>';
+}
+
+function updateStudioTableSelectors() {
+  const tables = studioState.tables || [];
+  const options = tables.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+  const builderSelect = $('studio-builder-table');
+  if (builderSelect) {
+    builderSelect.innerHTML = '<option value="">Select Table</option>' + options;
+  }
+}
+
+async function generateStudioCode() {
+  const schemaInput = $('studio-schema-input');
+  const content = schemaInput?.value || '';
+
+  if (!content.trim()) {
+    alert('Schema is empty');
+    return;
+  }
+
+  const lang = $('studio-codegen-lang')?.value || 'ts';
+  const codeOutput = $('studio-generated-code');
+
+  // For now, generate a simple placeholder
+  // In a full implementation, this would use the WASM flatc
+  let code = '';
+
+  if (lang === 'ts' || lang === 'js') {
+    code = `// Generated ${lang === 'ts' ? 'TypeScript' : 'JavaScript'} code
+// Schema: ${studioState.parsedSchema?.namespace || 'Unknown'}
+// Tables: ${studioState.tables.map(t => t.name).join(', ')}
+
+import * as flatbuffers from 'flatbuffers';
+
+`;
+    for (const table of studioState.tables) {
+      code += `export class ${table.name} {\n`;
+      code += `  bb: flatbuffers.ByteBuffer | null = null;\n`;
+      code += `  bb_pos = 0;\n\n`;
+      for (const field of table.fields) {
+        const tsType = fbsTypeToTS(field.type);
+        code += `  ${field.name}(): ${tsType} { /* ... */ }\n`;
+      }
+      code += `}\n\n`;
+    }
+  } else if (lang === 'json-schema') {
+    const jsonSchema = {
+      $schema: 'http://json-schema.org/draft-07/schema#',
+      definitions: {},
+    };
+    for (const table of studioState.tables) {
+      jsonSchema.definitions[table.name] = {
+        type: 'object',
+        properties: {},
+      };
+      for (const field of table.fields) {
+        jsonSchema.definitions[table.name].properties[field.name] = {
+          type: fbsTypeToJSONSchema(field.type),
+        };
+      }
+    }
+    code = JSON.stringify(jsonSchema, null, 2);
+  }
+
+  if (codeOutput) codeOutput.value = code;
+}
+
+function fbsTypeToTS(type) {
+  const map = {
+    'bool': 'boolean',
+    'byte': 'number',
+    'ubyte': 'number',
+    'short': 'number',
+    'ushort': 'number',
+    'int': 'number',
+    'uint': 'number',
+    'long': 'bigint',
+    'ulong': 'bigint',
+    'float': 'number',
+    'double': 'number',
+    'string': 'string',
+  };
+  if (type.startsWith('[') && type.endsWith(']')) {
+    return fbsTypeToTS(type.slice(1, -1)) + '[]';
+  }
+  return map[type.toLowerCase()] || type;
+}
+
+function fbsTypeToJSONSchema(type) {
+  const map = {
+    'bool': 'boolean',
+    'byte': 'integer',
+    'ubyte': 'integer',
+    'short': 'integer',
+    'ushort': 'integer',
+    'int': 'integer',
+    'uint': 'integer',
+    'long': 'integer',
+    'ulong': 'integer',
+    'float': 'number',
+    'double': 'number',
+    'string': 'string',
+  };
+  if (type.startsWith('[') && type.endsWith(']')) {
+    return 'array';
+  }
+  return map[type.toLowerCase()] || 'object';
+}
+
+function buildStudioForm(tableName) {
+  const table = studioState.tables.find(t => t.name === tableName);
+  if (!table) return;
+
+  const container = $('studio-builder-form');
+  if (!container) return;
+
+  let html = '';
+  for (const field of table.fields) {
+    html += `<div class="field-group">
+      <div class="field-label">
+        <span class="field-name">${field.name}</span>
+        <span class="field-type">${field.type}</span>
+      </div>
+      ${getStudioFieldInput(field)}
+    </div>`;
+  }
+
+  container.innerHTML = html;
+}
+
+function getStudioFieldInput(field) {
+  const type = field.type.toLowerCase();
+  const id = `studio-field-${field.name}`;
+
+  if (type.startsWith('[') && type.endsWith(']')) {
+    return `<textarea id="${id}" class="glass-input" rows="2" placeholder="One value per line"></textarea>`;
+  }
+
+  const enumType = studioState.enums.find(e => e.name === field.type);
+  if (enumType) {
+    const options = enumType.values.map(v => `<option value="${v.name}">${v.name}</option>`).join('');
+    return `<select id="${id}" class="glass-select">${options}</select>`;
+  }
+
+  switch (type) {
+    case 'bool':
+      return `<select id="${id}" class="glass-select"><option value="false">false</option><option value="true">true</option></select>`;
+    case 'string':
+      return `<input type="text" id="${id}" class="glass-input" value="${field.default || ''}">`;
+    default:
+      return `<input type="number" id="${id}" class="glass-input" value="${field.default || ''}" step="any">`;
+  }
+}
+
+function buildStudioBuffer() {
+  const tableName = $('studio-builder-table')?.value;
+  if (!tableName) {
+    alert('Please select a table');
+    return;
+  }
+
+  const table = studioState.tables.find(t => t.name === tableName);
+  if (!table) return;
+
+  const data = {};
+  for (const field of table.fields) {
+    const input = $(`studio-field-${field.name}`);
+    if (input) data[field.name] = input.value;
+  }
+
+  const json = JSON.stringify(data, null, 2);
+  const encoder = new TextEncoder();
+  const buffer = encoder.encode(json);
+
+  studioState.currentBuffer = buffer;
+  displayStudioHexView(buffer);
+
+  const decodedView = $('studio-decoded-view');
+  if (decodedView) decodedView.textContent = json;
+
+  const downloadBtn = $('studio-download-buffer');
+  if (downloadBtn) downloadBtn.disabled = false;
+}
+
+function displayStudioHexView(buffer) {
+  const container = $('studio-hex-view');
+  if (!container) return;
+
+  let html = '';
+  for (let i = 0; i < buffer.length; i += 16) {
+    const offset = i.toString(16).padStart(8, '0');
+    const bytes = [];
+    const ascii = [];
+
+    for (let j = 0; j < 16; j++) {
+      if (i + j < buffer.length) {
+        bytes.push(buffer[i + j].toString(16).padStart(2, '0'));
+        const char = buffer[i + j];
+        ascii.push(char >= 32 && char < 127 ? String.fromCharCode(char) : '.');
+      } else {
+        bytes.push('  ');
+        ascii.push(' ');
+      }
+    }
+
+    html += `<div class="hex-line">
+      <span class="hex-offset">${offset}</span>
+      <span class="hex-bytes">${bytes.join(' ')}</span>
+      <span class="hex-ascii">${ascii.join('')}</span>
+    </div>`;
+  }
+
+  container.innerHTML = html || '<div class="empty-state">Build a buffer to see output</div>';
+}
+
+function clearStudioForm() {
+  const container = $('studio-builder-form');
+  if (container) {
+    const inputs = container.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => { input.value = ''; });
+  }
+  studioState.currentBuffer = null;
+
+  const hexView = $('studio-hex-view');
+  if (hexView) hexView.innerHTML = '<div class="empty-state">Build a buffer to see output</div>';
+
+  const decodedView = $('studio-decoded-view');
+  if (decodedView) decodedView.innerHTML = '<div class="empty-state">Build or upload a buffer</div>';
+
+  const downloadBtn = $('studio-download-buffer');
+  if (downloadBtn) downloadBtn.disabled = true;
+}
+
+function downloadStudioBuffer() {
+  if (!studioState.currentBuffer) return;
+  const blob = new Blob([studioState.currentBuffer]);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'flatbuffer.bin';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function downloadTextFile(content, filename) {
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function downloadFile(path, filename) {
+  try {
+    const response = await fetch(path);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error('Download failed:', err);
+    alert('Download failed: ' + err.message);
+  }
 }
 
 init();

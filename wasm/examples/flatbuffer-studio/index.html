@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="FlatBuffer Studio - Browser-based IDE for FlatBuffers">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlatBuffer Studio</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav-bar">
+    <div class="nav-content">
+      <a href="https://github.com/DigitalArsenal/flatbuffers" target="_blank" class="nav-logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+        </svg>
+        <span>FlatBuffer Studio</span>
+      </a>
+      <div class="nav-tabs">
+        <button class="nav-tab active" data-tab="schema">Schema Editor</button>
+        <button class="nav-tab" data-tab="codegen">Code Generator</button>
+        <button class="nav-tab" data-tab="builder">Data Builder</button>
+        <button class="nav-tab" data-tab="bulk">Bulk Generator</button>
+        <button class="nav-tab" data-tab="downloads">Downloads</button>
+      </div>
+      <div class="nav-actions">
+        <span id="status-indicator" class="status-indicator">
+          <span class="status-dot"></span>
+          <span class="status-text">Loading WASM...</span>
+        </span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Schema Editor Tab -->
+    <section id="tab-schema" class="tab-content active">
+      <div class="panel-container">
+        <!-- Left Panel: Schema Input -->
+        <div class="panel schema-panel">
+          <div class="panel-header">
+            <h2>Schema Definition</h2>
+            <div class="panel-actions">
+              <select id="schema-type" class="select-input">
+                <option value="fbs">FlatBuffers IDL</option>
+                <option value="json">JSON Schema</option>
+              </select>
+              <button id="load-sample" class="btn btn-secondary">Load Sample</button>
+              <label class="btn btn-secondary">
+                Upload
+                <input type="file" id="upload-schema" accept=".fbs,.json" hidden>
+              </label>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="schema-editor" class="code-editor"></div>
+          </div>
+          <div class="panel-footer">
+            <button id="parse-schema" class="btn btn-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              Parse Schema
+            </button>
+            <span id="schema-status" class="status-message"></span>
+          </div>
+        </div>
+
+        <!-- Right Panel: Parsed Schema View -->
+        <div class="panel parsed-panel">
+          <div class="panel-header">
+            <h2>Parsed Schema</h2>
+            <div class="panel-actions">
+              <button id="copy-ast" class="btn btn-icon" title="Copy AST">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="parsed-view" class="parsed-tree">
+              <div class="empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <p>Parse a schema to see its structure</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Code Generator Tab -->
+    <section id="tab-codegen" class="tab-content">
+      <div class="panel-container">
+        <!-- Left Panel: Options -->
+        <div class="panel options-panel">
+          <div class="panel-header">
+            <h2>Generation Options</h2>
+          </div>
+          <div class="panel-body">
+            <div class="form-group">
+              <label>Target Language</label>
+              <select id="codegen-lang" class="select-input">
+                <option value="ts">TypeScript</option>
+                <option value="js">JavaScript</option>
+                <option value="json-schema">JSON Schema</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Root Type</label>
+              <select id="codegen-root" class="select-input">
+                <option value="">Auto-detect</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Options</label>
+              <div class="checkbox-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="opt-gen-mutable" checked>
+                  <span>Generate Mutable APIs</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="opt-gen-object-api" checked>
+                  <span>Generate Object API</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="opt-reflect-names">
+                  <span>Include Reflection Names</span>
+                </label>
+              </div>
+            </div>
+            <button id="generate-code" class="btn btn-primary btn-full">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              Generate Code
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Panel: Generated Code -->
+        <div class="panel code-panel">
+          <div class="panel-header">
+            <h2>Generated Code</h2>
+            <div class="panel-actions">
+              <button id="copy-code" class="btn btn-secondary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                Copy
+              </button>
+              <button id="download-code" class="btn btn-secondary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Download
+              </button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="generated-code" class="code-editor"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Data Builder Tab -->
+    <section id="tab-builder" class="tab-content">
+      <div class="panel-container three-panel">
+        <!-- Left Panel: Form Builder -->
+        <div class="panel form-panel">
+          <div class="panel-header">
+            <h2>Data Entry</h2>
+            <div class="panel-actions">
+              <select id="builder-table" class="select-input">
+                <option value="">Select Table</option>
+              </select>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="builder-form" class="builder-form">
+              <div class="empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="3" y1="9" x2="21" y2="9"></line>
+                  <line x1="9" y1="21" x2="9" y2="9"></line>
+                </svg>
+                <p>Parse a schema and select a table to build data</p>
+              </div>
+            </div>
+          </div>
+          <div class="panel-footer">
+            <button id="build-buffer" class="btn btn-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+              </svg>
+              Build FlatBuffer
+            </button>
+            <button id="clear-form" class="btn btn-secondary">Clear</button>
+          </div>
+        </div>
+
+        <!-- Middle Panel: Buffer View -->
+        <div class="panel buffer-panel">
+          <div class="panel-header">
+            <h2>FlatBuffer Output</h2>
+            <div class="panel-actions">
+              <label class="checkbox-label">
+                <input type="checkbox" id="encrypt-buffer">
+                <span>Encrypt</span>
+              </label>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="buffer-hex" class="hex-view">
+              <div class="empty-state small">
+                <p>Build a buffer to see output</p>
+              </div>
+            </div>
+            <div id="buffer-stats" class="buffer-stats" style="display: none;">
+              <span class="stat"><strong>Size:</strong> <span id="buffer-size">0</span> bytes</span>
+              <span class="stat"><strong>Encrypted:</strong> <span id="buffer-encrypted">No</span></span>
+            </div>
+          </div>
+          <div class="panel-footer">
+            <button id="download-buffer" class="btn btn-secondary" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Download .bin
+            </button>
+            <label class="btn btn-secondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              Upload .bin
+              <input type="file" id="upload-buffer" accept=".bin,.fb" hidden>
+            </label>
+          </div>
+        </div>
+
+        <!-- Right Panel: Decoded View -->
+        <div class="panel decoded-panel">
+          <div class="panel-header">
+            <h2>Decoded Data</h2>
+            <div class="panel-actions">
+              <button id="copy-json" class="btn btn-icon" title="Copy as JSON">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="decoded-view" class="json-view">
+              <div class="empty-state small">
+                <p>Build or upload a buffer to decode</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bulk Generator Tab -->
+    <section id="tab-bulk" class="tab-content">
+      <div class="panel-container">
+        <!-- Left Panel: Generator Options -->
+        <div class="panel options-panel">
+          <div class="panel-header">
+            <h2>Bulk Generation</h2>
+          </div>
+          <div class="panel-body">
+            <div class="form-group">
+              <label>Table Type</label>
+              <select id="bulk-table" class="select-input">
+                <option value="">Select Table</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Number of Records</label>
+              <input type="number" id="bulk-count" class="text-input" value="100" min="1" max="10000">
+            </div>
+            <div class="form-group">
+              <label>Options</label>
+              <div class="checkbox-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="bulk-encrypt">
+                  <span>Encrypt all records</span>
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="bulk-single-file" checked>
+                  <span>Single file (vector)</span>
+                </label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Random Seed (optional)</label>
+              <input type="text" id="bulk-seed" class="text-input" placeholder="Leave empty for random">
+            </div>
+            <button id="generate-bulk" class="btn btn-primary btn-full">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+              </svg>
+              Generate Records
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Panel: Generated Records -->
+        <div class="panel records-panel">
+          <div class="panel-header">
+            <h2>Generated Records</h2>
+            <div class="panel-actions">
+              <span id="bulk-stats" class="stats-text"></span>
+              <button id="download-bulk" class="btn btn-secondary" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Download All
+              </button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="bulk-preview" class="records-list">
+              <div class="empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                <p>Configure options and generate bulk records</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Downloads Tab -->
+    <section id="tab-downloads" class="tab-content">
+      <div class="downloads-container">
+        <div class="downloads-header">
+          <h2>FlatBuffers Libraries</h2>
+          <p>Download pre-built FlatBuffers runtime libraries for your target platform</p>
+        </div>
+
+        <div class="downloads-grid">
+          <!-- TypeScript/JavaScript -->
+          <div class="download-card">
+            <div class="download-icon ts">TS</div>
+            <h3>TypeScript / JavaScript</h3>
+            <p>NPM package with full TypeScript definitions</p>
+            <div class="download-actions">
+              <code class="install-cmd">npm install flatbuffers</code>
+              <a href="https://www.npmjs.com/package/flatbuffers" target="_blank" class="btn btn-secondary">NPM</a>
+            </div>
+          </div>
+
+          <!-- Python -->
+          <div class="download-card">
+            <div class="download-icon py">PY</div>
+            <h3>Python</h3>
+            <p>PyPI package for Python 3.x</p>
+            <div class="download-actions">
+              <code class="install-cmd">pip install flatbuffers</code>
+              <a href="https://pypi.org/project/flatbuffers/" target="_blank" class="btn btn-secondary">PyPI</a>
+            </div>
+          </div>
+
+          <!-- Rust -->
+          <div class="download-card">
+            <div class="download-icon rs">RS</div>
+            <h3>Rust</h3>
+            <p>Cargo crate with no_std support</p>
+            <div class="download-actions">
+              <code class="install-cmd">cargo add flatbuffers</code>
+              <a href="https://crates.io/crates/flatbuffers" target="_blank" class="btn btn-secondary">Crates.io</a>
+            </div>
+          </div>
+
+          <!-- Go -->
+          <div class="download-card">
+            <div class="download-icon go">GO</div>
+            <h3>Go</h3>
+            <p>Go module with generics support</p>
+            <div class="download-actions">
+              <code class="install-cmd">go get github.com/google/flatbuffers/go</code>
+              <a href="https://pkg.go.dev/github.com/google/flatbuffers/go" target="_blank" class="btn btn-secondary">Pkg.dev</a>
+            </div>
+          </div>
+
+          <!-- C++ -->
+          <div class="download-card">
+            <div class="download-icon cpp">C++</div>
+            <h3>C++</h3>
+            <p>Header-only library, C++11 compatible</p>
+            <div class="download-actions">
+              <code class="install-cmd">#include "flatbuffers/flatbuffers.h"</code>
+              <a href="https://github.com/google/flatbuffers/tree/master/include" target="_blank" class="btn btn-secondary">GitHub</a>
+            </div>
+          </div>
+
+          <!-- C# -->
+          <div class="download-card">
+            <div class="download-icon cs">C#</div>
+            <h3>C# / .NET</h3>
+            <p>NuGet package for .NET Standard 2.0+</p>
+            <div class="download-actions">
+              <code class="install-cmd">dotnet add package FlatBuffers</code>
+              <a href="https://www.nuget.org/packages/Google.FlatBuffers" target="_blank" class="btn btn-secondary">NuGet</a>
+            </div>
+          </div>
+
+          <!-- Java -->
+          <div class="download-card">
+            <div class="download-icon java">JV</div>
+            <h3>Java</h3>
+            <p>Maven Central artifact</p>
+            <div class="download-actions">
+              <code class="install-cmd">com.google.flatbuffers:flatbuffers-java</code>
+              <a href="https://central.sonatype.com/artifact/com.google.flatbuffers/flatbuffers-java" target="_blank" class="btn btn-secondary">Maven</a>
+            </div>
+          </div>
+
+          <!-- Swift -->
+          <div class="download-card">
+            <div class="download-icon swift">SW</div>
+            <h3>Swift</h3>
+            <p>Swift Package Manager</p>
+            <div class="download-actions">
+              <code class="install-cmd">.package(url: "https://github.com/google/flatbuffers.git")</code>
+              <a href="https://github.com/google/flatbuffers/tree/master/swift" target="_blank" class="btn btn-secondary">GitHub</a>
+            </div>
+          </div>
+
+          <!-- Kotlin -->
+          <div class="download-card">
+            <div class="download-icon kt">KT</div>
+            <h3>Kotlin</h3>
+            <p>Kotlin/JVM and Kotlin/Native</p>
+            <div class="download-actions">
+              <code class="install-cmd">com.google.flatbuffers:flatbuffers-kotlin</code>
+              <a href="https://central.sonatype.com/artifact/com.google.flatbuffers/flatbuffers-kotlin" target="_blank" class="btn btn-secondary">Maven</a>
+            </div>
+          </div>
+
+          <!-- WASM flatc -->
+          <div class="download-card featured">
+            <div class="download-icon wasm">WA</div>
+            <h3>WASM Compiler (flatc)</h3>
+            <p>Run flatc in the browser or Node.js</p>
+            <div class="download-actions">
+              <button id="download-flatc-wasm" class="btn btn-primary">Download flatc.wasm</button>
+              <button id="download-flatc-js" class="btn btn-secondary">Download flatc.mjs</button>
+            </div>
+          </div>
+
+          <!-- Encryption Module -->
+          <div class="download-card featured">
+            <div class="download-icon enc">EN</div>
+            <h3>Encryption Module (WASM)</h3>
+            <p>AES-256, X25519, secp256k1, P-256, Ed25519</p>
+            <div class="download-actions">
+              <button id="download-enc-wasm" class="btn btn-primary">Download encryption.wasm</button>
+              <button id="download-enc-js" class="btn btn-secondary">Download encryption.mjs</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Encryption Key Modal -->
+  <div id="encryption-modal" class="modal" style="display: none;">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Encryption Settings</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Encryption Key (32 bytes hex)</label>
+          <input type="text" id="encryption-key" class="text-input mono" placeholder="Enter or generate a 256-bit key">
+        </div>
+        <button id="generate-key" class="btn btn-secondary">Generate Random Key</button>
+      </div>
+      <div class="modal-footer">
+        <button id="save-encryption" class="btn btn-primary">Save</button>
+        <button class="btn btn-secondary modal-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./app.mjs"></script>
+</body>
+</html>

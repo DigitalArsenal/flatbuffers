@@ -37,6 +37,7 @@
         <a href="#schema" class="nav-link" data-tab="schema">Schema</a>
         <a href="#streaming" class="nav-link" data-tab="streaming">Streaming</a>
         <a href="#identity" class="nav-link" data-tab="identity">Identity</a>
+        <a href="#studio" class="nav-link" data-tab="studio">Studio</a>
         <span class="nav-divider"></span>
         <a href="https://flatbuffers.dev" target="_blank" class="nav-link nav-link-external">Docs</a>
       </div>
@@ -68,6 +69,7 @@
     <a href="#schema" class="nav-link" data-tab="schema">Schema</a>
     <a href="#streaming" class="nav-link" data-tab="streaming">Streaming</a>
     <a href="#identity" class="nav-link" data-tab="identity">Identity</a>
+    <a href="#studio" class="nav-link" data-tab="studio">Studio</a>
     <span class="nav-divider"></span>
     <a href="https://flatbuffers.dev" target="_blank" class="nav-link nav-link-external">Docs</a>
   </div>
@@ -926,6 +928,240 @@
             <summary>View Raw vCard</summary>
             <pre id="vcard-preview"></pre>
           </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- Studio Section -->
+    <section id="studio-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">FlatBuffer Studio</h2>
+        <p class="section-desc">Create schemas, generate code, and build FlatBuffers in the browser</p>
+      </div>
+
+      <div class="studio-container">
+        <!-- Studio Tabs -->
+        <div class="studio-tabs">
+          <button class="studio-tab active" data-studio-tab="schema-editor">Schema Editor</button>
+          <button class="studio-tab" data-studio-tab="code-gen">Code Generator</button>
+          <button class="studio-tab" data-studio-tab="data-builder">Data Builder</button>
+          <button class="studio-tab" data-studio-tab="downloads">Downloads</button>
+        </div>
+
+        <!-- Schema Editor Panel -->
+        <div id="studio-schema-editor" class="studio-panel active">
+          <div class="studio-split">
+            <div class="studio-pane">
+              <div class="pane-header">
+                <h4>Schema Definition</h4>
+                <div class="pane-actions">
+                  <select id="studio-schema-type" class="glass-select compact">
+                    <option value="fbs">FlatBuffers IDL    </option>
+                    <option value="json">JSON Schema</option>
+                  </select>
+                  <button id="studio-load-sample" class="glass-btn small">Load Sample</button>
+                  <label class="glass-btn small">
+                    Upload
+                    <input type="file" id="studio-upload-schema" accept=".fbs,.json" hidden>
+                  </label>
+                </div>
+              </div>
+              <div class="pane-body">
+                <textarea id="studio-schema-input" class="code-textarea" spellcheck="false" placeholder="// Enter your FlatBuffers schema here..."></textarea>
+              </div>
+              <div class="pane-footer">
+                <button id="studio-parse-schema" class="glass-btn primary">Parse Schema</button>
+                <span id="studio-schema-status" class="status-text"></span>
+              </div>
+            </div>
+            <div class="studio-pane">
+              <div class="pane-header">
+                <h4>Parsed Structure</h4>
+              </div>
+              <div class="pane-body">
+                <div id="studio-parsed-view" class="parsed-view">
+                  <div class="empty-state">Parse a schema to see its structure</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Code Generator Panel -->
+        <div id="studio-code-gen" class="studio-panel">
+          <div class="studio-split options-layout">
+            <div class="studio-pane studio-pane-options">
+              <div class="pane-header">
+                <h4>Generation Options</h4>
+              </div>
+              <div class="pane-body">
+                <div class="glass-input-group">
+                  <label>Target Language</label>
+                  <select id="studio-codegen-lang" class="glass-select">
+                    <option value="ts">TypeScript</option>
+                    <option value="js">JavaScript</option>
+                    <option value="json-schema">JSON Schema</option>
+                  </select>
+                </div>
+                <div class="glass-input-group">
+                  <label>Options</label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="studio-opt-mutable" checked>
+                    <span>Generate Mutable APIs</span>
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="studio-opt-object-api" checked>
+                    <span>Generate Object API</span>
+                  </label>
+                </div>
+                <button id="studio-generate-code" class="glass-btn primary full-width">Generate Code</button>
+              </div>
+            </div>
+            <div class="studio-pane">
+              <div class="pane-header">
+                <h4>Generated Code</h4>
+                <div class="pane-actions">
+                  <button id="studio-copy-code" class="glass-btn small">Copy</button>
+                  <button id="studio-download-code" class="glass-btn small">Download</button>
+                </div>
+              </div>
+              <div class="pane-body">
+                <textarea id="studio-generated-code" class="code-textarea" readonly placeholder="// Generated code will appear here..."></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Data Builder Panel -->
+        <div id="studio-data-builder" class="studio-panel">
+          <div class="studio-split three-col">
+            <div class="studio-pane">
+              <div class="pane-header">
+                <h4>Data Entry</h4>
+                <select id="studio-builder-table" class="glass-select compact">
+                  <option value="">Select Table</option>
+                </select>
+              </div>
+              <div class="pane-body">
+                <div id="studio-builder-form" class="builder-form">
+                  <div class="empty-state">Parse a schema and select a table</div>
+                </div>
+              </div>
+              <div class="pane-footer">
+                <button id="studio-build-buffer" class="glass-btn primary">Build Buffer</button>
+                <button id="studio-clear-form" class="glass-btn small">Clear</button>
+              </div>
+            </div>
+            <div class="studio-pane">
+              <div class="pane-header">
+                <h4>Buffer Output</h4>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="studio-encrypt-buffer">
+                  <span>Encrypt</span>
+                </label>
+              </div>
+              <div class="pane-body">
+                <div id="studio-hex-view" class="hex-view">
+                  <div class="empty-state">Build a buffer to see output</div>
+                </div>
+              </div>
+              <div class="pane-footer">
+                <button id="studio-download-buffer" class="glass-btn small" disabled>Download .bin</button>
+                <label class="glass-btn small">
+                  Upload .bin
+                  <input type="file" id="studio-upload-buffer" accept=".bin,.fb" hidden>
+                </label>
+              </div>
+            </div>
+            <div class="studio-pane">
+              <div class="pane-header">
+                <h4>Decoded JSON</h4>
+              </div>
+              <div class="pane-body">
+                <pre id="studio-decoded-view" class="json-view"><div class="empty-state">Build or upload a buffer</div></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Downloads Panel -->
+        <div id="studio-downloads" class="studio-panel">
+          <div class="downloads-grid">
+            <div class="download-card">
+              <div class="download-icon ts">TS</div>
+              <h4>TypeScript / JavaScript</h4>
+              <p>NPM package with full TypeScript definitions</p>
+              <code class="install-cmd">npm install flatbuffers</code>
+              <a href="https://www.npmjs.com/package/flatbuffers" target="_blank" class="glass-btn small">NPM</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon py">PY</div>
+              <h4>Python</h4>
+              <p>PyPI package for Python 3.x</p>
+              <code class="install-cmd">pip install flatbuffers</code>
+              <a href="https://pypi.org/project/flatbuffers/" target="_blank" class="glass-btn small">PyPI</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon rs">RS</div>
+              <h4>Rust</h4>
+              <p>Cargo crate with no_std support</p>
+              <code class="install-cmd">cargo add flatbuffers</code>
+              <a href="https://crates.io/crates/flatbuffers" target="_blank" class="glass-btn small">Crates.io</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon go">GO</div>
+              <h4>Go</h4>
+              <p>Go module with generics support</p>
+              <code class="install-cmd">go get github.com/google/flatbuffers/go</code>
+              <a href="https://pkg.go.dev/github.com/google/flatbuffers/go" target="_blank" class="glass-btn small">Pkg.dev</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon cpp">C++</div>
+              <h4>C++</h4>
+              <p>Header-only library, C++11 compatible</p>
+              <code class="install-cmd">#include "flatbuffers/flatbuffers.h"</code>
+              <a href="https://github.com/google/flatbuffers/tree/master/include" target="_blank" class="glass-btn small">GitHub</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon cs">C#</div>
+              <h4>C# / .NET</h4>
+              <p>NuGet package for .NET Standard 2.0+</p>
+              <code class="install-cmd">dotnet add package FlatBuffers</code>
+              <a href="https://www.nuget.org/packages/Google.FlatBuffers" target="_blank" class="glass-btn small">NuGet</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon java">JV</div>
+              <h4>Java</h4>
+              <p>Maven Central artifact</p>
+              <code class="install-cmd">com.google.flatbuffers:flatbuffers-java</code>
+              <a href="https://central.sonatype.com/artifact/com.google.flatbuffers/flatbuffers-java" target="_blank" class="glass-btn small">Maven</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon swift">SW</div>
+              <h4>Swift</h4>
+              <p>Swift Package Manager</p>
+              <code class="install-cmd">.package(url: "flatbuffers.git")</code>
+              <a href="https://github.com/google/flatbuffers/tree/master/swift" target="_blank" class="glass-btn small">GitHub</a>
+            </div>
+            <div class="download-card featured">
+              <div class="download-icon wasm">WA</div>
+              <h4>WASM Compiler (flatc)</h4>
+              <p>Run flatc in the browser or Node.js</p>
+              <div class="download-actions">
+                <button id="studio-download-flatc-wasm" class="glass-btn primary small">flatc.wasm</button>
+                <button id="studio-download-flatc-js" class="glass-btn small">flatc.mjs</button>
+              </div>
+            </div>
+            <div class="download-card featured">
+              <div class="download-icon enc">EN</div>
+              <h4>Encryption Module (WASM)</h4>
+              <p>AES-256, X25519, secp256k1, P-256, Ed25519</p>
+              <div class="download-actions">
+                <button id="studio-download-enc-wasm" class="glass-btn primary small">encryption.wasm</button>
+                <button id="studio-download-enc-js" class="glass-btn small">encryption.mjs</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>

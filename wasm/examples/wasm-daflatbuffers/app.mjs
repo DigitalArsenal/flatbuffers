@@ -3215,7 +3215,100 @@ const ALL_SCALAR_TYPES = [
 ];
 
 const INTEGER_TYPES = ['byte', 'ubyte', 'short', 'ushort', 'int', 'uint', 'long', 'ulong'];
+const FLOAT_TYPES = ['float', 'double'];
 const ENUM_BASE_TYPES = ['byte', 'ubyte', 'short', 'ushort', 'int', 'uint', 'long', 'ulong'];
+
+// Integer type ranges for validation
+const INTEGER_RANGES = {
+  'byte': { min: -128n, max: 127n },
+  'ubyte': { min: 0n, max: 255n },
+  'short': { min: -32768n, max: 32767n },
+  'ushort': { min: 0n, max: 65535n },
+  'int': { min: -2147483648n, max: 2147483647n },
+  'uint': { min: 0n, max: 4294967295n },
+  'long': { min: -9223372036854775808n, max: 9223372036854775807n },
+  'ulong': { min: 0n, max: 18446744073709551615n },
+};
+
+/**
+ * Validate a default value against its field type
+ * @param {string} value - The default value string
+ * @param {string} fieldType - The field type (e.g., 'int', 'bool', 'MyEnum')
+ * @returns {{ valid: boolean, error?: string }}
+ */
+function validateDefaultValue(value, fieldType) {
+  // Empty value is always valid (no default)
+  if (value === '' || value === undefined || value === null) {
+    return { valid: true };
+  }
+
+  // 'null' is valid for optional scalars
+  if (value === 'null') {
+    return { valid: true };
+  }
+
+  // Bool type
+  if (fieldType === 'bool') {
+    if (value === 'true' || value === 'false') {
+      return { valid: true };
+    }
+    return { valid: false, error: 'Must be "true" or "false"' };
+  }
+
+  // Integer types
+  if (INTEGER_TYPES.includes(fieldType)) {
+    const range = INTEGER_RANGES[fieldType];
+    // Check if it's a valid integer (decimal or hex)
+    const isHex = /^[-+]?0[xX][0-9a-fA-F]+$/.test(value);
+    const isDec = /^[-+]?[0-9]+$/.test(value);
+
+    if (!isHex && !isDec) {
+      return { valid: false, error: 'Must be an integer' };
+    }
+
+    try {
+      const num = BigInt(value);
+      if (num < range.min || num > range.max) {
+        return { valid: false, error: `Out of range (${range.min} to ${range.max})` };
+      }
+      return { valid: true };
+    } catch {
+      return { valid: false, error: 'Invalid integer' };
+    }
+  }
+
+  // Float types
+  if (FLOAT_TYPES.includes(fieldType)) {
+    // Special float values
+    if (/^[-+]?(nan|inf|infinity)$/i.test(value)) {
+      return { valid: true };
+    }
+    // Decimal float
+    if (/^[-+]?(([.][0-9]+)|([0-9]+[.][0-9]*)|([0-9]+))([eE][-+]?[0-9]+)?$/.test(value)) {
+      return { valid: true };
+    }
+    // Hex float
+    if (/^[-+]?0[xX](([.][0-9a-fA-F]+)|([0-9a-fA-F]+[.][0-9a-fA-F]*)|([0-9a-fA-F]+))([pP][-+]?[0-9]+)?$/.test(value)) {
+      return { valid: true };
+    }
+    return { valid: false, error: 'Must be a number (e.g., 1.5, -3.14, nan, inf)' };
+  }
+
+  // Check if it's an enum type
+  const enumItem = schemaBuilder.items.find(i => i.type === 'enum' && i.name === fieldType);
+  if (enumItem) {
+    // Value must be a valid enum member name
+    const validNames = enumItem.values.map(v => v.name);
+    if (validNames.includes(value)) {
+      return { valid: true };
+    }
+    return { valid: false, error: `Must be one of: ${validNames.join(', ')}` };
+  }
+
+  // For other types (custom tables, structs, etc.), can't have defaults
+  // This should be caught earlier by disabling the input
+  return { valid: true };
+}
 
 const SAMPLE_FBS_SCHEMA = `// Sample FlatBuffers Schema
 namespace MyGame.Sample;
@@ -3292,15 +3385,45 @@ function initStudio() {
     const code = $('studio-generated-code')?.value || '';
     navigator.clipboard.writeText(code);
   });
-  $('studio-download-code')?.addEventListener('click', () => {
-    const code = $('studio-generated-code')?.value || '';
+  $('studio-download-code')?.addEventListener('click', async () => {
     const lang = $('studio-codegen-lang')?.value || 'ts';
-    const extMap = {
-      ts: 'ts', python: 'py', cpp: 'h', rust: 'rs', go: 'go',
-      java: 'java', csharp: 'cs', kotlin: 'kt', swift: 'swift', jsonschema: 'json'
-    };
-    const ext = extMap[lang] || 'txt';
-    downloadTextFile(code, `generated.${ext}`);
+
+    if (!lastGeneratedFiles || Object.keys(lastGeneratedFiles).length === 0) {
+      alert('No code generated yet. Click "Generate Code" first.');
+      return;
+    }
+
+    const fileList = Object.keys(lastGeneratedFiles);
+
+    if (fileList.length === 1) {
+      // Single file - download directly
+      const filename = fileList[0];
+      downloadTextFile(lastGeneratedFiles[filename], filename);
+    } else {
+      // Multiple files - create ZIP
+      try {
+        const zip = await createZipFromFiles(lastGeneratedFiles);
+        const blob = new Blob([zip], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `generated_${lang}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error('ZIP creation failed:', err);
+        // Fallback to single concatenated file
+        const code = $('studio-generated-code')?.value || '';
+        const extMap = {
+          ts: 'ts', python: 'py', cpp: 'h', rust: 'rs', go: 'go',
+          java: 'java', csharp: 'cs', kotlin: 'kt', swift: 'swift', jsonschema: 'json'
+        };
+        const ext = extMap[lang] || 'txt';
+        downloadTextFile(code, `generated.${ext}`);
+      }
+    }
   });
 
   // Builder
@@ -3478,6 +3601,9 @@ function updateStudioTableSelectors() {
   }
 }
 
+// Store last generated files for download
+let lastGeneratedFiles = null;
+
 async function generateStudioCode() {
   const schemaInput = $('studio-schema-input');
   const content = schemaInput?.value || '';
@@ -3491,6 +3617,9 @@ async function generateStudioCode() {
   const codeOutput = $('studio-generated-code');
   const genMutable = $('studio-opt-mutable')?.checked ?? true;
   const genObjectApi = $('studio-opt-object-api')?.checked ?? true;
+
+  // Reset stored files
+  lastGeneratedFiles = null;
 
   // Check if WASM flatc is available
   if (!state.flatcRunner) {
@@ -3510,14 +3639,17 @@ async function generateStudioCode() {
     if (lang === 'jsonschema') {
       // Use generateJsonSchema for JSON Schema output
       code = state.flatcRunner.generateJsonSchema(schemaInput, { includeXFlatbuffers: true });
+      lastGeneratedFiles = { 'schema.json': code };
     } else {
       // Use generateCode for all other languages
       const files = state.flatcRunner.generateCode(schemaInput, lang, options);
+      lastGeneratedFiles = files;
 
       // Combine all generated files into output
       const fileList = Object.keys(files);
       if (fileList.length === 0) {
         code = '// No code generated. Check your schema for errors.';
+        lastGeneratedFiles = null;
       } else if (fileList.length === 1) {
         // Single file output
         code = files[fileList[0]];
@@ -3532,6 +3664,7 @@ async function generateStudioCode() {
     if (codeOutput) codeOutput.value = code;
   } catch (err) {
     console.error('Code generation error:', err);
+    lastGeneratedFiles = null;
     if (codeOutput) {
       codeOutput.value = `// Error generating code:\n// ${err.message}\n\n// Make sure your schema is valid FlatBuffers IDL.`;
     }
@@ -3727,6 +3860,110 @@ function downloadTextFile(content, filename) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// Simple ZIP file creator (no compression, store only)
+async function createZipFromFiles(files) {
+  const encoder = new TextEncoder();
+  const fileEntries = [];
+  let offset = 0;
+
+  // Build file entries
+  for (const [filename, content] of Object.entries(files)) {
+    const nameBytes = encoder.encode(filename);
+    const contentBytes = encoder.encode(content);
+    const crc = crc32(contentBytes);
+
+    fileEntries.push({
+      name: nameBytes,
+      content: contentBytes,
+      crc,
+      offset,
+    });
+
+    // Local file header (30 bytes + name + content)
+    offset += 30 + nameBytes.length + contentBytes.length;
+  }
+
+  // Calculate total size
+  const centralDirOffset = offset;
+  let centralDirSize = 0;
+  for (const entry of fileEntries) {
+    centralDirSize += 46 + entry.name.length;
+  }
+  const totalSize = offset + centralDirSize + 22;
+
+  // Create buffer
+  const buffer = new ArrayBuffer(totalSize);
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+  let pos = 0;
+
+  // Write local file headers and content
+  for (const entry of fileEntries) {
+    // Local file header signature
+    view.setUint32(pos, 0x04034b50, true); pos += 4;
+    view.setUint16(pos, 20, true); pos += 2; // Version needed
+    view.setUint16(pos, 0, true); pos += 2;  // Flags
+    view.setUint16(pos, 0, true); pos += 2;  // Compression (store)
+    view.setUint16(pos, 0, true); pos += 2;  // Mod time
+    view.setUint16(pos, 0, true); pos += 2;  // Mod date
+    view.setUint32(pos, entry.crc, true); pos += 4;
+    view.setUint32(pos, entry.content.length, true); pos += 4; // Compressed size
+    view.setUint32(pos, entry.content.length, true); pos += 4; // Uncompressed size
+    view.setUint16(pos, entry.name.length, true); pos += 2;
+    view.setUint16(pos, 0, true); pos += 2; // Extra field length
+
+    bytes.set(entry.name, pos); pos += entry.name.length;
+    bytes.set(entry.content, pos); pos += entry.content.length;
+  }
+
+  // Write central directory
+  for (const entry of fileEntries) {
+    view.setUint32(pos, 0x02014b50, true); pos += 4; // Central dir signature
+    view.setUint16(pos, 20, true); pos += 2; // Version made by
+    view.setUint16(pos, 20, true); pos += 2; // Version needed
+    view.setUint16(pos, 0, true); pos += 2;  // Flags
+    view.setUint16(pos, 0, true); pos += 2;  // Compression
+    view.setUint16(pos, 0, true); pos += 2;  // Mod time
+    view.setUint16(pos, 0, true); pos += 2;  // Mod date
+    view.setUint32(pos, entry.crc, true); pos += 4;
+    view.setUint32(pos, entry.content.length, true); pos += 4;
+    view.setUint32(pos, entry.content.length, true); pos += 4;
+    view.setUint16(pos, entry.name.length, true); pos += 2;
+    view.setUint16(pos, 0, true); pos += 2; // Extra field length
+    view.setUint16(pos, 0, true); pos += 2; // Comment length
+    view.setUint16(pos, 0, true); pos += 2; // Disk number
+    view.setUint16(pos, 0, true); pos += 2; // Internal attrs
+    view.setUint32(pos, 0, true); pos += 4;  // External attrs
+    view.setUint32(pos, entry.offset, true); pos += 4;
+
+    bytes.set(entry.name, pos); pos += entry.name.length;
+  }
+
+  // End of central directory
+  view.setUint32(pos, 0x06054b50, true); pos += 4;
+  view.setUint16(pos, 0, true); pos += 2; // Disk number
+  view.setUint16(pos, 0, true); pos += 2; // Central dir disk
+  view.setUint16(pos, fileEntries.length, true); pos += 2;
+  view.setUint16(pos, fileEntries.length, true); pos += 2;
+  view.setUint32(pos, centralDirSize, true); pos += 4;
+  view.setUint32(pos, centralDirOffset, true); pos += 4;
+  view.setUint16(pos, 0, true); // Comment length
+
+  return buffer;
+}
+
+// CRC32 for ZIP
+function crc32(data) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) {
+    crc ^= data[i];
+    for (let j = 0; j < 8; j++) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+    }
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
 async function downloadFile(path, filename) {
@@ -4246,19 +4483,43 @@ function attachEditorListeners(item) {
           if (!canHaveDefault) {
             defaultInput.value = '';
             defaultInput.placeholder = 'N/A';
+            defaultInput.classList.remove('input-error');
+            defaultInput.title = 'N/A';
             field.default = '';
           } else {
             defaultInput.placeholder = 'Default';
+            // Re-validate existing default value against new type
+            if (field.default) {
+              const validation = validateDefaultValue(field.default, field.fieldType);
+              if (!validation.valid) {
+                defaultInput.classList.add('input-error');
+                defaultInput.title = validation.error || 'Invalid default value';
+              } else {
+                defaultInput.classList.remove('input-error');
+                defaultInput.title = 'Default value';
+              }
+            }
           }
         }
         renderBuilderPreview();
       });
     }
 
-    // Default input handler
+    // Default input handler with type validation
     if (defaultInput) {
       defaultInput.addEventListener('input', () => {
         field.default = defaultInput.value;
+
+        // Validate the default value against the field type
+        const validation = validateDefaultValue(defaultInput.value, field.fieldType);
+        if (!validation.valid) {
+          defaultInput.classList.add('input-error');
+          defaultInput.title = validation.error || 'Invalid default value';
+        } else {
+          defaultInput.classList.remove('input-error');
+          defaultInput.title = 'Default value';
+        }
+
         renderBuilderPreview();
       });
     }

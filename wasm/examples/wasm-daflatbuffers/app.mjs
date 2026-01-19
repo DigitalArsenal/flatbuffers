@@ -2799,6 +2799,21 @@ function setupMainAppHandlers() {
     });
   });
 
+  // Mobile menu toggle
+  const mobileMenuBtn = $('nav-menu-btn');
+  const mobileMenu = $('nav-mobile-menu');
+
+  if (mobileMenuBtn && mobileMenu) {
+    mobileMenuBtn.addEventListener('click', () => {
+      mobileMenu.classList.toggle('open');
+      // Update hamburger icon to X when open
+      const isOpen = mobileMenu.classList.contains('open');
+      mobileMenuBtn.innerHTML = isOpen
+        ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+        : '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+    });
+  }
+
   // Navigation tabs (now links) - scroll to sections instead of hide/show
   document.querySelectorAll('.nav-link[data-tab]').forEach(link => {
     link.addEventListener('click', (e) => {
@@ -2809,6 +2824,13 @@ function setupMainAppHandlers() {
       if (tabEl) {
         // Scroll the section into view within the main-app container
         tabEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      // Close mobile menu if open
+      if (mobileMenu) {
+        mobileMenu.classList.remove('open');
+        if (mobileMenuBtn) {
+          mobileMenuBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+        }
       }
     });
   });

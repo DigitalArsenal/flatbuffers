@@ -3099,6 +3099,17 @@ async function init() {
     status.textContent = 'Loading FlatBuffers compiler...';
     state.flatcRunner = await FlatcRunner.init();
 
+    // Display flatc version
+    try {
+      const version = state.flatcRunner.version();
+      const versionEl = $('flatc-version');
+      if (versionEl && version) {
+        versionEl.textContent = `flatc ${version.trim()}`;
+      }
+    } catch (e) {
+      console.warn('Could not get flatc version:', e);
+    }
+
     // Setup streaming demo
     setupStreamingDemo();
 
@@ -3180,6 +3191,9 @@ const schemaBuilder = {
   rootType: '',
   fileIdentifier: '',  // 4-character file identifier
   fileExtension: '',   // file extension (without dot)
+  includes: [],        // List of include file paths
+  attributes: [],      // Custom attribute declarations
+  services: [],        // RPC service definitions
   items: [],
   selectedIndex: -1,
   previewFormat: 'fbs',
@@ -3492,40 +3506,119 @@ function parseFBSSchemaContent(content) {
     tables: [],
     structs: [],
     enums: [],
+    unions: [],
+    services: [],
+    includes: [],
+    attributes: [],
     rootType: '',
+    fileIdentifier: '',
+    fileExtension: '',
   };
 
-  // Parse namespace
-  const nsMatch = content.match(/namespace\s+([\w.]+)\s*;/);
-  if (nsMatch) schema.namespace = nsMatch[1];
+  // Remove single-line comments (// ...) but preserve /// doc comments
+  const lines = content.split('\n');
+  const processedLines = [];
+  let pendingDoc = [];
 
-  // Parse root_type
-  const rootMatch = content.match(/root_type\s+(\w+)\s*;/);
-  if (rootMatch) schema.rootType = rootMatch[1];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('///')) {
+      // Documentation comment - collect it
+      pendingDoc.push(trimmed.slice(3).trim());
+    } else if (trimmed.startsWith('//')) {
+      // Regular comment - skip
+      continue;
+    } else {
+      // If we have pending docs, they apply to this line's declaration
+      if (pendingDoc.length > 0) {
+        processedLines.push(`/*DOC:${pendingDoc.join('\\n')}*/`);
+        pendingDoc = [];
+      }
+      processedLines.push(line);
+    }
+  }
+  const cleanContent = processedLines.join('\n');
 
-  // Parse enums
-  const enumRegex = /enum\s+(\w+)\s*:\s*(\w+)\s*\{([^}]+)\}/g;
+  // Parse includes
+  const includeRegex = /include\s+"([^"]+)"\s*;/g;
   let match;
-  while ((match = enumRegex.exec(content)) !== null) {
-    const values = match[3].split(',').map(v => {
-      const parts = v.trim().split('=');
-      return { name: parts[0].trim(), value: parts[1] ? parseInt(parts[1].trim()) : null };
-    }).filter(v => v.name);
-    schema.enums.push({ name: match[1], type: match[2], values });
+  while ((match = includeRegex.exec(cleanContent)) !== null) {
+    schema.includes.push(match[1]);
   }
 
-  // Parse structs
-  const structRegex = /struct\s+(\w+)\s*\{([^}]+)\}/g;
-  while ((match = structRegex.exec(content)) !== null) {
-    const fields = parseSchemaFields(match[2]);
-    schema.structs.push({ name: match[1], fields });
+  // Parse namespace
+  const nsMatch = cleanContent.match(/namespace\s+([\w.]+)\s*;/);
+  if (nsMatch) schema.namespace = nsMatch[1];
+
+  // Parse custom attributes
+  const attrRegex = /attribute\s+"([^"]+)"\s*;/g;
+  while ((match = attrRegex.exec(cleanContent)) !== null) {
+    schema.attributes.push(match[1]);
+  }
+
+  // Parse root_type
+  const rootMatch = cleanContent.match(/root_type\s+(\w+)\s*;/);
+  if (rootMatch) schema.rootType = rootMatch[1];
+
+  // Parse file_identifier
+  const fidMatch = cleanContent.match(/file_identifier\s+"([^"]+)"\s*;/);
+  if (fidMatch) schema.fileIdentifier = fidMatch[1];
+
+  // Parse file_extension
+  const fextMatch = cleanContent.match(/file_extension\s+"([^"]+)"\s*;/);
+  if (fextMatch) schema.fileExtension = fextMatch[1];
+
+  // Parse enums (including doc comments before)
+  const enumRegex = /(?:\/\*DOC:([^*]*)\*\/\s*)?enum\s+(\w+)\s*:\s*(\w+)\s*(?:\([^)]*\))?\s*\{([^}]+)\}/g;
+  while ((match = enumRegex.exec(cleanContent)) !== null) {
+    const doc = match[1] ? match[1].replace(/\\n/g, '\n') : '';
+    const values = match[4].split(',').map(v => {
+      // Handle value with optional doc
+      const vTrimmed = v.trim();
+      const parts = vTrimmed.split('=');
+      const name = parts[0].trim().replace(/\/\*DOC:[^*]*\*\/\s*/, '');
+      return { name: name.trim(), value: parts[1] ? parseInt(parts[1].trim()) : null, doc: '' };
+    }).filter(v => v.name);
+    schema.enums.push({ name: match[2], type: match[3], values, doc });
+  }
+
+  // Parse unions
+  const unionRegex = /(?:\/\*DOC:([^*]*)\*\/\s*)?union\s+(\w+)\s*\{([^}]+)\}/g;
+  while ((match = unionRegex.exec(cleanContent)) !== null) {
+    const doc = match[1] ? match[1].replace(/\\n/g, '\n') : '';
+    const members = match[3].split(',').map(m => m.trim()).filter(m => m);
+    schema.unions.push({ name: match[2], members, doc });
+  }
+
+  // Parse structs (with optional metadata)
+  const structRegex = /(?:\/\*DOC:([^*]*)\*\/\s*)?struct\s+(\w+)\s*(?:\(([^)]*)\))?\s*\{([^}]+)\}/g;
+  while ((match = structRegex.exec(cleanContent)) !== null) {
+    const doc = match[1] ? match[1].replace(/\\n/g, '\n') : '';
+    const metadata = match[3] || '';
+    const forceAlign = metadata.match(/force_align:\s*(\d+)/)?.[1];
+    const fields = parseSchemaFields(match[4]);
+    schema.structs.push({
+      name: match[2],
+      fields,
+      doc,
+      forceAlign: forceAlign ? parseInt(forceAlign) : null
+    });
   }
 
   // Parse tables
-  const tableRegex = /table\s+(\w+)\s*\{([^}]+)\}/g;
-  while ((match = tableRegex.exec(content)) !== null) {
-    const fields = parseSchemaFields(match[2]);
-    schema.tables.push({ name: match[1], fields });
+  const tableRegex = /(?:\/\*DOC:([^*]*)\*\/\s*)?table\s+(\w+)\s*(?:\([^)]*\))?\s*\{([^}]+)\}/g;
+  while ((match = tableRegex.exec(cleanContent)) !== null) {
+    const doc = match[1] ? match[1].replace(/\\n/g, '\n') : '';
+    const fields = parseSchemaFields(match[3]);
+    schema.tables.push({ name: match[2], fields, doc });
+  }
+
+  // Parse RPC services
+  const serviceRegex = /(?:\/\*DOC:([^*]*)\*\/\s*)?rpc_service\s+(\w+)\s*\{([^}]+)\}/g;
+  while ((match = serviceRegex.exec(cleanContent)) !== null) {
+    const doc = match[1] ? match[1].replace(/\\n/g, '\n') : '';
+    const methods = parseRPCMethods(match[3]);
+    schema.services.push({ name: match[2], methods, doc });
   }
 
   return schema;
@@ -3533,14 +3626,66 @@ function parseFBSSchemaContent(content) {
 
 function parseSchemaFields(fieldsStr) {
   const fields = [];
-  const lines = fieldsStr.split(';').filter(l => l.trim());
-  for (const line of lines) {
-    const match = line.trim().match(/(\w+)\s*:\s*([^=]+)(?:=\s*(.+))?/);
-    if (match) {
-      fields.push({ name: match[1], type: match[2].trim(), default: match[3]?.trim() });
+  // Split by semicolons but handle attributes in parentheses
+  const fieldStatements = fieldsStr.split(';').filter(l => l.trim());
+
+  for (const stmt of fieldStatements) {
+    const trimmed = stmt.trim();
+    // Skip doc comment markers
+    if (trimmed.startsWith('/*DOC:')) continue;
+
+    // Parse field: name: type = default (attributes);
+    // Using a more robust regex that handles attributes
+    const fieldMatch = trimmed.match(/^(?:\/\*DOC:([^*]*)\*\/\s*)?(\w+)\s*:\s*(\[[^\]]+\]|\w+)(?:\s*=\s*([^(]+?))?(?:\s*\(([^)]+)\))?\s*$/);
+    if (fieldMatch) {
+      const doc = fieldMatch[1] ? fieldMatch[1].replace(/\\n/g, '\n') : '';
+      const name = fieldMatch[2];
+      const type = fieldMatch[3].trim();
+      const defaultVal = fieldMatch[4]?.trim() || '';
+      const attrs = fieldMatch[5] || '';
+
+      // Parse attributes
+      const field = { name, type, default: defaultVal, doc };
+      if (attrs) {
+        if (attrs.includes('key')) field.key = true;
+        if (attrs.includes('required')) field.required = true;
+        if (attrs.includes('deprecated')) field.deprecated = true;
+        if (attrs.includes('flexbuffer')) field.flexbuffer = true;
+        const idMatch = attrs.match(/id:\s*(\d+)/);
+        if (idMatch) field.id = parseInt(idMatch[1]);
+        const nestedMatch = attrs.match(/nested_flatbuffer:\s*"([^"]+)"/);
+        if (nestedMatch) field.nestedFlatbuffer = nestedMatch[1];
+        const forceAlignMatch = attrs.match(/force_align:\s*(\d+)/);
+        if (forceAlignMatch) field.forceAlign = parseInt(forceAlignMatch[1]);
+      }
+
+      fields.push(field);
     }
   }
   return fields;
+}
+
+function parseRPCMethods(methodsStr) {
+  const methods = [];
+  const lines = methodsStr.split(';').filter(l => l.trim());
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Parse: MethodName(RequestType): ResponseType (attributes);
+    const methodMatch = trimmed.match(/^(?:\/\*DOC:([^*]*)\*\/\s*)?(\w+)\s*\(\s*(\w+)\s*\)\s*:\s*(\w+)(?:\s*\(([^)]+)\))?\s*$/);
+    if (methodMatch) {
+      const doc = methodMatch[1] ? methodMatch[1].replace(/\\n/g, '\n') : '';
+      const attrs = methodMatch[5] || '';
+      methods.push({
+        name: methodMatch[2],
+        request: methodMatch[3],
+        response: methodMatch[4],
+        streaming: attrs.includes('streaming'),
+        doc
+      });
+    }
+  }
+  return methods;
 }
 
 function updateStudioParsedView(schema) {
@@ -3553,39 +3698,89 @@ function updateStudioParsedView(schema) {
     html += `<div class="tree-node"><strong>namespace:</strong> ${schema.namespace}</div>`;
   }
 
-  if (schema.enums.length) {
+  if (schema.includes?.length) {
+    html += '<div class="tree-section">Includes</div>';
+    for (const inc of schema.includes) {
+      html += `<div class="tree-node"><span class="tree-icon include">I</span>"${escapeHtml(inc)}"</div>`;
+    }
+  }
+
+  if (schema.enums?.length) {
     html += '<div class="tree-section">Enums</div>';
     for (const e of schema.enums) {
-      html += `<div class="tree-node"><span class="tree-icon enum">E</span><span class="tree-name">${e.name}</span><span class="tree-type">: ${e.type}</span></div>`;
+      html += `<div class="tree-node"><span class="tree-icon enum">E</span><span class="tree-name">${escapeHtml(e.name)}</span><span class="tree-type">: ${escapeHtml(e.type)}</span></div>`;
       html += '<div class="tree-children">';
       for (const v of e.values) {
-        html += `<div class="tree-node"><span class="tree-icon field">=</span>${v.name}${v.value !== null ? ` = ${v.value}` : ''}</div>`;
+        html += `<div class="tree-node"><span class="tree-icon field">=</span>${escapeHtml(v.name)}${v.value !== null ? ` = ${v.value}` : ''}</div>`;
       }
       html += '</div>';
     }
   }
 
-  if (schema.structs.length) {
+  if (schema.unions?.length) {
+    html += '<div class="tree-section">Unions</div>';
+    for (const u of schema.unions) {
+      html += `<div class="tree-node"><span class="tree-icon union">U</span><span class="tree-name">${escapeHtml(u.name)}</span></div>`;
+      html += '<div class="tree-children">';
+      for (const m of u.members) {
+        html += `<div class="tree-node"><span class="tree-icon field">|</span>${escapeHtml(m)}</div>`;
+      }
+      html += '</div>';
+    }
+  }
+
+  if (schema.structs?.length) {
     html += '<div class="tree-section">Structs</div>';
     for (const s of schema.structs) {
-      html += `<div class="tree-node"><span class="tree-icon struct">S</span><span class="tree-name">${s.name}</span></div>`;
+      const meta = s.forceAlign ? ` <span class="tree-type">(force_align: ${s.forceAlign})</span>` : '';
+      html += `<div class="tree-node"><span class="tree-icon struct">S</span><span class="tree-name">${escapeHtml(s.name)}</span>${meta}</div>`;
       html += '<div class="tree-children">';
       for (const f of s.fields) {
-        html += `<div class="tree-node"><span class="tree-icon field">-</span>${f.name}<span class="tree-type">: ${f.type}</span></div>`;
+        html += `<div class="tree-node"><span class="tree-icon field">-</span>${escapeHtml(f.name)}<span class="tree-type">: ${escapeHtml(f.type)}</span></div>`;
       }
       html += '</div>';
     }
   }
 
-  if (schema.tables.length) {
+  if (schema.tables?.length) {
     html += '<div class="tree-section">Tables</div>';
     for (const t of schema.tables) {
-      html += `<div class="tree-node"><span class="tree-icon table">T</span><span class="tree-name">${t.name}</span>${schema.rootType === t.name ? ' <span class="tree-type">(root)</span>' : ''}</div>`;
+      const isRoot = schema.rootType === t.name;
+      html += `<div class="tree-node"><span class="tree-icon table">T</span><span class="tree-name">${escapeHtml(t.name)}</span>${isRoot ? ' <span class="tree-type">(root)</span>' : ''}</div>`;
       html += '<div class="tree-children">';
       for (const f of t.fields) {
-        html += `<div class="tree-node"><span class="tree-icon field">-</span>${f.name}<span class="tree-type">: ${f.type}</span>${f.default ? ` = ${f.default}` : ''}</div>`;
+        let attrs = [];
+        if (f.id !== undefined) attrs.push(`id: ${f.id}`);
+        if (f.key) attrs.push('key');
+        if (f.required) attrs.push('required');
+        if (f.deprecated) attrs.push('deprecated');
+        const attrStr = attrs.length ? ` <span class="tree-attr">(${attrs.join(', ')})</span>` : '';
+        html += `<div class="tree-node"><span class="tree-icon field">-</span>${escapeHtml(f.name)}<span class="tree-type">: ${escapeHtml(f.type)}</span>${f.default ? ` = ${escapeHtml(f.default)}` : ''}${attrStr}</div>`;
       }
       html += '</div>';
+    }
+  }
+
+  if (schema.services?.length) {
+    html += '<div class="tree-section">RPC Services</div>';
+    for (const svc of schema.services) {
+      html += `<div class="tree-node"><span class="tree-icon rpc">R</span><span class="tree-name">${escapeHtml(svc.name)}</span></div>`;
+      html += '<div class="tree-children">';
+      for (const m of svc.methods || []) {
+        const stream = m.streaming ? ' <span class="tree-attr">(streaming)</span>' : '';
+        html += `<div class="tree-node"><span class="tree-icon field">→</span>${escapeHtml(m.name)}(${escapeHtml(m.request)}): ${escapeHtml(m.response)}${stream}</div>`;
+      }
+      html += '</div>';
+    }
+  }
+
+  if (schema.fileIdentifier || schema.fileExtension) {
+    html += '<div class="tree-section">File Info</div>';
+    if (schema.fileIdentifier) {
+      html += `<div class="tree-node"><strong>file_identifier:</strong> "${escapeHtml(schema.fileIdentifier)}"</div>`;
+    }
+    if (schema.fileExtension) {
+      html += `<div class="tree-node"><strong>file_extension:</strong> "${escapeHtml(schema.fileExtension)}"</div>`;
     }
   }
 
@@ -4057,6 +4252,26 @@ function initSchemaBuilder() {
     });
   }
 
+  // Includes textarea
+  const includesInput = $('builder-includes');
+  if (includesInput) {
+    includesInput.addEventListener('input', (e) => {
+      // Split by newlines, filter empty lines
+      schemaBuilder.includes = e.target.value.split('\n').filter(line => line.trim());
+      renderBuilderPreview();
+    });
+  }
+
+  // Custom attributes textarea
+  const attributesInput = $('builder-attributes');
+  if (attributesInput) {
+    attributesInput.addEventListener('input', (e) => {
+      // Split by newlines, filter empty lines
+      schemaBuilder.attributes = e.target.value.split('\n').filter(line => line.trim());
+      renderBuilderPreview();
+    });
+  }
+
   // Preview format toggle
   const fbsToggle = $('builder-preview-fbs');
   const jsonToggle = $('builder-preview-json');
@@ -4106,17 +4321,20 @@ function addSchemaItem(type) {
     name = `New${type.charAt(0).toUpperCase() + type.slice(1)}${counter++}`;
   }
 
-  const item = { type, name };
+  const item = { type, name, doc: '' };  // All items can have documentation
 
   if (type === 'table') {
     item.fields = [];
   } else if (type === 'enum') {
     item.baseType = 'int';  // Use canonical FlatBuffers type name
-    item.values = [{ name: 'Value0', value: 0 }];
+    item.values = [{ name: 'Value0', value: 0, doc: '' }];
   } else if (type === 'struct') {
     item.fields = [];
+    item.forceAlign = null;  // Optional force_align for structs
   } else if (type === 'union') {
     item.members = [];
+  } else if (type === 'rpc') {
+    item.methods = [];
   }
 
   schemaBuilder.items.push(item);
@@ -4217,8 +4435,11 @@ function renderBuilderEditor() {
 
   let html = `
     <div class="builder-item-header">
-      <input type="text" class="glass-input" id="builder-item-name" value="${item.name}" placeholder="Name">
+      <input type="text" class="glass-input" id="builder-item-name" value="${escapeHtml(item.name)}" placeholder="Name">
       <span class="builder-item-type-badge ${item.type}">${item.type}</span>
+    </div>
+    <div class="builder-item-doc">
+      <textarea class="glass-input builder-doc-input" id="builder-item-doc" placeholder="Documentation comment (/// in FBS)" rows="2">${escapeHtml(item.doc || '')}</textarea>
     </div>
   `;
 
@@ -4228,6 +4449,8 @@ function renderBuilderEditor() {
     html += renderEnumEditor(item);
   } else if (item.type === 'union') {
     html += renderUnionEditor(item);
+  } else if (item.type === 'rpc') {
+    html += renderRPCEditor(item);
   }
 
   container.innerHTML = html;
@@ -4300,13 +4523,23 @@ function renderFieldEditor(item) {
               dep
             </label>
           </div>
-        ` : '<div></div><div></div><div></div>'}
+        ` : `
+          <div class="builder-field-cell">
+            <input type="number" class="glass-input builder-field-force-align" value="${field.forceAlign || ''}" placeholder="1" min="1">
+            <span class="field-label">align</span>
+          </div>
+          <div></div>
+          <div></div>
+        `}
         <button class="builder-field-delete" data-field-index="${index}" title="Delete field">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
         </button>
+      </div>
+      <div class="builder-field-doc-row" data-field-index="${index}">
+        <input type="text" class="glass-input builder-field-doc" value="${escapeHtml(field.doc || '')}" placeholder="Field documentation (optional)">
       </div>
     `}).join('');
   }
@@ -4412,6 +4645,62 @@ function renderUnionEditor(item) {
   return html;
 }
 
+function renderRPCEditor(item) {
+  const tables = schemaBuilder.items.filter(i => i.type === 'table');
+
+  let html = `
+    <label style="display: block; margin-bottom: 8px; font-size: 13px; color: var(--white-60);">RPC Methods</label>
+    <div class="builder-rpc-methods">
+  `;
+
+  if (!item.methods || item.methods.length === 0) {
+    html += '<div class="empty-state" style="min-height: 80px;">No methods yet. Add an RPC method below.</div>';
+  } else {
+    html += item.methods.map((method, index) => `
+      <div class="builder-rpc-row" data-method-index="${index}">
+        <div class="builder-rpc-method-line">
+          <input type="text" class="glass-input builder-rpc-name" value="${escapeHtml(method.name || '')}" placeholder="MethodName" data-prop="name">
+          <span class="rpc-syntax">(</span>
+          <select class="glass-select builder-rpc-request" data-prop="request">
+            <option value="">Request...</option>
+            ${tables.map(t => `<option value="${t.name}" ${method.request === t.name ? 'selected' : ''}>${t.name}</option>`).join('')}
+          </select>
+          <span class="rpc-syntax">):</span>
+          <select class="glass-select builder-rpc-response" data-prop="response">
+            <option value="">Response...</option>
+            ${tables.map(t => `<option value="${t.name}" ${method.response === t.name ? 'selected' : ''}>${t.name}</option>`).join('')}
+          </select>
+          <label class="builder-field-attr" title="Enable server-side streaming">
+            <input type="checkbox" ${method.streaming ? 'checked' : ''} data-prop="streaming">
+            stream
+          </label>
+          <button class="builder-field-delete" data-method-index="${index}" title="Delete method">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <input type="text" class="glass-input builder-rpc-doc" value="${escapeHtml(method.doc || '')}" placeholder="Method documentation (optional)">
+      </div>
+    `).join('');
+  }
+
+  html += '</div>';
+  html += `
+    <button class="glass-btn small builder-add-field" style="margin-top: 12px;" ${tables.length === 0 ? 'disabled' : ''}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+      Add Method
+    </button>
+    ${tables.length === 0 ? '<p style="font-size: 12px; color: var(--white-40); margin-top: 8px;">Create request/response tables first.</p>' : ''}
+  `;
+
+  return html;
+}
+
 function attachEditorListeners(item) {
   const index = schemaBuilder.selectedIndex;
 
@@ -4423,6 +4712,15 @@ function attachEditorListeners(item) {
       renderBuilderItemList();
       renderBuilderPreview();
       updateRootTypeSelector();
+    });
+  }
+
+  // Item documentation
+  const docInput = $('builder-item-doc');
+  if (docInput) {
+    docInput.addEventListener('input', (e) => {
+      item.doc = e.target.value;
+      renderBuilderPreview();
     });
   }
 
@@ -4439,12 +4737,24 @@ function attachEditorListeners(item) {
           key: false,       // Sorting key
           required: false,
           deprecated: false,
+          doc: '',          // Documentation comment (///)
+          forceAlign: null, // Force alignment (structs only)
+          flexbuffer: false, // FlexBuffer attribute
+          nestedFlatbuffer: '', // Nested flatbuffer type name
         });
       } else if (item.type === 'enum') {
         const nextVal = item.values.length > 0 ? Math.max(...item.values.map(v => v.value)) + 1 : 0;
-        item.values.push({ name: `Value${item.values.length}`, value: nextVal });
+        item.values.push({ name: `Value${item.values.length}`, value: nextVal, doc: '' });
       } else if (item.type === 'union') {
         item.members.push('');
+      } else if (item.type === 'rpc') {
+        item.methods.push({
+          name: `Method${item.methods.length}`,
+          request: '',
+          response: '',
+          streaming: false,
+          doc: '',
+        });
       }
       renderBuilderEditor();
       renderBuilderPreview();
@@ -4557,6 +4867,31 @@ function attachEditorListeners(item) {
         renderBuilderPreview();
       });
     });
+
+    // Force align input for struct fields
+    const forceAlignInput = row.querySelector('input.builder-field-force-align');
+    if (forceAlignInput) {
+      forceAlignInput.addEventListener('input', () => {
+        const val = forceAlignInput.value.trim();
+        field.forceAlign = val === '' ? null : parseInt(val, 10);
+        renderBuilderPreview();
+      });
+    }
+  });
+
+  // Field documentation inputs
+  document.querySelectorAll('.builder-field-doc-row').forEach(row => {
+    const fieldIndex = parseInt(row.dataset.fieldIndex);
+    const field = item.fields?.[fieldIndex];
+    if (!field) return;
+
+    const docInput = row.querySelector('input.builder-field-doc');
+    if (docInput) {
+      docInput.addEventListener('input', () => {
+        field.doc = docInput.value;
+        renderBuilderPreview();
+      });
+    }
   });
 
   // Field delete buttons
@@ -4625,6 +4960,68 @@ function attachEditorListeners(item) {
       renderBuilderPreview();
     });
   });
+
+  // RPC method inputs
+  document.querySelectorAll('.builder-rpc-row').forEach(row => {
+    const methodIndex = parseInt(row.dataset.methodIndex);
+    const method = item.methods?.[methodIndex];
+    if (!method) return;
+
+    // Name input
+    const nameInput = row.querySelector('input.builder-rpc-name');
+    if (nameInput) {
+      nameInput.addEventListener('input', () => {
+        method.name = nameInput.value;
+        renderBuilderPreview();
+      });
+    }
+
+    // Request select
+    const requestSelect = row.querySelector('select.builder-rpc-request');
+    if (requestSelect) {
+      requestSelect.addEventListener('change', () => {
+        method.request = requestSelect.value;
+        renderBuilderPreview();
+      });
+    }
+
+    // Response select
+    const responseSelect = row.querySelector('select.builder-rpc-response');
+    if (responseSelect) {
+      responseSelect.addEventListener('change', () => {
+        method.response = responseSelect.value;
+        renderBuilderPreview();
+      });
+    }
+
+    // Streaming checkbox
+    const streamCheckbox = row.querySelector('input[data-prop="streaming"]');
+    if (streamCheckbox) {
+      streamCheckbox.addEventListener('change', () => {
+        method.streaming = streamCheckbox.checked;
+        renderBuilderPreview();
+      });
+    }
+
+    // Documentation input
+    const docInput = row.querySelector('input.builder-rpc-doc');
+    if (docInput) {
+      docInput.addEventListener('input', () => {
+        method.doc = docInput.value;
+        renderBuilderPreview();
+      });
+    }
+  });
+
+  // RPC method delete buttons
+  document.querySelectorAll('.builder-rpc-row .builder-field-delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const methodIndex = parseInt(btn.dataset.methodIndex);
+      item.methods.splice(methodIndex, 1);
+      renderBuilderEditor();
+      renderBuilderPreview();
+    });
+  });
 }
 
 function getAvailableTypes(structOnly = false) {
@@ -4669,31 +5066,79 @@ function updateRootTypeSelector() {
     tables.map(t => `<option value="${t.name}" ${schemaBuilder.rootType === t.name ? 'selected' : ''}>${t.name}</option>`).join('');
 }
 
+// Helper to format documentation comments
+function formatDoc(doc, indent = '') {
+  if (!doc) return '';
+  return doc.split('\n').map(line => `${indent}/// ${line}`).join('\n') + '\n';
+}
+
 function generateFBSFromBuilder() {
-  const { namespace, rootType, fileIdentifier, fileExtension, items } = schemaBuilder;
+  const { namespace, rootType, fileIdentifier, fileExtension, includes, attributes, services, items } = schemaBuilder;
   let output = '';
 
+  // Include statements first
+  if (includes && includes.length > 0) {
+    for (const inc of includes) {
+      if (inc.trim()) {
+        output += `include "${inc.trim()}";\n`;
+      }
+    }
+    output += '\n';
+  }
+
+  // Namespace
   if (namespace) {
     output += `namespace ${namespace};\n\n`;
   }
 
+  // Custom attribute declarations
+  if (attributes && attributes.length > 0) {
+    for (const attr of attributes) {
+      if (attr.trim()) {
+        output += `attribute "${attr.trim()}";\n`;
+      }
+    }
+    output += '\n';
+  }
+
   // Enums first
   for (const item of items.filter(i => i.type === 'enum')) {
+    if (item.doc) output += formatDoc(item.doc);
     output += `enum ${item.name} : ${item.baseType} {\n`;
-    output += item.values.map(v => `  ${v.name} = ${v.value}`).join(',\n');
+    output += item.values.map(v => {
+      let line = '';
+      if (v.doc) line += formatDoc(v.doc, '  ');
+      line += `  ${v.name} = ${v.value}`;
+      return line;
+    }).join(',\n');
     output += '\n}\n\n';
   }
 
   // Structs (fields use "name: type;" format with space after colon)
   for (const item of items.filter(i => i.type === 'struct')) {
-    output += `struct ${item.name} {\n`;
-    output += item.fields.map(f => `  ${f.name}: ${f.fieldType};`).join('\n');
-    if (item.fields.length > 0) output += '\n';
+    if (item.doc) output += formatDoc(item.doc);
+    // Struct metadata (force_align)
+    let structMeta = '';
+    if (item.forceAlign && item.forceAlign > 1) {
+      structMeta = ` (force_align: ${item.forceAlign})`;
+    }
+    output += `struct ${item.name}${structMeta} {\n`;
+    for (const f of item.fields) {
+      if (f.doc) output += formatDoc(f.doc, '  ');
+      let line = `  ${f.name}: ${f.fieldType}`;
+      // Struct field can have force_align
+      if (f.forceAlign && f.forceAlign > 1) {
+        line += ` (force_align: ${f.forceAlign})`;
+      }
+      line += ';';
+      output += line + '\n';
+    }
     output += '}\n\n';
   }
 
   // Unions
   for (const item of items.filter(i => i.type === 'union')) {
+    if (item.doc) output += formatDoc(item.doc);
     const validMembers = item.members.filter(m => m);
     if (validMembers.length > 0) {
       output += `union ${item.name} { ${validMembers.join(', ')} }\n\n`;
@@ -4702,17 +5147,20 @@ function generateFBSFromBuilder() {
 
   // Tables
   for (const item of items.filter(i => i.type === 'table')) {
+    if (item.doc) output += formatDoc(item.doc);
     output += `table ${item.name} {\n`;
     for (const f of item.fields) {
+      if (f.doc) output += formatDoc(f.doc, '  ');
       let line = `  ${f.name}: ${f.fieldType}`;
       // Only scalar types and enums can have defaults (not vectors, strings, tables, or structs)
       // Per FlatBuffers spec: "Only scalar values can have explicit defaults"
       const isVector = f.fieldType.startsWith('[') && f.fieldType.endsWith(']');
+      const isFixedArray = /^\[.+:\d+\]$/.test(f.fieldType);  // [type:N] syntax
       const isString = f.fieldType === 'string';
       const isReference = schemaBuilder.items.some(i => i.name === f.fieldType && (i.type === 'table' || i.type === 'struct'));
       const isEnum = schemaBuilder.items.some(i => i.name === f.fieldType && i.type === 'enum');
 
-      if (f.default && !isVector && !isString && !isReference) {
+      if (f.default && !isVector && !isFixedArray && !isString && !isReference) {
         // Validate the default value based on type
         const val = f.default.trim();
         let validDefault = null;
@@ -4744,7 +5192,7 @@ function generateFBSFromBuilder() {
       }
 
       // Handle "= null" for optional scalars (user types "null" in default field)
-      if (f.default && f.default.trim().toLowerCase() === 'null' && !isVector && !isString && !isReference) {
+      if (f.default && f.default.trim().toLowerCase() === 'null' && !isVector && !isFixedArray && !isString && !isReference) {
         line += ` = null`;
       }
 
@@ -4754,11 +5202,32 @@ function generateFBSFromBuilder() {
       if (f.key) attrs.push('key');
       if (f.required) attrs.push('required');
       if (f.deprecated) attrs.push('deprecated');
+      if (f.flexbuffer) attrs.push('flexbuffer');
+      if (f.nestedFlatbuffer) attrs.push(`nested_flatbuffer: "${f.nestedFlatbuffer}"`);
       if (attrs.length > 0) line += ` (${attrs.join(', ')})`;
       line += ';';
       output += line + '\n';
     }
     output += '}\n\n';
+  }
+
+  // RPC Services
+  if (services && services.length > 0) {
+    for (const svc of services) {
+      if (!svc.name) continue;
+      if (svc.doc) output += formatDoc(svc.doc);
+      output += `rpc_service ${svc.name} {\n`;
+      for (const method of (svc.methods || [])) {
+        if (!method.name || !method.request || !method.response) continue;
+        if (method.doc) output += formatDoc(method.doc, '  ');
+        let methodAttrs = '';
+        if (method.streaming) {
+          methodAttrs = ' (streaming: "server")';
+        }
+        output += `  ${method.name}(${method.request}): ${method.response}${methodAttrs};\n`;
+      }
+      output += '}\n\n';
+    }
   }
 
   // root_type is required for valid FlatBuffers schema

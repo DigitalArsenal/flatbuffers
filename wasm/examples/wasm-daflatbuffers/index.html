@@ -936,7 +936,7 @@
     <section id="studio-tab" class="content-section">
       <div class="section-header">
         <h2 class="section-title">FlatBuffer Studio</h2>
-        <p class="section-desc">Create schemas, generate code, and build FlatBuffers in the browser</p>
+        <p class="section-desc">Create schemas, generate code, and build FlatBuffers in the browser <span id="flatc-version" class="flatc-version"></span></p>
       </div>
 
       <div class="studio-container">
@@ -1004,14 +1004,27 @@
                     <option value="">Select root type...</option>
                   </select>
                 </div>
-                <div class="glass-input-group">
-                  <label>File Identifier <span class="label-hint">(4 chars)</span></label>
-                  <input type="text" id="builder-file-identifier" class="glass-input" placeholder="XXXX" maxlength="4" style="width: 80px; font-family: monospace;">
+                <div class="builder-config-row">
+                  <div class="glass-input-group">
+                    <label>File ID <span class="label-hint">(4 chars)</span></label>
+                    <input type="text" id="builder-file-identifier" class="glass-input" placeholder="XXXX" maxlength="4" style="width: 70px; font-family: monospace;">
+                  </div>
+                  <div class="glass-input-group">
+                    <label>Extension</label>
+                    <input type="text" id="builder-file-extension" class="glass-input" placeholder="bin" style="width: 70px;">
+                  </div>
                 </div>
-                <div class="glass-input-group">
-                  <label>File Extension</label>
-                  <input type="text" id="builder-file-extension" class="glass-input" placeholder="bin" style="width: 80px;">
-                </div>
+                <details class="builder-advanced">
+                  <summary>Advanced Options</summary>
+                  <div class="glass-input-group">
+                    <label>Includes <span class="label-hint">(one per line)</span></label>
+                    <textarea id="builder-includes" class="glass-input" placeholder="other.fbs&#10;common/types.fbs" rows="2"></textarea>
+                  </div>
+                  <div class="glass-input-group">
+                    <label>Custom Attributes <span class="label-hint">(one per line)</span></label>
+                    <textarea id="builder-attributes" class="glass-input" placeholder="my_custom_attr&#10;another_attr" rows="2"></textarea>
+                  </div>
+                </details>
               </div>
               <div class="builder-add-section">
                 <div class="builder-add-dropdown">
@@ -1027,6 +1040,7 @@
                     <button data-item-type="enum">Enum</button>
                     <button data-item-type="struct">Struct</button>
                     <button data-item-type="union">Union</button>
+                    <button data-item-type="rpc">RPC Service</button>
                   </div>
                 </div>
               </div>

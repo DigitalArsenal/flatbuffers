@@ -2776,6 +2776,17 @@ body {
   gap: 16px;
 }
 
+.flatc-version {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--white-05);
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: 'SF Mono', monospace;
+  color: var(--white-40);
+  margin-left: 8px;
+}
+
 .studio-tabs {
   display: flex;
   gap: 8px;
@@ -2966,7 +2977,16 @@ body {
 .parsed-view .tree-icon.enum { background: #d29922; color: #000; }
 .parsed-view .tree-icon.struct { background: #3fb950; color: #000; }
 .parsed-view .tree-icon.table { background: #58a6ff; color: #000; }
+.parsed-view .tree-icon.union { background: #a371f7; color: #000; }
+.parsed-view .tree-icon.rpc { background: #ff7b72; color: #000; }
+.parsed-view .tree-icon.include { background: #7ee787; color: #000; }
 .parsed-view .tree-icon.field { background: var(--white-20); color: var(--white-80); }
+
+.parsed-view .tree-attr {
+  color: var(--white-40);
+  font-size: 11px;
+  margin-left: 4px;
+}
 
 .parsed-view .tree-name {
   color: var(--white-90);
@@ -3282,6 +3302,7 @@ body {
 .builder-item-type-badge.enum { background: rgba(210, 153, 34, 0.2); color: #d29922; }
 .builder-item-type-badge.struct { background: rgba(63, 185, 80, 0.2); color: #3fb950; }
 .builder-item-type-badge.union { background: rgba(163, 113, 247, 0.2); color: #a371f7; }
+.builder-item-type-badge.rpc { background: rgba(255, 123, 114, 0.2); color: #ff7b72; }
 
 /* Field Editor */
 .builder-field-list {
@@ -3386,6 +3407,86 @@ body {
   margin-top: 12px;
 }
 
+/* Field documentation row */
+.builder-field-doc-row {
+  padding: 0 0 8px 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--white-10);
+}
+
+.builder-field-doc-row input {
+  width: 100%;
+  font-size: 12px;
+  padding: 6px 10px;
+  color: var(--white-60);
+  font-style: italic;
+}
+
+.builder-field-doc-row input::placeholder {
+  font-style: italic;
+  color: var(--white-30);
+}
+
+/* Item documentation */
+.builder-item-doc {
+  margin-bottom: 16px;
+}
+
+.builder-doc-input {
+  width: 100%;
+  font-size: 12px;
+  padding: 8px 10px;
+  resize: vertical;
+  min-height: 40px;
+  font-family: inherit;
+}
+
+.builder-doc-input::placeholder {
+  color: var(--white-30);
+  font-style: italic;
+}
+
+/* Builder config row */
+.builder-config-row {
+  display: flex;
+  gap: 12px;
+}
+
+.builder-config-row .glass-input-group {
+  flex: 0 0 auto;
+}
+
+/* Advanced options */
+.builder-advanced {
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.builder-advanced summary {
+  cursor: pointer;
+  color: var(--white-60);
+  padding: 6px 0;
+  user-select: none;
+}
+
+.builder-advanced summary:hover {
+  color: var(--white-80);
+}
+
+.builder-advanced[open] summary {
+  margin-bottom: 12px;
+}
+
+.builder-advanced .glass-input-group {
+  margin-bottom: 12px;
+}
+
+.builder-advanced textarea {
+  font-size: 12px;
+  resize: vertical;
+  min-height: 40px;
+}
+
 /* Enum Editor */
 .builder-enum-config {
   margin-bottom: 16px;
@@ -3427,6 +3528,62 @@ body {
   padding: 8px;
   background: var(--white-05);
   border-radius: 8px;
+}
+
+/* RPC Editor */
+.builder-rpc-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.builder-rpc-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--white-05);
+  border-radius: 8px;
+}
+
+.builder-rpc-method-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.builder-rpc-method-line .glass-input,
+.builder-rpc-method-line .glass-select {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.builder-rpc-name {
+  width: 120px;
+}
+
+.builder-rpc-request,
+.builder-rpc-response {
+  width: 120px;
+}
+
+.rpc-syntax {
+  color: var(--white-40);
+  font-family: 'SF Mono', monospace;
+  font-size: 13px;
+}
+
+.builder-rpc-doc {
+  font-size: 12px;
+  padding: 6px 10px;
+  color: var(--white-60);
+  font-style: italic;
+}
+
+.builder-rpc-doc::placeholder {
+  font-style: italic;
+  color: var(--white-30);
 }
 
 /* Preview Panel */

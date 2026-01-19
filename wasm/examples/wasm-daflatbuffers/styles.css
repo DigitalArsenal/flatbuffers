@@ -2383,6 +2383,80 @@ body {
   margin-bottom: 8px;
 }
 
+/* =============================================================================
+   File Upload/Download UI
+   ============================================================================= */
+
+.card-desc {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.file-input {
+  display: none;
+}
+
+.file-label {
+  font-size: 14px;
+  color: var(--muted);
+  margin-left: 12px;
+}
+
+.progress-container {
+  margin: 20px 0;
+  padding: 16px;
+  background: var(--white-05);
+  border-radius: var(--radius-sm);
+}
+
+.progress-text {
+  display: block;
+  text-align: center;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--white-80);
+}
+
+.upload-results {
+  margin-top: 20px;
+  padding: 20px;
+  background: var(--white-05);
+  border-radius: var(--radius-sm);
+}
+
+.upload-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.upload-stats .stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.upload-stats .stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.upload-stats .stat-value {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--white-90);
+}
+
+/* Button with icon */
+.glass-btn svg {
+  vertical-align: middle;
+  margin-right: 6px;
+  margin-top: -2px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .detail-grid,

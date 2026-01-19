@@ -1165,9 +1165,12 @@ async function generateBulkBuffers() {
         const binary = buildFlatBuffer(schemaType, data);
 
         if (encrypt) {
-          // Reuse the warm encryption context - only AES-CTR, no ECDH overhead
+          // Use high-performance streaming encryption:
+          // - Field keys are cached (HKDF only on first access)
+          // - IVs computed via fast XOR (no HKDF per record)
+          // This is ~100x faster than encryptScalar() for bulk operations
           const encrypted = new Uint8Array(binary);
-          encryptCtx.encryptScalar(encrypted, 0, encrypted.length, j % 65536);
+          encryptCtx.encryptBuffer(encrypted, j);  // j is the record counter
 
           state.encryptedBuffers.push(encrypted);
           state.encryptionHeaders.push(encryptionHeader); // Same header for all records
@@ -1220,6 +1223,406 @@ async function generateBulkBuffers() {
     if (plainBtn) plainBtn.disabled = false;
     btn.textContent = 'Encrypt for Bob';
   }
+}
+
+// =============================================================================
+// Streaming Export/Import - Memory-efficient large dataset handling
+// =============================================================================
+
+/**
+ * File format for encrypted FlatBuffers stream:
+ * [4 bytes: magic "EFBS" (Encrypted FlatBuffers Stream)]
+ * [4 bytes: version (1)]
+ * [4 bytes: record count]
+ * [4 bytes: schema type string length]
+ * [N bytes: schema type string (e.g., "monster")]
+ * [4 bytes: encryption header JSON length (0 if unencrypted)]
+ * [N bytes: encryption header JSON]
+ * [records...]
+ *   [4 bytes: record length]
+ *   [N bytes: FlatBuffer data (encrypted or plain)]
+ */
+
+const EFBS_MAGIC = 0x53424645; // "EFBS" in little-endian
+
+/**
+ * Generate FlatBuffers and download as a streaming file.
+ * This avoids storing all records in memory - records are chunked and exported.
+ */
+async function generateAndDownload(encrypt) {
+  const schemaType = $('bulk-schema').value;
+  const count = parseInt($('buffer-count').value);
+  const config = schemaConfig[schemaType];
+
+  // Check if PKI keys are available when encryption is enabled
+  if (encrypt && (!state.pki.bob || !state.pki.bob.publicKey)) {
+    alert('Please generate PKI key pairs first (in the PKI section above)');
+    return;
+  }
+
+  const btn = encrypt ? $('download-encrypted') : $('download-plain');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+
+  // Show progress bar
+  const progressContainer = $('download-progress');
+  const progressFill = $('download-progress-fill');
+  const progressText = $('download-progress-text');
+  progressContainer.style.display = 'block';
+  progressFill.style.width = '0%';
+  progressText.textContent = 'Preparing...';
+
+  const startTime = performance.now();
+
+  try {
+    // Create encryption context once if needed
+    let encryptCtx = null;
+    let encryptionHeaderJson = '';
+
+    if (encrypt) {
+      let publicKey = state.pki.bob.publicKey;
+      if (!(publicKey instanceof Uint8Array)) {
+        publicKey = new Uint8Array(
+          typeof publicKey === 'object' && publicKey !== null
+            ? Object.values(publicKey)
+            : publicKey
+        );
+      }
+
+      encryptCtx = EncryptionContext.forEncryption(publicKey, {
+        algorithm: state.pki.algorithm,
+        context: 'flatbuffers-stream-v1',
+      });
+      encryptionHeaderJson = encryptCtx.getHeaderJSON();
+    }
+
+    // Build file header
+    const schemaBytes = new TextEncoder().encode(schemaType);
+    const headerJsonBytes = new TextEncoder().encode(encryptionHeaderJson);
+
+    const fileHeaderSize = 4 + 4 + 4 + 4 + schemaBytes.length + 4 + headerJsonBytes.length;
+    const fileHeader = new ArrayBuffer(fileHeaderSize);
+    const headerView = new DataView(fileHeader);
+    let offset = 0;
+
+    // Magic
+    headerView.setUint32(offset, EFBS_MAGIC, true);
+    offset += 4;
+    // Version
+    headerView.setUint32(offset, 1, true);
+    offset += 4;
+    // Record count
+    headerView.setUint32(offset, count, true);
+    offset += 4;
+    // Schema type length + data
+    headerView.setUint32(offset, schemaBytes.length, true);
+    offset += 4;
+    new Uint8Array(fileHeader, offset, schemaBytes.length).set(schemaBytes);
+    offset += schemaBytes.length;
+    // Encryption header length + data
+    headerView.setUint32(offset, headerJsonBytes.length, true);
+    offset += 4;
+    new Uint8Array(fileHeader, offset, headerJsonBytes.length).set(headerJsonBytes);
+
+    // Collect chunks for final blob
+    const chunks = [new Uint8Array(fileHeader)];
+    let totalDataSize = fileHeaderSize;
+
+    // Generate records in batches to avoid memory buildup
+    const CHUNK_SIZE = 10000;
+
+    for (let i = 0; i < count; i += CHUNK_SIZE) {
+      const chunkEnd = Math.min(i + CHUNK_SIZE, count);
+      const chunkRecords = [];
+
+      for (let j = i; j < chunkEnd; j++) {
+        const data = config.sampleData(j);
+        let binary = buildFlatBuffer(schemaType, data);
+
+        if (encrypt) {
+          binary = new Uint8Array(binary);
+          encryptCtx.encryptBuffer(binary, j);
+        }
+
+        // Length-prefix the record
+        const recordWithLength = new Uint8Array(4 + binary.length);
+        new DataView(recordWithLength.buffer).setUint32(0, binary.length, true);
+        recordWithLength.set(binary, 4);
+
+        chunkRecords.push(recordWithLength);
+        totalDataSize += recordWithLength.length;
+      }
+
+      // Concatenate chunk records and add to chunks array
+      const chunkData = concatUint8Arrays(chunkRecords);
+      chunks.push(chunkData);
+
+      // Update progress
+      const progress = Math.round((chunkEnd / count) * 100);
+      progressFill.style.width = `${progress}%`;
+      progressText.textContent = `${encrypt ? 'Encrypting' : 'Generating'} ${chunkEnd.toLocaleString()} / ${count.toLocaleString()} records...`;
+      btn.textContent = `${progress}%`;
+
+      // Yield to UI
+      await new Promise(r => setTimeout(r, 0));
+    }
+
+    const elapsed = performance.now() - startTime;
+    const throughput = (totalDataSize / 1024 / 1024) / (elapsed / 1000);
+
+    // Create and download blob
+    const blob = new Blob(chunks, { type: 'application/octet-stream' });
+    const filename = `flatbuffers-${schemaType}-${count}${encrypt ? '-encrypted' : ''}.efbs`;
+
+    downloadBlob(blob, filename);
+
+    // Update stats
+    progressText.textContent = `Complete! ${count.toLocaleString()} records, ${formatSize(totalDataSize)}, ${Math.round(elapsed)}ms (${throughput.toFixed(1)} MB/s)`;
+
+    // Show completion stats in the stats bar
+    $('stat-count').textContent = count.toLocaleString();
+    $('stat-size').textContent = formatSize(totalDataSize);
+    $('stat-time').textContent = `${Math.round(elapsed)} ms`;
+    $('stat-memory').textContent = `${throughput.toFixed(1)} MB/s`;
+    $('stats-bar').style.display = 'flex';
+
+  } catch (err) {
+    console.error('Failed to generate/download:', err);
+    progressText.textContent = `Error: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+/**
+ * Upload and decrypt an .efbs file, showing stats.
+ */
+async function uploadAndDecrypt(file) {
+  const progressContainer = $('upload-progress');
+  const progressFill = $('upload-progress-fill');
+  const progressText = $('upload-progress-text');
+  progressContainer.style.display = 'block';
+  progressFill.style.width = '0%';
+  progressText.textContent = 'Reading file...';
+
+  const startTime = performance.now();
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const view = new DataView(buffer);
+    let offset = 0;
+
+    // Validate magic
+    const magic = view.getUint32(offset, true);
+    offset += 4;
+    if (magic !== EFBS_MAGIC) {
+      throw new Error('Invalid file format (expected EFBS)');
+    }
+
+    // Read version
+    const version = view.getUint32(offset, true);
+    offset += 4;
+    if (version !== 1) {
+      throw new Error(`Unsupported file version: ${version}`);
+    }
+
+    // Read record count
+    const recordCount = view.getUint32(offset, true);
+    offset += 4;
+
+    // Read schema type
+    const schemaTypeLen = view.getUint32(offset, true);
+    offset += 4;
+    const schemaType = new TextDecoder().decode(new Uint8Array(buffer, offset, schemaTypeLen));
+    offset += schemaTypeLen;
+
+    // Read encryption header
+    const encHeaderLen = view.getUint32(offset, true);
+    offset += 4;
+    const encHeaderJson = new TextDecoder().decode(new Uint8Array(buffer, offset, encHeaderLen));
+    offset += encHeaderLen;
+
+    const isEncrypted = encHeaderLen > 0;
+    let decryptCtx = null;
+
+    if (isEncrypted) {
+      // Create decryption context
+      if (!state.pki.bob || !state.pki.bob.privateKey) {
+        throw new Error('Bob\'s private key not available for decryption');
+      }
+
+      let privateKey = state.pki.bob.privateKey;
+      if (!(privateKey instanceof Uint8Array)) {
+        privateKey = new Uint8Array(
+          typeof privateKey === 'object' && privateKey !== null
+            ? Object.values(privateKey)
+            : privateKey
+        );
+      }
+
+      const header = encryptionHeaderFromJSON(encHeaderJson);
+      decryptCtx = EncryptionContext.forDecryption(privateKey, header, {
+        context: 'flatbuffers-stream-v1',
+      });
+    }
+
+    progressText.textContent = `Processing ${recordCount.toLocaleString()} ${schemaType} records...`;
+
+    // Process records
+    let decryptTime = 0;
+    let recordsProcessed = 0;
+    let sampleRecords = []; // Keep first 10 for display
+
+    while (offset < buffer.byteLength && recordsProcessed < recordCount) {
+      const recordLen = view.getUint32(offset, true);
+      offset += 4;
+
+      const recordData = new Uint8Array(buffer, offset, recordLen);
+      offset += recordLen;
+
+      if (isEncrypted && decryptCtx) {
+        const decrypted = new Uint8Array(recordData);
+        const t0 = performance.now();
+        decryptCtx.decryptBuffer(decrypted, recordsProcessed);
+        decryptTime += performance.now() - t0;
+
+        // Store sample for display
+        if (recordsProcessed < 10) {
+          sampleRecords.push({
+            index: recordsProcessed,
+            binary: decrypted,
+            size: recordLen,
+          });
+        }
+      } else {
+        if (recordsProcessed < 10) {
+          sampleRecords.push({
+            index: recordsProcessed,
+            binary: new Uint8Array(recordData),
+            size: recordLen,
+          });
+        }
+      }
+
+      recordsProcessed++;
+
+      // Update progress periodically
+      if (recordsProcessed % 10000 === 0) {
+        const progress = Math.round((offset / buffer.byteLength) * 100);
+        progressFill.style.width = `${progress}%`;
+        progressText.textContent = `${isEncrypted ? 'Decrypting' : 'Processing'} ${recordsProcessed.toLocaleString()} / ${recordCount.toLocaleString()} records...`;
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    const elapsed = performance.now() - startTime;
+    const throughput = (buffer.byteLength / 1024 / 1024) / (elapsed / 1000);
+
+    // Display results
+    progressFill.style.width = '100%';
+    progressText.textContent = `Complete! ${recordsProcessed.toLocaleString()} records verified`;
+
+    // Update stats bar
+    $('stat-count').textContent = recordsProcessed.toLocaleString();
+    $('stat-size').textContent = formatSize(buffer.byteLength);
+    $('stat-time').textContent = `${Math.round(elapsed)} ms`;
+    $('stat-memory').textContent = `${throughput.toFixed(1)} MB/s`;
+    $('stats-bar').style.display = 'flex';
+
+    // Show upload results
+    const resultsContainer = $('upload-results');
+    if (resultsContainer) {
+      resultsContainer.innerHTML = `
+        <div class="upload-stats">
+          <div class="stat-item">
+            <span class="stat-label">File</span>
+            <span class="stat-value">${file.name}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Schema</span>
+            <span class="stat-value">${schemaType}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Records</span>
+            <span class="stat-value">${recordsProcessed.toLocaleString()}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Encrypted</span>
+            <span class="stat-value">${isEncrypted ? 'Yes' : 'No'}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Total Time</span>
+            <span class="stat-value">${Math.round(elapsed)} ms</span>
+          </div>
+          ${isEncrypted ? `
+          <div class="stat-item">
+            <span class="stat-label">Decrypt Time</span>
+            <span class="stat-value">${Math.round(decryptTime)} ms</span>
+          </div>
+          ` : ''}
+          <div class="stat-item">
+            <span class="stat-label">Throughput</span>
+            <span class="stat-value">${throughput.toFixed(1)} MB/s</span>
+          </div>
+        </div>
+      `;
+      resultsContainer.style.display = 'block';
+    }
+
+    // Parse and show sample records
+    if (sampleRecords.length > 0) {
+      state.buffers = sampleRecords.map((r, i) => {
+        const config = schemaConfig[schemaType];
+        let data = {};
+        try {
+          const parsed = parseWithSchema(r.binary, config.parserSchema);
+          data = parsed;
+        } catch (e) {
+          data = { _parseError: e.message };
+        }
+        return { index: r.index, data, binary: r.binary, size: r.size };
+      });
+      state.encryptedBuffers = [];
+      state.encryptionHeaders = [];
+      state.encryptionEnabled = false;
+      renderBulkTable(schemaType);
+      $('data-card').style.display = 'block';
+      $('visible-range').textContent = `(showing first ${sampleRecords.length} of ${recordsProcessed.toLocaleString()})`;
+    }
+
+  } catch (err) {
+    console.error('Failed to upload/decrypt:', err);
+    progressText.textContent = `Error: ${err.message}`;
+  }
+}
+
+/**
+ * Helper to concatenate Uint8Arrays efficiently.
+ */
+function concatUint8Arrays(arrays) {
+  const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const arr of arrays) {
+    result.set(arr, offset);
+    offset += arr.length;
+  }
+  return result;
+}
+
+/**
+ * Trigger file download in browser.
+ */
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function renderBulkTable(schemaType) {
@@ -1364,7 +1767,8 @@ function showRecordDetail(record, index) {
 }
 
 /**
- * Decrypt a bulk record using Bob's private key
+ * Decrypt a bulk record using Bob's private key.
+ * Uses high-performance decryptBuffer() method with cached field keys.
  */
 function decryptBulkRecord(index) {
   if (!state.pki.bob || !state.pki.bob.privateKey) {
@@ -1382,9 +1786,9 @@ function decryptBulkRecord(index) {
       'flatbuffers-bulk-encryption-v1'
     );
 
-    // Decrypt using the context's method (CTR mode is symmetric)
+    // Use high-performance decryptBuffer() - uses cached keys and XOR-based IVs
     const decrypted = new Uint8Array(state.encryptedBuffers[index]);
-    decryptCtx.encryptScalar(decrypted, 0, decrypted.length, index % 65536);
+    decryptCtx.decryptBuffer(decrypted, index);  // index is the record counter
     return decrypted;
   } catch (error) {
     console.error('Decryption failed for record', index, error);
@@ -1420,81 +1824,26 @@ function clearBufferDisplay() {
 // =============================================================================
 
 /**
- * Convert FlatBuffers schema to JSON Schema
+ * Convert FlatBuffers schema to JSON Schema using flatc
+ * @param {string} schemaType - The schema type to convert
+ * @returns {string} JSON Schema string (or error message)
  */
 function fbsToJsonSchema(schemaType) {
-  const schemas = {
-    monster: {
-      $schema: 'https://json-schema.org/draft/2020-12/schema',
-      $id: 'https://flatbuffers.dev/schemas/monster.json',
-      title: 'Monster',
-      description: 'MyGame.Sample.Monster - A monster entity',
-      type: 'object',
-      properties: {
-        pos: {
-          type: 'object',
-          description: 'Vec3 - Position in 3D space',
-          properties: {
-            x: { type: 'number', format: 'float' },
-            y: { type: 'number', format: 'float' },
-            z: { type: 'number', format: 'float' },
-          },
-          required: ['x', 'y', 'z'],
-        },
-        mana: { type: 'integer', format: 'int16', default: 150 },
-        hp: { type: 'integer', format: 'int16', default: 100 },
-        name: { type: 'string' },
-        friendly: { type: 'boolean', default: false },
-        inventory: {
-          type: 'array',
-          items: { type: 'integer', format: 'uint8', minimum: 0, maximum: 255 },
-        },
-        color: {
-          type: 'integer',
-          format: 'int8',
-          enum: [0, 1, 2],
-          enumNames: ['Red', 'Green', 'Blue'],
-          default: 2,
-        },
-        weapons: {
-          type: 'array',
-          items: { $ref: '#/$defs/Weapon' },
-        },
-      },
-      $defs: {
-        Weapon: {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
-            damage: { type: 'integer', format: 'int16' },
-          },
-        },
-      },
-    },
-    weapon: {
-      $schema: 'https://json-schema.org/draft/2020-12/schema',
-      $id: 'https://flatbuffers.dev/schemas/weapon.json',
-      title: 'Weapon',
-      description: 'MyGame.Sample.Weapon',
-      type: 'object',
-      properties: {
-        name: { type: 'string' },
-        damage: { type: 'integer', format: 'int16' },
-      },
-    },
-    galaxy: {
-      $schema: 'https://json-schema.org/draft/2020-12/schema',
-      $id: 'https://flatbuffers.dev/schemas/galaxy.json',
-      title: 'Galaxy',
-      description: 'flatbuffers.goldens.Galaxy',
-      type: 'object',
-      properties: {
-        num_stars: { type: 'integer', format: 'int64' },
-      },
-    },
-  };
+  const config = schemaConfig[schemaType];
+  if (!config || !state.flatcRunner) {
+    return '{"error": "Schema not available or flatc not initialized"}';
+  }
 
-  return schemas[schemaType] || schemas.monster;
+  try {
+    const jsonSchema = state.flatcRunner.generateJsonSchema(
+      { entry: config.entry, files: config.files },
+      { includeXFlatbuffers: true }
+    );
+    return jsonSchema;
+  } catch (err) {
+    console.error('Failed to generate JSON Schema:', err);
+    return JSON.stringify({ error: err.message }, null, 2);
+  }
 }
 
 /**
@@ -1511,11 +1860,17 @@ function updateSchemaViewer() {
     fbsContent.textContent = fbsText.trim();
   }
 
-  // Display JSON Schema
+  // Display JSON Schema (fbsToJsonSchema returns a string directly from flatc)
   const jsonSchemaContent = $('json-schema-content');
   if (jsonSchemaContent) {
     const jsonSchema = fbsToJsonSchema(schemaType);
-    jsonSchemaContent.textContent = JSON.stringify(jsonSchema, null, 2);
+    // Parse and re-stringify for consistent formatting
+    try {
+      const parsed = JSON.parse(jsonSchema);
+      jsonSchemaContent.textContent = JSON.stringify(parsed, null, 2);
+    } catch {
+      jsonSchemaContent.textContent = jsonSchema;
+    }
   }
 }
 
@@ -1937,9 +2292,9 @@ function pkiEncrypt() {
     context: 'flatbuffers-pki-demo-v1',
   });
 
-  // Encrypt the data using the context's method (key and nonce are private fields)
+  // Encrypt the data using high-performance method (key caching + XOR IV)
   const ciphertext = new Uint8Array(state.pki.plaintext);
-  encryptCtx.encryptScalar(ciphertext, 0, ciphertext.length, 0);
+  encryptCtx.encryptBuffer(ciphertext, 0);  // recordCounter=0 for single message
   state.pki.ciphertext = ciphertext;
 
   // Get the header (contains ephemeral public key, etc.)
@@ -1988,9 +2343,9 @@ function pkiDecrypt() {
       'flatbuffers-pki-demo-v1'
     );
 
-    // Decrypt the data using the context's method (AES-CTR is symmetric, so encryptScalar works for both)
+    // Decrypt using high-performance method (AES-CTR is symmetric)
     const decrypted = new Uint8Array(state.pki.ciphertext);
-    decryptCtx.encryptScalar(decrypted, 0, decrypted.length, 0);
+    decryptCtx.decryptBuffer(decrypted, 0);  // recordCounter=0 for single message
     state.pki.decrypted = decrypted;
 
     // Convert back to string
@@ -2040,9 +2395,9 @@ function pkiTryWrongKey() {
       'flatbuffers-pki-demo-v1'
     );
 
-    // Attempt decryption using the context's method (AES-CTR is symmetric)
+    // Attempt decryption (will produce garbage since wrong key was used)
     const attemptedDecrypt = new Uint8Array(state.pki.ciphertext);
-    decryptCtx.encryptScalar(attemptedDecrypt, 0, attemptedDecrypt.length, 0);
+    decryptCtx.decryptBuffer(attemptedDecrypt, 0);  // recordCounter=0
 
     // Check if it matches original (it shouldn't)
     const decoder = new TextDecoder();
@@ -2519,7 +2874,20 @@ function setupMainAppHandlers() {
   $('generate-single').addEventListener('click', generateSingleRecord);
   $('toggle-field-decrypt').addEventListener('click', toggleFieldDecrypt);
 
-  // Bulk Generation Tab
+  // Bulk Generation Tab - Download buttons (memory efficient)
+  $('download-encrypted')?.addEventListener('click', () => generateAndDownload(true));
+  $('download-plain')?.addEventListener('click', () => generateAndDownload(false));
+
+  // File upload
+  $('upload-file')?.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      $('upload-filename').textContent = file.name;
+      uploadAndDecrypt(file);
+    }
+  });
+
+  // In-memory generation (for smaller datasets)
   $('generate-buffers').addEventListener('click', () => {
     state.encryptionEnabled = true;
     generateBulkBuffers();

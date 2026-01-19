@@ -238,6 +238,17 @@ test("generateJsonSchema exports schema", () => {
   assertEqual(typeof parsed.$schema, "string", "has $schema");
 });
 
+test("generateJsonSchema with includeXFlatbuffers adds metadata", () => {
+  const jsonSchema = runner.generateJsonSchema(schemaInput, { includeXFlatbuffers: true });
+  assertEqual(typeof jsonSchema, "string", "jsonschema is string");
+  const parsed = JSON.parse(jsonSchema);
+  assertEqual(typeof parsed["x-flatbuffers"], "object", "has x-flatbuffers root metadata");
+  assertEqual(typeof parsed["x-flatbuffers"].root_type, "string", "has root_type in x-flatbuffers");
+  // Check that definitions also have x-flatbuffers metadata
+  const monsterDef = parsed.definitions?.MyGame_Sample_Monster;
+  assertEqual(typeof monsterDef?.["x-flatbuffers"], "object", "Monster has x-flatbuffers metadata");
+});
+
 // Test: Code generation options
 console.log("\n5. Code generation options:");
 

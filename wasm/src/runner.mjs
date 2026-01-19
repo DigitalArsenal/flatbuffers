@@ -550,15 +550,72 @@ export class FlatcRunner {
   /**
    * Export a schema to JSON Schema format.
    * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput
+   * @param {Object} [options={}]
+   * @param {boolean} [options.includeXFlatbuffers=false] - Include x-flatbuffers metadata for lossless round-tripping.
    * @returns {string}
    */
-  generateJsonSchema(schemaInput) {
-    const result = this.generateCode(schemaInput, "jsonschema");
-    const files = Object.values(result);
-    if (files.length === 0) {
-      throw new Error("No JSON Schema output generated");
+  generateJsonSchema(schemaInput, options = {}) {
+    const outDir = `/out_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    this.Module.FS.mkdirTree(outDir);
+
+    const cleanupDir = (dir) => {
+      try {
+        const entries = this.Module.FS.readdir(dir).filter(
+          (e) => e !== "." && e !== ".."
+        );
+        for (const entry of entries) {
+          const fullPath = `${dir}/${entry}`;
+          const stat = this.Module.FS.stat(fullPath);
+          if (this.Module.FS.isDir(stat.mode)) {
+            cleanupDir(fullPath);
+          } else {
+            this.unlink(fullPath);
+          }
+        }
+        this.rmdir(dir);
+      } catch {
+        // ignore cleanup errors
+      }
+    };
+
+    try {
+      this._mountSchemaIfNeeded(schemaInput);
+
+      const args = ["--jsonschema", "-o", outDir];
+
+      if (options.includeXFlatbuffers) {
+        args.push("--jsonschema-xflatbuffers");
+      }
+
+      for (const dir of this._cachedIncludeDirs) {
+        args.push("-I", dir);
+      }
+
+      args.push(schemaInput.entry);
+
+      const result = this.runCommand(args);
+
+      if (result.code !== 0 || result.stderr.includes("error:")) {
+        throw new Error(
+          `flatc JSON Schema generation failed (exit ${result.code}):\n${result.stderr || result.stdout}`
+        );
+      }
+
+      // Collect output files
+      const files = this.Module.FS.readdir(outDir).filter(
+        (f) => f !== "." && f !== ".."
+      );
+
+      if (files.length === 0) {
+        throw new Error("No JSON Schema output generated");
+      }
+
+      return this.Module.FS.readFile(`${outDir}/${files[0]}`, {
+        encoding: "utf8",
+      });
+    } finally {
+      cleanupDir(outDir);
     }
-    return files[0];
   }
 
   /**

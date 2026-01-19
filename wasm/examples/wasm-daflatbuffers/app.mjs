@@ -638,10 +638,9 @@ function login(keys) {
   // Always derive PKI keys from HD wallet if available
   // This ensures Alice/Bob keys are deterministically derived from the user's seed
   if (state.hdRoot) {
-    console.log('Deriving PKI keys from HD wallet...');
     generatePKIKeyPairs(); // This will use derivePKIKeysFromHD internally
   } else if (state.pki.alice && state.pki.bob) {
-    console.log('PKI keys already loaded, updating UI...');
+    // Just update the UI since keys are already in state
     // Just update the UI since keys are already in state
     $('alice-public-key').textContent = toHexCompact(state.pki.alice.publicKey);
     $('alice-private-key').textContent = toHexCompact(state.pki.alice.privateKey);
@@ -661,7 +660,6 @@ function login(keys) {
     $('pki-security').style.display = 'block';
     $('pki-clear-keys').style.display = 'inline-flex';
   } else if (!loadPKIKeys()) {
-    console.log('No saved PKI keys, generating new ones...');
     generatePKIKeyPairs();
   }
 
@@ -1532,7 +1530,6 @@ function savePKIKeys() {
 
   try {
     localStorage.setItem(PKI_STORAGE_KEY, JSON.stringify(data));
-    console.log('Saved PKI keys to localStorage:', data.algorithm);
   } catch (e) {
     console.warn('Failed to save PKI keys to localStorage:', e);
   }
@@ -1557,7 +1554,6 @@ function loadPKIKeys() {
   try {
     const stored = localStorage.getItem(PKI_STORAGE_KEY);
     if (!stored) {
-      console.log('No PKI keys found in localStorage');
       return false;
     }
 
@@ -1582,7 +1578,6 @@ function loadPKIKeys() {
     if (data.encryptionKey && data.encryptionIV) {
       state.encryptionKey = hexToBytes(data.encryptionKey);
       state.encryptionIV = hexToBytes(data.encryptionIV);
-      console.log('Loaded encryption key and IV from localStorage');
     }
 
     // Update UI elements (with null checks)
@@ -1608,7 +1603,6 @@ function loadPKIKeys() {
     if (pkiSecurity) pkiSecurity.style.display = 'block';
     if (pkiClearKeys) pkiClearKeys.style.display = 'inline-flex';
 
-    console.log('Loaded PKI keys:', data.algorithm, 'Alice:', data.alice.publicKey.slice(0, 16) + '...');
     return true;
   } catch (e) {
     console.warn('Failed to load PKI keys from localStorage:', e);
@@ -1691,12 +1685,6 @@ function derivePKIKeysFromHD() {
         state.pki.bob = deriveX25519FromSeed();
     }
 
-    console.log('Derived PKI keys from HD paths:', {
-      algorithm,
-      alicePub: state.pki.alice?.publicKey?.length,
-      bobPub: state.pki.bob?.publicKey?.length,
-    });
-
     return true;
   } catch (e) {
     console.error('Failed to derive PKI keys from HD:', e);
@@ -1742,14 +1730,11 @@ function deriveP256FromPrivate() {
 }
 
 function generatePKIKeyPairs() {
-  console.log('generatePKIKeyPairs called');
-
   // First try to derive from HD wallet
   if (state.hdRoot && derivePKIKeysFromHD()) {
-    console.log('PKI keys derived from HD wallet');
+    // PKI keys derived from HD wallet
   } else {
     // Fallback to random generation
-    console.log('Falling back to random PKI key generation');
     const algorithm = $('pki-algorithm')?.value || 'x25519';
     state.pki.algorithm = algorithm;
 
@@ -1777,13 +1762,6 @@ function generatePKIKeyPairs() {
       return;
     }
   }
-
-  console.log('PKI keys ready:', {
-    alicePub: state.pki.alice?.publicKey?.length,
-    alicePriv: state.pki.alice?.privateKey?.length,
-    bobPub: state.pki.bob?.publicKey?.length,
-    bobPriv: state.pki.bob?.privateKey?.length,
-  });
 
   // Save keys to localStorage
   savePKIKeys();
@@ -2611,9 +2589,6 @@ async function init() {
 
     // Load saved PKI keys if available
     const hasSavedKeys = loadPKIKeys();
-    if (hasSavedKeys) {
-      console.log('Loaded PKI keys from localStorage');
-    }
 
     state.initialized = true;
 
@@ -2636,7 +2611,6 @@ async function init() {
 
     // Auto-login if we have saved PKI keys (skip login screen)
     if (hasSavedKeys) {
-      console.log('Auto-logging in with saved keys...');
       // Generate temporary wallet keys for the session
       const tempKeys = {
         x25519: x25519GenerateKeyPair(),
@@ -2647,7 +2621,6 @@ async function init() {
 
       // Generate encryption key and IV if not loaded from storage
       if (!state.encryptionKey || !state.encryptionIV) {
-        console.log('Generating new encryption key and IV for session...');
         const encoder = new TextEncoder();
         // Use a random seed for session-based encryption
         const randomSeed = new Uint8Array(32);

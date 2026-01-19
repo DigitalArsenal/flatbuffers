@@ -48,9 +48,29 @@
           </svg>
         </button>
         <button id="nav-logout" class="nav-btn glass-btn" style="display: none;">Logout</button>
+        <button id="nav-menu-btn" class="nav-menu-btn" aria-label="Toggle menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
       </div>
     </div>
   </nav>
+
+  <!-- Mobile Menu -->
+  <div id="nav-mobile-menu" class="nav-mobile-menu">
+    <a href="#overview" class="nav-link" data-tab="overview">Overview</a>
+    <a href="#pki" class="nav-link" data-tab="pki">PKI</a>
+    <a href="#fields" class="nav-link" data-tab="fields">Field Encryption</a>
+    <a href="#buffers" class="nav-link" data-tab="buffers">Bulk Generation</a>
+    <a href="#schema" class="nav-link" data-tab="schema">Schema</a>
+    <a href="#streaming" class="nav-link" data-tab="streaming">Streaming</a>
+    <a href="#identity" class="nav-link" data-tab="identity">Identity</a>
+    <span class="nav-divider"></span>
+    <a href="https://flatbuffers.dev" target="_blank" class="nav-link nav-link-external">Docs</a>
+  </div>
 
   <!-- Hero / Login Section -->
   <section id="hero-section" class="hero-section">

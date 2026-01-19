@@ -3667,7 +3667,7 @@ function renderTreeNode(node, prefix) {
     if (item._isFolder) {
       const folderPath = prefix ? `${prefix}/${name}` : name;
       html += `
-        <div class="file-tree-folder" data-folder="${escapeHtml(folderPath)}">
+        <div class="file-tree-folder" data-folder="${escapeHtml(folderPath)}" data-drop-target="folder">
           <div class="file-tree-item folder-item">
             <span class="folder-toggle">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3679,6 +3679,12 @@ function renderTreeNode(node, prefix) {
             </svg>
             <span class="file-name">${escapeHtml(name)}</span>
             <div class="file-actions">
+              <button class="file-action-btn" data-action="add-file" title="Add file to folder">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
               <button class="file-action-btn delete" data-action="delete-folder" title="Delete folder">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -3687,7 +3693,7 @@ function renderTreeNode(node, prefix) {
               </button>
             </div>
           </div>
-          <div class="file-tree-folder-children">
+          <div class="file-tree-folder-children" data-drop-target="folder-children" data-folder="${escapeHtml(folderPath)}">
             ${renderTreeNode(item._children, folderPath)}
           </div>
         </div>
@@ -3697,7 +3703,8 @@ function renderTreeNode(node, prefix) {
       const isModified = schemaFiles.files[item._path]?.modified;
       const isEntry = schemaFiles.entryPoint === item._path;
       html += `
-        <div class="file-tree-item${isSelected ? ' selected' : ''}${isModified ? ' modified' : ''}" data-path="${escapeHtml(item._path)}">
+        <div class="file-tree-item${isSelected ? ' selected' : ''}${isModified ? ' modified' : ''}"
+             data-path="${escapeHtml(item._path)}" draggable="true">
           <svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
             <polyline points="14 2 14 8 20 8"></polyline>
@@ -3777,9 +3784,114 @@ function attachFileTreeListeners() {
           saveSchemaFilesToStorage();
           renderSchemaFileTree();
         }
+      } else if (action === 'add-file') {
+        const folder = btn.closest('.file-tree-folder');
+        const folderPath = folder?.dataset.folder;
+        if (folderPath) {
+          const fileName = prompt('New file name:', 'new_file.fbs');
+          if (fileName) {
+            createSchemaFile(`${folderPath}/${fileName}`);
+          }
+        }
       }
     });
   });
+
+  // Drag and drop for files
+  setupFileTreeDragDrop();
+}
+
+function setupFileTreeDragDrop() {
+  const container = $('schema-file-tree');
+  if (!container) return;
+
+  // Make files draggable
+  document.querySelectorAll('.file-tree-item[data-path][draggable="true"]').forEach(item => {
+    item.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', item.dataset.path);
+      e.dataTransfer.effectAllowed = 'move';
+      item.classList.add('dragging');
+    });
+
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    });
+  });
+
+  // Make folders and root accept drops
+  document.querySelectorAll('.file-tree-folder, .file-tree-body').forEach(dropTarget => {
+    dropTarget.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      dropTarget.classList.add('drag-over');
+    });
+
+    dropTarget.addEventListener('dragleave', (e) => {
+      // Only remove if leaving the element entirely
+      if (!dropTarget.contains(e.relatedTarget)) {
+        dropTarget.classList.remove('drag-over');
+      }
+    });
+
+    dropTarget.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropTarget.classList.remove('drag-over');
+
+      const sourcePath = e.dataTransfer.getData('text/plain');
+      if (!sourcePath || !schemaFiles.files[sourcePath]) return;
+
+      // Determine target folder
+      let targetFolder = '';
+      if (dropTarget.classList.contains('file-tree-folder')) {
+        targetFolder = dropTarget.dataset.folder;
+      }
+      // If dropping on root (.file-tree-body), targetFolder stays ''
+
+      // Get just the filename
+      const filename = sourcePath.split('/').pop();
+      const newPath = targetFolder ? `${targetFolder}/${filename}` : filename;
+
+      // Don't move to same location
+      if (newPath === sourcePath) return;
+
+      // Check if target already exists
+      if (schemaFiles.files[newPath]) {
+        if (!confirm(`File "${newPath}" already exists. Replace it?`)) return;
+      }
+
+      // Move the file
+      moveSchemaFile(sourcePath, newPath);
+    });
+  });
+}
+
+function moveSchemaFile(oldPath, newPath) {
+  if (!schemaFiles.files[oldPath]) return;
+
+  const content = schemaFiles.files[oldPath].content;
+  const modified = schemaFiles.files[oldPath].modified;
+
+  // Delete old
+  delete schemaFiles.files[oldPath];
+
+  // Create new
+  schemaFiles.files[newPath] = { content, modified };
+
+  // Update entry point if moved
+  if (schemaFiles.entryPoint === oldPath) {
+    schemaFiles.entryPoint = newPath;
+  }
+
+  // Update current file if moved
+  if (schemaFiles.currentFile === oldPath) {
+    schemaFiles.currentFile = newPath;
+  }
+
+  saveSchemaFilesToStorage();
+  renderSchemaFileTree();
+  updateCurrentFileIndicator();
+  setStudioStatus(`Moved to ${newPath}`, 'success');
 }
 
 // Load sample project without confirmation (for initial load)
@@ -3840,14 +3952,12 @@ function initStudio() {
     if (name) createSchemaFile(name);
   });
 
-  // New folder button - just prompts for a file in the folder
+  // New folder button
   $('schema-new-folder')?.addEventListener('click', () => {
     const folder = prompt('Folder name:');
-    if (folder) {
-      const fileName = prompt('First file name in this folder:', 'schema.fbs');
-      if (fileName) {
-        createSchemaFile(`${folder}/${fileName}`);
-      }
+    if (folder && folder.trim()) {
+      // Create folder with a default schema file
+      createSchemaFile(`${folder.trim()}/schema.fbs`, `// ${folder.trim()} schema\n\nnamespace ${folder.trim().replace(/[^a-zA-Z0-9]/g, '')};\n`);
     }
   });
 
@@ -6227,11 +6337,15 @@ function validateSchemaWithWasm(fbs, statusEl) {
 function exportToSchemaEditor() {
   const fbs = generateFBSFromBuilder();
 
-  // Set the schema editor content
-  const schemaInput = $('studio-schema-input');
-  if (schemaInput) {
-    schemaInput.value = fbs;
-  }
+  // Prompt for filename
+  const defaultName = schemaBuilder.namespace
+    ? schemaBuilder.namespace.replace(/\./g, '/') + '.fbs'
+    : 'schema.fbs';
+  const filename = prompt('Save as filename:', defaultName);
+  if (!filename) return;
+
+  // Create the file in the schema editor
+  createSchemaFile(filename, fbs);
 
   // Switch to schema editor tab
   document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
@@ -6243,9 +6357,7 @@ function exportToSchemaEditor() {
   if (editorTab) editorTab.classList.add('active');
   if (editorPanel) editorPanel.classList.add('active');
 
-  // Update schema type selector
-  const schemaTypeSelect = $('studio-schema-type');
-  if (schemaTypeSelect) schemaTypeSelect.value = 'fbs';
+  setStudioStatus(`Exported to ${filename}`, 'success');
 }
 
 init();

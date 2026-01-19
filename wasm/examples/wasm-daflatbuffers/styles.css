@@ -2973,6 +2973,21 @@ body {
   transform: rotate(-90deg);
 }
 
+/* Drag and drop */
+.file-tree-item.dragging {
+  opacity: 0.5;
+}
+
+.file-tree-folder.drag-over,
+.file-tree-body.drag-over {
+  background: rgba(88, 166, 255, 0.1);
+  border-radius: 4px;
+}
+
+.file-tree-folder.drag-over > .file-tree-item {
+  background: rgba(88, 166, 255, 0.15);
+}
+
 /* Editor main area */
 .schema-editor-main {
   display: flex;

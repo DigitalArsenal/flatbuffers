@@ -951,37 +951,74 @@
 
         <!-- Schema Editor Panel -->
         <div id="studio-schema-editor" class="studio-panel active">
-          <div class="studio-split">
-            <div class="studio-pane">
+          <div class="schema-editor-layout">
+            <!-- Left: File Tree -->
+            <div class="schema-file-tree">
               <div class="pane-header">
-                <h4>Schema Definition</h4>
+                <h4>Files</h4>
                 <div class="pane-actions">
-                  <select id="studio-schema-type" class="glass-select compact">
-                    <option value="fbs">FlatBuffers IDL    </option>
-                    <option value="json">JSON Schema</option>
-                  </select>
-                  <button id="studio-load-sample" class="glass-btn small">Load Sample</button>
-                  <label class="glass-btn small">
-                    Upload
-                    <input type="file" id="studio-upload-schema" accept=".fbs,.json" hidden>
+                  <button id="schema-new-file" class="glass-btn small icon-btn" title="New File">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="12" y1="18" x2="12" y2="12"></line>
+                      <line x1="9" y1="15" x2="15" y2="15"></line>
+                    </svg>
+                  </button>
+                  <button id="schema-new-folder" class="glass-btn small icon-btn" title="New Folder">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                      <line x1="12" y1="11" x2="12" y2="17"></line>
+                      <line x1="9" y1="14" x2="15" y2="14"></line>
+                    </svg>
+                  </button>
+                  <label class="glass-btn small icon-btn" title="Upload Files">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <input type="file" id="studio-upload-schema" accept=".fbs,.json" multiple hidden>
                   </label>
                 </div>
               </div>
-              <div class="pane-body">
-                <textarea id="studio-schema-input" class="code-textarea" spellcheck="false" placeholder="// Enter your FlatBuffers schema here..."></textarea>
+              <div class="file-tree-body" id="schema-file-tree">
+                <div class="empty-state small">No files yet</div>
               </div>
-              <div class="pane-footer">
-                <button id="studio-parse-schema" class="glass-btn primary">Parse Schema</button>
-                <span id="studio-schema-status" class="status-text"></span>
+              <div class="pane-footer small">
+                <button id="studio-load-sample" class="glass-btn small full-width">Load Sample Project</button>
               </div>
             </div>
-            <div class="studio-pane">
-              <div class="pane-header">
-                <h4>Parsed Structure</h4>
+
+            <!-- Center: Editor -->
+            <div class="schema-editor-main">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4 id="schema-editor-title">Schema Definition</h4>
+                  <div class="pane-actions">
+                    <span id="schema-current-file" class="current-file-indicator"></span>
+                  </div>
+                </div>
+                <div class="pane-body">
+                  <textarea id="studio-schema-input" class="code-textarea" spellcheck="false" placeholder="// Select or create a file to begin editing..."></textarea>
+                </div>
+                <div class="pane-footer">
+                  <button id="studio-parse-schema" class="glass-btn primary">Parse All &amp; Validate</button>
+                  <span id="studio-schema-status" class="status-text"></span>
+                </div>
               </div>
-              <div class="pane-body">
-                <div id="studio-parsed-view" class="parsed-view">
-                  <div class="empty-state">Parse a schema to see its structure</div>
+            </div>
+
+            <!-- Right: Parsed Structure -->
+            <div class="schema-parsed-pane">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4>Parsed Structure</h4>
+                </div>
+                <div class="pane-body">
+                  <div id="studio-parsed-view" class="parsed-view">
+                    <div class="empty-state">Parse schemas to see structure</div>
+                  </div>
                 </div>
               </div>
             </div>

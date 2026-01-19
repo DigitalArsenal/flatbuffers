@@ -3185,6 +3185,16 @@ const studioState = {
   currentBuffer: null,
 };
 
+// Schema Editor File System State
+const schemaFiles = {
+  files: {},           // Map of path -> { content, modified }
+  currentFile: null,   // Currently selected file path
+  entryPoint: null,    // Main entry point for compilation (usually main.fbs or schema.fbs)
+};
+
+// localStorage key for persistence
+const SCHEMA_FILES_STORAGE_KEY = 'flatbuffers_studio_files';
+
 // Schema Builder State
 const schemaBuilder = {
   namespace: '',
@@ -3353,6 +3363,379 @@ table Weapon {
 root_type Monster;
 `;
 
+// Sample multi-file project
+const SAMPLE_PROJECT_FILES = {
+  'schema.fbs': `// Main schema file
+include "types/common.fbs";
+include "types/monster.fbs";
+
+namespace MyGame;
+
+root_type Monster;
+file_identifier "GAME";
+`,
+  'types/common.fbs': `// Common types
+namespace MyGame.Types;
+
+enum Color : byte { Red = 0, Green, Blue }
+
+struct Vec3 {
+  x: float;
+  y: float;
+  z: float;
+}
+`,
+  'types/monster.fbs': `// Monster definitions
+include "common.fbs";
+
+namespace MyGame;
+
+table Weapon {
+  name: string;
+  damage: short;
+}
+
+table Monster {
+  pos: Types.Vec3;
+  mana: short = 150;
+  hp: short = 100;
+  name: string (required);
+  friendly: bool = false;
+  inventory: [ubyte];
+  color: Types.Color = Blue;
+  weapons: [Weapon];
+}
+`
+};
+
+// ============================================================================
+// Schema File System Functions
+// ============================================================================
+
+function loadSchemaFilesFromStorage() {
+  try {
+    const saved = localStorage.getItem(SCHEMA_FILES_STORAGE_KEY);
+    if (saved) {
+      const data = JSON.parse(saved);
+      schemaFiles.files = data.files || {};
+      schemaFiles.entryPoint = data.entryPoint || null;
+      // Mark all as unmodified on load
+      for (const path in schemaFiles.files) {
+        schemaFiles.files[path].modified = false;
+      }
+      return true;
+    }
+  } catch (e) {
+    console.warn('Failed to load schema files from storage:', e);
+  }
+  return false;
+}
+
+function saveSchemaFilesToStorage() {
+  try {
+    const data = {
+      files: schemaFiles.files,
+      entryPoint: schemaFiles.entryPoint,
+    };
+    localStorage.setItem(SCHEMA_FILES_STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn('Failed to save schema files to storage:', e);
+  }
+}
+
+function createSchemaFile(path, content = '') {
+  // Normalize path
+  path = path.replace(/\\/g, '/').replace(/^\//, '');
+
+  // Ensure .fbs extension
+  if (!path.endsWith('.fbs') && !path.endsWith('.json')) {
+    path += '.fbs';
+  }
+
+  schemaFiles.files[path] = { content, modified: true };
+
+  // Set as entry point if it's the first file or named schema/main
+  if (!schemaFiles.entryPoint || path === 'schema.fbs' || path === 'main.fbs') {
+    schemaFiles.entryPoint = path;
+  }
+
+  saveSchemaFilesToStorage();
+  renderSchemaFileTree();
+  selectSchemaFile(path);
+}
+
+function deleteSchemaFile(path) {
+  if (!schemaFiles.files[path]) return;
+
+  if (!confirm(`Delete "${path}"?`)) return;
+
+  delete schemaFiles.files[path];
+
+  // Update entry point if deleted
+  if (schemaFiles.entryPoint === path) {
+    const remaining = Object.keys(schemaFiles.files);
+    schemaFiles.entryPoint = remaining.length > 0 ? remaining[0] : null;
+  }
+
+  // Clear editor if current file was deleted
+  if (schemaFiles.currentFile === path) {
+    schemaFiles.currentFile = null;
+    const editor = $('studio-schema-input');
+    if (editor) {
+      editor.value = '';
+      editor.placeholder = '// Select or create a file to begin editing...';
+    }
+    updateCurrentFileIndicator();
+  }
+
+  saveSchemaFilesToStorage();
+  renderSchemaFileTree();
+}
+
+function renameSchemaFile(oldPath, newPath) {
+  if (!schemaFiles.files[oldPath]) return;
+
+  // Normalize new path
+  newPath = newPath.replace(/\\/g, '/').replace(/^\//, '');
+  if (!newPath.endsWith('.fbs') && !newPath.endsWith('.json')) {
+    newPath += '.fbs';
+  }
+
+  if (oldPath === newPath) return;
+  if (schemaFiles.files[newPath]) {
+    alert(`File "${newPath}" already exists`);
+    return;
+  }
+
+  schemaFiles.files[newPath] = schemaFiles.files[oldPath];
+  delete schemaFiles.files[oldPath];
+
+  if (schemaFiles.entryPoint === oldPath) {
+    schemaFiles.entryPoint = newPath;
+  }
+
+  if (schemaFiles.currentFile === oldPath) {
+    schemaFiles.currentFile = newPath;
+  }
+
+  saveSchemaFilesToStorage();
+  renderSchemaFileTree();
+  updateCurrentFileIndicator();
+}
+
+function selectSchemaFile(path) {
+  // Save current file content first
+  if (schemaFiles.currentFile && schemaFiles.files[schemaFiles.currentFile]) {
+    const editor = $('studio-schema-input');
+    if (editor) {
+      schemaFiles.files[schemaFiles.currentFile].content = editor.value;
+    }
+  }
+
+  schemaFiles.currentFile = path;
+
+  const editor = $('studio-schema-input');
+  if (editor && schemaFiles.files[path]) {
+    editor.value = schemaFiles.files[path].content;
+    editor.placeholder = '// Enter your FlatBuffers schema here...';
+  }
+
+  updateCurrentFileIndicator();
+  renderSchemaFileTree(); // Update selection
+}
+
+function updateCurrentFileIndicator() {
+  const indicator = $('schema-current-file');
+  const title = $('schema-editor-title');
+
+  if (schemaFiles.currentFile) {
+    if (indicator) indicator.textContent = schemaFiles.currentFile;
+    if (title) title.textContent = schemaFiles.currentFile.split('/').pop();
+  } else {
+    if (indicator) indicator.textContent = '';
+    if (title) title.textContent = 'Schema Definition';
+  }
+}
+
+function renderSchemaFileTree() {
+  const container = $('schema-file-tree');
+  if (!container) return;
+
+  const paths = Object.keys(schemaFiles.files).sort();
+
+  if (paths.length === 0) {
+    container.innerHTML = '<div class="empty-state small">No files yet</div>';
+    return;
+  }
+
+  // Build folder structure
+  const tree = {};
+  for (const path of paths) {
+    const parts = path.split('/');
+    let current = tree;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const folder = parts[i];
+      if (!current[folder]) {
+        current[folder] = { _isFolder: true, _children: {} };
+      }
+      current = current[folder]._children;
+    }
+    current[parts[parts.length - 1]] = { _isFile: true, _path: path };
+  }
+
+  container.innerHTML = renderTreeNode(tree, '');
+  attachFileTreeListeners();
+}
+
+function renderTreeNode(node, prefix) {
+  let html = '';
+
+  // Sort: folders first, then files
+  const entries = Object.entries(node).sort((a, b) => {
+    const aIsFolder = a[1]._isFolder;
+    const bIsFolder = b[1]._isFolder;
+    if (aIsFolder && !bIsFolder) return -1;
+    if (!aIsFolder && bIsFolder) return 1;
+    return a[0].localeCompare(b[0]);
+  });
+
+  for (const [name, item] of entries) {
+    if (item._isFolder) {
+      const folderPath = prefix ? `${prefix}/${name}` : name;
+      html += `
+        <div class="file-tree-folder" data-folder="${escapeHtml(folderPath)}">
+          <div class="file-tree-item folder-item">
+            <span class="folder-toggle">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </span>
+            <svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span class="file-name">${escapeHtml(name)}</span>
+            <div class="file-actions">
+              <button class="file-action-btn delete" data-action="delete-folder" title="Delete folder">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="file-tree-folder-children">
+            ${renderTreeNode(item._children, folderPath)}
+          </div>
+        </div>
+      `;
+    } else if (item._isFile) {
+      const isSelected = schemaFiles.currentFile === item._path;
+      const isModified = schemaFiles.files[item._path]?.modified;
+      const isEntry = schemaFiles.entryPoint === item._path;
+      html += `
+        <div class="file-tree-item${isSelected ? ' selected' : ''}${isModified ? ' modified' : ''}" data-path="${escapeHtml(item._path)}">
+          <svg class="file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+          </svg>
+          <span class="file-name">${escapeHtml(name)}${isEntry ? ' ★' : ''}</span>
+          <div class="file-actions">
+            <button class="file-action-btn" data-action="set-entry" title="Set as entry point">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+              </svg>
+            </button>
+            <button class="file-action-btn" data-action="rename" title="Rename">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
+              </svg>
+            </button>
+            <button class="file-action-btn delete" data-action="delete" title="Delete">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  return html;
+}
+
+function attachFileTreeListeners() {
+  // File selection
+  document.querySelectorAll('.file-tree-item[data-path]').forEach(item => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.file-action-btn')) return; // Don't select when clicking actions
+      const path = item.dataset.path;
+      selectSchemaFile(path);
+    });
+  });
+
+  // Folder toggle
+  document.querySelectorAll('.file-tree-folder > .file-tree-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.file-action-btn')) return;
+      const folder = item.closest('.file-tree-folder');
+      folder.classList.toggle('collapsed');
+    });
+  });
+
+  // File actions
+  document.querySelectorAll('.file-action-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const action = btn.dataset.action;
+      const fileItem = btn.closest('.file-tree-item');
+      const path = fileItem?.dataset.path;
+
+      if (action === 'delete' && path) {
+        deleteSchemaFile(path);
+      } else if (action === 'rename' && path) {
+        const newName = prompt('New filename:', path);
+        if (newName) renameSchemaFile(path, newName);
+      } else if (action === 'set-entry' && path) {
+        schemaFiles.entryPoint = path;
+        saveSchemaFilesToStorage();
+        renderSchemaFileTree();
+        setStudioStatus(`Entry point set to ${path}`, 'success');
+      } else if (action === 'delete-folder') {
+        const folder = btn.closest('.file-tree-folder');
+        const folderPath = folder?.dataset.folder;
+        if (folderPath) {
+          const filesToDelete = Object.keys(schemaFiles.files).filter(p => p.startsWith(folderPath + '/'));
+          if (filesToDelete.length === 0) return;
+          if (!confirm(`Delete folder "${folderPath}" and ${filesToDelete.length} file(s)?`)) return;
+          filesToDelete.forEach(p => delete schemaFiles.files[p]);
+          saveSchemaFilesToStorage();
+          renderSchemaFileTree();
+        }
+      }
+    });
+  });
+}
+
+function loadSampleProject() {
+  if (Object.keys(schemaFiles.files).length > 0) {
+    if (!confirm('This will replace all current files. Continue?')) return;
+  }
+
+  schemaFiles.files = {};
+  for (const [path, content] of Object.entries(SAMPLE_PROJECT_FILES)) {
+    schemaFiles.files[path] = { content, modified: false };
+  }
+  schemaFiles.entryPoint = 'schema.fbs';
+  schemaFiles.currentFile = 'schema.fbs';
+
+  saveSchemaFilesToStorage();
+  renderSchemaFileTree();
+  selectSchemaFile('schema.fbs');
+  setStudioStatus('Sample project loaded', 'success');
+}
+
 function initStudio() {
   // Studio tab switching
   document.querySelectorAll('.studio-tab').forEach(tab => {
@@ -3366,29 +3749,83 @@ function initStudio() {
     });
   });
 
-  // Load sample schema
-  $('studio-load-sample')?.addEventListener('click', () => {
-    const schemaInput = $('studio-schema-input');
-    if (schemaInput) {
-      schemaInput.value = SAMPLE_FBS_SCHEMA;
-      setStudioStatus('Sample schema loaded', 'success');
+  // Initialize file tree - load from storage or start empty
+  loadSchemaFilesFromStorage();
+  renderSchemaFileTree();
+  if (schemaFiles.currentFile) {
+    selectSchemaFile(schemaFiles.currentFile);
+  } else if (schemaFiles.entryPoint) {
+    selectSchemaFile(schemaFiles.entryPoint);
+  }
+
+  // Load sample project button
+  $('studio-load-sample')?.addEventListener('click', loadSampleProject);
+
+  // New file button
+  $('schema-new-file')?.addEventListener('click', () => {
+    const name = prompt('File name (e.g., types/monster.fbs):');
+    if (name) createSchemaFile(name);
+  });
+
+  // New folder button - just prompts for a file in the folder
+  $('schema-new-folder')?.addEventListener('click', () => {
+    const folder = prompt('Folder name:');
+    if (folder) {
+      const fileName = prompt('First file name in this folder:', 'schema.fbs');
+      if (fileName) {
+        createSchemaFile(`${folder}/${fileName}`);
+      }
     }
   });
 
-  // Upload schema
-  $('studio-upload-schema')?.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const schemaInput = $('studio-schema-input');
-      if (schemaInput) {
-        schemaInput.value = event.target.result;
-        setStudioStatus(`Loaded ${file.name}`, 'success');
+  // Upload schema files (multiple)
+  $('studio-upload-schema')?.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    for (const file of files) {
+      const content = await file.text();
+      // Preserve folder structure if webkitRelativePath is available
+      const path = file.webkitRelativePath || file.name;
+      schemaFiles.files[path] = { content, modified: false };
+    }
+
+    // Set entry point to first .fbs file if not already set
+    if (!schemaFiles.entryPoint) {
+      const fbsFile = files.find(f => f.name.endsWith('.fbs'));
+      if (fbsFile) {
+        schemaFiles.entryPoint = fbsFile.webkitRelativePath || fbsFile.name;
       }
-    };
-    reader.readAsText(file);
+    }
+
+    saveSchemaFilesToStorage();
+    renderSchemaFileTree();
+
+    // Select first uploaded file
+    const firstPath = files[0].webkitRelativePath || files[0].name;
+    selectSchemaFile(firstPath);
+    setStudioStatus(`Uploaded ${files.length} file(s)`, 'success');
+
+    // Reset file input
+    e.target.value = '';
   });
+
+  // Editor content change - mark file as modified
+  const schemaInput = $('studio-schema-input');
+  if (schemaInput) {
+    schemaInput.addEventListener('input', () => {
+      if (schemaFiles.currentFile && schemaFiles.files[schemaFiles.currentFile]) {
+        schemaFiles.files[schemaFiles.currentFile].content = schemaInput.value;
+        schemaFiles.files[schemaFiles.currentFile].modified = true;
+        renderSchemaFileTree(); // Update modified indicator
+      }
+    });
+
+    // Auto-save on blur
+    schemaInput.addEventListener('blur', () => {
+      saveSchemaFilesToStorage();
+    });
+  }
 
   // Parse schema
   $('studio-parse-schema')?.addEventListener('click', parseStudioSchema);
@@ -3476,24 +3913,71 @@ function setStudioStatus(message, type) {
 }
 
 function parseStudioSchema() {
-  const schemaInput = $('studio-schema-input');
-  const content = schemaInput?.value || '';
+  // Save current editor content first
+  if (schemaFiles.currentFile && schemaFiles.files[schemaFiles.currentFile]) {
+    const editor = $('studio-schema-input');
+    if (editor) {
+      schemaFiles.files[schemaFiles.currentFile].content = editor.value;
+    }
+  }
+  saveSchemaFilesToStorage();
 
-  if (!content.trim()) {
-    setStudioStatus('Schema is empty', 'error');
-    return;
+  // Get all files for parsing
+  const files = {};
+  for (const [path, data] of Object.entries(schemaFiles.files)) {
+    files[path] = data.content;
   }
 
+  // If no files, check if there's content in the editor as a single file
+  if (Object.keys(files).length === 0) {
+    const schemaInput = $('studio-schema-input');
+    const content = schemaInput?.value || '';
+    if (!content.trim()) {
+      setStudioStatus('No schema files to parse', 'error');
+      return;
+    }
+    files['schema.fbs'] = content;
+    schemaFiles.entryPoint = 'schema.fbs';
+  }
+
+  const entryPoint = schemaFiles.entryPoint || Object.keys(files)[0];
+
   try {
-    const schema = parseFBSSchemaContent(content);
+    // Parse the entry point file for display
+    const entryContent = files[entryPoint] || '';
+    const schema = parseFBSSchemaContent(entryContent);
+
+    // Also parse all other files to get a combined view
+    for (const [path, content] of Object.entries(files)) {
+      if (path !== entryPoint) {
+        const subSchema = parseFBSSchemaContent(content);
+        schema.tables.push(...subSchema.tables);
+        schema.enums.push(...subSchema.enums);
+        schema.structs.push(...subSchema.structs);
+        schema.unions.push(...subSchema.unions);
+        schema.services.push(...subSchema.services);
+      }
+    }
+
     studioState.parsedSchema = schema;
     studioState.tables = schema.tables;
     studioState.enums = schema.enums;
     studioState.structs = schema.structs;
 
+    // Validate with WASM if available
+    if (state.flatcRunner) {
+      try {
+        state.flatcRunner.generateJsonSchema({ entry: entryPoint, files }, { includeXFlatbuffers: true });
+        setStudioStatus(`Parsed ${Object.keys(files).length} file(s) - Valid`, 'success');
+      } catch (wasmErr) {
+        setStudioStatus(`Parsed but validation failed: ${wasmErr.message}`, 'warning');
+      }
+    } else {
+      setStudioStatus(`Parsed ${Object.keys(files).length} file(s)`, 'success');
+    }
+
     updateStudioParsedView(schema);
     updateStudioTableSelectors();
-    setStudioStatus('Schema parsed successfully', 'success');
   } catch (err) {
     console.error('Parse error:', err);
     setStudioStatus(err.message, 'error');
@@ -3800,13 +4284,33 @@ function updateStudioTableSelectors() {
 let lastGeneratedFiles = null;
 
 async function generateStudioCode() {
-  const schemaInput = $('studio-schema-input');
-  const content = schemaInput?.value || '';
-
-  if (!content.trim()) {
-    alert('Schema is empty');
-    return;
+  // Save current editor content first
+  if (schemaFiles.currentFile && schemaFiles.files[schemaFiles.currentFile]) {
+    const editor = $('studio-schema-input');
+    if (editor) {
+      schemaFiles.files[schemaFiles.currentFile].content = editor.value;
+    }
   }
+
+  // Get all files
+  const files = {};
+  for (const [path, data] of Object.entries(schemaFiles.files)) {
+    files[path] = data.content;
+  }
+
+  // If no files, check if there's content in the editor as a single file
+  if (Object.keys(files).length === 0) {
+    const editorInput = $('studio-schema-input');
+    const content = editorInput?.value || '';
+    if (!content.trim()) {
+      alert('No schema files. Create a file or enter schema content.');
+      return;
+    }
+    files['schema.fbs'] = content;
+    schemaFiles.entryPoint = 'schema.fbs';
+  }
+
+  const entryPoint = schemaFiles.entryPoint || Object.keys(files)[0];
 
   const lang = $('studio-codegen-lang')?.value || 'ts';
   const codeOutput = $('studio-generated-code');
@@ -3823,7 +4327,7 @@ async function generateStudioCode() {
   }
 
   try {
-    const schemaInput = { entry: 'schema.fbs', files: { 'schema.fbs': content } };
+    const schemaInput = { entry: entryPoint, files };
     const options = {
       genMutable,
       genObjectApi,
@@ -3837,21 +4341,21 @@ async function generateStudioCode() {
       lastGeneratedFiles = { 'schema.json': code };
     } else {
       // Use generateCode for all other languages
-      const files = state.flatcRunner.generateCode(schemaInput, lang, options);
-      lastGeneratedFiles = files;
+      const generatedFiles = state.flatcRunner.generateCode(schemaInput, lang, options);
+      lastGeneratedFiles = generatedFiles;
 
       // Combine all generated files into output
-      const fileList = Object.keys(files);
+      const fileList = Object.keys(generatedFiles);
       if (fileList.length === 0) {
         code = '// No code generated. Check your schema for errors.';
         lastGeneratedFiles = null;
       } else if (fileList.length === 1) {
         // Single file output
-        code = files[fileList[0]];
+        code = generatedFiles[fileList[0]];
       } else {
         // Multiple files - show each with a header
         code = fileList.map(filename => {
-          return `// ===== ${filename} =====\n\n${files[filename]}`;
+          return `// ===== ${filename} =====\n\n${generatedFiles[filename]}`;
         }).join('\n\n');
       }
     }

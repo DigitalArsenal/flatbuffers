@@ -2824,6 +2824,195 @@ body {
   display: block;
 }
 
+/* Schema Editor Layout - Three column with file tree */
+.schema-editor-layout {
+  display: grid;
+  grid-template-columns: 200px 1fr 280px;
+  gap: 16px;
+  min-height: 500px;
+}
+
+.schema-file-tree {
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.schema-file-tree .pane-header {
+  padding: 10px 12px;
+}
+
+.schema-file-tree .pane-header h4 {
+  font-size: 12px;
+}
+
+.file-tree-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.file-tree-body .empty-state.small {
+  padding: 20px 10px;
+  font-size: 11px;
+}
+
+.schema-file-tree .pane-footer.small {
+  padding: 8px;
+}
+
+.schema-file-tree .pane-footer .full-width {
+  width: 100%;
+  justify-content: center;
+}
+
+/* File tree items */
+.file-tree-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--white-70);
+  gap: 6px;
+  user-select: none;
+}
+
+.file-tree-item:hover {
+  background: var(--white-05);
+}
+
+.file-tree-item.selected {
+  background: var(--white-10);
+  color: var(--white-90);
+}
+
+.file-tree-item.modified .file-name::after {
+  content: " •";
+  color: var(--accent);
+}
+
+.file-tree-item .file-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.file-tree-item .file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree-item .file-actions {
+  display: none;
+  gap: 2px;
+}
+
+.file-tree-item:hover .file-actions {
+  display: flex;
+}
+
+.file-tree-item .file-action-btn {
+  width: 18px;
+  height: 18px;
+  padding: 2px;
+  background: none;
+  border: none;
+  color: var(--white-40);
+  cursor: pointer;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-tree-item .file-action-btn:hover {
+  background: var(--white-10);
+  color: var(--white-80);
+}
+
+.file-tree-item .file-action-btn.delete:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+/* Folder items */
+.file-tree-folder {
+  margin-bottom: 4px;
+}
+
+.file-tree-folder > .file-tree-item {
+  font-weight: 500;
+}
+
+.file-tree-folder-children {
+  padding-left: 16px;
+}
+
+.file-tree-folder.collapsed .file-tree-folder-children {
+  display: none;
+}
+
+.folder-toggle {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s;
+}
+
+.file-tree-folder.collapsed .folder-toggle {
+  transform: rotate(-90deg);
+}
+
+/* Editor main area */
+.schema-editor-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.schema-editor-main .studio-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.current-file-indicator {
+  font-size: 11px;
+  color: var(--white-50);
+  font-family: 'SF Mono', monospace;
+}
+
+/* Parsed structure pane */
+.schema-parsed-pane {
+  display: flex;
+  flex-direction: column;
+}
+
+.schema-parsed-pane .studio-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Icon buttons */
+.icon-btn {
+  padding: 6px !important;
+  min-width: auto !important;
+}
+
+.icon-btn svg {
+  display: block;
+}
+
 .studio-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -3753,7 +3942,26 @@ body {
 }
 
 /* Responsive */
+@media (max-width: 1200px) {
+  .schema-editor-layout {
+    grid-template-columns: 180px 1fr 220px;
+  }
+}
+
 @media (max-width: 1024px) {
+  .schema-editor-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .schema-file-tree {
+    max-height: 200px;
+  }
+
+  .schema-parsed-pane {
+    max-height: 300px;
+  }
+
   .studio-split {
     grid-template-columns: 1fr;
   }

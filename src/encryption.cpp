@@ -864,8 +864,7 @@ bool IsFieldEncrypted(const reflection::Field* field) {
   if (!field) return false;
   auto attrs = field->attributes();
   if (!attrs) return false;
-  for (size_t i = 0; i < attrs->size(); i++) {
-    auto kv = attrs->Get(i);
+  for (auto kv : *attrs) {
     if (kv && kv->key() && kv->key()->str() == "encrypted") {
       return true;
     }

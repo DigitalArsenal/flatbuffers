@@ -549,42 +549,91 @@ int crypto_ecdh_p256_compute(
     EVP_PKEY_CTX *pctx = NULL;
     EVP_PKEY *priv_pkey = NULL;
     EVP_PKEY *peer_pkey = NULL;
-    OSSL_PARAM params[3];
+    OSSL_PARAM_BLD *bld = NULL;
+    OSSL_PARAM *params = NULL;
+    BIGNUM *priv_bn = NULL;
     size_t secret_len = 32;
     int ret = 0;
 
-    // Build private key
-    params[0] = OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME, "P-256", 0);
-    params[1] = OSSL_PARAM_construct_BN(OSSL_PKEY_PARAM_PRIV_KEY, (void *)private_key, 32);
-    params[2] = OSSL_PARAM_construct_end();
+    // Convert raw private key bytes to BIGNUM
+    priv_bn = BN_bin2bn(private_key, 32, NULL);
+    if (priv_bn == NULL) {
+        goto cleanup;
+    }
+
+    // Build private key using OSSL_PARAM_BLD for proper BIGNUM handling
+    bld = OSSL_PARAM_BLD_new();
+    if (bld == NULL) {
+        goto cleanup;
+    }
+
+    if (!OSSL_PARAM_BLD_push_utf8_string(bld, OSSL_PKEY_PARAM_GROUP_NAME, "P-256", 0)) {
+        goto cleanup;
+    }
+    if (!OSSL_PARAM_BLD_push_BN(bld, OSSL_PKEY_PARAM_PRIV_KEY, priv_bn)) {
+        goto cleanup;
+    }
+
+    params = OSSL_PARAM_BLD_to_param(bld);
+    if (params == NULL) {
+        goto cleanup;
+    }
 
     pctx = EVP_PKEY_CTX_new_from_name(fips_libctx, "EC", NULL);
+    if (pctx == NULL) {
+        goto cleanup;
+    }
     if (EVP_PKEY_fromdata_init(pctx) != 1) {
         goto cleanup;
     }
     if (EVP_PKEY_fromdata(pctx, &priv_pkey, EVP_PKEY_KEYPAIR, params) != 1) {
         goto cleanup;
     }
+
     EVP_PKEY_CTX_free(pctx);
     pctx = NULL;
+    OSSL_PARAM_free(params);
+    params = NULL;
+    OSSL_PARAM_BLD_free(bld);
+    bld = NULL;
 
-    // Build peer's public key
-    params[0] = OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME, "P-256", 0);
-    params[1] = OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY, (void *)peer_public_key, 65);
-    params[2] = OSSL_PARAM_construct_end();
+    // Build peer's public key (octet string works fine for public keys)
+    bld = OSSL_PARAM_BLD_new();
+    if (bld == NULL) {
+        goto cleanup;
+    }
+
+    if (!OSSL_PARAM_BLD_push_utf8_string(bld, OSSL_PKEY_PARAM_GROUP_NAME, "P-256", 0)) {
+        goto cleanup;
+    }
+    if (!OSSL_PARAM_BLD_push_octet_string(bld, OSSL_PKEY_PARAM_PUB_KEY, peer_public_key, 65)) {
+        goto cleanup;
+    }
+
+    params = OSSL_PARAM_BLD_to_param(bld);
+    if (params == NULL) {
+        goto cleanup;
+    }
 
     pctx = EVP_PKEY_CTX_new_from_name(fips_libctx, "EC", NULL);
+    if (pctx == NULL) {
+        goto cleanup;
+    }
     if (EVP_PKEY_fromdata_init(pctx) != 1) {
         goto cleanup;
     }
     if (EVP_PKEY_fromdata(pctx, &peer_pkey, EVP_PKEY_PUBLIC_KEY, params) != 1) {
         goto cleanup;
     }
+
     EVP_PKEY_CTX_free(pctx);
     pctx = NULL;
 
     // Perform ECDH
     pctx = EVP_PKEY_CTX_new_from_pkey(fips_libctx, priv_pkey, NULL);
+    if (pctx == NULL) {
+        goto cleanup;
+    }
     if (EVP_PKEY_derive_init(pctx) != 1) {
         goto cleanup;
     }
@@ -598,6 +647,9 @@ int crypto_ecdh_p256_compute(
     ret = 1;
 
 cleanup:
+    BN_free(priv_bn);
+    OSSL_PARAM_free(params);
+    OSSL_PARAM_BLD_free(bld);
     EVP_PKEY_free(priv_pkey);
     EVP_PKEY_free(peer_pkey);
     EVP_PKEY_CTX_free(pctx);

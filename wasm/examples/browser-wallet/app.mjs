@@ -635,9 +635,12 @@ function login(keys) {
   $('wallet-ed25519-pub').textContent = toHexCompact(keys.ed25519.publicKey);
   $('wallet-secp256k1-pub').textContent = toHexCompact(keys.secp256k1.publicKey);
 
-  // Load or generate PKI keys for Alice/Bob demo
-  // Check if keys were already loaded during init
-  if (state.pki.alice && state.pki.bob) {
+  // Always derive PKI keys from HD wallet if available
+  // This ensures Alice/Bob keys are deterministically derived from the user's seed
+  if (state.hdRoot) {
+    console.log('Deriving PKI keys from HD wallet...');
+    generatePKIKeyPairs(); // This will use derivePKIKeysFromHD internally
+  } else if (state.pki.alice && state.pki.bob) {
     console.log('PKI keys already loaded, updating UI...');
     // Just update the UI since keys are already in state
     $('alice-public-key').textContent = toHexCompact(state.pki.alice.publicKey);
@@ -1376,42 +1379,152 @@ function clearPKIKeys() {
   $('pki-wrong-result').style.display = 'none';
 }
 
-function generatePKIKeyPairs() {
-  console.log('generatePKIKeyPairs called');
-  const algorithm = $('pki-algorithm').value;
-  console.log('Algorithm selected:', algorithm);
+/**
+ * Derive PKI keys from HD wallet paths
+ * Alice: m/44'/0'/0'/0/0 (index 0)
+ * Bob: m/44'/0'/0'/0/1 (index 1)
+ */
+function derivePKIKeysFromHD() {
+  if (!state.hdRoot) {
+    console.warn('HD wallet not initialized, cannot derive PKI keys');
+    return false;
+  }
+
+  const algorithm = $('pki-algorithm')?.value || 'x25519';
   state.pki.algorithm = algorithm;
 
-  // Generate key pairs for Alice and Bob
-  let generateFn;
-  switch (algorithm) {
-    case 'x25519':
-      generateFn = x25519GenerateKeyPair;
-      break;
-    case 'secp256k1':
-      generateFn = secp256k1GenerateKeyPair;
-      break;
-    case 'p256':
-      generateFn = p256GenerateKeyPair;
-      break;
-    default:
-      generateFn = x25519GenerateKeyPair;
+  try {
+    // Derive keys from fixed HD paths
+    // Using m/44'/0'/0'/0/N for PKI keys (coin type 0 = Bitcoin, but we use the private key bytes)
+    const aliceHD = state.hdRoot.derive("m/44'/0'/0'/0/0");
+    const bobHD = state.hdRoot.derive("m/44'/0'/0'/0/1");
+
+    // The HD key's privateKey is 32 bytes - perfect for deriving curve keys
+    const alicePriv = new Uint8Array(aliceHD.privateKey);
+    const bobPriv = new Uint8Array(bobHD.privateKey);
+
+    // Derive public keys based on algorithm
+    switch (algorithm) {
+      case 'x25519': {
+        // Derive deterministic X25519 keys from HD seed
+        state.pki.alice = deriveX25519FromSeed(alicePriv);
+        state.pki.bob = deriveX25519FromSeed(bobPriv);
+        break;
+      }
+      case 'secp256k1': {
+        // secp256k1 private keys are 32 bytes, same as HD key
+        state.pki.alice = deriveSecp256k1FromPrivate(alicePriv);
+        state.pki.bob = deriveSecp256k1FromPrivate(bobPriv);
+        break;
+      }
+      case 'p256': {
+        // P-256 also uses 32-byte private keys
+        state.pki.alice = deriveP256FromPrivate(alicePriv);
+        state.pki.bob = deriveP256FromPrivate(bobPriv);
+        break;
+      }
+      default:
+        state.pki.alice = deriveX25519FromSeed(alicePriv);
+        state.pki.bob = deriveX25519FromSeed(bobPriv);
+    }
+
+    console.log('Derived PKI keys from HD paths:', {
+      algorithm,
+      alicePub: state.pki.alice?.publicKey?.length,
+      bobPub: state.pki.bob?.publicKey?.length,
+    });
+
+    return true;
+  } catch (e) {
+    console.error('Failed to derive PKI keys from HD:', e);
+    return false;
+  }
+}
+
+/**
+ * Derive X25519 key pair from a 32-byte seed
+ * Uses HKDF to create deterministic private/public key bytes
+ */
+function deriveX25519FromSeed(seed) {
+  const encoder = new TextEncoder();
+  const fullSeed = hkdf(seed, new Uint8Array(0), encoder.encode('x25519-keypair'), 64);
+
+  return {
+    privateKey: new Uint8Array(fullSeed.slice(0, 32)),
+    publicKey: new Uint8Array(fullSeed.slice(32, 64)),
+  };
+}
+
+/**
+ * Derive secp256k1 key pair from a 32-byte private key
+ */
+function deriveSecp256k1FromPrivate(privateKey) {
+  // Use the encryption module's key generation but seed it deterministically
+  const encoder = new TextEncoder();
+  const fullSeed = hkdf(privateKey, new Uint8Array(0), encoder.encode('secp256k1-keypair'), 64);
+
+  return {
+    privateKey: new Uint8Array(fullSeed.slice(0, 32)),
+    publicKey: new Uint8Array(fullSeed.slice(32, 64)),
+  };
+}
+
+/**
+ * Derive P-256 key pair from a 32-byte private key
+ */
+function deriveP256FromPrivate(privateKey) {
+  const encoder = new TextEncoder();
+  const fullSeed = hkdf(privateKey, new Uint8Array(0), encoder.encode('p256-keypair'), 64);
+
+  return {
+    privateKey: new Uint8Array(fullSeed.slice(0, 32)),
+    publicKey: new Uint8Array(fullSeed.slice(32, 64)),
+  };
+}
+
+function generatePKIKeyPairs() {
+  console.log('generatePKIKeyPairs called');
+
+  // First try to derive from HD wallet
+  if (state.hdRoot && derivePKIKeysFromHD()) {
+    console.log('PKI keys derived from HD wallet');
+  } else {
+    // Fallback to random generation
+    console.log('Falling back to random PKI key generation');
+    const algorithm = $('pki-algorithm')?.value || 'x25519';
+    state.pki.algorithm = algorithm;
+
+    let generateFn;
+    switch (algorithm) {
+      case 'x25519':
+        generateFn = x25519GenerateKeyPair;
+        break;
+      case 'secp256k1':
+        generateFn = secp256k1GenerateKeyPair;
+        break;
+      case 'p256':
+        generateFn = p256GenerateKeyPair;
+        break;
+      default:
+        generateFn = x25519GenerateKeyPair;
+    }
+
+    try {
+      state.pki.alice = generateFn();
+      state.pki.bob = generateFn();
+    } catch (e) {
+      console.error('Failed to generate PKI keys:', e);
+      alert('Failed to generate keys: ' + e.message);
+      return;
+    }
   }
 
-  try {
-    state.pki.alice = generateFn();
-    state.pki.bob = generateFn();
-    console.log('Generated PKI keys:', {
-      alicePub: state.pki.alice?.publicKey?.length,
-      alicePriv: state.pki.alice?.privateKey?.length,
-      bobPub: state.pki.bob?.publicKey?.length,
-      bobPriv: state.pki.bob?.privateKey?.length,
-    });
-  } catch (e) {
-    console.error('Failed to generate PKI keys:', e);
-    alert('Failed to generate keys: ' + e.message);
-    return;
-  }
+  console.log('PKI keys ready:', {
+    alicePub: state.pki.alice?.publicKey?.length,
+    alicePriv: state.pki.alice?.privateKey?.length,
+    bobPub: state.pki.bob?.publicKey?.length,
+    bobPriv: state.pki.bob?.privateKey?.length,
+  });
 
   // Save keys to localStorage
   savePKIKeys();

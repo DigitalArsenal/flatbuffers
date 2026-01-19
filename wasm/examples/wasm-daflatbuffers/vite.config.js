@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
+import { viteSingleFile } from 'vite-plugin-singlefile';
 
 export default defineConfig({
   root: '.',
   base: './',
+  plugins: [viteSingleFile()],
   resolve: {
     alias: {
       // Allow importing from wasm/src
@@ -16,9 +18,15 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // Required for vite-plugin-singlefile
+    cssCodeSplit: false,
+    assetsInlineLimit: 100000000, // Inline all assets
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
+      },
+      output: {
+        inlineDynamicImports: true,
       },
     },
   },

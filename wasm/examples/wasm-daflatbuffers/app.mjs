@@ -36,6 +36,7 @@ import { FlatcRunner } from '../../src/runner.mjs';
 import { FlatBufferParser, parseWithSchema, Schemas, toHex, toHexCompact } from './flatbuffer-parser.mjs';
 import { PaginatedTable } from './virtual-scroller.mjs';
 import { StreamingDemo, MessageTypes, formatBytes, formatThroughput } from './streaming-demo.mjs';
+import { Builder } from 'flatbuffers';
 
 // Import schemas as raw text
 import monsterSchema from './schemas/monster.fbs?raw';
@@ -713,7 +714,107 @@ function logout() {
 }
 
 // =============================================================================
-// FlatBuffer Generation
+// FlatBuffer Builder Functions (Direct API - bypasses CLI for performance)
+// =============================================================================
+
+/**
+ * Build a Monster FlatBuffer using the Builder API directly.
+ * This is ~100x faster than the CLI-based approach.
+ */
+function buildMonster(data) {
+  const builder = new Builder(256);
+
+  // Create strings/vectors BEFORE starting table (FlatBuffers requirement)
+  const nameOffset = builder.createString(data.name);
+
+  let inventoryOffset = 0;
+  if (data.inventory?.length > 0) {
+    builder.startVector(1, data.inventory.length, 1);
+    for (let i = data.inventory.length - 1; i >= 0; i--) {
+      builder.addInt8(data.inventory[i]);
+    }
+    inventoryOffset = builder.endVector();
+  }
+
+  // Monster table: 10 fields (pos, mana, hp, name, friendly, inventory, color, weapons, equipped, path)
+  builder.startObject(10);
+
+  // Field 0: pos (Vec3 struct - 12 bytes inline: x, y, z floats)
+  if (data.pos) {
+    builder.prep(4, 12);
+    builder.writeFloat32(data.pos.z);
+    builder.writeFloat32(data.pos.y);
+    builder.writeFloat32(data.pos.x);
+    builder.addFieldStruct(0, builder.offset(), 0);
+  }
+
+  // Field 1: mana (short, default 150)
+  builder.addFieldInt16(1, data.mana, 150);
+
+  // Field 2: hp (short, default 100)
+  builder.addFieldInt16(2, data.hp, 100);
+
+  // Field 3: name (string offset)
+  builder.addFieldOffset(3, nameOffset, 0);
+
+  // Field 5: inventory (vector offset) - field 4 is deprecated 'friendly'
+  if (inventoryOffset) builder.addFieldOffset(5, inventoryOffset, 0);
+
+  // Field 6: color (byte enum, default 2=Blue)
+  builder.addFieldInt8(6, data.color, 2);
+
+  const monster = builder.endObject();
+  builder.finish(monster, 'MONS');
+  return builder.asUint8Array();
+}
+
+/**
+ * Build a Weapon FlatBuffer using the Builder API directly.
+ */
+function buildWeapon(data) {
+  const builder = new Builder(64);
+  const nameOffset = builder.createString(data.name);
+
+  // Weapon table: 2 fields (name, damage)
+  builder.startObject(2);
+  builder.addFieldOffset(0, nameOffset, 0);
+  builder.addFieldInt16(1, data.damage, 0);
+
+  const weapon = builder.endObject();
+  builder.finish(weapon, 'WEAP');
+  return builder.asUint8Array();
+}
+
+/**
+ * Build a Galaxy FlatBuffer using the Builder API directly.
+ */
+function buildGalaxy(data) {
+  const builder = new Builder(32);
+
+  // Galaxy table: 1 field (num_stars as int64)
+  builder.startObject(1);
+  builder.addFieldInt64(0, data.num_stars, BigInt(0));
+
+  const galaxy = builder.endObject();
+  builder.finish(galaxy, 'GALX');
+  return builder.asUint8Array();
+}
+
+/**
+ * Build a FlatBuffer using the direct Builder API (fast path).
+ * Use this instead of generateFlatBuffer for bulk operations.
+ */
+function buildFlatBuffer(schemaType, data) {
+  switch (schemaType) {
+    case 'monster': return buildMonster(data);
+    case 'weapon': return buildWeapon(data);
+    case 'galaxy': return buildGalaxy(data);
+    default: throw new Error(`Unknown schema for builder: ${schemaType}`);
+  }
+}
+
+// =============================================================================
+// FlatBuffer Generation (CLI-based - kept for JSON conversion tools)
 // =============================================================================
 
 async function generateFlatBuffer(schemaType, data) {
@@ -1027,61 +1128,58 @@ async function generateBulkBuffers() {
     // Clear previous data to free memory
     state.buffers = [];
     state.encryptedBuffers = [];
-    state.encryptionHeaders = []; // Store ECIES headers for each record
+    state.encryptionHeaders = [];
+
+    // === WARM ENCRYPTION CONTEXT: Create ONCE before the loop ===
+    // This avoids 1000+ ECDH operations (~500ms overhead) by reusing one context
+    let encryptCtx = null;
+    let encryptionHeader = null;
+
+    if (encrypt) {
+      let publicKey = state.pki.bob.publicKey;
+      if (!(publicKey instanceof Uint8Array)) {
+        publicKey = new Uint8Array(
+          typeof publicKey === 'object' && publicKey !== null
+            ? Object.values(publicKey)
+            : publicKey
+        );
+      }
+
+      encryptCtx = EncryptionContext.forEncryption(publicKey, {
+        algorithm: state.pki.algorithm,
+        context: 'flatbuffers-bulk-encryption-v1',
+      });
+      encryptionHeader = encryptCtx.getHeaderJSON();
+    }
 
     const batchSize = Math.min(100, count);
     let totalSize = 0;
-    let runnerResetCounter = 0;
 
     for (let i = 0; i < count; i += batchSize) {
       const batchEnd = Math.min(i + batchSize, count);
 
       for (let j = i; j < batchEnd; j++) {
         const data = config.sampleData(j);
-        const binary = await generateFlatBuffer(schemaType, data);
+
+        // Use Builder API directly (fast) instead of CLI-based generateFlatBuffer
+        const binary = buildFlatBuffer(schemaType, data);
 
         if (encrypt) {
-          // Encrypt using Bob's public key (ECIES)
-          // Ensure publicKey is a Uint8Array (may be plain object from localStorage)
-          let publicKey = state.pki.bob.publicKey;
-          if (!(publicKey instanceof Uint8Array)) {
-            if (typeof publicKey === 'object' && publicKey !== null) {
-              publicKey = new Uint8Array(Object.values(publicKey));
-            } else {
-              publicKey = new Uint8Array(publicKey);
-            }
-          }
-
-          const encryptCtx = EncryptionContext.forEncryption(publicKey, {
-            algorithm: state.pki.algorithm,
-            context: 'flatbuffers-bulk-encryption-v1',
-          });
-
-          // Encrypt the buffer using the context's method
+          // Reuse the warm encryption context - only AES-CTR, no ECDH overhead
           const encrypted = new Uint8Array(binary);
           encryptCtx.encryptScalar(encrypted, 0, encrypted.length, j % 65536);
 
           state.encryptedBuffers.push(encrypted);
-          state.encryptionHeaders.push(encryptCtx.getHeaderJSON());
+          state.encryptionHeaders.push(encryptionHeader); // Same header for all records
         }
 
-        // Store data and binary buffer
         state.buffers.push({
           index: j,
           data,
-          binary: new Uint8Array(binary), // Keep original binary for plain mode
+          binary: new Uint8Array(binary),
           size: binary.length,
         });
         totalSize += binary.length;
-
-        runnerResetCounter++;
-      }
-
-      // Periodically reset FlatcRunner to release WASM memory
-      // This prevents "memory access out of bounds" on large generations
-      if (runnerResetCounter >= RUNNER_RESET_INTERVAL && i + batchSize < count) {
-        await resetFlatcRunner();
-        runnerResetCounter = 0;
       }
 
       // Update progress and yield to UI

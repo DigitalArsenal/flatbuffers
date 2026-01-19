@@ -681,7 +681,7 @@ function logout() {
   // Clear HD wallet state
   state.masterSeed = null;
   state.hdRoot = null;
-
+  localStorage.clear();
   // Hide main app content
   $('main-app').style.display = 'none';
 

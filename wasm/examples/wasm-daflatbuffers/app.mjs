@@ -3985,6 +3985,115 @@ function setStudioStatus(message, type) {
   }
 }
 
+function showSchemaError(errorMessage) {
+  const parsedView = $('studio-parsed-view');
+  if (!parsedView) return;
+
+  // Parse error message to extract file, line, and details
+  const errors = parseSchemaErrors(errorMessage);
+
+  let html = '<div class="error-display">';
+  html += '<div class="error-header"><span class="error-icon">!</span> Schema Errors</div>';
+
+  if (errors.length > 0) {
+    html += '<div class="error-list">';
+    for (const err of errors) {
+      html += `<div class="error-item" data-file="${err.file || ''}" data-line="${err.line || ''}">`;
+      if (err.file) {
+        html += `<span class="error-location">${err.file}${err.line ? ':' + err.line : ''}</span>`;
+      }
+      html += `<span class="error-message">${escapeHtml(err.message)}</span>`;
+      html += '</div>';
+    }
+    html += '</div>';
+  } else {
+    html += `<div class="error-raw">${escapeHtml(errorMessage)}</div>`;
+  }
+
+  html += '</div>';
+  parsedView.innerHTML = html;
+
+  // Add click handlers to jump to error locations
+  parsedView.querySelectorAll('.error-item[data-line]').forEach(item => {
+    item.addEventListener('click', () => {
+      const file = item.dataset.file;
+      const line = parseInt(item.dataset.line, 10);
+      if (file && line) {
+        jumpToErrorLine(file, line);
+      }
+    });
+  });
+}
+
+function parseSchemaErrors(errorMessage) {
+  const errors = [];
+  const lines = errorMessage.split('\n');
+
+  // Common flatc error patterns:
+  // "error: file:line:col: message"
+  // "filename:line: error: message"
+  // "error: message"
+  const patterns = [
+    /^error:\s*([^:]+):(\d+):(\d+):\s*(.+)$/i,
+    /^([^:]+):(\d+):\s*error:\s*(.+)$/i,
+    /^([^:]+):(\d+):(\d+):\s*(.+)$/i,
+    /^error:\s*(.+)$/i,
+  ];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    let matched = false;
+    for (const pattern of patterns) {
+      const match = trimmed.match(pattern);
+      if (match) {
+        if (match.length === 5) {
+          // file:line:col: message
+          errors.push({ file: match[1], line: match[2], col: match[3], message: match[4] });
+        } else if (match.length === 4) {
+          // file:line: message
+          errors.push({ file: match[1], line: match[2], message: match[3] });
+        } else if (match.length === 2) {
+          // just message
+          errors.push({ message: match[1] });
+        }
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched && trimmed.length > 0) {
+      // Add as raw message
+      errors.push({ message: trimmed });
+    }
+  }
+
+  return errors;
+}
+
+function jumpToErrorLine(filename, lineNumber) {
+  // If the file exists in our schema files, select it
+  if (schemaFiles.files[filename]) {
+    selectSchemaFile(filename);
+  }
+
+  // Jump to line in editor
+  const editor = $('studio-schema-input');
+  if (editor && lineNumber > 0) {
+    const lines = editor.value.split('\n');
+    let charIndex = 0;
+    for (let i = 0; i < lineNumber - 1 && i < lines.length; i++) {
+      charIndex += lines[i].length + 1;
+    }
+    editor.focus();
+    editor.setSelectionRange(charIndex, charIndex + (lines[lineNumber - 1]?.length || 0));
+    // Scroll into view
+    const lineHeight = 20; // approximate
+    editor.scrollTop = (lineNumber - 5) * lineHeight;
+  }
+}
+
 function parseStudioSchema() {
   // Save current editor content first
   if (schemaFiles.currentFile && schemaFiles.files[schemaFiles.currentFile]) {
@@ -4042,18 +4151,22 @@ function parseStudioSchema() {
       try {
         state.flatcRunner.generateJsonSchema({ entry: entryPoint, files }, { includeXFlatbuffers: true });
         setStudioStatus(`Parsed ${Object.keys(files).length} file(s) - Valid`, 'success');
+        updateStudioParsedView(schema);
       } catch (wasmErr) {
-        setStudioStatus(`Parsed but validation failed: ${wasmErr.message}`, 'warning');
+        setStudioStatus('Validation failed', 'error');
+        showSchemaError(wasmErr.message);
+        return;
       }
     } else {
       setStudioStatus(`Parsed ${Object.keys(files).length} file(s)`, 'success');
+      updateStudioParsedView(schema);
     }
 
-    updateStudioParsedView(schema);
     updateStudioTableSelectors();
   } catch (err) {
     console.error('Parse error:', err);
-    setStudioStatus(err.message, 'error');
+    setStudioStatus('Parse error', 'error');
+    showSchemaError(err.message);
   }
 }
 
@@ -4427,14 +4540,120 @@ function updateCodegenDisplay() {
   const titleEl = $('codegen-current-file');
 
   if (!lastGeneratedFiles || !selectedGeneratedFile) {
-    if (codeEl) codeEl.textContent = '// Generated code will appear here...';
+    if (codeEl) codeEl.innerHTML = '<span class="syn-comment">// Generated code will appear here...</span>';
     if (titleEl) titleEl.textContent = 'Generated Code';
     return;
   }
 
   const content = lastGeneratedFiles[selectedGeneratedFile] || '';
-  if (codeEl) codeEl.textContent = content;
+  const lang = getLanguageFromFilename(selectedGeneratedFile);
+  if (codeEl) codeEl.innerHTML = highlightSyntax(content, lang);
   if (titleEl) titleEl.textContent = selectedGeneratedFile;
+}
+
+function getLanguageFromFilename(filename) {
+  const ext = filename.split('.').pop()?.toLowerCase();
+  const langMap = {
+    'ts': 'typescript',
+    'js': 'javascript',
+    'py': 'python',
+    'rs': 'rust',
+    'go': 'go',
+    'java': 'java',
+    'cs': 'csharp',
+    'kt': 'kotlin',
+    'swift': 'swift',
+    'cpp': 'cpp',
+    'h': 'cpp',
+    'hpp': 'cpp',
+    'json': 'json',
+    'fbs': 'flatbuffers',
+  };
+  return langMap[ext] || 'text';
+}
+
+function highlightSyntax(code, lang) {
+  // Escape HTML first
+  const escaped = code
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Language-specific keywords
+  const keywords = {
+    typescript: ['import', 'export', 'from', 'const', 'let', 'var', 'function', 'class', 'interface', 'type', 'enum', 'extends', 'implements', 'return', 'if', 'else', 'for', 'while', 'new', 'this', 'static', 'readonly', 'public', 'private', 'protected', 'async', 'await', 'try', 'catch', 'throw', 'null', 'undefined', 'true', 'false'],
+    javascript: ['import', 'export', 'from', 'const', 'let', 'var', 'function', 'class', 'extends', 'return', 'if', 'else', 'for', 'while', 'new', 'this', 'static', 'async', 'await', 'try', 'catch', 'throw', 'null', 'undefined', 'true', 'false'],
+    python: ['import', 'from', 'class', 'def', 'return', 'if', 'elif', 'else', 'for', 'while', 'in', 'not', 'and', 'or', 'is', 'None', 'True', 'False', 'self', 'try', 'except', 'raise', 'with', 'as', 'pass', 'lambda'],
+    rust: ['use', 'mod', 'pub', 'fn', 'struct', 'enum', 'impl', 'trait', 'let', 'mut', 'const', 'static', 'if', 'else', 'match', 'for', 'while', 'loop', 'return', 'self', 'Self', 'true', 'false', 'None', 'Some', 'Ok', 'Err'],
+    go: ['package', 'import', 'func', 'type', 'struct', 'interface', 'const', 'var', 'return', 'if', 'else', 'for', 'range', 'switch', 'case', 'default', 'go', 'chan', 'select', 'defer', 'nil', 'true', 'false', 'map', 'make', 'new'],
+    java: ['import', 'package', 'class', 'interface', 'extends', 'implements', 'public', 'private', 'protected', 'static', 'final', 'void', 'return', 'if', 'else', 'for', 'while', 'new', 'this', 'super', 'try', 'catch', 'throw', 'throws', 'null', 'true', 'false'],
+    csharp: ['using', 'namespace', 'class', 'struct', 'interface', 'enum', 'public', 'private', 'protected', 'internal', 'static', 'readonly', 'const', 'void', 'return', 'if', 'else', 'for', 'foreach', 'while', 'new', 'this', 'base', 'try', 'catch', 'throw', 'null', 'true', 'false', 'var', 'get', 'set'],
+    kotlin: ['import', 'package', 'class', 'interface', 'object', 'fun', 'val', 'var', 'return', 'if', 'else', 'when', 'for', 'while', 'in', 'is', 'as', 'this', 'super', 'null', 'true', 'false', 'override', 'open', 'data', 'sealed', 'companion'],
+    swift: ['import', 'class', 'struct', 'enum', 'protocol', 'extension', 'func', 'var', 'let', 'return', 'if', 'else', 'guard', 'for', 'while', 'in', 'switch', 'case', 'default', 'self', 'Self', 'nil', 'true', 'false', 'public', 'private', 'internal', 'static', 'override'],
+    cpp: ['include', 'namespace', 'class', 'struct', 'enum', 'template', 'typename', 'public', 'private', 'protected', 'static', 'const', 'constexpr', 'virtual', 'override', 'void', 'return', 'if', 'else', 'for', 'while', 'new', 'delete', 'this', 'nullptr', 'true', 'false', 'auto', 'using'],
+    flatbuffers: ['namespace', 'table', 'struct', 'enum', 'union', 'root_type', 'file_identifier', 'file_extension', 'include', 'attribute', 'rpc_service', 'required', 'deprecated', 'key', 'id'],
+    json: [],
+  };
+
+  const types = {
+    typescript: ['string', 'number', 'boolean', 'object', 'any', 'void', 'never', 'unknown', 'Array', 'Map', 'Set', 'Promise', 'Uint8Array', 'Int8Array', 'Float32Array', 'Float64Array', 'BigInt', 'flatbuffers'],
+    javascript: ['String', 'Number', 'Boolean', 'Object', 'Array', 'Map', 'Set', 'Promise', 'Uint8Array', 'flatbuffers'],
+    python: ['int', 'float', 'str', 'bool', 'list', 'dict', 'tuple', 'set', 'bytes', 'bytearray', 'Optional', 'List', 'Dict', 'Union', 'Any'],
+    rust: ['i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64', 'bool', 'char', 'str', 'String', 'Vec', 'Option', 'Result', 'Box', 'Rc', 'Arc'],
+    go: ['int', 'int8', 'int16', 'int32', 'int64', 'uint', 'uint8', 'uint16', 'uint32', 'uint64', 'float32', 'float64', 'bool', 'string', 'byte', 'rune', 'error'],
+    java: ['int', 'long', 'short', 'byte', 'float', 'double', 'boolean', 'char', 'String', 'Integer', 'Long', 'Double', 'Boolean', 'Object', 'List', 'Map', 'Set'],
+    csharp: ['int', 'long', 'short', 'byte', 'float', 'double', 'bool', 'char', 'string', 'object', 'decimal', 'List', 'Dictionary', 'Array'],
+    kotlin: ['Int', 'Long', 'Short', 'Byte', 'Float', 'Double', 'Boolean', 'Char', 'String', 'Unit', 'Any', 'Nothing', 'List', 'Map', 'Set', 'Array'],
+    swift: ['Int', 'Int8', 'Int16', 'Int32', 'Int64', 'UInt', 'UInt8', 'Float', 'Double', 'Bool', 'String', 'Character', 'Array', 'Dictionary', 'Set', 'Optional'],
+    cpp: ['int', 'long', 'short', 'char', 'float', 'double', 'bool', 'void', 'size_t', 'uint8_t', 'int8_t', 'uint16_t', 'int16_t', 'uint32_t', 'int32_t', 'uint64_t', 'int64_t', 'string', 'vector', 'map', 'unique_ptr', 'shared_ptr'],
+    flatbuffers: ['bool', 'byte', 'ubyte', 'short', 'ushort', 'int', 'uint', 'long', 'ulong', 'float', 'double', 'string', 'int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32', 'int64', 'uint64', 'float32', 'float64'],
+    json: [],
+  };
+
+  const langKeywords = keywords[lang] || [];
+  const langTypes = types[lang] || [];
+
+  // Process line by line to handle strings and comments properly
+  const lines = escaped.split('\n');
+  const highlighted = lines.map(line => {
+    let result = line;
+
+    // Highlight strings (single and double quotes)
+    result = result.replace(/(["'`])(?:(?!\1|\\).|\\.)*\1/g, '<span class="syn-string">$&</span>');
+
+    // Highlight comments
+    if (lang === 'python') {
+      result = result.replace(/(#.*)$/g, '<span class="syn-comment">$1</span>');
+    } else {
+      result = result.replace(/(\/\/.*)$/g, '<span class="syn-comment">$1</span>');
+    }
+
+    // Highlight numbers
+    result = result.replace(/\b(\d+\.?\d*([eE][+-]?\d+)?[fFdDlL]?)\b/g, '<span class="syn-number">$1</span>');
+
+    // Highlight keywords (word boundary match)
+    for (const kw of langKeywords) {
+      const regex = new RegExp(`\\b(${kw})\\b`, 'g');
+      result = result.replace(regex, '<span class="syn-keyword">$1</span>');
+    }
+
+    // Highlight types
+    for (const tp of langTypes) {
+      const regex = new RegExp(`\\b(${tp})\\b`, 'g');
+      result = result.replace(regex, '<span class="syn-type">$1</span>');
+    }
+
+    // Highlight decorators/attributes
+    if (lang === 'python') {
+      result = result.replace(/(@\w+)/g, '<span class="syn-decorator">$1</span>');
+    } else if (lang === 'typescript' || lang === 'javascript') {
+      result = result.replace(/(@\w+)/g, '<span class="syn-decorator">$1</span>');
+    }
+
+    return result;
+  });
+
+  return highlighted.join('\n');
 }
 
 async function generateStudioCode() {

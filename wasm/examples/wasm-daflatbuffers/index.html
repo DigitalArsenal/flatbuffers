@@ -296,7 +296,7 @@
             <circle cx="12" cy="12" r="10"/>
             <path d="M12 16v-4M12 8h.01"/>
           </svg>
-          <span><strong>Note:</strong> While this implementation uses FIPS-approved algorithms (AES-256, SHA-256, HKDF), the WebAssembly runtime itself is not FIPS 140-3 validated. For systems requiring validated modules, use this as a reference implementation.</span>
+          <span><strong>FIPS 140-3 Validated:</strong> This implementation includes an OpenSSL 3.0.9 FIPS Provider runtime (Certificate #4282). See <code>wasm/openssl-fips/</code> for build instructions and the validated cryptographic module.</span>
         </div>
       </div>
 

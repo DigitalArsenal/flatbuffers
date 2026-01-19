@@ -1100,6 +1100,124 @@ function clearBufferDisplay() {
 // PKI Demo (Alice/Bob Public Key Encryption)
 // =============================================================================
 
+const PKI_STORAGE_KEY = 'flatbuffers-pki-keys';
+
+/**
+ * Save PKI keys to localStorage (encrypted keys stored as hex)
+ */
+function savePKIKeys() {
+  if (!state.pki.alice || !state.pki.bob) return;
+
+  const data = {
+    algorithm: state.pki.algorithm,
+    alice: {
+      publicKey: toHexCompact(state.pki.alice.publicKey),
+      privateKey: toHexCompact(state.pki.alice.privateKey),
+    },
+    bob: {
+      publicKey: toHexCompact(state.pki.bob.publicKey),
+      privateKey: toHexCompact(state.pki.bob.privateKey),
+    },
+    savedAt: new Date().toISOString(),
+  };
+
+  try {
+    localStorage.setItem(PKI_STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.warn('Failed to save PKI keys to localStorage:', e);
+  }
+}
+
+/**
+ * Convert hex string to Uint8Array
+ */
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+  }
+  return bytes;
+}
+
+/**
+ * Load PKI keys from localStorage
+ * @returns {boolean} true if keys were loaded successfully
+ */
+function loadPKIKeys() {
+  try {
+    const stored = localStorage.getItem(PKI_STORAGE_KEY);
+    if (!stored) return false;
+
+    const data = JSON.parse(stored);
+    if (!data.alice || !data.bob || !data.algorithm) return false;
+
+    // Restore keys from hex
+    state.pki.algorithm = data.algorithm;
+    state.pki.alice = {
+      publicKey: hexToBytes(data.alice.publicKey),
+      privateKey: hexToBytes(data.alice.privateKey),
+    };
+    state.pki.bob = {
+      publicKey: hexToBytes(data.bob.publicKey),
+      privateKey: hexToBytes(data.bob.privateKey),
+    };
+
+    // Update UI
+    $('pki-algorithm').value = data.algorithm;
+    $('alice-public-key').textContent = data.alice.publicKey;
+    $('alice-private-key').textContent = data.alice.privateKey;
+    $('bob-public-key').textContent = data.bob.publicKey;
+    $('bob-private-key').textContent = data.bob.privateKey;
+
+    // Show UI sections
+    $('pki-parties').style.display = 'grid';
+    $('pki-demo').style.display = 'block';
+    $('pki-security').style.display = 'block';
+    $('pki-clear-keys').style.display = 'inline-flex';
+
+    return true;
+  } catch (e) {
+    console.warn('Failed to load PKI keys from localStorage:', e);
+    return false;
+  }
+}
+
+/**
+ * Clear saved PKI keys from localStorage and reset UI
+ */
+function clearPKIKeys() {
+  try {
+    localStorage.removeItem(PKI_STORAGE_KEY);
+  } catch (e) {
+    console.warn('Failed to clear PKI keys from localStorage:', e);
+  }
+
+  // Reset state
+  state.pki.alice = null;
+  state.pki.bob = null;
+  state.pki.algorithm = 'x25519';
+  state.pki.plaintext = null;
+  state.pki.ciphertext = null;
+  state.pki.header = null;
+  state.pki.decrypted = null;
+
+  // Reset UI
+  $('pki-algorithm').value = 'x25519';
+  $('alice-public-key').textContent = '--';
+  $('alice-private-key').textContent = '--';
+  $('bob-public-key').textContent = '--';
+  $('bob-private-key').textContent = '--';
+  $('pki-parties').style.display = 'none';
+  $('pki-demo').style.display = 'none';
+  $('pki-security').style.display = 'none';
+  $('pki-clear-keys').style.display = 'none';
+  $('pki-plaintext').value = '';
+  $('pki-ciphertext-step').style.display = 'none';
+  $('pki-decrypt-step').style.display = 'none';
+  $('pki-result-step').style.display = 'none';
+  $('pki-wrong-result').style.display = 'none';
+}
+
 function generatePKIKeyPairs() {
   const algorithm = $('pki-algorithm').value;
   state.pki.algorithm = algorithm;
@@ -1123,6 +1241,9 @@ function generatePKIKeyPairs() {
   state.pki.alice = generateFn();
   state.pki.bob = generateFn();
 
+  // Save keys to localStorage
+  savePKIKeys();
+
   // Display keys
   $('alice-public-key').textContent = toHexCompact(state.pki.alice.publicKey);
   $('alice-private-key').textContent = toHexCompact(state.pki.alice.privateKey);
@@ -1133,6 +1254,7 @@ function generatePKIKeyPairs() {
   $('pki-parties').style.display = 'grid';
   $('pki-demo').style.display = 'block';
   $('pki-security').style.display = 'block';
+  $('pki-clear-keys').style.display = 'inline-flex';
 
   // Reset encryption state
   resetPKIDemo();
@@ -1284,19 +1406,90 @@ function pkiTryWrongKey() {
 // =============================================================================
 
 function setupStreamingDemo() {
-  // StreamingDemo needs WASM module - for now use a mock
+  // Create a mock WASM module that actually tracks statistics
   // In production, this would use the actual streaming-dispatcher WASM
+  const typeRegistry = new Map(); // typeIndex -> { fileId, count, totalReceived, capacity, messageSize }
+  let nextTypeIndex = 0;
+  const heapMemory = new Uint8Array(4 * 1024 * 1024); // 4MB heap
+
   const mockWasm = {
     _dispatcher_init: () => {},
-    _dispatcher_reset: () => {},
-    _dispatcher_register_type: () => 0,
-    _dispatcher_push_bytes: () => 0,
-    _dispatcher_get_message_count: () => 0,
-    _dispatcher_get_total_received: () => 0,
-    _dispatcher_clear_messages: () => {},
-    _malloc: (size) => 1,
+    _dispatcher_reset: () => {
+      for (const info of typeRegistry.values()) {
+        info.count = 0;
+        info.totalReceived = 0;
+      }
+    },
+    _dispatcher_register_type: (fileIdPtr, bufferPtr, bufferSize, messageSize) => {
+      const fileId = new TextDecoder().decode(heapMemory.slice(fileIdPtr, fileIdPtr + 4));
+      const typeIndex = nextTypeIndex++;
+      const capacity = Math.floor(bufferSize / messageSize);
+      typeRegistry.set(typeIndex, {
+        fileId,
+        count: 0,
+        totalReceived: 0,
+        capacity,
+        messageSize,
+        bufferPtr,
+      });
+      return typeIndex;
+    },
+    _dispatcher_push_bytes: (ptr, size) => {
+      // Parse size-prefixed messages from the buffer
+      let offset = 0;
+      let messagesProcessed = 0;
+
+      while (offset + 4 <= size) {
+        // Read message size (little-endian)
+        const msgSize = heapMemory[ptr + offset] |
+                       (heapMemory[ptr + offset + 1] << 8) |
+                       (heapMemory[ptr + offset + 2] << 16) |
+                       (heapMemory[ptr + offset + 3] << 24);
+
+        if (offset + 4 + msgSize > size) break; // Incomplete message
+
+        // Read file ID (4 bytes after size)
+        const fileId = new TextDecoder().decode(heapMemory.slice(ptr + offset + 4, ptr + offset + 8));
+
+        // Find matching type and increment counters
+        for (const [, info] of typeRegistry.entries()) {
+          if (info.fileId === fileId) {
+            info.totalReceived++;
+            info.count = Math.min(info.count + 1, info.capacity);
+            break;
+          }
+        }
+
+        offset += 4 + msgSize;
+        messagesProcessed++;
+      }
+
+      return messagesProcessed;
+    },
+    _dispatcher_get_message_count: (typeIndex) => {
+      const info = typeRegistry.get(typeIndex);
+      return info ? info.count : 0;
+    },
+    _dispatcher_get_total_received: (typeIndex) => {
+      const info = typeRegistry.get(typeIndex);
+      return info ? info.totalReceived : 0;
+    },
+    _dispatcher_clear_messages: (typeIndex) => {
+      const info = typeRegistry.get(typeIndex);
+      if (info) {
+        info.count = 0;
+        info.totalReceived = 0;
+      }
+    },
+    _malloc: (size) => {
+      // Simple bump allocator - find first free spot
+      // For demo purposes, just return incrementing addresses
+      const addr = mockWasm._nextAlloc || 1024;
+      mockWasm._nextAlloc = addr + size + 16; // 16-byte align
+      return addr;
+    },
     _free: () => {},
-    HEAPU8: new Uint8Array(1024 * 1024),
+    HEAPU8: heapMemory,
   };
 
   state.streamingDemo = new StreamingDemo(mockWasm);
@@ -1649,6 +1842,7 @@ function setupMainAppHandlers() {
 
   // PKI Tab
   $('pki-generate-keys').addEventListener('click', generatePKIKeyPairs);
+  $('pki-clear-keys').addEventListener('click', clearPKIKeys);
   $('pki-encrypt').addEventListener('click', pkiEncrypt);
   $('pki-decrypt').addEventListener('click', pkiDecrypt);
   $('pki-wrong-key').addEventListener('click', pkiTryWrongKey);
@@ -1789,6 +1983,11 @@ async function init() {
 
     // Setup streaming demo
     setupStreamingDemo();
+
+    // Load saved PKI keys if available
+    if (loadPKIKeys()) {
+      console.log('Loaded PKI keys from localStorage');
+    }
 
     state.initialized = true;
 

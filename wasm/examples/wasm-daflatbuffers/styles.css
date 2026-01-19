@@ -3116,8 +3116,8 @@ body {
 /* Code Generator Layout */
 .code-gen-layout {
   display: grid;
-  grid-template-columns: 240px 220px 1fr;
-  gap: 16px;
+  grid-template-columns: 200px 200px 1fr;
+  gap: 12px;
   height: 600px;
 }
 
@@ -3128,28 +3128,36 @@ body {
 }
 
 .codegen-options-content {
-  padding: 16px;
+  padding: 12px;
 }
 
 .codegen-options-content .glass-input-group {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+}
+
+.codegen-checkboxes {
+  margin-bottom: 12px;
+}
+
+.codegen-checkboxes .checkbox-label {
+  margin-bottom: 6px;
 }
 
 /* Code Generator File Tree */
 .codegen-file-tree {
-  padding: 8px;
+  padding: 4px;
 }
 
 .codegen-file-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 6px 10px;
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s ease;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--white-70);
 }
 
@@ -3163,8 +3171,8 @@ body {
 }
 
 .codegen-file-item .file-icon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
   opacity: 0.6;
 }
@@ -3181,7 +3189,7 @@ body {
 }
 
 .codegen-file-item .file-size {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--white-40);
   flex-shrink: 0;
 }
@@ -3203,24 +3211,55 @@ body {
   background: transparent;
   color: var(--white-90);
   font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.5;
   white-space: pre;
   overflow-x: auto;
   min-height: 100%;
+  tab-size: 2;
 }
 
-@media (max-width: 1200px) {
+/* Medium screens - 2 column layout */
+@media (max-width: 1100px) {
   .code-gen-layout {
-    grid-template-columns: 200px 180px 1fr;
+    grid-template-columns: 180px 1fr;
+    grid-template-rows: auto 1fr;
+    height: auto;
+  }
+
+  .code-gen-options {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .code-gen-files {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .code-gen-content {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+
+  .code-gen-content .studio-pane {
+    min-height: 500px;
   }
 }
 
-@media (max-width: 900px) {
+/* Mobile - stacked layout */
+@media (max-width: 768px) {
   .code-gen-layout {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto 1fr;
-    height: auto;
+    gap: 8px;
+  }
+
+  .code-gen-options,
+  .code-gen-files,
+  .code-gen-content {
+    grid-column: 1;
+    grid-row: auto;
   }
 
   .code-gen-options .studio-pane,
@@ -3229,17 +3268,83 @@ body {
   }
 
   .code-gen-content .studio-pane {
-    min-height: 400px;
+    min-height: 350px;
   }
 
+  /* Horizontal file list on mobile */
   .codegen-file-tree {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
+    padding: 8px;
   }
 
   .codegen-file-item {
     flex: 0 0 auto;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+  }
+
+  .codegen-file-item .file-size {
+    display: none;
+  }
+
+  /* Inline options on mobile */
+  .codegen-options-content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+  }
+
+  .codegen-options-content .glass-input-group {
+    flex: 1;
+    min-width: 140px;
+    margin-bottom: 0;
+  }
+
+  .codegen-checkboxes {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 0;
+    flex-wrap: wrap;
+  }
+
+  .codegen-checkboxes .checkbox-label {
+    margin-bottom: 0;
+    white-space: nowrap;
+  }
+
+  .codegen-options-content .glass-btn {
+    flex: 0 0 auto;
+  }
+
+  .code-display {
+    font-size: 11px;
+    padding: 12px;
+  }
+}
+
+/* Very small mobile */
+@media (max-width: 480px) {
+  .codegen-options-content {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .codegen-options-content .glass-input-group {
+    width: 100%;
+  }
+
+  .codegen-checkboxes {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .code-display {
+    font-size: 10px;
+    line-height: 1.4;
   }
 }
 

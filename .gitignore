@@ -173,3 +173,4 @@ CMakeUserPresets.json
 # Agent/AI configuration files (local only)
 AGENTS.md
 .claude/
+wasm/RED_TEAM.md

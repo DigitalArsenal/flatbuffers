@@ -4816,6 +4816,7 @@ async function generateStudioCode() {
     const options = {
       genMutable,
       genObjectApi,
+      genAll: true,  // Generate code for all included files, not just the entry point
     };
 
     if (lang === 'jsonschema') {

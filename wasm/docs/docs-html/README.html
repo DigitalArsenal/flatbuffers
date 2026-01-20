@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>README - DA FlatBuffers</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a24;
+      --accent-primary: #6366f1;
+      --accent-secondary: #818cf8;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --border-color: rgba(99, 102, 241, 0.2);
+      --glow-color: rgba(99, 102, 241, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(59, 130, 246, 0.04) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Grid pattern overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .page-container {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      margin-bottom: 30px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--accent-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .back-link:hover {
+      background: var(--bg-tertiary);
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 20px var(--glow-color);
+      transform: translateY(-1px);
+    }
+
+    .markdown-body {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 48px;
+      box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.3),
+        0 0 40px var(--glow-color);
+    }
+
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3,
+    .markdown-body h4 {
+      color: var(--text-primary);
+      border-bottom-color: var(--border-color);
+      font-weight: 600;
+    }
+
+    .markdown-body h1 {
+      background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-size: 2.2em;
+      margin-bottom: 24px;
+    }
+
+    .markdown-body a {
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body a:hover {
+      color: var(--accent-primary);
+    }
+
+    .markdown-body code {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9em;
+    }
+
+    .markdown-body pre {
+      background: var(--bg-primary) !important;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+    }
+
+    .markdown-body pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-size: 0.85em;
+      line-height: 1.6;
+    }
+
+    .markdown-body table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 20px 0;
+    }
+
+    .markdown-body table th,
+    .markdown-body table td {
+      border: 1px solid var(--border-color);
+      padding: 12px 16px;
+      text-align: left;
+    }
+
+    .markdown-body table th {
+      background: var(--bg-tertiary);
+      font-weight: 600;
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body table tr:nth-child(even) {
+      background: rgba(99, 102, 241, 0.03);
+    }
+
+    .markdown-body blockquote {
+      border-left: 4px solid var(--accent-primary);
+      background: var(--bg-tertiary);
+      padding: 16px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .markdown-body hr {
+      border: none;
+      height: 1px;
+      background: var(--border-color);
+      margin: 32px 0;
+    }
+
+    .markdown-body ul, .markdown-body ol {
+      padding-left: 24px;
+    }
+
+    .markdown-body li {
+      margin: 8px 0;
+    }
+
+    @media (max-width: 768px) {
+      .page-container {
+        padding: 20px 16px;
+      }
+      .markdown-body {
+        padding: 24px;
+        border-radius: 12px;
+      }
+      .markdown-body h1 {
+        font-size: 1.8em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <a href="https://digitalarsenal.github.io/flatbuffers/" class="back-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Back to DA FlatBuffers
+    </a>
+    <article class="markdown-body"><h1>FlatBuffers WASM Runtime Integration</h1>
+<p>Run the FlatBuffers encryption module in any language with WebAssembly support. The same cryptographic implementation works across all platforms, ensuring consistent behavior and cross-language interoperability.</p>
+<h2>Why WASM Runtimes?</h2>
+<h3>Single Auditable Implementation</h3>
+<p>The encryption module is compiled from a single C++ codebase to WebAssembly. This means:</p>
+<ul>
+<li><strong>One codebase to audit</strong> - Security teams can focus on a single implementation</li>
+<li><strong>Consistent behavior</strong> - Identical cryptographic operations across all languages</li>
+<li><strong>No native dependencies</strong> - Pure WASM runs in any compliant runtime</li>
+</ul>
+<h3>Battle-Tested Cryptography</h3>
+<p>Two cryptographic backends are available. <strong>The pre-built WASM module uses Crypto++ by default</strong> (configured via <code>FLATBUFFERS_USE_CRYPTOPP=1</code> in the CMake build).</p>
+<h4>Default: Crypto++ (Pre-built)</h4>
+<p>The default WASM build (<code>flatc-encryption.wasm</code>) uses <a href="https://cryptopp.com/">Crypto++</a>, a cryptographic library with:</p>
+<ul>
+<li>30+ years of production use</li>
+<li>FIPS 140-2 validation</li>
+<li>Extensive peer review and security audits</li>
+<li>Active maintenance and security updates</li>
+<li>Full algorithm support including X25519, Ed25519, secp256k1</li>
+</ul>
+<h4>Alternative: OpenSSL FIPS Provider (Requires Custom Build)</h4>
+<p>For organizations requiring FIPS 140-3 compliance, an <a href="../../openssl-fips/README.html">OpenSSL 3.x FIPS build</a> can be compiled from source:</p>
+<ul>
+<li>FIPS 140-3 validated algorithms (Certificate #4282)</li>
+<li>NIST-approved curves only (P-256, P-384, P-521)</li>
+<li><strong>Note</strong>: X25519/Ed25519/secp256k1 are not available in FIPS mode (not NIST-approved)</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Crypto++ (Default Build)</th>
+<th>OpenSSL FIPS (Custom Build)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>X25519</td>
+<td>✅</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>Ed25519</td>
+<td>✅</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>secp256k1</td>
+<td>✅</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>P-256/P-384</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>AES-256</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>SHA-256/SHA-3</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>FIPS 140-3 Validated</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Pre-built WASM</td>
+<td>✅</td>
+<td>❌ (build from source)</td>
+</tr>
+</tbody></table>
+<h3>Cross-Language Interoperability</h3>
+<p>Data encrypted in one language can be decrypted in any other:</p>
+<pre><code>Go ↔ Python ↔ Rust ↔ Java ↔ C# ↔ Swift ↔ Node.js ↔ Browser
+</code></pre>
+<p>All implementations use the same:</p>
+<ul>
+<li>Key formats (raw bytes)</li>
+<li>IV/nonce handling</li>
+<li>Encryption algorithms (AES-256-CTR)</li>
+<li>Key derivation (HKDF-SHA256)</li>
+<li>Signature formats (DER-encoded ECDSA, raw Ed25519)</li>
+</ul>
+<hr>
+<h2>Supported Runtimes</h2>
+<table>
+<thead>
+<tr>
+<th>Language</th>
+<th>Runtime</th>
+<th>Package</th>
+<th>Key Features</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="go.html">Go</a></td>
+<td>wazero</td>
+<td><code>github.com/tetratelabs/wazero</code></td>
+<td>Pure Go, no CGo, zero dependencies</td>
+</tr>
+<tr>
+<td><a href="python.html">Python</a></td>
+<td>wasmer</td>
+<td><code>pip install wasmer</code></td>
+<td>PyPI ready, type hints</td>
+</tr>
+<tr>
+<td><a href="rust.html">Rust</a></td>
+<td>wasmer</td>
+<td><code>wasmer</code> crate</td>
+<td>no_std support, memory safe</td>
+</tr>
+<tr>
+<td><a href="java.html">Java</a></td>
+<td>Chicory</td>
+<td>Maven Central</td>
+<td>Pure Java, no JNI</td>
+</tr>
+<tr>
+<td><a href="csharp.html">C#</a></td>
+<td>Wasmtime</td>
+<td>NuGet</td>
+<td>.NET 6+, async support</td>
+</tr>
+<tr>
+<td><a href="swift.html">Swift</a></td>
+<td>WasmKit</td>
+<td>Swift Package Manager</td>
+<td>iOS/macOS, pure Swift</td>
+</tr>
+<tr>
+<td><a href="nodejs.html">Node.js</a></td>
+<td>V8 (native)</td>
+<td><code>npm install flatc-wasm</code></td>
+<td>ESM/CJS, TypeScript</td>
+</tr>
+<tr>
+<td><a href="browser.html">Browser</a></td>
+<td>V8/SpiderMonkey/JSC</td>
+<td>CDN or bundler</td>
+<td>All modern browsers</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Cryptographic Operations</h2>
+<h3>Symmetric Encryption</h3>
+<table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Algorithm</th>
+<th>Key Size</th>
+<th>IV Size</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Encryption/Decryption</td>
+<td>AES-256-CTR</td>
+<td>32 bytes</td>
+<td>16 bytes</td>
+</tr>
+</tbody></table>
+<h3>Key Exchange (ECDH)</h3>
+<table>
+<thead>
+<tr>
+<th>Curve</th>
+<th>Private Key</th>
+<th>Public Key</th>
+<th>Shared Secret</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>X25519</td>
+<td>32 bytes</td>
+<td>32 bytes</td>
+<td>32 bytes</td>
+<td>General purpose, Signal, WireGuard</td>
+</tr>
+<tr>
+<td>secp256k1</td>
+<td>32 bytes</td>
+<td>33 bytes*</td>
+<td>32 bytes</td>
+<td>Bitcoin, Ethereum, cryptocurrencies</td>
+</tr>
+<tr>
+<td>P-256</td>
+<td>32 bytes</td>
+<td>33 bytes*</td>
+<td>32 bytes</td>
+<td>TLS, enterprise, NIST compliance</td>
+</tr>
+</tbody></table>
+<p>*Compressed format. Uncompressed (65 bytes) also supported for input.</p>
+<h3>Digital Signatures</h3>
+<table>
+<thead>
+<tr>
+<th>Algorithm</th>
+<th>Private Key</th>
+<th>Public Key</th>
+<th>Signature</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Ed25519</td>
+<td>64 bytes</td>
+<td>32 bytes</td>
+<td>64 bytes</td>
+<td>Fast, deterministic, Solana/Cardano</td>
+</tr>
+<tr>
+<td>secp256k1 ECDSA</td>
+<td>32 bytes</td>
+<td>33 bytes</td>
+<td>70-72 bytes*</td>
+<td>Bitcoin, Ethereum transactions</td>
+</tr>
+<tr>
+<td>P-256 ECDSA</td>
+<td>32 bytes</td>
+<td>33 bytes</td>
+<td>70-72 bytes*</td>
+<td>TLS, enterprise PKI</td>
+</tr>
+</tbody></table>
+<p>*DER-encoded, variable length.</p>
+<h3>Key Derivation</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Input</th>
+<th>Output</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>HKDF-SHA256</td>
+<td>IKM + salt + info</td>
+<td>Variable length</td>
+<td>Derive keys from ECDH shared secrets</td>
+</tr>
+<tr>
+<td>SHA-256</td>
+<td>Any data</td>
+<td>32 bytes</td>
+<td>Hashing, message digests</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>API Reference</h2>
+<p>All runtimes expose the same WASM functions. Memory management follows the pattern:</p>
+<ol>
+<li>Allocate memory with <code>malloc</code></li>
+<li>Write input data to allocated memory</li>
+<li>Call the cryptographic function</li>
+<li>Read output from memory</li>
+<li>Free allocated memory with <code>free</code></li>
+</ol>
+<h3>Core Functions</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Signature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>malloc</code></td>
+<td><code>(size: i32) -&gt; i32</code></td>
+<td>Allocate <code>size</code> bytes, returns pointer</td>
+</tr>
+<tr>
+<td><code>free</code></td>
+<td><code>(ptr: i32)</code></td>
+<td>Free memory at pointer</td>
+</tr>
+</tbody></table>
+<h3>Hash Functions</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Signature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>wasi_sha256</code></td>
+<td><code>(data: i32, len: i32, out: i32)</code></td>
+<td>SHA-256 hash. <code>out</code> must be 32 bytes</td>
+</tr>
+<tr>
+<td><code>wasi_hkdf</code></td>
+<td><code>(ikm: i32, ikm_len: i32, salt: i32, salt_len: i32, info: i32, info_len: i32, out: i32, out_len: i32)</code></td>
+<td>HKDF-SHA256. <code>salt</code> can be NULL (0)</td>
+</tr>
+</tbody></table>
+<h3>Symmetric Encryption</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Signature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>wasi_encrypt_bytes</code></td>
+<td><code>(key: i32, iv: i32, data: i32, len: i32) -&gt; i32</code></td>
+<td>AES-256-CTR encrypt in-place. Returns 0 on success</td>
+</tr>
+<tr>
+<td><code>wasi_decrypt_bytes</code></td>
+<td><code>(key: i32, iv: i32, data: i32, len: i32) -&gt; i32</code></td>
+<td>AES-256-CTR decrypt in-place. Returns 0 on success</td>
+</tr>
+</tbody></table>
+<h3>X25519 Key Exchange</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Signature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>wasi_x25519_generate_keypair</code></td>
+<td><code>(priv_out: i32, pub_out: i32) -&gt; i32</code></td>
+<td>Generate keypair. <code>priv_out</code>: 32 bytes, <code>pub_out</code>: 32 bytes</td>
+</tr>
+<tr>
+<td><code>wasi_x25519_shared_secret</code></td>
+<td><code>(priv: i32, pub: i32, out: i32) -&gt; i32</code></td>
+<td>Compute shared secret. <code>out</code>: 32 bytes</td>
+</tr>
+</tbody></table>
+<h3>secp256k1 (Bitcoin/Ethereum)</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Signature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>wasi_secp256k1_generate_keypair</code></td>
+<td><code>(priv_out: i32, pub_out: i32) -&gt; i32</code></td>
+<td>Generate keypair. <code>priv_out</code>: 32 bytes, <code>pub_out</code>: 33 bytes</td>
+</tr>
+<tr>
+<td><code>wasi_secp256k1_shared_secret</code></td>
+<td><code>(priv: i32, pub: i32, pub_len: i32, out: i32) -&gt; i32</code></td>
+<td>ECDH. <code>pub_len</code>: 33 or 65</td>
+</tr>
+<tr>
+<td><code>wasi_secp256k1_sign</code></td>
+<td><code>(priv: i32, data: i32, len: i32, sig_out: i32, sig_len_out: i32) -&gt; i32</code></td>
+<td>Sign (usually a hash). <code>sig_out</code>: max 72 bytes</td>
+</tr>
+<tr>
+<td><code>wasi_secp256k1_verify</code></td>
+<td><code>(pub: i32, pub_len: i32, data: i32, len: i32, sig: i32, sig_len: i32) -&gt; i32</code></td>
+<td>Verify. Returns 0 if valid</td>
+</tr>
+</tbody></table>
+<h3>P-256 (NIST)</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Signature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>wasi_p256_generate_keypair</code></td>
+<td><code>(priv_out: i32, pub_out: i32) -&gt; i32</code></td>
+<td>Generate keypair. <code>priv_out</code>: 32 bytes, <code>pub_out</code>: 33 bytes</td>
+</tr>
+<tr>
+<td><code>wasi_p256_shared_secret</code></td>
+<td><code>(priv: i32, pub: i32, pub_len: i32, out: i32) -&gt; i32</code></td>
+<td>ECDH. <code>pub_len</code>: 33 or 65</td>
+</tr>
+<tr>
+<td><code>wasi_p256_sign</code></td>
+<td><code>(priv: i32, data: i32, len: i32, sig_out: i32, sig_len_out: i32) -&gt; i32</code></td>
+<td>Sign (usually a hash). <code>sig_out</code>: max 72 bytes</td>
+</tr>
+<tr>
+<td><code>wasi_p256_verify</code></td>
+<td><code>(pub: i32, pub_len: i32, data: i32, len: i32, sig: i32, sig_len: i32) -&gt; i32</code></td>
+<td>Verify. Returns 0 if valid</td>
+</tr>
+</tbody></table>
+<h3>Ed25519 Signatures</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Signature</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>wasi_ed25519_generate_keypair</code></td>
+<td><code>(priv_out: i32, pub_out: i32) -&gt; i32</code></td>
+<td>Generate keypair. <code>priv_out</code>: 64 bytes, <code>pub_out</code>: 32 bytes</td>
+</tr>
+<tr>
+<td><code>wasi_ed25519_sign</code></td>
+<td><code>(priv: i32, data: i32, len: i32, sig_out: i32) -&gt; i32</code></td>
+<td>Sign message. <code>sig_out</code>: 64 bytes</td>
+</tr>
+<tr>
+<td><code>wasi_ed25519_verify</code></td>
+<td><code>(pub: i32, data: i32, len: i32, sig: i32) -&gt; i32</code></td>
+<td>Verify. Returns 0 if valid</td>
+</tr>
+</tbody></table>
+<hr>
+<h2>Security Considerations</h2>
+<h3>Key Management</h3>
+<ol>
+<li><strong>Generate keys securely</strong> - Use the WASM module&#39;s key generation functions, which use the platform&#39;s cryptographic RNG</li>
+<li><strong>Never reuse IVs</strong> - Generate a new random 16-byte IV for each encryption operation</li>
+<li><strong>Derive keys with HKDF</strong> - Never use raw ECDH output directly as an encryption key</li>
+</ol>
+<pre><code>Shared Secret → HKDF(secret, salt, info) → Encryption Key
+</code></pre>
+<ol start="4">
+<li><strong>Use unique info strings</strong> - Different purposes should use different HKDF info parameters:</li>
+</ol>
+<pre><code>HKDF(secret, null, &quot;encryption-key-v1&quot;) → Key for encrypting
+HKDF(secret, null, &quot;authentication-key-v1&quot;) → Key for MAC (if needed)
+</code></pre>
+<h3>Memory Handling</h3>
+<ol>
+<li><strong>Zero sensitive data</strong> - After use, overwrite key material in memory</li>
+<li><strong>Minimize key lifetime</strong> - Keep keys in WASM memory only as long as needed</li>
+<li><strong>Free allocated memory</strong> - Always call <code>free()</code> to prevent memory leaks</li>
+</ol>
+<h3>What This Module Does NOT Protect</h3>
+<ul>
+<li><strong>Key storage</strong> - You must implement secure key storage for your platform</li>
+<li><strong>Side-channel attacks</strong> - WASM runtimes may not be constant-time</li>
+<li><strong>Authentication</strong> - Use signatures or HMAC to verify message integrity</li>
+<li><strong>Forward secrecy</strong> - Implement ephemeral keys if needed</li>
+</ul>
+<hr>
+<h2>Performance Optimization</h2>
+<h3>1. Cache the WASM Module</h3>
+<p>Loading and compiling WASM is expensive. Initialize once and reuse:</p>
+<pre><code class="language-javascript">// Good: Initialize once
+const module = await initEncryption();
+// Reuse for all operations
+
+// Bad: Initialize per operation
+async function encrypt(data) {
+  const module = await initEncryption(); // Slow!
+  // ...
+}
+</code></pre>
+<h3>2. Batch Operations</h3>
+<p>Minimize WASM boundary crossings by processing multiple items:</p>
+<pre><code class="language-javascript">// Good: Batch processing
+const allData = items.map(i =&gt; i.data);
+const results = encryptBatch(allData, key, ivs);
+
+// Less efficient: One at a time
+for (const item of items) {
+  encrypt(item.data, key, iv);
+}
+</code></pre>
+<h3>3. Reuse Memory Allocations</h3>
+<p>For repeated operations of the same size, reuse allocated buffers:</p>
+<pre><code class="language-go">// Good: Reuse buffers
+keyPtr, _ := malloc(32)
+defer free(keyPtr)
+
+for _, data := range items {
+    writeBytes(keyPtr, key)
+    encrypt(keyPtr, ivPtr, dataPtr, len)
+}
+
+// Less efficient: Allocate each time
+for _, data := range items {
+    keyPtr, _ := malloc(32)
+    // ...
+    free(keyPtr)
+}
+</code></pre>
+<h3>4. Use Streaming for Large Data</h3>
+<p>For large files, process in chunks rather than loading everything into memory:</p>
+<pre><code class="language-python">CHUNK_SIZE = 64 * 1024  # 64KB chunks
+
+def encrypt_file(input_path, output_path, key):
+    iv = os.urandom(16)
+    with open(input_path, &#39;rb&#39;) as f_in, open(output_path, &#39;wb&#39;) as f_out:
+        f_out.write(iv)  # Prepend IV
+        while chunk := f_in.read(CHUNK_SIZE):
+            encrypted = encrypt_bytes(key, iv, chunk)
+            f_out.write(encrypted)
+            # CTR mode: increment IV for next chunk
+            iv = increment_iv(iv)
+</code></pre>
+<hr>
+<h2>Troubleshooting</h2>
+<h3>Common Issues</h3>
+<h4>&quot;Cannot find module&quot; / &quot;WASM module not found&quot;</h4>
+<p>The WASM binary must be accessible at runtime. Solutions:</p>
+<ol>
+<li><strong>Bundle with your application</strong> - Copy <code>flatc-encryption.wasm</code> to your build output</li>
+<li><strong>Use absolute paths</strong> - Specify the full path to the WASM file</li>
+<li><strong>Check file permissions</strong> - Ensure the WASM file is readable</li>
+</ol>
+<h4>&quot;Import not found: wasi_snapshot_preview1&quot;</h4>
+<p>The WASM module requires WASI imports. Most runtimes provide these automatically:</p>
+<ul>
+<li><strong>wazero (Go)</strong>: Use <code>wasi_snapshot_preview1.MustInstantiate()</code></li>
+<li><strong>wasmer (Python)</strong>: Configure WASI before instantiation</li>
+<li><strong>Wasmtime (C#)</strong>: Call <code>linker.DefineWasi()</code></li>
+</ul>
+<h4>&quot;Import not found: env.invoke_*&quot;</h4>
+<p>The module uses Emscripten&#39;s exception handling. You need to provide stub implementations:</p>
+<pre><code class="language-javascript">// Minimal invoke_* stubs
+const imports = {
+  env: {
+    invoke_v: (idx) =&gt; { /* call table[idx]() */ },
+    invoke_vi: (idx, a) =&gt; { /* call table[idx](a) */ },
+    invoke_vii: (idx, a, b) =&gt; { /* call table[idx](a, b) */ },
+    // ... etc
+  }
+};
+</code></pre>
+<p>See language-specific guides for complete implementations.</p>
+<h4>&quot;Memory access out of bounds&quot;</h4>
+<p>You&#39;re reading or writing outside allocated memory. Check:</p>
+<ol>
+<li><strong>Pointer validity</strong> - Ensure <code>malloc</code> returned non-zero</li>
+<li><strong>Buffer sizes</strong> - Don&#39;t write more bytes than allocated</li>
+<li><strong>Double-free</strong> - Don&#39;t free the same pointer twice</li>
+</ol>
+<h4>&quot;Invalid signature&quot; / &quot;Verification failed&quot;</h4>
+<ol>
+<li><strong>Check key types</strong> - Ed25519 uses 64-byte private keys, ECDSA uses 32-byte</li>
+<li><strong>Hash before signing</strong> - secp256k1 and P-256 expect a 32-byte hash, not raw message</li>
+<li><strong>Public key format</strong> - Ensure compressed (33 bytes) vs uncompressed (65 bytes) matches</li>
+</ol>
+<hr>
+<h2>Examples</h2>
+<h3>End-to-End Encryption</h3>
+<p>Complete example of encrypting a FlatBuffer for a recipient:</p>
+<pre><code class="language-javascript">// 1. Generate sender&#39;s ephemeral keypair
+const senderKeys = x25519GenerateKeyPair();
+
+// 2. Compute shared secret with recipient&#39;s public key
+const sharedSecret = x25519SharedSecret(
+  senderKeys.privateKey,
+  recipientPublicKey
+);
+
+// 3. Derive encryption key using HKDF
+const encryptionKey = hkdf(
+  sharedSecret,
+  null, // no salt
+  new TextEncoder().encode(&#39;flatbuffer-encryption-v1&#39;),
+  32    // 256 bits
+);
+
+// 4. Generate random IV
+const iv = crypto.getRandomValues(new Uint8Array(16));
+
+// 5. Encrypt the FlatBuffer
+const ciphertext = new Uint8Array(flatbuffer);
+encryptBytes(ciphertext, encryptionKey, iv);
+
+// 6. Package for transmission
+const message = {
+  senderPublicKey: senderKeys.publicKey, // 32 bytes
+  iv: iv,                                 // 16 bytes
+  ciphertext: ciphertext                  // encrypted data
+};
+</code></pre>
+<h3>Cross-Language Verification</h3>
+<p>Verify a signature created in another language:</p>
+<pre><code class="language-go">// Go: Verify Ed25519 signature from Python
+func verifyPythonSignature(publicKey, message, signature []byte) bool {
+    module := loadEncryptionModule()
+
+    pubPtr := writeBytes(module, publicKey)
+    msgPtr := writeBytes(module, message)
+    sigPtr := writeBytes(module, signature)
+    defer freeAll(module, pubPtr, msgPtr, sigPtr)
+
+    result := module.ed25519Verify(pubPtr, msgPtr, len(message), sigPtr)
+    return result == 0 // 0 = valid
+}
+</code></pre>
+<hr>
+<h2>Language Guides</h2>
+<p>For detailed integration instructions, see:</p>
+<ul>
+<li><a href="go.html">Go Integration</a> - wazero runtime, pure Go</li>
+<li><a href="python.html">Python Integration</a> - wasmer with Cranelift</li>
+<li><a href="rust.html">Rust Integration</a> - wasmer crate</li>
+<li><a href="java.html">Java Integration</a> - Chicory pure Java runtime</li>
+<li><a href="csharp.html">C# Integration</a> - Wasmtime .NET bindings</li>
+<li><a href="swift.html">Swift Integration</a> - WasmKit for iOS/macOS</li>
+<li><a href="nodejs.html">Node.js Integration</a> - Native V8 WASM support</li>
+<li><a href="browser.html">Browser Integration</a> - All modern browsers</li>
+</ul>
+</article>
+  </div>
+</body>
+</html>

@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Python - DA FlatBuffers</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a24;
+      --accent-primary: #6366f1;
+      --accent-secondary: #818cf8;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --border-color: rgba(99, 102, 241, 0.2);
+      --glow-color: rgba(99, 102, 241, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(59, 130, 246, 0.04) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Grid pattern overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .page-container {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      margin-bottom: 30px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--accent-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .back-link:hover {
+      background: var(--bg-tertiary);
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 20px var(--glow-color);
+      transform: translateY(-1px);
+    }
+
+    .markdown-body {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 48px;
+      box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.3),
+        0 0 40px var(--glow-color);
+    }
+
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3,
+    .markdown-body h4 {
+      color: var(--text-primary);
+      border-bottom-color: var(--border-color);
+      font-weight: 600;
+    }
+
+    .markdown-body h1 {
+      background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-size: 2.2em;
+      margin-bottom: 24px;
+    }
+
+    .markdown-body a {
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body a:hover {
+      color: var(--accent-primary);
+    }
+
+    .markdown-body code {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9em;
+    }
+
+    .markdown-body pre {
+      background: var(--bg-primary) !important;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+    }
+
+    .markdown-body pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-size: 0.85em;
+      line-height: 1.6;
+    }
+
+    .markdown-body table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 20px 0;
+    }
+
+    .markdown-body table th,
+    .markdown-body table td {
+      border: 1px solid var(--border-color);
+      padding: 12px 16px;
+      text-align: left;
+    }
+
+    .markdown-body table th {
+      background: var(--bg-tertiary);
+      font-weight: 600;
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body table tr:nth-child(even) {
+      background: rgba(99, 102, 241, 0.03);
+    }
+
+    .markdown-body blockquote {
+      border-left: 4px solid var(--accent-primary);
+      background: var(--bg-tertiary);
+      padding: 16px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .markdown-body hr {
+      border: none;
+      height: 1px;
+      background: var(--border-color);
+      margin: 32px 0;
+    }
+
+    .markdown-body ul, .markdown-body ol {
+      padding-left: 24px;
+    }
+
+    .markdown-body li {
+      margin: 8px 0;
+    }
+
+    @media (max-width: 768px) {
+      .page-container {
+        padding: 20px 16px;
+      }
+      .markdown-body {
+        padding: 24px;
+        border-radius: 12px;
+      }
+      .markdown-body h1 {
+        font-size: 1.8em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <a href="https://digitalarsenal.github.io/flatbuffers/" class="back-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Back to DA FlatBuffers
+    </a>
+    <article class="markdown-body"><h1>Python Integration Guide</h1>
+<p>Integrate the FlatBuffers encryption WASM module into Python applications using <a href="https://github.com/wasmerio/wasmer-python">wasmer-python</a>, Python bindings for the Wasmer WebAssembly runtime.</p>
+<h2>Why wasmer-python?</h2>
+<ul>
+<li><strong>High performance</strong> - JIT compilation via Cranelift</li>
+<li><strong>Easy installation</strong> - <code>pip install wasmer</code></li>
+<li><strong>Type hints</strong> - Full typing support</li>
+<li><strong>Cross-platform</strong> - Windows, macOS, Linux</li>
+</ul>
+<h2>Prerequisites</h2>
+<ul>
+<li>Python 3.7 or later</li>
+<li><code>flatc-encryption.wasm</code> binary</li>
+</ul>
+<h2>Installation</h2>
+<pre><code class="language-bash">pip install wasmer wasmer-compiler-cranelift
+</code></pre>
+<p>Or with wasmtime (alternative runtime):</p>
+<pre><code class="language-bash">pip install wasmtime
+</code></pre>
+<h2>Quick Start</h2>
+<pre><code class="language-python">from wasmer import engine, Store, Module, Instance, ImportObject, Function, FunctionType, Type
+from wasmer_compiler_cranelift import Compiler
+import os
+import struct
+
+# Create store with Cranelift JIT
+store = Store(engine.JIT(Compiler))
+
+# Load WASM module
+with open(&quot;flatc-encryption.wasm&quot;, &quot;rb&quot;) as f:
+    wasm_bytes = f.read()
+
+module = Module(store, wasm_bytes)
+
+# Create WASI imports (minimal stubs)
+import_object = ImportObject()
+
+def fd_close(fd: int) -&gt; int:
+    return 0
+
+def clock_time_get(clock_id: int, precision: int, time: int) -&gt; int:
+    return 0
+
+import_object.register(&quot;wasi_snapshot_preview1&quot;, {
+    &quot;fd_close&quot;: Function(store, fd_close, FunctionType([Type.I32], [Type.I32])),
+    &quot;clock_time_get&quot;: Function(store, clock_time_get, FunctionType([Type.I32, Type.I64, Type.I32], [Type.I32])),
+    # ... add other WASI stubs as needed
+})
+
+# Instantiate
+instance = Instance(module, import_object)
+
+# Get exports
+memory = instance.exports.memory
+malloc = instance.exports.malloc
+free = instance.exports.free
+encrypt = instance.exports.wasi_encrypt_bytes
+decrypt = instance.exports.wasi_decrypt_bytes
+
+# Helper functions
+def write_bytes(ptr: int, data: bytes):
+    mem_view = memory.uint8_view(ptr)
+    for i, b in enumerate(data):
+        mem_view[i] = b
+
+def read_bytes(ptr: int, length: int) -&gt; bytes:
+    mem_view = memory.uint8_view(ptr)
+    return bytes(mem_view[0:length])
+
+# Encrypt data
+key = os.urandom(32)
+iv = os.urandom(16)
+plaintext = b&quot;Hello, FlatBuffers!&quot;
+
+key_ptr = malloc(32)
+iv_ptr = malloc(16)
+data_ptr = malloc(len(plaintext))
+
+write_bytes(key_ptr, key)
+write_bytes(iv_ptr, iv)
+write_bytes(data_ptr, plaintext)
+
+# Encrypt in-place
+encrypt(key_ptr, iv_ptr, data_ptr, len(plaintext))
+
+# Read encrypted data
+ciphertext = read_bytes(data_ptr, len(plaintext))
+print(f&quot;Encrypted: {ciphertext.hex()}&quot;)
+
+# Decrypt
+decrypt(key_ptr, iv_ptr, data_ptr, len(plaintext))
+decrypted = read_bytes(data_ptr, len(plaintext))
+print(f&quot;Decrypted: {decrypted.decode()}&quot;)
+
+# Clean up
+free(key_ptr)
+free(iv_ptr)
+free(data_ptr)
+</code></pre>
+<h2>Complete Module Wrapper</h2>
+<p>For production use, create a Python class wrapping the WASM module:</p>
+<pre><code class="language-python">&quot;&quot;&quot;
+FlatBuffers Encryption Module for Python.
+
+Provides cryptographic operations via the Crypto++ WASM module:
+- AES-256-CTR symmetric encryption
+- X25519 ECDH key exchange
+- secp256k1 ECDH and ECDSA signatures
+- P-256 ECDH and ECDSA signatures
+- Ed25519 signatures
+&quot;&quot;&quot;
+
+from wasmer import engine, Store, Module, Instance, ImportObject, Function, FunctionType, Type
+from wasmer_compiler_cranelift import Compiler
+from pathlib import Path
+from typing import Optional, Tuple, NamedTuple
+from dataclasses import dataclass
+import os
+import struct
+import time as time_module
+
+# Key and signature sizes
+AES_KEY_SIZE = 32
+AES_IV_SIZE = 16
+SHA256_SIZE = 32
+
+X25519_PRIVATE_KEY_SIZE = 32
+X25519_PUBLIC_KEY_SIZE = 32
+
+SECP256K1_PRIVATE_KEY_SIZE = 32
+SECP256K1_PUBLIC_KEY_SIZE = 33
+SECP256K1_SIGNATURE_MAX_SIZE = 72
+
+ED25519_PRIVATE_KEY_SIZE = 64
+ED25519_PUBLIC_KEY_SIZE = 32
+ED25519_SIGNATURE_SIZE = 64
+
+
+@dataclass
+class X25519KeyPair:
+    &quot;&quot;&quot;X25519 key pair for ECDH.&quot;&quot;&quot;
+    private_key: bytes  # 32 bytes
+    public_key: bytes   # 32 bytes
+
+
+@dataclass
+class Ed25519KeyPair:
+    &quot;&quot;&quot;Ed25519 key pair for signing.&quot;&quot;&quot;
+    private_key: bytes  # 64 bytes (seed + public key)
+    public_key: bytes   # 32 bytes
+
+
+@dataclass
+class Secp256k1KeyPair:
+    &quot;&quot;&quot;secp256k1 key pair for ECDH and ECDSA.&quot;&quot;&quot;
+    private_key: bytes  # 32 bytes
+    public_key: bytes   # 33 bytes (compressed)
+
+
+class EncryptionModule:
+    &quot;&quot;&quot;Wrapper for the FlatBuffers WASI encryption module.&quot;&quot;&quot;
+
+    def __init__(self, wasm_path: Optional[str] = None):
+        &quot;&quot;&quot;
+        Initialize the encryption module.
+
+        Args:
+            wasm_path: Path to the WASM module. If None, searches default locations.
+        &quot;&quot;&quot;
+        if wasm_path is None:
+            wasm_path = self._find_wasm_module()
+
+        # Create the store with Cranelift compiler
+        self._store = Store(engine.JIT(Compiler))
+
+        # Load and compile the module
+        with open(wasm_path, &#39;rb&#39;) as f:
+            wasm_bytes = f.read()
+        self._module = Module(self._store, wasm_bytes)
+
+        # Create import object with WASI stubs
+        import_object = self._create_imports()
+
+        # Instantiate
+        self._instance = Instance(self._module, import_object)
+
+        # Cache exported functions
+        self._memory = self._instance.exports.memory
+        self._malloc = self._instance.exports.malloc
+        self._free = self._instance.exports.free
+
+        # Encryption
+        self._encrypt = self._instance.exports.wasi_encrypt_bytes
+        self._decrypt = self._instance.exports.wasi_decrypt_bytes
+
+        # Hash
+        self._sha256 = self._instance.exports.wasi_sha256
+        self._hkdf = self._instance.exports.wasi_hkdf
+
+        # X25519
+        self._x25519_generate = self._instance.exports.wasi_x25519_generate_keypair
+        self._x25519_shared = self._instance.exports.wasi_x25519_shared_secret
+
+        # secp256k1
+        self._secp256k1_generate = self._instance.exports.wasi_secp256k1_generate_keypair
+        self._secp256k1_shared = self._instance.exports.wasi_secp256k1_shared_secret
+        self._secp256k1_sign = self._instance.exports.wasi_secp256k1_sign
+        self._secp256k1_verify = self._instance.exports.wasi_secp256k1_verify
+
+        # Ed25519
+        self._ed25519_generate = self._instance.exports.wasi_ed25519_generate_keypair
+        self._ed25519_sign = self._instance.exports.wasi_ed25519_sign
+        self._ed25519_verify = self._instance.exports.wasi_ed25519_verify
+
+    def _find_wasm_module(self) -&gt; str:
+        &quot;&quot;&quot;Search for the WASM module in expected locations.&quot;&quot;&quot;
+        paths = [
+            Path(__file__).parent / &quot;flatc-encryption.wasm&quot;,
+            Path(&quot;flatc-encryption.wasm&quot;),
+            Path(&quot;wasm/flatc-encryption.wasm&quot;),
+        ]
+        for p in paths:
+            if p.exists():
+                return str(p.resolve())
+        raise FileNotFoundError(&quot;Could not find flatc-encryption.wasm&quot;)
+
+    def _create_imports(self) -&gt; ImportObject:
+        &quot;&quot;&quot;Create the import object with WASI and env module stubs.&quot;&quot;&quot;
+        import_object = ImportObject()
+
+        # WASI stubs
+        def fd_close(fd: int) -&gt; int:
+            return 0
+
+        def fd_seek(fd: int, offset: int, whence: int, newoffset: int) -&gt; int:
+            return 0
+
+        def fd_write(fd: int, iovs: int, iovs_len: int, nwritten: int) -&gt; int:
+            return 0
+
+        def fd_read(fd: int, iovs: int, iovs_len: int, nread: int) -&gt; int:
+            return 0
+
+        def environ_sizes_get(count: int, size: int) -&gt; int:
+            return 0
+
+        def environ_get(environ: int, environ_buf: int) -&gt; int:
+            return 0
+
+        def clock_time_get(clock_id: int, precision: int, time: int) -&gt; int:
+            return 0
+
+        def proc_exit(code: int):
+            raise SystemExit(code)
+
+        def random_get(buf: int, buf_len: int) -&gt; int:
+            return 0
+
+        import_object.register(&quot;wasi_snapshot_preview1&quot;, {
+            &quot;fd_close&quot;: Function(self._store, fd_close, FunctionType([Type.I32], [Type.I32])),
+            &quot;fd_seek&quot;: Function(self._store, fd_seek, FunctionType([Type.I32, Type.I64, Type.I32, Type.I32], [Type.I32])),
+            &quot;fd_write&quot;: Function(self._store, fd_write, FunctionType([Type.I32, Type.I32, Type.I32, Type.I32], [Type.I32])),
+            &quot;fd_read&quot;: Function(self._store, fd_read, FunctionType([Type.I32, Type.I32, Type.I32, Type.I32], [Type.I32])),
+            &quot;environ_sizes_get&quot;: Function(self._store, environ_sizes_get, FunctionType([Type.I32, Type.I32], [Type.I32])),
+            &quot;environ_get&quot;: Function(self._store, environ_get, FunctionType([Type.I32, Type.I32], [Type.I32])),
+            &quot;clock_time_get&quot;: Function(self._store, clock_time_get, FunctionType([Type.I32, Type.I64, Type.I32], [Type.I32])),
+            &quot;proc_exit&quot;: Function(self._store, proc_exit, FunctionType([Type.I32], [])),
+            &quot;random_get&quot;: Function(self._store, random_get, FunctionType([Type.I32, Type.I32], [Type.I32])),
+        })
+
+        # Emscripten env stubs (invoke_* trampolines)
+        def invoke_stub(*args):
+            pass
+
+        import_object.register(&quot;env&quot;, {
+            &quot;invoke_v&quot;: Function(self._store, invoke_stub, FunctionType([Type.I32], [])),
+            &quot;invoke_vi&quot;: Function(self._store, invoke_stub, FunctionType([Type.I32, Type.I32], [])),
+            &quot;invoke_vii&quot;: Function(self._store, invoke_stub, FunctionType([Type.I32, Type.I32, Type.I32], [])),
+            &quot;invoke_viii&quot;: Function(self._store, invoke_stub, FunctionType([Type.I32, Type.I32, Type.I32, Type.I32], [])),
+            &quot;invoke_i&quot;: Function(self._store, lambda idx: 0, FunctionType([Type.I32], [Type.I32])),
+            &quot;invoke_ii&quot;: Function(self._store, lambda idx, a: 0, FunctionType([Type.I32, Type.I32], [Type.I32])),
+            &quot;invoke_iii&quot;: Function(self._store, lambda idx, a, b: 0, FunctionType([Type.I32, Type.I32, Type.I32], [Type.I32])),
+        })
+
+        return import_object
+
+    def _write_bytes(self, ptr: int, data: bytes) -&gt; None:
+        &quot;&quot;&quot;Write bytes to WASM memory.&quot;&quot;&quot;
+        mem_view = self._memory.uint8_view(ptr)
+        for i, b in enumerate(data):
+            mem_view[i] = b
+
+    def _read_bytes(self, ptr: int, length: int) -&gt; bytes:
+        &quot;&quot;&quot;Read bytes from WASM memory.&quot;&quot;&quot;
+        mem_view = self._memory.uint8_view(ptr)
+        return bytes(mem_view[0:length])
+
+    # Symmetric Encryption
+
+    def encrypt(self, key: bytes, iv: bytes, data: bytes) -&gt; bytes:
+        &quot;&quot;&quot;
+        Encrypt data using AES-256-CTR.
+
+        Args:
+            key: 32-byte encryption key
+            iv: 16-byte initialization vector
+            data: Data to encrypt
+
+        Returns:
+            Encrypted data (same length as input)
+        &quot;&quot;&quot;
+        if len(key) != AES_KEY_SIZE:
+            raise ValueError(f&quot;Key must be {AES_KEY_SIZE} bytes&quot;)
+        if len(iv) != AES_IV_SIZE:
+            raise ValueError(f&quot;IV must be {AES_IV_SIZE} bytes&quot;)
+
+        key_ptr = self._malloc(len(key))
+        iv_ptr = self._malloc(len(iv))
+        data_ptr = self._malloc(len(data))
+
+        try:
+            self._write_bytes(key_ptr, key)
+            self._write_bytes(iv_ptr, iv)
+            self._write_bytes(data_ptr, data)
+
+            result = self._encrypt(key_ptr, iv_ptr, data_ptr, len(data))
+            if result != 0:
+                raise RuntimeError(&quot;Encryption failed&quot;)
+
+            return self._read_bytes(data_ptr, len(data))
+        finally:
+            self._free(key_ptr)
+            self._free(iv_ptr)
+            self._free(data_ptr)
+
+    def decrypt(self, key: bytes, iv: bytes, data: bytes) -&gt; bytes:
+        &quot;&quot;&quot;
+        Decrypt data using AES-256-CTR.
+
+        Args:
+            key: 32-byte encryption key
+            iv: 16-byte initialization vector
+            data: Data to decrypt
+
+        Returns:
+            Decrypted data
+        &quot;&quot;&quot;
+        # CTR mode is symmetric
+        return self.encrypt(key, iv, data)
+
+    # Hash Functions
+
+    def sha256(self, data: bytes) -&gt; bytes:
+        &quot;&quot;&quot;
+        Compute SHA-256 hash.
+
+        Args:
+            data: Data to hash
+
+        Returns:
+            32-byte hash
+        &quot;&quot;&quot;
+        data_ptr = self._malloc(len(data))
+        out_ptr = self._malloc(SHA256_SIZE)
+
+        try:
+            self._write_bytes(data_ptr, data)
+            self._sha256(data_ptr, len(data), out_ptr)
+            return self._read_bytes(out_ptr, SHA256_SIZE)
+        finally:
+            self._free(data_ptr)
+            self._free(out_ptr)
+
+    def hkdf(self, ikm: bytes, salt: Optional[bytes], info: bytes, length: int) -&gt; bytes:
+        &quot;&quot;&quot;
+        Derive key using HKDF-SHA256.
+
+        Args:
+            ikm: Input key material
+            salt: Optional salt (can be None)
+            info: Context/application-specific info
+            length: Desired output length
+
+        Returns:
+            Derived key material
+        &quot;&quot;&quot;
+        ikm_ptr = self._malloc(len(ikm))
+        self._write_bytes(ikm_ptr, ikm)
+
+        salt_ptr = 0
+        salt_len = 0
+        if salt:
+            salt_ptr = self._malloc(len(salt))
+            self._write_bytes(salt_ptr, salt)
+            salt_len = len(salt)
+
+        info_ptr = self._malloc(len(info))
+        self._write_bytes(info_ptr, info)
+
+        out_ptr = self._malloc(length)
+
+        try:
+            self._hkdf(
+                ikm_ptr, len(ikm),
+                salt_ptr, salt_len,
+                info_ptr, len(info),
+                out_ptr, length
+            )
+            return self._read_bytes(out_ptr, length)
+        finally:
+            self._free(ikm_ptr)
+            if salt_ptr:
+                self._free(salt_ptr)
+            self._free(info_ptr)
+            self._free(out_ptr)
+
+    # X25519 Key Exchange
+
+    def x25519_generate_keypair(self) -&gt; X25519KeyPair:
+        &quot;&quot;&quot;Generate an X25519 key pair.&quot;&quot;&quot;
+        priv_ptr = self._malloc(X25519_PRIVATE_KEY_SIZE)
+        pub_ptr = self._malloc(X25519_PUBLIC_KEY_SIZE)
+
+        try:
+            result = self._x25519_generate(priv_ptr, pub_ptr)
+            if result != 0:
+                raise RuntimeError(&quot;Key generation failed&quot;)
+
+            return X25519KeyPair(
+                private_key=self._read_bytes(priv_ptr, X25519_PRIVATE_KEY_SIZE),
+                public_key=self._read_bytes(pub_ptr, X25519_PUBLIC_KEY_SIZE)
+            )
+        finally:
+            self._free(priv_ptr)
+            self._free(pub_ptr)
+
+    def x25519_shared_secret(self, private_key: bytes, public_key: bytes) -&gt; bytes:
+        &quot;&quot;&quot;
+        Compute X25519 shared secret.
+
+        Args:
+            private_key: 32-byte private key
+            public_key: 32-byte public key
+
+        Returns:
+            32-byte shared secret
+        &quot;&quot;&quot;
+        priv_ptr = self._malloc(len(private_key))
+        pub_ptr = self._malloc(len(public_key))
+        out_ptr = self._malloc(32)
+
+        try:
+            self._write_bytes(priv_ptr, private_key)
+            self._write_bytes(pub_ptr, public_key)
+
+            result = self._x25519_shared(priv_ptr, pub_ptr, out_ptr)
+            if result != 0:
+                raise RuntimeError(&quot;Shared secret computation failed&quot;)
+
+            return self._read_bytes(out_ptr, 32)
+        finally:
+            self._free(priv_ptr)
+            self._free(pub_ptr)
+            self._free(out_ptr)
+
+    # Ed25519 Signatures
+
+    def ed25519_generate_keypair(self) -&gt; Ed25519KeyPair:
+        &quot;&quot;&quot;Generate an Ed25519 key pair.&quot;&quot;&quot;
+        priv_ptr = self._malloc(ED25519_PRIVATE_KEY_SIZE)
+        pub_ptr = self._malloc(ED25519_PUBLIC_KEY_SIZE)
+
+        try:
+            result = self._ed25519_generate(priv_ptr, pub_ptr)
+            if result != 0:
+                raise RuntimeError(&quot;Key generation failed&quot;)
+
+            return Ed25519KeyPair(
+                private_key=self._read_bytes(priv_ptr, ED25519_PRIVATE_KEY_SIZE),
+                public_key=self._read_bytes(pub_ptr, ED25519_PUBLIC_KEY_SIZE)
+            )
+        finally:
+            self._free(priv_ptr)
+            self._free(pub_ptr)
+
+    def ed25519_sign(self, private_key: bytes, message: bytes) -&gt; bytes:
+        &quot;&quot;&quot;
+        Sign a message with Ed25519.
+
+        Args:
+            private_key: 64-byte private key
+            message: Message to sign
+
+        Returns:
+            64-byte signature
+        &quot;&quot;&quot;
+        priv_ptr = self._malloc(len(private_key))
+        msg_ptr = self._malloc(len(message))
+        sig_ptr = self._malloc(ED25519_SIGNATURE_SIZE)
+
+        try:
+            self._write_bytes(priv_ptr, private_key)
+            self._write_bytes(msg_ptr, message)
+
+            result = self._ed25519_sign(priv_ptr, msg_ptr, len(message), sig_ptr)
+            if result != 0:
+                raise RuntimeError(&quot;Signing failed&quot;)
+
+            return self._read_bytes(sig_ptr, ED25519_SIGNATURE_SIZE)
+        finally:
+            self._free(priv_ptr)
+            self._free(msg_ptr)
+            self._free(sig_ptr)
+
+    def ed25519_verify(self, public_key: bytes, message: bytes, signature: bytes) -&gt; bool:
+        &quot;&quot;&quot;
+        Verify an Ed25519 signature.
+
+        Args:
+            public_key: 32-byte public key
+            message: Original message
+            signature: 64-byte signature
+
+        Returns:
+            True if valid, False otherwise
+        &quot;&quot;&quot;
+        pub_ptr = self._malloc(len(public_key))
+        msg_ptr = self._malloc(len(message))
+        sig_ptr = self._malloc(len(signature))
+
+        try:
+            self._write_bytes(pub_ptr, public_key)
+            self._write_bytes(msg_ptr, message)
+            self._write_bytes(sig_ptr, signature)
+
+            result = self._ed25519_verify(pub_ptr, msg_ptr, len(message), sig_ptr)
+            return result == 0
+        finally:
+            self._free(pub_ptr)
+            self._free(msg_ptr)
+            self._free(sig_ptr)
+
+    # secp256k1
+
+    def secp256k1_generate_keypair(self) -&gt; Secp256k1KeyPair:
+        &quot;&quot;&quot;Generate a secp256k1 key pair.&quot;&quot;&quot;
+        priv_ptr = self._malloc(SECP256K1_PRIVATE_KEY_SIZE)
+        pub_ptr = self._malloc(SECP256K1_PUBLIC_KEY_SIZE)
+
+        try:
+            result = self._secp256k1_generate(priv_ptr, pub_ptr)
+            if result != 0:
+                raise RuntimeError(&quot;Key generation failed&quot;)
+
+            return Secp256k1KeyPair(
+                private_key=self._read_bytes(priv_ptr, SECP256K1_PRIVATE_KEY_SIZE),
+                public_key=self._read_bytes(pub_ptr, SECP256K1_PUBLIC_KEY_SIZE)
+            )
+        finally:
+            self._free(priv_ptr)
+            self._free(pub_ptr)
+
+    def secp256k1_sign(self, private_key: bytes, message_hash: bytes) -&gt; bytes:
+        &quot;&quot;&quot;
+        Sign with secp256k1 ECDSA.
+
+        Args:
+            private_key: 32-byte private key
+            message_hash: 32-byte hash to sign
+
+        Returns:
+            DER-encoded signature (70-72 bytes)
+        &quot;&quot;&quot;
+        priv_ptr = self._malloc(len(private_key))
+        msg_ptr = self._malloc(len(message_hash))
+        sig_ptr = self._malloc(SECP256K1_SIGNATURE_MAX_SIZE)
+        sig_len_ptr = self._malloc(4)
+
+        try:
+            self._write_bytes(priv_ptr, private_key)
+            self._write_bytes(msg_ptr, message_hash)
+
+            result = self._secp256k1_sign(
+                priv_ptr, msg_ptr, len(message_hash),
+                sig_ptr, sig_len_ptr
+            )
+            if result != 0:
+                raise RuntimeError(&quot;Signing failed&quot;)
+
+            sig_len = struct.unpack(&#39;&lt;I&#39;, self._read_bytes(sig_len_ptr, 4))[0]
+            return self._read_bytes(sig_ptr, sig_len)
+        finally:
+            self._free(priv_ptr)
+            self._free(msg_ptr)
+            self._free(sig_ptr)
+            self._free(sig_len_ptr)
+
+    def secp256k1_verify(self, public_key: bytes, message_hash: bytes, signature: bytes) -&gt; bool:
+        &quot;&quot;&quot;
+        Verify secp256k1 ECDSA signature.
+
+        Args:
+            public_key: 33 or 65 byte public key
+            message_hash: 32-byte hash that was signed
+            signature: DER-encoded signature
+
+        Returns:
+            True if valid, False otherwise
+        &quot;&quot;&quot;
+        pub_ptr = self._malloc(len(public_key))
+        msg_ptr = self._malloc(len(message_hash))
+        sig_ptr = self._malloc(len(signature))
+
+        try:
+            self._write_bytes(pub_ptr, public_key)
+            self._write_bytes(msg_ptr, message_hash)
+            self._write_bytes(sig_ptr, signature)
+
+            result = self._secp256k1_verify(
+                pub_ptr, len(public_key),
+                msg_ptr, len(message_hash),
+                sig_ptr, len(signature)
+            )
+            return result == 0
+        finally:
+            self._free(pub_ptr)
+            self._free(msg_ptr)
+            self._free(sig_ptr)
+</code></pre>
+<h2>Template Project Structure</h2>
+<pre><code>myproject/
+├── requirements.txt
+├── encryption.py       # WASM wrapper module
+├── main.py
+├── wasm/
+│   └── flatc-encryption.wasm
+└── tests/
+    └── test_encryption.py
+</code></pre>
+<p><strong>requirements.txt:</strong></p>
+<pre><code>wasmer&gt;=1.1.0
+wasmer-compiler-cranelift&gt;=1.1.0
+</code></pre>
+<h2>Usage Examples</h2>
+<h3>Basic Encryption</h3>
+<pre><code class="language-python">from encryption import EncryptionModule
+import os
+
+module = EncryptionModule(&quot;flatc-encryption.wasm&quot;)
+
+# Generate key and IV
+key = os.urandom(32)
+iv = os.urandom(16)
+
+# Encrypt
+plaintext = b&quot;Secret message&quot;
+ciphertext = module.encrypt(key, iv, plaintext)
+
+# Decrypt
+decrypted = module.decrypt(key, iv, ciphertext)
+assert decrypted == plaintext
+</code></pre>
+<h3>End-to-End Encryption</h3>
+<pre><code class="language-python">from encryption import EncryptionModule
+import os
+
+module = EncryptionModule()
+
+# Alice generates keypair
+alice = module.x25519_generate_keypair()
+
+# Bob generates keypair
+bob = module.x25519_generate_keypair()
+
+# Alice computes shared secret
+alice_shared = module.x25519_shared_secret(alice.private_key, bob.public_key)
+
+# Bob computes same shared secret
+bob_shared = module.x25519_shared_secret(bob.private_key, alice.public_key)
+
+assert alice_shared == bob_shared
+
+# Derive encryption key
+encryption_key = module.hkdf(
+    alice_shared,
+    None,  # no salt
+    b&quot;my-app-encryption-v1&quot;,
+    32
+)
+
+# Encrypt message
+iv = os.urandom(16)
+message = b&quot;Hello Bob!&quot;
+ciphertext = module.encrypt(encryption_key, iv, message)
+
+# Bob decrypts
+decrypted = module.decrypt(encryption_key, iv, ciphertext)
+print(decrypted.decode())  # &quot;Hello Bob!&quot;
+</code></pre>
+<h3>Digital Signatures</h3>
+<pre><code class="language-python">from encryption import EncryptionModule
+
+module = EncryptionModule()
+
+# Generate signing keypair
+keypair = module.ed25519_generate_keypair()
+
+# Sign message
+message = b&quot;Sign this document&quot;
+signature = module.ed25519_sign(keypair.private_key, message)
+
+# Verify
+is_valid = module.ed25519_verify(keypair.public_key, message, signature)
+print(f&quot;Signature valid: {is_valid}&quot;)  # True
+
+# Tampered message fails verification
+is_valid = module.ed25519_verify(keypair.public_key, b&quot;tampered&quot;, signature)
+print(f&quot;Tampered valid: {is_valid}&quot;)  # False
+</code></pre>
+<h2>Alternative: Using wasmtime-py</h2>
+<p>If you prefer wasmtime over wasmer:</p>
+<pre><code class="language-python">import wasmtime
+
+# Create engine and store
+engine = wasmtime.Engine()
+store = wasmtime.Store(engine)
+linker = wasmtime.Linker(engine)
+
+# Add WASI
+wasi_config = wasmtime.WasiConfig()
+store.set_wasi(wasi_config)
+linker.define_wasi()
+
+# Load and instantiate
+module = wasmtime.Module.from_file(engine, &quot;flatc-encryption.wasm&quot;)
+instance = linker.instantiate(store, module)
+
+# Get exports
+memory = instance.exports(store)[&quot;memory&quot;]
+malloc = instance.exports(store)[&quot;malloc&quot;]
+# ...
+</code></pre>
+<h2>Performance Tips</h2>
+<ol>
+<li><strong>Reuse the module instance</strong> - Instantiation is expensive</li>
+<li><strong>Batch operations</strong> - Minimize Python↔WASM boundary crossings</li>
+<li><strong>Use memoryview</strong> - For large data, avoid copying</li>
+</ol>
+<pre><code class="language-python"># Good: Reuse instance
+module = EncryptionModule()
+for item in items:
+    module.encrypt(key, iv, item)
+
+# Bad: Create new instance each time
+for item in items:
+    module = EncryptionModule()  # Slow!
+    module.encrypt(key, iv, item)
+</code></pre>
+<h2>Troubleshooting</h2>
+<h3>&quot;Import not found: wasi_snapshot_preview1&quot;</h3>
+<p>Add WASI stubs to your import object. See the complete wrapper above.</p>
+<h3>&quot;Import not found: env.invoke_*&quot;</h3>
+<p>Add Emscripten trampolines. For basic usage, empty stubs work:</p>
+<pre><code class="language-python">import_object.register(&quot;env&quot;, {
+    &quot;invoke_v&quot;: Function(store, lambda idx: None, FunctionType([Type.I32], [])),
+    # ... add more as needed
+})
+</code></pre>
+<h3>&quot;Memory access out of bounds&quot;</h3>
+<p>Check pointer validity and buffer sizes:</p>
+<pre><code class="language-python">ptr = malloc(size)
+if ptr == 0:
+    raise MemoryError(&quot;malloc returned null&quot;)
+</code></pre>
+<h2>See Also</h2>
+<ul>
+<li><a href="https://wasmerio.github.io/wasmer-python/">wasmer-python Documentation</a></li>
+<li><a href="https://bytecodealliance.github.io/wasmtime-py/">wasmtime-py Documentation</a></li>
+<li><a href="README.md#api-reference">API Reference</a></li>
+<li><a href="README.md#security-considerations">Security Considerations</a></li>
+</ul>
+</article>
+  </div>
+</body>
+</html>

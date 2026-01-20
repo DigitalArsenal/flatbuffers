@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rust - DA FlatBuffers</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a24;
+      --accent-primary: #6366f1;
+      --accent-secondary: #818cf8;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --border-color: rgba(99, 102, 241, 0.2);
+      --glow-color: rgba(99, 102, 241, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(59, 130, 246, 0.04) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Grid pattern overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .page-container {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      margin-bottom: 30px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--accent-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .back-link:hover {
+      background: var(--bg-tertiary);
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 20px var(--glow-color);
+      transform: translateY(-1px);
+    }
+
+    .markdown-body {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 48px;
+      box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.3),
+        0 0 40px var(--glow-color);
+    }
+
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3,
+    .markdown-body h4 {
+      color: var(--text-primary);
+      border-bottom-color: var(--border-color);
+      font-weight: 600;
+    }
+
+    .markdown-body h1 {
+      background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-size: 2.2em;
+      margin-bottom: 24px;
+    }
+
+    .markdown-body a {
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body a:hover {
+      color: var(--accent-primary);
+    }
+
+    .markdown-body code {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9em;
+    }
+
+    .markdown-body pre {
+      background: var(--bg-primary) !important;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+    }
+
+    .markdown-body pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-size: 0.85em;
+      line-height: 1.6;
+    }
+
+    .markdown-body table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 20px 0;
+    }
+
+    .markdown-body table th,
+    .markdown-body table td {
+      border: 1px solid var(--border-color);
+      padding: 12px 16px;
+      text-align: left;
+    }
+
+    .markdown-body table th {
+      background: var(--bg-tertiary);
+      font-weight: 600;
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body table tr:nth-child(even) {
+      background: rgba(99, 102, 241, 0.03);
+    }
+
+    .markdown-body blockquote {
+      border-left: 4px solid var(--accent-primary);
+      background: var(--bg-tertiary);
+      padding: 16px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .markdown-body hr {
+      border: none;
+      height: 1px;
+      background: var(--border-color);
+      margin: 32px 0;
+    }
+
+    .markdown-body ul, .markdown-body ol {
+      padding-left: 24px;
+    }
+
+    .markdown-body li {
+      margin: 8px 0;
+    }
+
+    @media (max-width: 768px) {
+      .page-container {
+        padding: 20px 16px;
+      }
+      .markdown-body {
+        padding: 24px;
+        border-radius: 12px;
+      }
+      .markdown-body h1 {
+        font-size: 1.8em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <a href="https://digitalarsenal.github.io/flatbuffers/" class="back-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Back to DA FlatBuffers
+    </a>
+    <article class="markdown-body"><h1>Rust Integration Guide</h1>
+<p>Integrate the FlatBuffers encryption WASM module into Rust applications using the <a href="https://wasmer.io/">wasmer</a> crate.</p>
+<h2>Why wasmer?</h2>
+<ul>
+<li><strong>High performance</strong> - Native speed with LLVM, Cranelift, or Singlepass</li>
+<li><strong>Memory safe</strong> - Rust&#39;s safety guarantees for WASM memory access</li>
+<li><strong>Flexible</strong> - Multiple compiler backends</li>
+<li><strong>Production ready</strong> - Used in production by many companies</li>
+</ul>
+<h2>Prerequisites</h2>
+<ul>
+<li>Rust 1.70 or later</li>
+<li><code>flatc-encryption.wasm</code> binary</li>
+</ul>
+<h2>Installation</h2>
+<p>Add to <code>Cargo.toml</code>:</p>
+<pre><code class="language-toml">[dependencies]
+wasmer = &quot;4.2&quot;
+</code></pre>
+<h2>Quick Start</h2>
+<pre><code class="language-rust">use wasmer::{imports, Instance, Module, Store, Value};
+use std::fs;
+
+fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    // Create store
+    let mut store = Store::default();
+
+    // Load WASM
+    let wasm_bytes = fs::read(&quot;flatc-encryption.wasm&quot;)?;
+    let module = Module::new(&amp;store, &amp;wasm_bytes)?;
+
+    // Create imports (WASI stubs)
+    let import_object = imports! {
+        &quot;wasi_snapshot_preview1&quot; =&gt; {
+            &quot;fd_close&quot; =&gt; wasmer::Function::new_typed(&amp;mut store, |_fd: i32| -&gt; i32 { 0 }),
+            &quot;clock_time_get&quot; =&gt; wasmer::Function::new_typed(&amp;mut store, |_: i32, _: i64, _: i32| -&gt; i32 { 0 }),
+            // Add other WASI stubs as needed
+        },
+    };
+
+    // Instantiate
+    let instance = Instance::new(&amp;mut store, &amp;module, &amp;import_object)?;
+
+    // Get exports
+    let memory = instance.exports.get_memory(&quot;memory&quot;)?;
+    let malloc = instance.exports.get_function(&quot;malloc&quot;)?;
+    let free = instance.exports.get_function(&quot;free&quot;)?;
+    let encrypt = instance.exports.get_function(&quot;wasi_encrypt_bytes&quot;)?;
+    let decrypt = instance.exports.get_function(&quot;wasi_decrypt_bytes&quot;)?;
+
+    // Encrypt data
+    let key: [u8; 32] = rand::random();
+    let iv: [u8; 16] = rand::random();
+    let plaintext = b&quot;Hello, FlatBuffers!&quot;;
+
+    // Allocate WASM memory
+    let key_ptr = malloc.call(&amp;mut store, &amp;[Value::I32(32)])?[0].unwrap_i32() as u32;
+    let iv_ptr = malloc.call(&amp;mut store, &amp;[Value::I32(16)])?[0].unwrap_i32() as u32;
+    let data_ptr = malloc.call(&amp;mut store, &amp;[Value::I32(plaintext.len() as i32)])?[0].unwrap_i32() as u32;
+
+    // Write to WASM memory
+    let mem_view = memory.view(&amp;store);
+    mem_view.write(key_ptr as u64, &amp;key)?;
+    mem_view.write(iv_ptr as u64, &amp;iv)?;
+    mem_view.write(data_ptr as u64, plaintext)?;
+
+    // Encrypt
+    encrypt.call(&amp;mut store, &amp;[
+        Value::I32(key_ptr as i32),
+        Value::I32(iv_ptr as i32),
+        Value::I32(data_ptr as i32),
+        Value::I32(plaintext.len() as i32),
+    ])?;
+
+    // Read encrypted data
+    let mut ciphertext = vec![0u8; plaintext.len()];
+    mem_view.read(data_ptr as u64, &amp;mut ciphertext)?;
+    println!(&quot;Encrypted: {:?}&quot;, hex::encode(&amp;ciphertext));
+
+    // Clean up
+    free.call(&amp;mut store, &amp;[Value::I32(key_ptr as i32)])?;
+    free.call(&amp;mut store, &amp;[Value::I32(iv_ptr as i32)])?;
+    free.call(&amp;mut store, &amp;[Value::I32(data_ptr as i32)])?;
+
+    Ok(())
+}
+</code></pre>
+<h2>Complete Module Wrapper</h2>
+<pre><code class="language-rust">//! FlatBuffers Encryption Module for Rust
+//!
+//! Provides cryptographic operations via the Crypto++ WASM module.
+
+use wasmer::{imports, Instance, Module, Store, Value, Memory, Function, FunctionEnv, FunctionEnvMut};
+use std::sync::Arc;
+use thiserror::Error;
+
+/// Key and signature sizes
+pub const AES_KEY_SIZE: usize = 32;
+pub const AES_IV_SIZE: usize = 16;
+pub const SHA256_SIZE: usize = 32;
+
+pub const X25519_PRIVATE_KEY_SIZE: usize = 32;
+pub const X25519_PUBLIC_KEY_SIZE: usize = 32;
+
+pub const SECP256K1_PRIVATE_KEY_SIZE: usize = 32;
+pub const SECP256K1_PUBLIC_KEY_SIZE: usize = 33;
+pub const SECP256K1_SIGNATURE_MAX_SIZE: usize = 72;
+
+pub const ED25519_PRIVATE_KEY_SIZE: usize = 64;
+pub const ED25519_PUBLIC_KEY_SIZE: usize = 32;
+pub const ED25519_SIGNATURE_SIZE: usize = 64;
+
+#[derive(Error, Debug)]
+pub enum EncryptionError {
+    #[error(&quot;WASM error: {0}&quot;)]
+    Wasm(#[from] wasmer::RuntimeError),
+    #[error(&quot;Export error: {0}&quot;)]
+    Export(#[from] wasmer::ExportError),
+    #[error(&quot;Memory error: {0}&quot;)]
+    Memory(#[from] wasmer::MemoryAccessError),
+    #[error(&quot;Invalid key size: expected {expected}, got {actual}&quot;)]
+    InvalidKeySize { expected: usize, actual: usize },
+    #[error(&quot;Operation failed&quot;)]
+    OperationFailed,
+    #[error(&quot;IO error: {0}&quot;)]
+    Io(#[from] std::io::Error),
+}
+
+pub type Result&lt;T&gt; = std::result::Result&lt;T, EncryptionError&gt;;
+
+/// X25519 key pair
+#[derive(Clone)]
+pub struct X25519KeyPair {
+    pub private_key: [u8; X25519_PRIVATE_KEY_SIZE],
+    pub public_key: [u8; X25519_PUBLIC_KEY_SIZE],
+}
+
+/// Ed25519 key pair
+#[derive(Clone)]
+pub struct Ed25519KeyPair {
+    pub private_key: [u8; ED25519_PRIVATE_KEY_SIZE],
+    pub public_key: [u8; ED25519_PUBLIC_KEY_SIZE],
+}
+
+/// secp256k1 key pair
+#[derive(Clone)]
+pub struct Secp256k1KeyPair {
+    pub private_key: [u8; SECP256K1_PRIVATE_KEY_SIZE],
+    pub public_key: [u8; SECP256K1_PUBLIC_KEY_SIZE],
+}
+
+/// Encryption module wrapper
+pub struct EncryptionModule {
+    store: Store,
+    instance: Instance,
+}
+
+impl EncryptionModule {
+    /// Create a new encryption module from WASM bytes
+    pub fn new(wasm_bytes: &amp;[u8]) -&gt; Result&lt;Self&gt; {
+        let mut store = Store::default();
+        let module = Module::new(&amp;store, wasm_bytes)?;
+
+        // Create WASI stubs
+        let import_object = imports! {
+            &quot;wasi_snapshot_preview1&quot; =&gt; {
+                &quot;fd_close&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32| -&gt; i32 { 0 }),
+                &quot;fd_seek&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32, _: i64, _: i32, _: i32| -&gt; i32 { 0 }),
+                &quot;fd_write&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32, _: i32, _: i32, _: i32| -&gt; i32 { 0 }),
+                &quot;fd_read&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32, _: i32, _: i32, _: i32| -&gt; i32 { 0 }),
+                &quot;environ_sizes_get&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32, _: i32| -&gt; i32 { 0 }),
+                &quot;environ_get&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32, _: i32| -&gt; i32 { 0 }),
+                &quot;clock_time_get&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32, _: i64, _: i32| -&gt; i32 { 0 }),
+                &quot;proc_exit&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32| {}),
+                &quot;random_get&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32, _: i32| -&gt; i32 { 0 }),
+            },
+            &quot;env&quot; =&gt; {
+                &quot;invoke_v&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32| {}),
+                &quot;invoke_vi&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32, _: i32| {}),
+                &quot;invoke_vii&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32, _: i32, _: i32| {}),
+                &quot;invoke_viii&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32, _: i32, _: i32, _: i32| {}),
+                &quot;invoke_i&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32| -&gt; i32 { 0 }),
+                &quot;invoke_ii&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32, _: i32| -&gt; i32 { 0 }),
+                &quot;invoke_iii&quot; =&gt; Function::new_typed(&amp;mut store, |_: i32, _: i32, _: i32| -&gt; i32 { 0 }),
+            },
+        };
+
+        let instance = Instance::new(&amp;mut store, &amp;module, &amp;import_object)?;
+
+        Ok(Self { store, instance })
+    }
+
+    /// Load from file
+    pub fn from_file(path: &amp;str) -&gt; Result&lt;Self&gt; {
+        let wasm_bytes = std::fs::read(path)?;
+        Self::new(&amp;wasm_bytes)
+    }
+
+    fn memory(&amp;self) -&gt; Result&lt;&amp;Memory&gt; {
+        Ok(self.instance.exports.get_memory(&quot;memory&quot;)?)
+    }
+
+    fn malloc(&amp;mut self, size: usize) -&gt; Result&lt;u32&gt; {
+        let malloc = self.instance.exports.get_function(&quot;malloc&quot;)?;
+        let result = malloc.call(&amp;mut self.store, &amp;[Value::I32(size as i32)])?;
+        Ok(result[0].unwrap_i32() as u32)
+    }
+
+    fn free(&amp;mut self, ptr: u32) -&gt; Result&lt;()&gt; {
+        let free = self.instance.exports.get_function(&quot;free&quot;)?;
+        free.call(&amp;mut self.store, &amp;[Value::I32(ptr as i32)])?;
+        Ok(())
+    }
+
+    fn write_bytes(&amp;self, ptr: u32, data: &amp;[u8]) -&gt; Result&lt;()&gt; {
+        let memory = self.memory()?;
+        let view = memory.view(&amp;self.store);
+        view.write(ptr as u64, data)?;
+        Ok(())
+    }
+
+    fn read_bytes(&amp;self, ptr: u32, len: usize) -&gt; Result&lt;Vec&lt;u8&gt;&gt; {
+        let memory = self.memory()?;
+        let view = memory.view(&amp;self.store);
+        let mut buf = vec![0u8; len];
+        view.read(ptr as u64, &amp;mut buf)?;
+        Ok(buf)
+    }
+
+    /// Encrypt data using AES-256-CTR
+    pub fn encrypt(&amp;mut self, key: &amp;[u8], iv: &amp;[u8], data: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;&gt; {
+        if key.len() != AES_KEY_SIZE {
+            return Err(EncryptionError::InvalidKeySize {
+                expected: AES_KEY_SIZE,
+                actual: key.len(),
+            });
+        }
+        if iv.len() != AES_IV_SIZE {
+            return Err(EncryptionError::InvalidKeySize {
+                expected: AES_IV_SIZE,
+                actual: iv.len(),
+            });
+        }
+
+        let key_ptr = self.malloc(key.len())?;
+        let iv_ptr = self.malloc(iv.len())?;
+        let data_ptr = self.malloc(data.len())?;
+
+        self.write_bytes(key_ptr, key)?;
+        self.write_bytes(iv_ptr, iv)?;
+        self.write_bytes(data_ptr, data)?;
+
+        let encrypt = self.instance.exports.get_function(&quot;wasi_encrypt_bytes&quot;)?;
+        let result = encrypt.call(&amp;mut self.store, &amp;[
+            Value::I32(key_ptr as i32),
+            Value::I32(iv_ptr as i32),
+            Value::I32(data_ptr as i32),
+            Value::I32(data.len() as i32),
+        ])?;
+
+        if result[0].unwrap_i32() != 0 {
+            self.free(key_ptr)?;
+            self.free(iv_ptr)?;
+            self.free(data_ptr)?;
+            return Err(EncryptionError::OperationFailed);
+        }
+
+        let encrypted = self.read_bytes(data_ptr, data.len())?;
+
+        self.free(key_ptr)?;
+        self.free(iv_ptr)?;
+        self.free(data_ptr)?;
+
+        Ok(encrypted)
+    }
+
+    /// Decrypt data using AES-256-CTR
+    pub fn decrypt(&amp;mut self, key: &amp;[u8], iv: &amp;[u8], data: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;&gt; {
+        // CTR mode is symmetric
+        self.encrypt(key, iv, data)
+    }
+
+    /// Compute SHA-256 hash
+    pub fn sha256(&amp;mut self, data: &amp;[u8]) -&gt; Result&lt;[u8; SHA256_SIZE]&gt; {
+        let data_ptr = self.malloc(data.len())?;
+        let out_ptr = self.malloc(SHA256_SIZE)?;
+
+        self.write_bytes(data_ptr, data)?;
+
+        let sha256 = self.instance.exports.get_function(&quot;wasi_sha256&quot;)?;
+        sha256.call(&amp;mut self.store, &amp;[
+            Value::I32(data_ptr as i32),
+            Value::I32(data.len() as i32),
+            Value::I32(out_ptr as i32),
+        ])?;
+
+        let hash = self.read_bytes(out_ptr, SHA256_SIZE)?;
+
+        self.free(data_ptr)?;
+        self.free(out_ptr)?;
+
+        let mut result = [0u8; SHA256_SIZE];
+        result.copy_from_slice(&amp;hash);
+        Ok(result)
+    }
+
+    /// Derive key using HKDF-SHA256
+    pub fn hkdf(&amp;mut self, ikm: &amp;[u8], salt: Option&lt;&amp;[u8]&gt;, info: &amp;[u8], length: usize) -&gt; Result&lt;Vec&lt;u8&gt;&gt; {
+        let ikm_ptr = self.malloc(ikm.len())?;
+        self.write_bytes(ikm_ptr, ikm)?;
+
+        let (salt_ptr, salt_len) = if let Some(s) = salt {
+            let ptr = self.malloc(s.len())?;
+            self.write_bytes(ptr, s)?;
+            (ptr, s.len())
+        } else {
+            (0, 0)
+        };
+
+        let info_ptr = self.malloc(info.len())?;
+        self.write_bytes(info_ptr, info)?;
+
+        let out_ptr = self.malloc(length)?;
+
+        let hkdf = self.instance.exports.get_function(&quot;wasi_hkdf&quot;)?;
+        hkdf.call(&amp;mut self.store, &amp;[
+            Value::I32(ikm_ptr as i32),
+            Value::I32(ikm.len() as i32),
+            Value::I32(salt_ptr as i32),
+            Value::I32(salt_len as i32),
+            Value::I32(info_ptr as i32),
+            Value::I32(info.len() as i32),
+            Value::I32(out_ptr as i32),
+            Value::I32(length as i32),
+        ])?;
+
+        let result = self.read_bytes(out_ptr, length)?;
+
+        self.free(ikm_ptr)?;
+        if salt_ptr != 0 {
+            self.free(salt_ptr)?;
+        }
+        self.free(info_ptr)?;
+        self.free(out_ptr)?;
+
+        Ok(result)
+    }
+
+    /// Generate X25519 key pair
+    pub fn x25519_generate_keypair(&amp;mut self) -&gt; Result&lt;X25519KeyPair&gt; {
+        let priv_ptr = self.malloc(X25519_PRIVATE_KEY_SIZE)?;
+        let pub_ptr = self.malloc(X25519_PUBLIC_KEY_SIZE)?;
+
+        let generate = self.instance.exports.get_function(&quot;wasi_x25519_generate_keypair&quot;)?;
+        let result = generate.call(&amp;mut self.store, &amp;[
+            Value::I32(priv_ptr as i32),
+            Value::I32(pub_ptr as i32),
+        ])?;
+
+        if result[0].unwrap_i32() != 0 {
+            self.free(priv_ptr)?;
+            self.free(pub_ptr)?;
+            return Err(EncryptionError::OperationFailed);
+        }
+
+        let priv_bytes = self.read_bytes(priv_ptr, X25519_PRIVATE_KEY_SIZE)?;
+        let pub_bytes = self.read_bytes(pub_ptr, X25519_PUBLIC_KEY_SIZE)?;
+
+        self.free(priv_ptr)?;
+        self.free(pub_ptr)?;
+
+        let mut private_key = [0u8; X25519_PRIVATE_KEY_SIZE];
+        let mut public_key = [0u8; X25519_PUBLIC_KEY_SIZE];
+        private_key.copy_from_slice(&amp;priv_bytes);
+        public_key.copy_from_slice(&amp;pub_bytes);
+
+        Ok(X25519KeyPair { private_key, public_key })
+    }
+
+    /// Compute X25519 shared secret
+    pub fn x25519_shared_secret(&amp;mut self, private_key: &amp;[u8], public_key: &amp;[u8]) -&gt; Result&lt;[u8; 32]&gt; {
+        let priv_ptr = self.malloc(private_key.len())?;
+        let pub_ptr = self.malloc(public_key.len())?;
+        let out_ptr = self.malloc(32)?;
+
+        self.write_bytes(priv_ptr, private_key)?;
+        self.write_bytes(pub_ptr, public_key)?;
+
+        let shared = self.instance.exports.get_function(&quot;wasi_x25519_shared_secret&quot;)?;
+        let result = shared.call(&amp;mut self.store, &amp;[
+            Value::I32(priv_ptr as i32),
+            Value::I32(pub_ptr as i32),
+            Value::I32(out_ptr as i32),
+        ])?;
+
+        if result[0].unwrap_i32() != 0 {
+            self.free(priv_ptr)?;
+            self.free(pub_ptr)?;
+            self.free(out_ptr)?;
+            return Err(EncryptionError::OperationFailed);
+        }
+
+        let secret_bytes = self.read_bytes(out_ptr, 32)?;
+
+        self.free(priv_ptr)?;
+        self.free(pub_ptr)?;
+        self.free(out_ptr)?;
+
+        let mut secret = [0u8; 32];
+        secret.copy_from_slice(&amp;secret_bytes);
+        Ok(secret)
+    }
+
+    /// Generate Ed25519 key pair
+    pub fn ed25519_generate_keypair(&amp;mut self) -&gt; Result&lt;Ed25519KeyPair&gt; {
+        let priv_ptr = self.malloc(ED25519_PRIVATE_KEY_SIZE)?;
+        let pub_ptr = self.malloc(ED25519_PUBLIC_KEY_SIZE)?;
+
+        let generate = self.instance.exports.get_function(&quot;wasi_ed25519_generate_keypair&quot;)?;
+        let result = generate.call(&amp;mut self.store, &amp;[
+            Value::I32(priv_ptr as i32),
+            Value::I32(pub_ptr as i32),
+        ])?;
+
+        if result[0].unwrap_i32() != 0 {
+            self.free(priv_ptr)?;
+            self.free(pub_ptr)?;
+            return Err(EncryptionError::OperationFailed);
+        }
+
+        let priv_bytes = self.read_bytes(priv_ptr, ED25519_PRIVATE_KEY_SIZE)?;
+        let pub_bytes = self.read_bytes(pub_ptr, ED25519_PUBLIC_KEY_SIZE)?;
+
+        self.free(priv_ptr)?;
+        self.free(pub_ptr)?;
+
+        let mut private_key = [0u8; ED25519_PRIVATE_KEY_SIZE];
+        let mut public_key = [0u8; ED25519_PUBLIC_KEY_SIZE];
+        private_key.copy_from_slice(&amp;priv_bytes);
+        public_key.copy_from_slice(&amp;pub_bytes);
+
+        Ok(Ed25519KeyPair { private_key, public_key })
+    }
+
+    /// Sign with Ed25519
+    pub fn ed25519_sign(&amp;mut self, private_key: &amp;[u8], message: &amp;[u8]) -&gt; Result&lt;[u8; ED25519_SIGNATURE_SIZE]&gt; {
+        let priv_ptr = self.malloc(private_key.len())?;
+        let msg_ptr = self.malloc(message.len())?;
+        let sig_ptr = self.malloc(ED25519_SIGNATURE_SIZE)?;
+
+        self.write_bytes(priv_ptr, private_key)?;
+        self.write_bytes(msg_ptr, message)?;
+
+        let sign = self.instance.exports.get_function(&quot;wasi_ed25519_sign&quot;)?;
+        let result = sign.call(&amp;mut self.store, &amp;[
+            Value::I32(priv_ptr as i32),
+            Value::I32(msg_ptr as i32),
+            Value::I32(message.len() as i32),
+            Value::I32(sig_ptr as i32),
+        ])?;
+
+        if result[0].unwrap_i32() != 0 {
+            self.free(priv_ptr)?;
+            self.free(msg_ptr)?;
+            self.free(sig_ptr)?;
+            return Err(EncryptionError::OperationFailed);
+        }
+
+        let sig_bytes = self.read_bytes(sig_ptr, ED25519_SIGNATURE_SIZE)?;
+
+        self.free(priv_ptr)?;
+        self.free(msg_ptr)?;
+        self.free(sig_ptr)?;
+
+        let mut signature = [0u8; ED25519_SIGNATURE_SIZE];
+        signature.copy_from_slice(&amp;sig_bytes);
+        Ok(signature)
+    }
+
+    /// Verify Ed25519 signature
+    pub fn ed25519_verify(&amp;mut self, public_key: &amp;[u8], message: &amp;[u8], signature: &amp;[u8]) -&gt; Result&lt;bool&gt; {
+        let pub_ptr = self.malloc(public_key.len())?;
+        let msg_ptr = self.malloc(message.len())?;
+        let sig_ptr = self.malloc(signature.len())?;
+
+        self.write_bytes(pub_ptr, public_key)?;
+        self.write_bytes(msg_ptr, message)?;
+        self.write_bytes(sig_ptr, signature)?;
+
+        let verify = self.instance.exports.get_function(&quot;wasi_ed25519_verify&quot;)?;
+        let result = verify.call(&amp;mut self.store, &amp;[
+            Value::I32(pub_ptr as i32),
+            Value::I32(msg_ptr as i32),
+            Value::I32(message.len() as i32),
+            Value::I32(sig_ptr as i32),
+        ])?;
+
+        self.free(pub_ptr)?;
+        self.free(msg_ptr)?;
+        self.free(sig_ptr)?;
+
+        Ok(result[0].unwrap_i32() == 0)
+    }
+}
+</code></pre>
+<h2>Template Project Structure</h2>
+<pre><code>myproject/
+├── Cargo.toml
+├── src/
+│   ├── main.rs
+│   └── encryption.rs
+├── wasm/
+│   └── flatc-encryption.wasm
+└── tests/
+    └── integration_tests.rs
+</code></pre>
+<p><strong>Cargo.toml:</strong></p>
+<pre><code class="language-toml">[package]
+name = &quot;myproject&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2021&quot;
+
+[dependencies]
+wasmer = &quot;4.2&quot;
+thiserror = &quot;1.0&quot;
+rand = &quot;0.8&quot;
+hex = &quot;0.4&quot;
+</code></pre>
+<h2>Usage Examples</h2>
+<h3>Basic Encryption</h3>
+<pre><code class="language-rust">use crate::encryption::EncryptionModule;
+
+fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let mut module = EncryptionModule::from_file(&quot;flatc-encryption.wasm&quot;)?;
+
+    let key: [u8; 32] = rand::random();
+    let iv: [u8; 16] = rand::random();
+    let plaintext = b&quot;Secret message&quot;;
+
+    let ciphertext = module.encrypt(&amp;key, &amp;iv, plaintext)?;
+    let decrypted = module.decrypt(&amp;key, &amp;iv, &amp;ciphertext)?;
+
+    assert_eq!(plaintext.to_vec(), decrypted);
+    Ok(())
+}
+</code></pre>
+<h3>End-to-End Encryption</h3>
+<pre><code class="language-rust">use crate::encryption::EncryptionModule;
+
+fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let mut module = EncryptionModule::from_file(&quot;flatc-encryption.wasm&quot;)?;
+
+    // Generate key pairs
+    let alice = module.x25519_generate_keypair()?;
+    let bob = module.x25519_generate_keypair()?;
+
+    // Compute shared secret
+    let alice_shared = module.x25519_shared_secret(&amp;alice.private_key, &amp;bob.public_key)?;
+    let bob_shared = module.x25519_shared_secret(&amp;bob.private_key, &amp;alice.public_key)?;
+
+    assert_eq!(alice_shared, bob_shared);
+
+    // Derive encryption key
+    let key = module.hkdf(&amp;alice_shared, None, b&quot;encryption-v1&quot;, 32)?;
+
+    // Encrypt
+    let iv: [u8; 16] = rand::random();
+    let message = b&quot;Hello Bob!&quot;;
+    let ciphertext = module.encrypt(&amp;key, &amp;iv, message)?;
+
+    // Decrypt
+    let decrypted = module.decrypt(&amp;key, &amp;iv, &amp;ciphertext)?;
+    println!(&quot;Decrypted: {}&quot;, String::from_utf8_lossy(&amp;decrypted));
+
+    Ok(())
+}
+</code></pre>
+<h2>Performance Tips</h2>
+<ol>
+<li><strong>Reuse module instances</strong> - Module compilation is expensive</li>
+<li><strong>Use TypedFunction</strong> - For hot paths, use typed function calls</li>
+<li><strong>Batch allocations</strong> - Minimize malloc/free calls</li>
+</ol>
+<pre><code class="language-rust">// Good: Reuse instance
+let mut module = EncryptionModule::from_file(&quot;wasm&quot;)?;
+for item in items {
+    module.encrypt(&amp;key, &amp;iv, item)?;
+}
+
+// Bad: Create new instance each time
+for item in items {
+    let mut module = EncryptionModule::from_file(&quot;wasm&quot;)?; // Slow!
+    module.encrypt(&amp;key, &amp;iv, item)?;
+}
+</code></pre>
+<h2>Troubleshooting</h2>
+<h3>&quot;Import not found&quot;</h3>
+<p>Ensure all WASI and env imports are provided. See the complete wrapper above.</p>
+<h3>&quot;Memory access out of bounds&quot;</h3>
+<p>Check pointer validity:</p>
+<pre><code class="language-rust">let ptr = self.malloc(size)?;
+if ptr == 0 {
+    return Err(EncryptionError::OperationFailed);
+}
+</code></pre>
+<h2>See Also</h2>
+<ul>
+<li><a href="https://docs.wasmer.io/">wasmer Documentation</a></li>
+<li><a href="README.md#api-reference">API Reference</a></li>
+<li><a href="README.md#security-considerations">Security Considerations</a></li>
+</ul>
+</article>
+  </div>
+</body>
+</html>

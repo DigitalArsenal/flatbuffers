@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Browser - DA FlatBuffers</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a24;
+      --accent-primary: #6366f1;
+      --accent-secondary: #818cf8;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --border-color: rgba(99, 102, 241, 0.2);
+      --glow-color: rgba(99, 102, 241, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(59, 130, 246, 0.04) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Grid pattern overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .page-container {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      margin-bottom: 30px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--accent-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .back-link:hover {
+      background: var(--bg-tertiary);
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 20px var(--glow-color);
+      transform: translateY(-1px);
+    }
+
+    .markdown-body {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 48px;
+      box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.3),
+        0 0 40px var(--glow-color);
+    }
+
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3,
+    .markdown-body h4 {
+      color: var(--text-primary);
+      border-bottom-color: var(--border-color);
+      font-weight: 600;
+    }
+
+    .markdown-body h1 {
+      background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-size: 2.2em;
+      margin-bottom: 24px;
+    }
+
+    .markdown-body a {
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body a:hover {
+      color: var(--accent-primary);
+    }
+
+    .markdown-body code {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9em;
+    }
+
+    .markdown-body pre {
+      background: var(--bg-primary) !important;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+    }
+
+    .markdown-body pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-size: 0.85em;
+      line-height: 1.6;
+    }
+
+    .markdown-body table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 20px 0;
+    }
+
+    .markdown-body table th,
+    .markdown-body table td {
+      border: 1px solid var(--border-color);
+      padding: 12px 16px;
+      text-align: left;
+    }
+
+    .markdown-body table th {
+      background: var(--bg-tertiary);
+      font-weight: 600;
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body table tr:nth-child(even) {
+      background: rgba(99, 102, 241, 0.03);
+    }
+
+    .markdown-body blockquote {
+      border-left: 4px solid var(--accent-primary);
+      background: var(--bg-tertiary);
+      padding: 16px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .markdown-body hr {
+      border: none;
+      height: 1px;
+      background: var(--border-color);
+      margin: 32px 0;
+    }
+
+    .markdown-body ul, .markdown-body ol {
+      padding-left: 24px;
+    }
+
+    .markdown-body li {
+      margin: 8px 0;
+    }
+
+    @media (max-width: 768px) {
+      .page-container {
+        padding: 20px 16px;
+      }
+      .markdown-body {
+        padding: 24px;
+        border-radius: 12px;
+      }
+      .markdown-body h1 {
+        font-size: 1.8em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <a href="https://digitalarsenal.github.io/flatbuffers/" class="back-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Back to DA FlatBuffers
+    </a>
+    <article class="markdown-body"><h1>Browser Integration Guide</h1>
+<p>Run the FlatBuffers encryption module directly in web browsers using the native WebAssembly API.</p>
+<h2>Browser Support</h2>
+<p>All modern browsers support WebAssembly:</p>
+<table>
+<thead>
+<tr>
+<th>Browser</th>
+<th>Version</th>
+<th>Engine</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Chrome</td>
+<td>57+</td>
+<td>V8</td>
+</tr>
+<tr>
+<td>Firefox</td>
+<td>52+</td>
+<td>SpiderMonkey</td>
+</tr>
+<tr>
+<td>Safari</td>
+<td>11+</td>
+<td>JavaScriptCore</td>
+</tr>
+<tr>
+<td>Edge</td>
+<td>79+</td>
+<td>V8</td>
+</tr>
+</tbody></table>
+<h2>Installation</h2>
+<h3>Option 1: npm + Bundler (Recommended)</h3>
+<pre><code class="language-bash">npm install flatc-wasm
+</code></pre>
+<p>Works with Vite, Webpack, Rollup, Parcel, and other bundlers.</p>
+<h3>Option 2: CDN</h3>
+<pre><code class="language-html">&lt;script type=&quot;module&quot;&gt;
+  import { initEncryption, encryptBytes } from &#39;https://esm.sh/flatc-wasm/encryption&#39;;
+&lt;/script&gt;
+</code></pre>
+<h3>Option 3: Direct WASM Loading</h3>
+<pre><code class="language-html">&lt;script type=&quot;module&quot;&gt;
+  const wasmResponse = await fetch(&#39;/flatc-encryption.wasm&#39;);
+  const wasmBytes = await wasmResponse.arrayBuffer();
+  const { instance } = await WebAssembly.instantiate(wasmBytes, imports);
+&lt;/script&gt;
+</code></pre>
+<h2>Quick Start</h2>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;FlatBuffers Encryption Demo&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;script type=&quot;module&quot;&gt;
+    import {
+      initEncryption,
+      encryptBytes,
+      decryptBytes,
+      x25519GenerateKeyPair,
+      x25519SharedSecret,
+      hkdf,
+      KEY_SIZE,
+      IV_SIZE
+    } from &#39;https://esm.sh/flatc-wasm/encryption&#39;;
+
+    // Initialize the WASM module
+    await initEncryption();
+
+    // Generate key pair
+    const keypair = x25519GenerateKeyPair();
+    console.log(&#39;Public key:&#39;, toHex(keypair.publicKey));
+
+    // Encrypt some data
+    const key = crypto.getRandomValues(new Uint8Array(KEY_SIZE));
+    const iv = crypto.getRandomValues(new Uint8Array(IV_SIZE));
+    const plaintext = new TextEncoder().encode(&#39;Hello from the browser!&#39;);
+
+    const data = new Uint8Array(plaintext);
+    encryptBytes(data, key, iv);
+    console.log(&#39;Encrypted:&#39;, toHex(data));
+
+    // Decrypt
+    decryptBytes(data, key, iv);
+    console.log(&#39;Decrypted:&#39;, new TextDecoder().decode(data));
+
+    function toHex(bytes) {
+      return Array.from(bytes).map(b =&gt; b.toString(16).padStart(2, &#39;0&#39;)).join(&#39;&#39;);
+    }
+  &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<h2>Vite Configuration</h2>
+<p>For Vite projects, the WASM file is handled automatically:</p>
+<pre><code class="language-javascript">// vite.config.js
+export default {
+  optimizeDeps: {
+    exclude: [&#39;flatc-wasm&#39;]
+  }
+};
+</code></pre>
+<pre><code class="language-javascript">// main.js
+import { initEncryption, encryptBytes } from &#39;flatc-wasm/encryption&#39;;
+
+await initEncryption();
+// Use encryption functions...
+</code></pre>
+<h2>Webpack Configuration</h2>
+<pre><code class="language-javascript">// webpack.config.js
+module.exports = {
+  experiments: {
+    asyncWebAssembly: true
+  }
+};
+</code></pre>
+<h2>API Reference</h2>
+<p>The browser API is identical to Node.js:</p>
+<h3>Initialization</h3>
+<pre><code class="language-javascript">import { initEncryption } from &#39;flatc-wasm/encryption&#39;;
+
+// Must call before using any other functions
+await initEncryption();
+</code></pre>
+<h3>Symmetric Encryption</h3>
+<pre><code class="language-javascript">import { encryptBytes, decryptBytes, KEY_SIZE, IV_SIZE } from &#39;flatc-wasm/encryption&#39;;
+
+const key = crypto.getRandomValues(new Uint8Array(KEY_SIZE));  // 32 bytes
+const iv = crypto.getRandomValues(new Uint8Array(IV_SIZE));    // 16 bytes
+
+// Encrypt in-place
+const data = new Uint8Array([1, 2, 3, 4, 5]);
+encryptBytes(data, key, iv);
+
+// Decrypt in-place
+decryptBytes(data, key, iv);
+</code></pre>
+<h3>Key Exchange</h3>
+<pre><code class="language-javascript">import {
+  x25519GenerateKeyPair,
+  x25519SharedSecret,
+  hkdf
+} from &#39;flatc-wasm/encryption&#39;;
+
+// Generate key pair
+const alice = x25519GenerateKeyPair();
+const bob = x25519GenerateKeyPair();
+
+// Compute shared secret
+const sharedSecret = x25519SharedSecret(alice.privateKey, bob.publicKey);
+
+// Derive encryption key
+const encryptionKey = hkdf(
+  sharedSecret,
+  null,
+  new TextEncoder().encode(&#39;my-app-v1&#39;),
+  32
+);
+</code></pre>
+<h3>Digital Signatures</h3>
+<pre><code class="language-javascript">import {
+  ed25519GenerateKeyPair,
+  ed25519Sign,
+  ed25519Verify
+} from &#39;flatc-wasm/encryption&#39;;
+
+const keypair = ed25519GenerateKeyPair();
+const message = new TextEncoder().encode(&#39;Sign this&#39;);
+
+const signature = ed25519Sign(keypair.privateKey, message);
+const isValid = ed25519Verify(keypair.publicKey, message, signature);
+</code></pre>
+<h2>Complete Example: Secure Messaging App</h2>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;title&gt;Secure Messenger&lt;/title&gt;
+  &lt;style&gt;
+    body { font-family: system-ui; max-width: 600px; margin: 50px auto; }
+    textarea, input { width: 100%; margin: 10px 0; padding: 10px; }
+    button { padding: 10px 20px; cursor: pointer; }
+    .key { font-family: monospace; font-size: 12px; word-break: break-all; }
+  &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;h1&gt;Secure Messenger&lt;/h1&gt;
+
+  &lt;div id=&quot;setup&quot;&gt;
+    &lt;h2&gt;Your Keys&lt;/h2&gt;
+    &lt;p&gt;Public Key:&lt;/p&gt;
+    &lt;div class=&quot;key&quot; id=&quot;myPublicKey&quot;&gt;&lt;/div&gt;
+    &lt;p&gt;Share this with others so they can send you encrypted messages.&lt;/p&gt;
+  &lt;/div&gt;
+
+  &lt;div id=&quot;encrypt&quot;&gt;
+    &lt;h2&gt;Send Encrypted Message&lt;/h2&gt;
+    &lt;label&gt;Recipient&#39;s Public Key:&lt;/label&gt;
+    &lt;input type=&quot;text&quot; id=&quot;recipientKey&quot; placeholder=&quot;Paste recipient&#39;s public key&quot;&gt;
+
+    &lt;label&gt;Message:&lt;/label&gt;
+    &lt;textarea id=&quot;plaintext&quot; rows=&quot;4&quot; placeholder=&quot;Enter your message&quot;&gt;&lt;/textarea&gt;
+
+    &lt;button onclick=&quot;encryptMessage()&quot;&gt;Encrypt&lt;/button&gt;
+
+    &lt;label&gt;Encrypted Package (send this):&lt;/label&gt;
+    &lt;textarea id=&quot;encrypted&quot; rows=&quot;4&quot; readonly&gt;&lt;/textarea&gt;
+  &lt;/div&gt;
+
+  &lt;div id=&quot;decrypt&quot;&gt;
+    &lt;h2&gt;Receive Encrypted Message&lt;/h2&gt;
+    &lt;label&gt;Paste encrypted package:&lt;/label&gt;
+    &lt;textarea id=&quot;received&quot; rows=&quot;4&quot; placeholder=&quot;Paste encrypted message&quot;&gt;&lt;/textarea&gt;
+
+    &lt;button onclick=&quot;decryptMessage()&quot;&gt;Decrypt&lt;/button&gt;
+
+    &lt;label&gt;Decrypted Message:&lt;/label&gt;
+    &lt;textarea id=&quot;decrypted&quot; rows=&quot;4&quot; readonly&gt;&lt;/textarea&gt;
+  &lt;/div&gt;
+
+  &lt;script type=&quot;module&quot;&gt;
+    import {
+      initEncryption,
+      encryptBytes,
+      decryptBytes,
+      x25519GenerateKeyPair,
+      x25519SharedSecret,
+      hkdf,
+      KEY_SIZE,
+      IV_SIZE
+    } from &#39;https://esm.sh/flatc-wasm/encryption&#39;;
+
+    // Store keypair globally
+    let myKeypair;
+
+    // Initialize
+    async function init() {
+      await initEncryption();
+
+      // Generate our keypair
+      myKeypair = x25519GenerateKeyPair();
+      document.getElementById(&#39;myPublicKey&#39;).textContent = toHex(myKeypair.publicKey);
+
+      // Store private key in sessionStorage (demo only - use better storage in production!)
+      sessionStorage.setItem(&#39;privateKey&#39;, toHex(myKeypair.privateKey));
+    }
+
+    init();
+
+    // Make functions available to onclick handlers
+    window.encryptMessage = async function() {
+      const recipientKeyHex = document.getElementById(&#39;recipientKey&#39;).value.trim();
+      const plaintext = document.getElementById(&#39;plaintext&#39;).value;
+
+      if (!recipientKeyHex || !plaintext) {
+        alert(&#39;Please enter recipient key and message&#39;);
+        return;
+      }
+
+      try {
+        const recipientKey = fromHex(recipientKeyHex);
+
+        // Compute shared secret
+        const sharedSecret = x25519SharedSecret(myKeypair.privateKey, recipientKey);
+
+        // Derive encryption key
+        const encryptionKey = hkdf(
+          sharedSecret,
+          null,
+          new TextEncoder().encode(&#39;secure-messenger-v1&#39;),
+          KEY_SIZE
+        );
+
+        // Generate IV
+        const iv = crypto.getRandomValues(new Uint8Array(IV_SIZE));
+
+        // Encrypt
+        const data = new TextEncoder().encode(plaintext);
+        const buffer = new Uint8Array(data);
+        encryptBytes(buffer, encryptionKey, iv);
+
+        // Package: sender public key + IV + ciphertext
+        const package = {
+          sender: toHex(myKeypair.publicKey),
+          iv: toHex(iv),
+          ciphertext: toHex(buffer)
+        };
+
+        document.getElementById(&#39;encrypted&#39;).value = JSON.stringify(package);
+      } catch (e) {
+        alert(&#39;Encryption failed: &#39; + e.message);
+      }
+    };
+
+    window.decryptMessage = async function() {
+      const receivedJson = document.getElementById(&#39;received&#39;).value.trim();
+
+      if (!receivedJson) {
+        alert(&#39;Please paste encrypted message&#39;);
+        return;
+      }
+
+      try {
+        const package = JSON.parse(receivedJson);
+        const senderKey = fromHex(package.sender);
+        const iv = fromHex(package.iv);
+        const ciphertext = fromHex(package.ciphertext);
+
+        // Get our private key
+        const privateKeyHex = sessionStorage.getItem(&#39;privateKey&#39;);
+        const privateKey = fromHex(privateKeyHex);
+
+        // Compute shared secret
+        const sharedSecret = x25519SharedSecret(privateKey, senderKey);
+
+        // Derive decryption key
+        const decryptionKey = hkdf(
+          sharedSecret,
+          null,
+          new TextEncoder().encode(&#39;secure-messenger-v1&#39;),
+          KEY_SIZE
+        );
+
+        // Decrypt
+        const buffer = new Uint8Array(ciphertext);
+        decryptBytes(buffer, decryptionKey, iv);
+
+        const plaintext = new TextDecoder().decode(buffer);
+        document.getElementById(&#39;decrypted&#39;).value = plaintext;
+      } catch (e) {
+        alert(&#39;Decryption failed: &#39; + e.message);
+      }
+    };
+
+    function toHex(bytes) {
+      return Array.from(bytes).map(b =&gt; b.toString(16).padStart(2, &#39;0&#39;)).join(&#39;&#39;);
+    }
+
+    function fromHex(hex) {
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i &lt; bytes.length; i++) {
+        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+      }
+      return bytes;
+    }
+  &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<h2>Web Workers</h2>
+<p>For heavy encryption workloads, use Web Workers to avoid blocking the main thread:</p>
+<p><strong>worker.js:</strong></p>
+<pre><code class="language-javascript">import { initEncryption, encryptBytes } from &#39;flatc-wasm/encryption&#39;;
+
+let initialized = false;
+
+self.onmessage = async (e) =&gt; {
+  if (!initialized) {
+    await initEncryption();
+    initialized = true;
+  }
+
+  const { data, key, iv } = e.data;
+  const buffer = new Uint8Array(data);
+  encryptBytes(buffer, new Uint8Array(key), new Uint8Array(iv));
+
+  self.postMessage({ encrypted: buffer }, [buffer.buffer]);
+};
+</code></pre>
+<p><strong>main.js:</strong></p>
+<pre><code class="language-javascript">const worker = new Worker(&#39;worker.js&#39;, { type: &#39;module&#39; });
+
+worker.onmessage = (e) =&gt; {
+  console.log(&#39;Encrypted:&#39;, e.data.encrypted);
+};
+
+worker.postMessage({
+  data: plaintext,
+  key: key,
+  iv: iv
+}, [plaintext.buffer]);  // Transfer ownership for zero-copy
+</code></pre>
+<h2>Streaming Large Files</h2>
+<p>For large files, process in chunks to avoid memory issues:</p>
+<pre><code class="language-javascript">async function encryptFile(file, key) {
+  const CHUNK_SIZE = 64 * 1024;  // 64KB
+  const iv = crypto.getRandomValues(new Uint8Array(16));
+  const chunks = [];
+
+  chunks.push(iv);  // First chunk is the IV
+
+  const reader = file.stream().getReader();
+  let counter = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    // Create IV for this chunk (increment counter)
+    const chunkIv = new Uint8Array(iv);
+    const view = new DataView(chunkIv.buffer);
+    view.setBigUint64(8, BigInt(counter), false);
+
+    // Encrypt chunk
+    const encrypted = new Uint8Array(value);
+    encryptBytes(encrypted, key, chunkIv);
+    chunks.push(encrypted);
+
+    counter++;
+  }
+
+  return new Blob(chunks);
+}
+</code></pre>
+<h2>Security Considerations</h2>
+<h3>1. Use crypto.getRandomValues()</h3>
+<pre><code class="language-javascript">// Good: Cryptographically secure
+const key = crypto.getRandomValues(new Uint8Array(32));
+
+// Bad: Predictable!
+const badKey = new Uint8Array(32);
+for (let i = 0; i &lt; 32; i++) {
+  badKey[i] = Math.floor(Math.random() * 256);
+}
+</code></pre>
+<h3>2. Clear Sensitive Data</h3>
+<pre><code class="language-javascript">function clearKey(key) {
+  key.fill(0);
+}
+
+// Use key...
+encryptBytes(data, key, iv);
+
+// Then clear it
+clearKey(key);
+</code></pre>
+<h3>3. Use HTTPS</h3>
+<p>Always serve your app over HTTPS. WebAssembly may be restricted on HTTP.</p>
+<h3>4. Consider SubtleCrypto for Some Operations</h3>
+<p>For operations that don&#39;t require cross-language compatibility, consider using the native Web Crypto API:</p>
+<pre><code class="language-javascript">// Native Web Crypto (fast, but different format)
+const key = await crypto.subtle.generateKey(
+  { name: &#39;AES-GCM&#39;, length: 256 },
+  true,
+  [&#39;encrypt&#39;, &#39;decrypt&#39;]
+);
+
+// FlatBuffers WASM (cross-language compatible)
+const fbKey = x25519GenerateKeyPair();
+</code></pre>
+<h2>Performance Tips</h2>
+<h3>1. Initialize Once</h3>
+<pre><code class="language-javascript">// At app startup
+let encryptionReady = initEncryption();
+
+// In your encryption function
+async function encrypt(data, key, iv) {
+  await encryptionReady;  // Wait if not ready
+  // ...
+}
+</code></pre>
+<h3>2. Use Transferable Objects</h3>
+<pre><code class="language-javascript">// Transfer buffer ownership (zero-copy)
+worker.postMessage({ data: buffer }, [buffer.buffer]);
+</code></pre>
+<h3>3. Batch Operations</h3>
+<pre><code class="language-javascript">// Good: Single WASM call for batch
+const results = items.map(item =&gt; {
+  const buf = new Uint8Array(item);
+  encryptBytes(buf, key, iv);
+  return buf;
+});
+</code></pre>
+<h2>Troubleshooting</h2>
+<h3>&quot;CompileError: WebAssembly.instantiate&quot;</h3>
+<p>The WASM file may be corrupted or incompatible. Ensure you&#39;re using the correct version.</p>
+<h3>&quot;ReferenceError: crypto is not defined&quot;</h3>
+<p>Use <code>window.crypto</code> or ensure you&#39;re in a secure context (HTTPS).</p>
+<h3>&quot;Out of memory&quot;</h3>
+<p>Processing very large files? Use streaming or Web Workers.</p>
+<h3>CORS Errors</h3>
+<p>When loading WASM from a different origin, ensure CORS headers are set:</p>
+<pre><code>Access-Control-Allow-Origin: *
+Content-Type: application/wasm
+</code></pre>
+<h2>See Also</h2>
+<ul>
+<li><a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API">Web Crypto API</a></li>
+<li><a href="https://developer.mozilla.org/en-US/docs/WebAssembly">WebAssembly on MDN</a></li>
+<li><a href="nodejs.html">Node.js Integration</a> - Same API for server-side</li>
+<li><a href="README.md#api-reference">API Reference</a></li>
+</ul>
+</article>
+  </div>
+</body>
+</html>

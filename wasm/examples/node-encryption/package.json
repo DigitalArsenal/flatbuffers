@@ -1,0 +1,12 @@
+{
+  "name": "flatc-wasm-encryption-example",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Example: Using flatc-wasm encryption in Node.js",
+  "scripts": {
+    "test": "node test.mjs"
+  },
+  "dependencies": {
+    "flatc-wasm": "file:../.."
+  }
+}

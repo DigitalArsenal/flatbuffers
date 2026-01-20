@@ -1,0 +1,29 @@
+# Don't include test files in npm package
+test/
+*.test.js
+*.test.mjs
+*.spec.js
+
+# Don't include examples (adds significant size)
+examples/
+
+# Don't include schema source files
+schemas/
+
+# Don't include source maps
+*.map
+
+# Don't include TypeScript source (only declarations)
+*.ts
+!*.d.ts
+
+# Don't include build artifacts
+.cache/
+.parcel-cache/
+
+# Don't include development files
+.gitignore
+.eslintrc*
+.prettierrc*
+tsconfig.json
+jest.config.*

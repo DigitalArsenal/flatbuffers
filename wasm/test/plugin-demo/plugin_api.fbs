@@ -1,0 +1,20 @@
+// Plugin API Schema
+// Defines the aligned buffer format for plugin input/output
+
+namespace PluginAPI;
+
+// Input passed to plugin's process() function
+struct Input {
+  value: uint16;
+}
+
+// Output returned by plugin's process() function
+struct Output {
+  value: uint32;
+}
+
+// Plugin metadata (optional, for registration)
+struct PluginInfo {
+  version: uint16;
+  flags: uint16;
+}

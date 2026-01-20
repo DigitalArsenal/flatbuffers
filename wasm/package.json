@@ -1,0 +1,73 @@
+{
+  "name": "flatc-wasm",
+  "version": "26.1.13",
+  "description": "FlatBuffers compiler (flatc) as a WebAssembly module - schema management, JSON/binary conversion, and code generation",
+  "type": "module",
+  "main": "src/index.mjs",
+  "module": "src/index.mjs",
+  "types": "src/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.mjs",
+      "require": "./dist/flatc-wasm.cjs"
+    },
+    "./runner": {
+      "types": "./src/runner.d.ts",
+      "import": "./src/runner.mjs"
+    },
+    "./encryption": {
+      "types": "./src/encryption.d.ts",
+      "import": "./src/encryption.mjs"
+    },
+    "./module": {
+      "types": "./dist/flatc-wasm.d.ts",
+      "import": "./dist/flatc-wasm.js",
+      "require": "./dist/flatc-wasm.cjs"
+    }
+  },
+  "files": [
+    "src/index.mjs",
+    "src/index.d.ts",
+    "src/runner.mjs",
+    "src/runner.d.ts",
+    "src/encryption.mjs",
+    "src/encryption.d.ts",
+    "dist/flatc-wasm.js",
+    "dist/flatc-wasm.cjs",
+    "dist/flatc-wasm.d.ts",
+    "dist/flatc-encryption.wasm",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "cmake --build ../build/wasm --target flatc_wasm_npm -j",
+    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_encryption.mjs",
+    "test:encryption": "node test/test_encryption.mjs",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/google/flatbuffers.git",
+    "directory": "wasm"
+  },
+  "keywords": [
+    "flatbuffers",
+    "flatc",
+    "wasm",
+    "webassembly",
+    "serialization",
+    "schema",
+    "compiler",
+    "codegen"
+  ],
+  "author": "The FlatBuffers project",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/google/flatbuffers/issues"
+  },
+  "homepage": "https://flatbuffers.dev/",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

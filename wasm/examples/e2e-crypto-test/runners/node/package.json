@@ -1,0 +1,15 @@
+{
+  "name": "e2e-crypto-test-node",
+  "version": "1.0.0",
+  "description": "Node.js runner for cross-language FlatBuffers encryption tests",
+  "type": "module",
+  "scripts": {
+    "test": "node test_runner.mjs",
+    "test:unencrypted": "node test_runner.mjs --unencrypted",
+    "test:encrypted": "node test_runner.mjs --encrypted",
+    "generate-binary": "node generate_binary.mjs"
+  },
+  "dependencies": {
+    "flatc-wasm": "file:../../../../"
+  }
+}

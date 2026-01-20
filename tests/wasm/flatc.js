@@ -1,0 +1,1 @@
+../../build/wasm/wasm/flatc.js

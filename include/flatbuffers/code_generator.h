@@ -29,18 +29,31 @@ struct CodeGenOptions {
   FileSaver* file_saver{nullptr};
 };
 
-// A code generator interface for producing converting flatbuffer schema into
-// code.
-class CodeGenerator {
+  // A code generator interface for producing converting flatbuffer schema into
+  // code.
+  class CodeGenerator {
  public:
   virtual ~CodeGenerator() = default;
 
+#if defined(_WIN32)
+#  ifdef ERROR
+#    pragma push_macro("ERROR")
+#    define FLATBUFFERS_CODE_GENERATOR_PUSHED_ERROR
+#    undef ERROR
+#  endif
+#endif
   enum Status {
     OK = 0,
     ERROR = 1,
     FAILED_VERIFICATION = 2,
     NOT_IMPLEMENTED = 3
   };
+#if defined(_WIN32)
+#  ifdef FLATBUFFERS_CODE_GENERATOR_PUSHED_ERROR
+#    pragma pop_macro("ERROR")
+#    undef FLATBUFFERS_CODE_GENERATOR_PUSHED_ERROR
+#  endif
+#endif
 
   std::string status_detail;
 

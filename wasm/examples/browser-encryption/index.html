@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlatBuffers Encryption Demo</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .card h2 {
+      margin-top: 0;
+      color: #2563eb;
+    }
+    textarea, input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 14px;
+    }
+    textarea {
+      height: 150px;
+      resize: vertical;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin: 5px 5px 5px 0;
+    }
+    button:hover {
+      background: #1d4ed8;
+    }
+    button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    .output {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .success {
+      color: #22c55e;
+    }
+    .error {
+      color: #ef4444;
+    }
+    .info {
+      color: #3b82f6;
+    }
+    label {
+      display: block;
+      margin: 10px 0 5px;
+      font-weight: 500;
+    }
+    .hex-display {
+      font-family: monospace;
+      font-size: 12px;
+      word-break: break-all;
+    }
+    .row {
+      display: flex;
+      gap: 20px;
+    }
+    .col {
+      flex: 1;
+    }
+    #status {
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+    }
+    #status.loading {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    #status.ready {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    #status.error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔐 FlatBuffers Encryption Demo</h1>
+
+  <div id="status" class="loading">Loading flatc-wasm...</div>
+
+  <div class="card">
+    <h2>1. Schema</h2>
+    <p>Define your schema with <code>(encrypted)</code> attributes on sensitive fields:</p>
+    <textarea id="schema">table UserData {
+  user_id: uint64;
+  username: string;
+  password_hash: string (encrypted);
+  balance: double (encrypted);
+  notes: string;
+}
+root_type UserData;</textarea>
+  </div>
+
+  <div class="card">
+    <h2>2. JSON Data</h2>
+    <p>Enter the data to be serialized:</p>
+    <textarea id="json-input">{
+  "user_id": 12345,
+  "username": "alice",
+  "password_hash": "secret_hash_abc123",
+  "balance": 1000.50,
+  "notes": "This is a public note"
+}</textarea>
+  </div>
+
+  <div class="card">
+    <h2>3. Encryption Key</h2>
+    <p>256-bit key (64 hex characters):</p>
+    <input type="text" id="encryption-key" placeholder="Generate or enter a 64-character hex key">
+    <button onclick="generateKey()">🎲 Generate Random Key</button>
+  </div>
+
+  <div class="card">
+    <h2>4. Operations</h2>
+    <button onclick="createBuffer()" id="btn-create">Create FlatBuffer</button>
+    <button onclick="encryptBuffer()" id="btn-encrypt" disabled>Encrypt</button>
+    <button onclick="decryptBuffer()" id="btn-decrypt" disabled>Decrypt</button>
+    <button onclick="readBuffer()" id="btn-read" disabled>Read as JSON</button>
+    <button onclick="compareBuffers()" id="btn-compare" disabled>Compare Original vs Encrypted</button>
+  </div>
+
+  <div class="card">
+    <h2>5. Output</h2>
+    <div class="row">
+      <div class="col">
+        <label>Buffer (hex):</label>
+        <div id="buffer-hex" class="output hex-display">No buffer created yet</div>
+      </div>
+      <div class="col">
+        <label>Log:</label>
+        <div id="log" class="output"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>How It Works</h2>
+    <ul>
+      <li><strong>Create FlatBuffer</strong>: Converts JSON to binary FlatBuffer format</li>
+      <li><strong>Encrypt</strong>: Encrypts fields marked with <code>(encrypted)</code> in-place</li>
+      <li><strong>Decrypt</strong>: Restores encrypted fields (same operation as encrypt for AES-CTR)</li>
+      <li><strong>Read as JSON</strong>: Converts buffer back to JSON (will show garbage if encrypted)</li>
+      <li><strong>Compare</strong>: Shows which bytes changed after encryption</li>
+    </ul>
+    <p><strong>Key insight:</strong> The encrypted buffer maintains valid FlatBuffer structure. Only the field <em>values</em> are encrypted, not the schema/offsets.</p>
+  </div>
+
+  <!-- Import from CDN or local -->
+  <script type="module">
+    // Import the encryption module which includes all needed functions
+    import {
+      loadEncryptionWasm,
+      encryptBytes,
+      hkdf,
+      EncryptionContext,
+      encryptBuffer as encryptBufferLib,
+      decryptBuffer as decryptBufferLib,
+      parseSchemaForEncryption,
+      KEY_SIZE,
+      IV_SIZE
+    } from '../../src/encryption.mjs';
+
+    // Path to the encryption WASM module (built from Crypto++)
+    const ENCRYPTION_WASM_PATH = '../../dist/flatc-encryption.wasm';
+
+    // Wrapper for encrypting buffers that uses the library's implementation
+    function encryptBufferImpl(buffer, schema, key, rootType) {
+      const { buffer: encrypted } = encryptBufferLib(buffer, schema, key, rootType);
+      return encrypted;
+    }
+
+    // Global state
+    let flatc = null;
+    let currentBuffer = null;
+    let originalBuffer = null;
+    let encryptionNonce = null;  // Store nonce for decrypt
+
+    // UI helpers
+    const log = document.getElementById('log');
+    const bufferHex = document.getElementById('buffer-hex');
+    const status = document.getElementById('status');
+
+    function appendLog(msg, className = '') {
+      const line = document.createElement('div');
+      line.textContent = msg;
+      if (className) line.className = className;
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function clearLog() {
+      log.innerHTML = '';
+    }
+
+    function toHex(arr) {
+      return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join(' ');
+    }
+
+    function updateBufferDisplay() {
+      if (currentBuffer) {
+        bufferHex.textContent = toHex(currentBuffer);
+      }
+    }
+
+    // Operations
+    window.generateKey = function() {
+      const key = crypto.getRandomValues(new Uint8Array(32));
+      document.getElementById('encryption-key').value = Array.from(key).map(b => b.toString(16).padStart(2, '0')).join('');
+      appendLog('Generated new 256-bit key', 'success');
+    };
+
+    window.createBuffer = async function() {
+      clearLog();
+      appendLog('Creating FlatBuffer...', 'info');
+
+      try {
+        const schema = document.getElementById('schema').value;
+        const json = document.getElementById('json-input').value;
+
+        // Parse to validate JSON
+        JSON.parse(json);
+
+        // Extract root type from schema
+        const rootMatch = schema.match(/root_type\s+(\w+)/);
+        if (!rootMatch) throw new Error('No root_type found in schema');
+        const rootType = rootMatch[1];
+
+        const schemaInput = {
+          entry: '/schema.fbs',
+          files: { '/schema.fbs': schema }
+        };
+
+        currentBuffer = flatc.generateBinary(schemaInput, json);
+        originalBuffer = new Uint8Array(currentBuffer);
+
+        appendLog(`Created buffer: ${currentBuffer.length} bytes`, 'success');
+        updateBufferDisplay();
+
+        document.getElementById('btn-encrypt').disabled = false;
+        document.getElementById('btn-read').disabled = false;
+        document.getElementById('btn-compare').disabled = false;
+      } catch (e) {
+        appendLog(`Error: ${e.message}`, 'error');
+      }
+    };
+
+    window.encryptBuffer = function() {
+      appendLog('Encrypting buffer...', 'info');
+
+      try {
+        const keyHex = document.getElementById('encryption-key').value;
+        if (keyHex.length !== 64) throw new Error('Key must be 64 hex characters (256 bits)');
+
+        const schema = document.getElementById('schema').value;
+        const rootMatch = schema.match(/root_type\s+(\w+)/);
+        const rootType = rootMatch[1];
+
+        // Encrypt and save the nonce for later decryption
+        const { buffer, nonce } = encryptBufferLib(currentBuffer, schema, keyHex, rootType);
+        encryptionNonce = nonce;
+
+        appendLog('Buffer encrypted!', 'success');
+        appendLog(`Nonce (save for decrypt): ${Array.from(nonce).map(b => b.toString(16).padStart(2, '0')).join('')}`, 'info');
+        updateBufferDisplay();
+        document.getElementById('btn-decrypt').disabled = false;
+      } catch (e) {
+        appendLog(`Error: ${e.message}`, 'error');
+      }
+    };
+
+    window.decryptBuffer = function() {
+      appendLog('Decrypting buffer...', 'info');
+
+      try {
+        if (!encryptionNonce) {
+          throw new Error('No nonce available. Encrypt first or provide the nonce from encryption.');
+        }
+
+        const keyHex = document.getElementById('encryption-key').value;
+        const schema = document.getElementById('schema').value;
+        const rootMatch = schema.match(/root_type\s+(\w+)/);
+        const rootType = rootMatch[1];
+
+        // Decrypt using the saved nonce (CRITICAL: must use same nonce as encryption)
+        decryptBufferLib(currentBuffer, schema, keyHex, rootType, encryptionNonce);
+        appendLog('Buffer decrypted!', 'success');
+        updateBufferDisplay();
+      } catch (e) {
+        appendLog(`Error: ${e.message}`, 'error');
+      }
+    };
+
+    window.readBuffer = function() {
+      appendLog('Reading buffer as JSON...', 'info');
+
+      try {
+        const schema = document.getElementById('schema').value;
+        const schemaInput = {
+          entry: '/schema.fbs',
+          files: { '/schema.fbs': schema }
+        };
+
+        const json = flatc.generateJSON(schemaInput, { path: '/data.bin', data: currentBuffer });
+        appendLog('JSON output:', 'info');
+        appendLog(JSON.stringify(JSON.parse(json), null, 2));
+      } catch (e) {
+        appendLog(`Error reading buffer: ${e.message}`, 'error');
+        appendLog('(This may be expected if buffer is encrypted and strings contain invalid UTF-8)', 'info');
+      }
+    };
+
+    window.compareBuffers = function() {
+      if (!originalBuffer || !currentBuffer) return;
+
+      appendLog('Comparing original vs current buffer:', 'info');
+
+      let diffCount = 0;
+      for (let i = 0; i < originalBuffer.length; i++) {
+        if (originalBuffer[i] !== currentBuffer[i]) {
+          diffCount++;
+        }
+      }
+
+      if (diffCount === 0) {
+        appendLog('Buffers are identical', 'success');
+      } else {
+        appendLog(`${diffCount} bytes differ (${((diffCount / originalBuffer.length) * 100).toFixed(1)}% of buffer)`, 'info');
+      }
+    };
+
+    // Initialize
+    async function init() {
+      try {
+        // Load the encryption WASM module (Crypto++ compiled to WASM)
+        appendLog('Loading encryption WASM module...', 'info');
+        await loadEncryptionWasm(ENCRYPTION_WASM_PATH);
+        appendLog('Encryption module loaded (Crypto++ WASM)', 'success');
+
+        // Load flatc-wasm for FlatBuffer operations
+        const module = await import('../../src/index.mjs');
+        const { FlatcRunner } = module;
+
+        flatc = await FlatcRunner.init();
+        status.textContent = `Ready! flatc ${flatc.version()} + Crypto++ WASM`;
+        status.className = 'ready';
+
+        appendLog('flatc-wasm loaded successfully', 'success');
+        appendLog(`Version: ${flatc.version()}`, 'info');
+      } catch (e) {
+        status.textContent = `Failed to load: ${e.message}`;
+        status.className = 'error';
+        appendLog(`Failed to load: ${e.message}`, 'error');
+        appendLog('Make sure you have built the WASM modules (flatc.wasm and flatc-encryption.wasm)', 'info');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

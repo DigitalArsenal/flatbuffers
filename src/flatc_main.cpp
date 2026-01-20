@@ -22,6 +22,7 @@
 #include "flatbuffers/base.h"
 #include "flatbuffers/code_generator.h"
 #include "flatbuffers/flatc.h"
+#include "flatbuffers/options.h"
 #include "flatbuffers/util.h"
 #include "idl_gen_binary.h"
 #include "idl_gen_cpp.h"
@@ -183,6 +184,7 @@ int main(int argc, const char* argv[]) {
   // Create the FlatC options by parsing the command line arguments.
   flatbuffers::FlatCOptions options =
       flatc.ParseFromCommandLineArguments(argc, argv);
+  flatbuffers::global_options = options;
 
   // this exists here to ensure file_saver outlives the compilation process
   std::unique_ptr<flatbuffers::FileSaver> file_saver;

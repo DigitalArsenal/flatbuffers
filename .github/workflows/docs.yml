@@ -1,14 +1,16 @@
 name: docs
 on:
   # For manual pushes.
-  workflow_dispatch: 
+  workflow_dispatch:
 
-  # Pushes to main that touch the documentation directory.
+  # Pushes to master that touch docs or wasm/docs
   push:
     branches:
       - master
     paths:
       - 'docs/**'
+      - 'wasm/**'
+      - '.github/workflows/docs.yml'
 
 permissions:
   contents: write
@@ -17,20 +19,76 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
       - name: Configure Git Credentials
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+
+      # Setup Node.js for wasm-daflatbuffers demo build
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: wasm/docs/package-lock.json
+
+      # Build wasm-daflatbuffers demo (this will be the landing page)
+      - name: Build wasm-daflatbuffers demo
+        working-directory: wasm/docs
+        run: |
+          echo "=== Checking required files ==="
+          ls -la ../src/
+          ls -la ../dist/
+          echo "=== Installing dependencies ==="
+          npm ci
+          echo "=== Building demo ==="
+          npm run build
+
+      # Setup Python for mkdocs
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
-      - run: echo "cache_id=$(date --utc '+%V')" >> $GITHUB_ENV 
+
+      - run: echo "cache_id=$(date --utc '+%V')" >> $GITHUB_ENV
+
       - uses: actions/cache@v4
         with:
           key: mkdocs-material-${{ env.cache_id }}
           path: .cache
           restore-keys: |
             mkdocs-material-
-      - run: pip install mkdocs-material 
-      - run: pip install mkdocs-redirects
-      - run: mkdocs gh-deploy --force -f docs/mkdocs.yml
+
+      - run: pip install mkdocs-material mkdocs-redirects
+
+      # Build mkdocs documentation
+      - name: Build mkdocs site
+        run: mkdocs build -f mkdocs.yml -d ../mkdocs-site
+        working-directory: docs
+
+      # Assemble final site into /docs folder (served from master branch)
+      - name: Assemble site
+        run: |
+          # Clear existing docs content except source files
+          find docs -maxdepth 1 -type f ! -name 'mkdocs.yml' -delete 2>/dev/null || true
+          rm -rf docs/site docs/wasm-runtimes 2>/dev/null || true
+
+          # Copy wasm-daflatbuffers demo as the root landing page
+          cp -r wasm/docs/dist/* docs/
+
+          # Copy mkdocs documentation to /docs/site subdirectory
+          mkdir -p docs/site
+          cp -r mkdocs-site/* docs/site/
+
+          # Convert WASM runtime markdown docs to styled HTML
+          if [ -d "wasm/docs/docs" ]; then
+            mkdir -p docs/wasm-runtimes
+            cd wasm/docs && node scripts/build-markdown.mjs && cd ../..
+            cp -r wasm/docs/docs-html/* docs/wasm-runtimes/
+          fi
+
+      - name: Commit and push to master
+        run: |
+          git add docs/
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Update docs site [skip ci]"
+          git push

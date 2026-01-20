@@ -1,0 +1,18 @@
+[package]
+name = "flatbuffers-encryption-wasi"
+version = "0.1.0"
+edition = "2021"
+description = "FlatBuffers WASI encryption module for Rust using Wasmer"
+
+[dependencies]
+wasmer = "4.2"
+thiserror = "1.0"
+hex = "0.4"
+
+[[bin]]
+name = "encryption_demo"
+path = "src/main.rs"
+
+[lib]
+name = "encryption"
+path = "src/lib.rs"

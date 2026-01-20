@@ -1,0 +1,58 @@
+// Test schema for field-level encryption
+// Fields marked with (encrypted) will be encrypted when using the encryption API
+
+namespace EncryptionTest;
+
+struct Coordinates {
+  lat: double;
+  lon: double;
+}
+
+table PublicData {
+  id: uint64;
+  label: string;
+}
+
+table SensorReading {
+  // Public fields - not encrypted
+  device_id: string;
+  timestamp: uint64;
+  public_data: PublicData;
+
+  // Encrypted fields
+  location: Coordinates (encrypted);
+  temperature: float (encrypted);
+  raw_data: [ubyte] (encrypted);
+  secret_message: string (encrypted);
+  readings: [float] (encrypted);
+}
+
+table UserRecord {
+  // Public
+  user_id: uint64;
+  username: string;
+
+  // Private/encrypted
+  password_hash: string (encrypted);
+  private_key: [ubyte] (encrypted);
+  ssn: string (encrypted);
+  balance: double (encrypted);
+}
+
+// Test with various scalar types
+table ScalarTest {
+  // All encrypted scalars
+  encrypted_bool: bool (encrypted);
+  encrypted_byte: byte (encrypted);
+  encrypted_ubyte: ubyte (encrypted);
+  encrypted_short: short (encrypted);
+  encrypted_ushort: ushort (encrypted);
+  encrypted_int: int (encrypted);
+  encrypted_uint: uint (encrypted);
+  encrypted_long: long (encrypted);
+  encrypted_ulong: ulong (encrypted);
+  encrypted_float: float (encrypted);
+  encrypted_double: double (encrypted);
+}
+
+root_type SensorReading;

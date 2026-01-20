@@ -1,0 +1,26 @@
+# Generated FlatBuffer code - each runner generates at runtime
+generated/
+
+# Runtime-generated binary files (created by create_messages.mjs)
+vectors/binary/secure_message_*.bin
+vectors/binary/secure_message_*.json
+
+# Language-specific build artifacts
+runners/rust/target/
+runners/rust/Cargo.lock
+runners/java/target/
+runners/csharp/bin/
+runners/csharp/obj/
+runners/swift/.build/
+
+# Node.js
+runners/node/node_modules/
+
+# Python
+runners/python/__pycache__/
+runners/python/*.pyc
+runners/python/.venv/
+
+# Go
+runners/go/go.sum
+runners/go/e2e-crypto-test

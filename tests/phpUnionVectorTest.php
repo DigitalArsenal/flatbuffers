@@ -1,15 +1,24 @@
 <?php
 
-require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "Constants.php"));
-require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "ByteBuffer.php"));
-require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "FlatbufferBuilder.php"));
-require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "Table.php"));
-require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "Struct.php"));
+$phpLibDir = dirname(dirname(__FILE__));
+require join(DIRECTORY_SEPARATOR, array($phpLibDir, "php", "Constants.php"));
+require join(DIRECTORY_SEPARATOR, array($phpLibDir, "php", "ByteBuffer.php"));
+require join(DIRECTORY_SEPARATOR, array($phpLibDir, "php", "FlatbufferBuilder.php"));
+require join(DIRECTORY_SEPARATOR, array($phpLibDir, "php", "Table.php"));
+require join(DIRECTORY_SEPARATOR, array($phpLibDir, "php", "Struct.php"));
 
-require join(DIRECTORY_SEPARATOR, array(dirname(__FILE__), "php", 'Attacker.php'));
-require join(DIRECTORY_SEPARATOR, array(dirname(__FILE__), "php", 'BookReader.php'));
-require join(DIRECTORY_SEPARATOR, array(dirname(__FILE__), "php", 'Character.php'));
-require join(DIRECTORY_SEPARATOR, array(dirname(__FILE__), "php", 'Movie.php'));
+$unionGeneratedDir = getenv('PHP_UNION_GENERATED_DIR');
+if ($unionGeneratedDir === false || $unionGeneratedDir === '') {
+    $unionGeneratedDir = join(DIRECTORY_SEPARATOR, array(dirname(__FILE__), "php"));
+}
+$unionGeneratedDir = rtrim($unionGeneratedDir, DIRECTORY_SEPARATOR);
+foreach (['Attacker.php', 'BookReader.php', 'Character.php', 'Movie.php'] as $file) {
+    $path = join(DIRECTORY_SEPARATOR, array($unionGeneratedDir, $file));
+    if (!file_exists($path)) {
+        throw new Exception("Required generated file not found: {$path}");
+    }
+    require $path;
+}
 
 class Assert {
     public function ok($result, $message = "") {
@@ -44,6 +53,26 @@ class Assert {
     }
 }
 
+/**
+ * @template T
+ * @param class-string<T>|object $target
+ * @param array<int, string> $candidates
+ * @param mixed ...$args
+ * @return mixed
+ */
+function callMethodWithFallback($target, array $candidates, ...$args) {
+    foreach ($candidates as $method) {
+        if (method_exists($target, $method)) {
+            if (is_string($target)) {
+                return $target::$method(...$args);
+            }
+            return $target->$method(...$args);
+        }
+    }
+    $type = is_string($target) ? $target : get_class($target);
+    throw new Exception("None of the expected methods exist on {$type}: " . implode(', ', $candidates));
+}
+
 function main()
 {
     $assert = new Assert();
@@ -57,11 +86,13 @@ function main()
     ];
 
     Attacker::startAttacker($fbb);
-    Attacker::addSwordAttackDamage($fbb, 5);
+    callMethodWithFallback('Attacker', ['addSwordAttackDamage', 'addsword_attack_damage'], $fbb, 5);
     $attackerOffset = Attacker::endAttacker($fbb);
 
-    $charTypesOffset = Movie::createCharactersTypeVector($fbb, $charTypes);
-    $charsOffset = Movie::createCharactersVector(
+    $charTypesOffset = callMethodWithFallback('Movie', ['createCharactersTypeVector', 'createcharacters_typeVector'], $fbb, $charTypes);
+    $charsOffset = callMethodWithFallback(
+        'Movie',
+        ['createCharactersVector', 'createcharactersVector'],
         $fbb,
         [
             BookReader::createBookReader($fbb, 7),
@@ -71,29 +102,31 @@ function main()
     );
 
     Movie::startMovie($fbb);
-    Movie::addCharactersType($fbb, $charTypesOffset);
-    Movie::addCharacters($fbb, $charsOffset);
+    callMethodWithFallback('Movie', ['addCharactersType', 'addcharacters_type'], $fbb, $charTypesOffset);
+    callMethodWithFallback('Movie', ['addCharacters', 'addcharacters'], $fbb, $charsOffset);
     Movie::finishMovieBuffer($fbb, Movie::endMovie($fbb));
 
     $buf = Google\FlatBuffers\ByteBuffer::wrap($fbb->dataBuffer()->data());
 
     $movie = Movie::getRootAsMovie($buf);
 
-    $assert->strictEqual($movie->getCharactersTypeLength(), count($charTypes));
-    $assert->strictEqual($movie->getCharactersLength(), $movie->getCharactersTypeLength());
+    $charactersTypeLength = callMethodWithFallback($movie, ['getCharactersTypeLength', 'getcharacters_typeLength']);
+    $charactersLength = callMethodWithFallback($movie, ['getCharactersLength', 'getcharactersLength']);
+    $assert->strictEqual($charactersTypeLength, count($charTypes));
+    $assert->strictEqual($charactersLength, $charactersTypeLength);
 
     for ($i = 0; $i < count($charTypes); ++$i) {
-        $assert->strictEqual($movie->getCharactersType($i), $charTypes[$i]);
+        $assert->strictEqual(callMethodWithFallback($movie, ['getCharactersType', 'getcharacters_type'], $i), $charTypes[$i]);
     }
 
-    $bookReader7 = $movie->getCharacters(0, new BookReader());
-    $assert->strictEqual($bookReader7->getBooksRead(), 7);
+    $bookReader7 = callMethodWithFallback($movie, ['getCharacters', 'getcharacters'], 0, new BookReader());
+    $assert->strictEqual(callMethodWithFallback($bookReader7, ['getBooksRead', 'Getbooks_read']), 7);
 
-    $attacker = $movie->getCharacters(1, new Attacker());
-    $assert->strictEqual($attacker->getSwordAttackDamage(), 5);
+    $attacker = callMethodWithFallback($movie, ['getCharacters', 'getcharacters'], 1, new Attacker());
+    $assert->strictEqual(callMethodWithFallback($attacker, ['getSwordAttackDamage', 'getsword_attack_damage']), 5);
 
-    $bookReader2 = $movie->getCharacters(2, new BookReader());
-    $assert->strictEqual($bookReader2->getBooksRead(), 2);
+    $bookReader2 = callMethodWithFallback($movie, ['getCharacters', 'getcharacters'], 2, new BookReader());
+    $assert->strictEqual(callMethodWithFallback($bookReader2, ['getBooksRead', 'Getbooks_read']), 2);
 }
 
 try {

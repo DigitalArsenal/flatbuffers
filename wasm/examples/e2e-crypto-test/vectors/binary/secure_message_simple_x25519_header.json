@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "key_exchange": "ECDH",
+  "curve": "x25519",
+  "encryption": "AES_256_CTR",
+  "ephemeral_public_key": "ebba9aefe0d6b9ef04d3a530ccb4726f384310621a51e921e414caa05f971f22",
+  "sender_id": "alice",
+  "timestamp": 1767926301649
+}

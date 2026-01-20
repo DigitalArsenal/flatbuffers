@@ -1,0 +1,1817 @@
+{
+  "version": "2.0.0",
+  "generated_at": "2026-01-08T15:18:44.583Z",
+  "description": "Cross-language FlatBuffers encryption test vectors with multi-chain crypto keys",
+  "supported_crypto": [
+    {
+      "name": "Bitcoin",
+      "curve": "secp256k1",
+      "signature": "ECDSA",
+      "key_size": 32
+    },
+    {
+      "name": "Ethereum",
+      "curve": "secp256k1",
+      "signature": "ECDSA",
+      "key_size": 32
+    },
+    {
+      "name": "Solana",
+      "curve": "Ed25519",
+      "signature": "EdDSA",
+      "key_size": 64
+    },
+    {
+      "name": "SUI",
+      "curve": "Ed25519",
+      "signature": "EdDSA",
+      "key_size": 64
+    },
+    {
+      "name": "Cosmos",
+      "curve": "secp256k1",
+      "signature": "ECDSA",
+      "key_size": 32
+    },
+    {
+      "name": "Polkadot",
+      "curve": "Sr25519",
+      "signature": "Schnorr",
+      "key_size": 32
+    },
+    {
+      "name": "Cardano",
+      "curve": "Ed25519",
+      "signature": "EdDSA",
+      "key_size": 64
+    },
+    {
+      "name": "Tezos",
+      "curve": "Ed25519",
+      "signature": "EdDSA",
+      "key_size": 64
+    },
+    {
+      "name": "Near",
+      "curve": "Ed25519",
+      "signature": "EdDSA",
+      "key_size": 64
+    },
+    {
+      "name": "Aptos",
+      "curve": "Ed25519",
+      "signature": "EdDSA",
+      "key_size": 64
+    }
+  ],
+  "encryption_keys": {
+    "bitcoin": {
+      "key_hex": "01a845a3decfe95cb28818f6f1fa6a9f121f6eaa46a975754c166bb6c4e47d2a",
+      "iv_hex": "0b24f2a482af7f09e5ff8f1a4d8874be"
+    },
+    "ethereum": {
+      "key_hex": "c4632f23c1c106deba3a7fe852382d798d96bd37ceee6da4b58dca659766b68a",
+      "iv_hex": "ac920c39937a22d6c85ba0c8b5918d9f"
+    },
+    "solana": {
+      "key_hex": "9b54ab761e3bd5a38cccbdd81281787e2eb79e006b937ecc893af0c09ef9474a",
+      "iv_hex": "33494c9840684656dc3e3ccd345c35b7"
+    },
+    "sui": {
+      "key_hex": "ffecddeb713f56e0efb83840ec6c84af3409c8f7a49cfe944b55a35ff5c3f599",
+      "iv_hex": "f150fe92db177be4d4cda863b0587ac0"
+    },
+    "cosmos": {
+      "key_hex": "fdfa005ff13a657a8a5720cf1718de9042e9ced6e23d18ccc71e514e3f444390",
+      "iv_hex": "616312f41337c7033327b6e15caa25cc"
+    },
+    "polkadot": {
+      "key_hex": "e6f8b64c11b6874cd654d0da6af063dec774da23978d40cc5a725f5fd86a0afd",
+      "iv_hex": "88fd37384d2621af9416fdf20c100709"
+    },
+    "cardano": {
+      "key_hex": "84ffb7825fc4a3651e5adae4e93e9d784af66e8ef6b5e11ae3a2ae426143cd03",
+      "iv_hex": "0efeb5eb6d6d55a921c16cc87394a627"
+    },
+    "tezos": {
+      "key_hex": "2eb20bcc9ad66a4e76b14bd9ba53fb673450e450ff2e6de2edcad6bf185e978b",
+      "iv_hex": "9688a40a2769664b0fc3a208462ee768"
+    },
+    "near": {
+      "key_hex": "439574af4a096af8bd854b3b86d29af63d1ef181cf350453c57fbf726c72452a",
+      "iv_hex": "fef6a38b1165882456e5449c1ab194b6"
+    },
+    "aptos": {
+      "key_hex": "94f9a9adad66a615b8e379e9fe31ae94b2daf562c21fd9c0f139bce71ad1b68b",
+      "iv_hex": "c42a50adb3ac8d5ba5ded12683013ecd"
+    }
+  },
+  "crypto_keys": {
+    "bitcoin": {
+      "private_key_hex": "c40f8569f3fc0cb7ac055f750fe2c54a01ff11a5ea1a60fc494d6e7c9d03bd7f",
+      "public_key_hex": "42af91ceeeccb05652cec465ac3e80334884ca653e8f97e4f2a9facd2eddb8d570",
+      "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+      "scheme": "ECDSA_secp256k1"
+    },
+    "ethereum": {
+      "private_key_hex": "a15e083cc8c1696251e70b714704277d3cf2747b3c64fa4b85e983be86b58a50",
+      "public_key_hex": "e72510501f075d0a5d500cda3e3616fa74b44bb55859e30d6be02d2014e3567953",
+      "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f81a5d",
+      "scheme": "ECDSA_secp256k1"
+    },
+    "solana": {
+      "private_key_hex": "1c7e090afdc360d19390b6cc1044e0aa73eb1aeda0198a8c45c59ced975eca6b42971ac893bfead05e3caed212a98a7698acd722ad6b227fb32561a40f24b1e1",
+      "public_key_hex": "4a1eead1e1fdea74cdd74465d76db0a84c3354365050dcb6412419854b48bd74",
+      "address": "4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA",
+      "scheme": "Ed25519"
+    },
+    "sui": {
+      "private_key_hex": "4b484c475036eb053dd18f56fa85e0b9948a5b4f065de13910a2a1958df796e22ffcfd1e3bcc156b35ed9f605c33a73ee590cc279e67f3d4e1bc9c80655d71f7",
+      "public_key_hex": "4bab82a18f300c74d26d1009ac4c878f55bbd1601cacd882f7a5dbab53cf8137",
+      "address": "0x2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+      "scheme": "Ed25519"
+    },
+    "cosmos": {
+      "private_key_hex": "17aef67f95f9f082a684ae06afc75b4f66c5e4c32a89f7fc793ec731842d1e4c",
+      "public_key_hex": "af438776ec886907aaf1cdb1ee88e17ca00adffd9cbcf0be9dbfebbc1847d1734b",
+      "address": "cosmos1hsk6jryyqjfhp5dhc55tc9jtckygx0eph6dd02",
+      "scheme": "ECDSA_secp256k1"
+    },
+    "polkadot": {
+      "private_key_hex": "c84c18b6514eb0dcb7055b2fc7fb44f556d83c28fc4eabbbd2d4cb0272fb87fc",
+      "public_key_hex": "6adfd2ec8ce9f696ec83099b94a44dffb7a36dcb2cf56a8b762cd60ebd1fa542",
+      "address": "14ShUZUYUR35RBZW6uVVt1zXDxmSQddkeDdXf1JkMA6P7GNY",
+      "scheme": "Sr25519"
+    },
+    "cardano": {
+      "private_key_hex": "8ce7279cdfaf01ae3f5bc96ec284300b4cea781f353f4ce1d5e65e337eb8158a7245bde1fc8db01f8ca3a81fe0a19fc8527a2501a0c5b31a07f8f11c24655cbe",
+      "public_key_hex": "73201844b66d4a10f1a7bfc48828eb7eac9581d516f6c8fdf7ee5db86db5d6e7",
+      "address": "addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3jcu5d8ps7zex2k2xt3uqxgjqnnj83ws8lhrn648jjxtwq2ytjqp",
+      "scheme": "Ed25519"
+    },
+    "tezos": {
+      "private_key_hex": "7ea77e85a526206236e75a0882d4dcdf4cb40286d2ad984ced0d705f366b7f5f87486c33a6daf1245f1efe974ea3294ddbacbe144a1c5ffcee004f65032a910d",
+      "public_key_hex": "8eb745f6127833de94f0a3d9f63959efc44cb2722791b0bb0d10deafe4c17dac",
+      "address": "tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb",
+      "scheme": "Ed25519"
+    },
+    "near": {
+      "private_key_hex": "beab7691dcd67a5954b16b8b833666ded5871e435ef88826be3a439149271f19d709d3ab99703c7db1a267c08cee0278720eae702478042cf8757e8cb490715a",
+      "public_key_hex": "8e783ada3a0ce7dd5e30e0cecb96b8ab69149474eeedd2b519bdd2cbdcf7f13d",
+      "address": "alice.near",
+      "scheme": "Ed25519"
+    },
+    "aptos": {
+      "private_key_hex": "30a78bd34c656cb16317e0c41cd76614a2f218b3bce37b67989b472f530ca60c5548bfbfc577b85b5fa283b57894554b2b75275535e450bcaef9a22d8ee1b3a7",
+      "public_key_hex": "f4561dfc814fa31491376d3df0ebeb561f2772095bbc7bd21eae28a33c65a267",
+      "address": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+      "scheme": "Ed25519"
+    }
+  },
+  "schemas": {
+    "monster_encrypted": "// Monster schema with encrypted fields for cross-language testing\n// Based on official FlatBuffers monster_test.fbs\n\nattribute \"encrypted\";\n\nnamespace CryptoTest;\n\nenum Color:ubyte (bit_flags) {\n  Red = 0,\n  Green,\n  Blue = 3,\n}\n\nstruct Vec3 {\n  x: float;\n  y: float;\n  z: float;\n}\n\nstruct EncryptedCoords {\n  lat: double;\n  lon: double;\n}\n\ntable Weapon {\n  name: string;\n  damage: short (encrypted);  // Encrypted weapon damage\n}\n\ntable Monster {\n  // Public fields (not encrypted)\n  id: string;\n  name: string;\n  color: Color = Blue;\n  pos: Vec3;\n  created_at: uint64;\n\n  // Encrypted fields\n  hp: short = 100 (encrypted);\n  mana: short = 150 (encrypted);\n  secret_location: EncryptedCoords (encrypted);\n  inventory: [ubyte] (encrypted);\n  secret_notes: string (encrypted);\n  damage_multiplier: float (encrypted);\n  experience: double (encrypted);\n  is_elite: bool (encrypted);\n\n  // Encrypted vectors\n  loot_values: [int] (encrypted);\n  secret_codes: [ubyte] (encrypted);\n\n  // Nested tables with encrypted fields\n  weapons: [Weapon];\n}\n\nroot_type Monster;\nfile_identifier \"CMON\";\nfile_extension \"cmon\";\n",
+    "wallet_test": "// Wallet schema for testing with real crypto key formats\n// Tests encryption with Bitcoin, Ethereum, Solana, SUI, and other major crypto keys\n\nattribute \"encrypted\";\n\nnamespace CryptoTest;\n\n// Key type identifiers\nenum KeyType: ubyte {\n  Unknown = 0,\n  Bitcoin_secp256k1,      // BTC: secp256k1 ECDSA\n  Ethereum_secp256k1,     // ETH: secp256k1 ECDSA (same curve as BTC)\n  Solana_ed25519,         // SOL: Ed25519\n  SUI_ed25519,            // SUI: Ed25519\n  Cosmos_secp256k1,       // ATOM: secp256k1 ECDSA\n  Polkadot_sr25519,       // DOT: Schnorrkel/Ristretto x25519\n  Cardano_ed25519,        // ADA: Ed25519 Extended\n  Tezos_ed25519,          // XTZ: Ed25519\n  Near_ed25519,           // NEAR: Ed25519\n  Aptos_ed25519,          // APT: Ed25519\n}\n\n// Signature scheme identifiers\nenum SignatureScheme: ubyte {\n  ECDSA_secp256k1 = 0,    // Bitcoin, Ethereum, Cosmos\n  ECDSA_p256,             // NIST P-256\n  Ed25519,                // Solana, SUI, Cardano, Tezos, Near, Aptos\n  Schnorr_secp256k1,      // Bitcoin Taproot\n  Sr25519,                // Polkadot Schnorrkel\n}\n\n// Wallet address (public)\ntable WalletAddress {\n  chain: string;           // e.g., \"bitcoin\", \"ethereum\", \"solana\"\n  address: string;         // Human-readable address\n  key_type: KeyType;\n}\n\n// Encrypted key material\ntable EncryptedKeyMaterial {\n  // Public metadata\n  key_type: KeyType;\n  scheme: SignatureScheme;\n  created_at: uint64;\n\n  // Encrypted fields - private key material\n  private_key: [ubyte] (encrypted);     // Raw private key bytes\n  seed_phrase: string (encrypted);       // BIP-39 mnemonic\n  derivation_path: string (encrypted);   // BIP-32/44 path\n}\n\n// Transaction to sign\ntable Transaction {\n  // Public fields\n  tx_id: string;\n  chain: string;\n  timestamp: uint64;\n\n  // Encrypted transaction details\n  from_address: string (encrypted);\n  to_address: string (encrypted);\n  amount: uint64 (encrypted);           // In smallest unit (satoshi, wei, lamports)\n  fee: uint64 (encrypted);\n  memo: string (encrypted);\n  raw_tx_data: [ubyte] (encrypted);     // Chain-specific raw transaction\n}\n\n// Signed transaction result\ntable SignedTransaction {\n  tx_id: string;\n  chain: string;\n\n  // Encrypted signature data\n  signature: [ubyte] (encrypted);        // Raw signature bytes\n  signed_tx_hex: string (encrypted);     // Full signed transaction\n  signer_public_key: [ubyte] (encrypted);\n}\n\n// Multi-chain wallet\ntable MultiChainWallet {\n  // Public\n  wallet_id: string;\n  label: string;\n  created_at: uint64;\n\n  // Encrypted master key\n  master_seed: [ubyte] (encrypted);\n  master_key_encrypted: string (encrypted);\n\n  // Derived keys per chain (all encrypted)\n  bitcoin_key: EncryptedKeyMaterial;\n  ethereum_key: EncryptedKeyMaterial;\n  solana_key: EncryptedKeyMaterial;\n  sui_key: EncryptedKeyMaterial;\n  cosmos_key: EncryptedKeyMaterial;\n  polkadot_key: EncryptedKeyMaterial;\n  cardano_key: EncryptedKeyMaterial;\n  tezos_key: EncryptedKeyMaterial;\n  near_key: EncryptedKeyMaterial;\n  aptos_key: EncryptedKeyMaterial;\n\n  // Addresses (public)\n  addresses: [WalletAddress];\n\n  // Transaction history (encrypted)\n  pending_transactions: [Transaction];\n  signed_transactions: [SignedTransaction];\n}\n\nroot_type MultiChainWallet;\nfile_identifier \"CWLT\";\nfile_extension \"cwlt\";\n"
+  },
+  "test_cases": [
+    {
+      "id": "monster_unencrypted",
+      "description": "Monster with encrypted fields - before encryption",
+      "schema": "monster_encrypted",
+      "root_type": "Monster",
+      "data": {
+        "id": "monster-001",
+        "name": "Test Dragon",
+        "color": "Blue",
+        "pos": {
+          "x": 1.5,
+          "y": 2.5,
+          "z": 3.5
+        },
+        "created_at": 1704067200000,
+        "hp": 250,
+        "mana": 500,
+        "secret_location": {
+          "lat": 37.7749,
+          "lon": -122.4194
+        },
+        "inventory": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90
+        ],
+        "secret_notes": "This monster guards the treasure!",
+        "damage_multiplier": 1.5,
+        "experience": 123456.789,
+        "is_elite": true,
+        "loot_values": [
+          100,
+          200,
+          300,
+          500,
+          1000
+        ],
+        "secret_codes": [
+          222,
+          173,
+          190,
+          239
+        ],
+        "weapons": [
+          {
+            "name": "Fire Sword",
+            "damage": 50
+          },
+          {
+            "name": "Ice Staff",
+            "damage": 75
+          }
+        ]
+      },
+      "encrypted": false
+    },
+    {
+      "id": "wallet_unencrypted",
+      "description": "Multi-chain wallet - before encryption",
+      "schema": "wallet_test",
+      "root_type": "MultiChainWallet",
+      "data": {
+        "wallet_id": "wallet-e2e-test-001",
+        "label": "Cross-Language Test Wallet",
+        "created_at": 1767885524582,
+        "master_seed": [
+          157,
+          174,
+          85,
+          38,
+          36,
+          4,
+          3,
+          128,
+          237,
+          198,
+          248,
+          86,
+          190,
+          62,
+          49,
+          239,
+          53,
+          233,
+          86,
+          27,
+          173,
+          169,
+          76,
+          82,
+          79,
+          36,
+          206,
+          133,
+          12,
+          95,
+          17,
+          3,
+          235,
+          173,
+          23,
+          56,
+          245,
+          47,
+          125,
+          161,
+          228,
+          15,
+          107,
+          52,
+          144,
+          253,
+          148,
+          57,
+          38,
+          200,
+          193,
+          210,
+          246,
+          166,
+          163,
+          229,
+          227,
+          49,
+          210,
+          236,
+          150,
+          13,
+          79,
+          254
+        ],
+        "master_key_encrypted": "encrypted_master_key_placeholder",
+        "bitcoin_key": {
+          "key_type": "Bitcoin_secp256k1",
+          "scheme": "ECDSA_secp256k1",
+          "created_at": 1767885524583,
+          "private_key": [
+            196,
+            15,
+            133,
+            105,
+            243,
+            252,
+            12,
+            183,
+            172,
+            5,
+            95,
+            117,
+            15,
+            226,
+            197,
+            74,
+            1,
+            255,
+            17,
+            165,
+            234,
+            26,
+            96,
+            252,
+            73,
+            77,
+            110,
+            124,
+            157,
+            3,
+            189,
+            127
+          ],
+          "seed_phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "derivation_path": "m/44'/0'/0'/0/0"
+        },
+        "ethereum_key": {
+          "key_type": "Ethereum_secp256k1",
+          "scheme": "ECDSA_secp256k1",
+          "created_at": 1767885524583,
+          "private_key": [
+            161,
+            94,
+            8,
+            60,
+            200,
+            193,
+            105,
+            98,
+            81,
+            231,
+            11,
+            113,
+            71,
+            4,
+            39,
+            125,
+            60,
+            242,
+            116,
+            123,
+            60,
+            100,
+            250,
+            75,
+            133,
+            233,
+            131,
+            190,
+            134,
+            181,
+            138,
+            80
+          ],
+          "seed_phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "derivation_path": "m/44'/0'/0'/0/0"
+        },
+        "solana_key": {
+          "key_type": "Solana_ed25519",
+          "scheme": "Ed25519",
+          "created_at": 1767885524583,
+          "private_key": [
+            28,
+            126,
+            9,
+            10,
+            253,
+            195,
+            96,
+            209,
+            147,
+            144,
+            182,
+            204,
+            16,
+            68,
+            224,
+            170,
+            115,
+            235,
+            26,
+            237,
+            160,
+            25,
+            138,
+            140,
+            69,
+            197,
+            156,
+            237,
+            151,
+            94,
+            202,
+            107,
+            66,
+            151,
+            26,
+            200,
+            147,
+            191,
+            234,
+            208,
+            94,
+            60,
+            174,
+            210,
+            18,
+            169,
+            138,
+            118,
+            152,
+            172,
+            215,
+            34,
+            173,
+            107,
+            34,
+            127,
+            179,
+            37,
+            97,
+            164,
+            15,
+            36,
+            177,
+            225
+          ],
+          "seed_phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "derivation_path": "m/44'/0'/0'/0/0"
+        },
+        "sui_key": {
+          "key_type": "SUI_ed25519",
+          "scheme": "Ed25519",
+          "created_at": 1767885524583,
+          "private_key": [
+            75,
+            72,
+            76,
+            71,
+            80,
+            54,
+            235,
+            5,
+            61,
+            209,
+            143,
+            86,
+            250,
+            133,
+            224,
+            185,
+            148,
+            138,
+            91,
+            79,
+            6,
+            93,
+            225,
+            57,
+            16,
+            162,
+            161,
+            149,
+            141,
+            247,
+            150,
+            226,
+            47,
+            252,
+            253,
+            30,
+            59,
+            204,
+            21,
+            107,
+            53,
+            237,
+            159,
+            96,
+            92,
+            51,
+            167,
+            62,
+            229,
+            144,
+            204,
+            39,
+            158,
+            103,
+            243,
+            212,
+            225,
+            188,
+            156,
+            128,
+            101,
+            93,
+            113,
+            247
+          ],
+          "seed_phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "derivation_path": "m/44'/0'/0'/0/0"
+        },
+        "cosmos_key": {
+          "key_type": "Cosmos_secp256k1",
+          "scheme": "ECDSA_secp256k1",
+          "created_at": 1767885524583,
+          "private_key": [
+            23,
+            174,
+            246,
+            127,
+            149,
+            249,
+            240,
+            130,
+            166,
+            132,
+            174,
+            6,
+            175,
+            199,
+            91,
+            79,
+            102,
+            197,
+            228,
+            195,
+            42,
+            137,
+            247,
+            252,
+            121,
+            62,
+            199,
+            49,
+            132,
+            45,
+            30,
+            76
+          ],
+          "seed_phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "derivation_path": "m/44'/0'/0'/0/0"
+        },
+        "polkadot_key": {
+          "key_type": "Polkadot_sr25519",
+          "scheme": "Sr25519",
+          "created_at": 1767885524583,
+          "private_key": [
+            200,
+            76,
+            24,
+            182,
+            81,
+            78,
+            176,
+            220,
+            183,
+            5,
+            91,
+            47,
+            199,
+            251,
+            68,
+            245,
+            86,
+            216,
+            60,
+            40,
+            252,
+            78,
+            171,
+            187,
+            210,
+            212,
+            203,
+            2,
+            114,
+            251,
+            135,
+            252
+          ],
+          "seed_phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "derivation_path": "m/44'/0'/0'/0/0"
+        },
+        "cardano_key": {
+          "key_type": "Cardano_ed25519",
+          "scheme": "Ed25519",
+          "created_at": 1767885524583,
+          "private_key": [
+            140,
+            231,
+            39,
+            156,
+            223,
+            175,
+            1,
+            174,
+            63,
+            91,
+            201,
+            110,
+            194,
+            132,
+            48,
+            11,
+            76,
+            234,
+            120,
+            31,
+            53,
+            63,
+            76,
+            225,
+            213,
+            230,
+            94,
+            51,
+            126,
+            184,
+            21,
+            138,
+            114,
+            69,
+            189,
+            225,
+            252,
+            141,
+            176,
+            31,
+            140,
+            163,
+            168,
+            31,
+            224,
+            161,
+            159,
+            200,
+            82,
+            122,
+            37,
+            1,
+            160,
+            197,
+            179,
+            26,
+            7,
+            248,
+            241,
+            28,
+            36,
+            101,
+            92,
+            190
+          ],
+          "seed_phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "derivation_path": "m/44'/0'/0'/0/0"
+        },
+        "tezos_key": {
+          "key_type": "Tezos_ed25519",
+          "scheme": "Ed25519",
+          "created_at": 1767885524583,
+          "private_key": [
+            126,
+            167,
+            126,
+            133,
+            165,
+            38,
+            32,
+            98,
+            54,
+            231,
+            90,
+            8,
+            130,
+            212,
+            220,
+            223,
+            76,
+            180,
+            2,
+            134,
+            210,
+            173,
+            152,
+            76,
+            237,
+            13,
+            112,
+            95,
+            54,
+            107,
+            127,
+            95,
+            135,
+            72,
+            108,
+            51,
+            166,
+            218,
+            241,
+            36,
+            95,
+            30,
+            254,
+            151,
+            78,
+            163,
+            41,
+            77,
+            219,
+            172,
+            190,
+            20,
+            74,
+            28,
+            95,
+            252,
+            238,
+            0,
+            79,
+            101,
+            3,
+            42,
+            145,
+            13
+          ],
+          "seed_phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "derivation_path": "m/44'/0'/0'/0/0"
+        },
+        "near_key": {
+          "key_type": "Near_ed25519",
+          "scheme": "Ed25519",
+          "created_at": 1767885524583,
+          "private_key": [
+            190,
+            171,
+            118,
+            145,
+            220,
+            214,
+            122,
+            89,
+            84,
+            177,
+            107,
+            139,
+            131,
+            54,
+            102,
+            222,
+            213,
+            135,
+            30,
+            67,
+            94,
+            248,
+            136,
+            38,
+            190,
+            58,
+            67,
+            145,
+            73,
+            39,
+            31,
+            25,
+            215,
+            9,
+            211,
+            171,
+            153,
+            112,
+            60,
+            125,
+            177,
+            162,
+            103,
+            192,
+            140,
+            238,
+            2,
+            120,
+            114,
+            14,
+            174,
+            112,
+            36,
+            120,
+            4,
+            44,
+            248,
+            117,
+            126,
+            140,
+            180,
+            144,
+            113,
+            90
+          ],
+          "seed_phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "derivation_path": "m/44'/0'/0'/0/0"
+        },
+        "aptos_key": {
+          "key_type": "Aptos_ed25519",
+          "scheme": "Ed25519",
+          "created_at": 1767885524583,
+          "private_key": [
+            48,
+            167,
+            139,
+            211,
+            76,
+            101,
+            108,
+            177,
+            99,
+            23,
+            224,
+            196,
+            28,
+            215,
+            102,
+            20,
+            162,
+            242,
+            24,
+            179,
+            188,
+            227,
+            123,
+            103,
+            152,
+            155,
+            71,
+            47,
+            83,
+            12,
+            166,
+            12,
+            85,
+            72,
+            191,
+            191,
+            197,
+            119,
+            184,
+            91,
+            95,
+            162,
+            131,
+            181,
+            120,
+            148,
+            85,
+            75,
+            43,
+            117,
+            39,
+            85,
+            53,
+            228,
+            80,
+            188,
+            174,
+            249,
+            162,
+            45,
+            142,
+            225,
+            179,
+            167
+          ],
+          "seed_phrase": "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+          "derivation_path": "m/44'/0'/0'/0/0"
+        },
+        "addresses": [
+          {
+            "chain": "bitcoin",
+            "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+            "key_type": "Bitcoin_secp256k1"
+          },
+          {
+            "chain": "ethereum",
+            "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f81a5d",
+            "key_type": "Ethereum_secp256k1"
+          },
+          {
+            "chain": "solana",
+            "address": "4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA",
+            "key_type": "Solana_ed25519"
+          },
+          {
+            "chain": "sui",
+            "address": "0x2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+            "key_type": "SUI_ed25519"
+          },
+          {
+            "chain": "cosmos",
+            "address": "cosmos1hsk6jryyqjfhp5dhc55tc9jtckygx0eph6dd02",
+            "key_type": "Cosmos_secp256k1"
+          },
+          {
+            "chain": "polkadot",
+            "address": "14ShUZUYUR35RBZW6uVVt1zXDxmSQddkeDdXf1JkMA6P7GNY",
+            "key_type": "Polkadot_sr25519"
+          },
+          {
+            "chain": "cardano",
+            "address": "addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3jcu5d8ps7zex2k2xt3uqxgjqnnj83ws8lhrn648jjxtwq2ytjqp",
+            "key_type": "Cardano_ed25519"
+          },
+          {
+            "chain": "tezos",
+            "address": "tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb",
+            "key_type": "Tezos_ed25519"
+          },
+          {
+            "chain": "near",
+            "address": "alice.near",
+            "key_type": "Near_ed25519"
+          },
+          {
+            "chain": "aptos",
+            "address": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+            "key_type": "Aptos_ed25519"
+          }
+        ],
+        "pending_transactions": [
+          {
+            "tx_id": "tx-pending-001",
+            "chain": "ethereum",
+            "timestamp": 1767885524582,
+            "from_address": "0x742d35Cc6634C0532925a3b844Bc9e7595f81a5d",
+            "to_address": "0x0000000000000000000000000000000000000000",
+            "amount": 1000000000000000000,
+            "fee": 21000000000000,
+            "memo": "Test transfer",
+            "raw_tx_data": [
+              21,
+              202,
+              151,
+              226,
+              126,
+              243,
+              198,
+              213,
+              213,
+              214,
+              68,
+              157,
+              134,
+              107,
+              159,
+              125,
+              145,
+              90,
+              183,
+              91,
+              74,
+              212,
+              76,
+              36,
+              43,
+              22,
+              118,
+              244,
+              135,
+              254,
+              73,
+              38,
+              211,
+              157,
+              47,
+              102,
+              10,
+              247,
+              214,
+              155,
+              131,
+              90,
+              188,
+              55,
+              110,
+              120,
+              32,
+              232,
+              119,
+              176,
+              232,
+              204,
+              104,
+              219,
+              135,
+              108,
+              237,
+              176,
+              67,
+              28,
+              48,
+              223,
+              74,
+              241
+            ]
+          }
+        ],
+        "signed_transactions": [
+          {
+            "tx_id": "tx-signed-001",
+            "chain": "bitcoin",
+            "signature": [
+              53,
+              184,
+              228,
+              120,
+              118,
+              251,
+              12,
+              238,
+              75,
+              72,
+              222,
+              126,
+              147,
+              196,
+              229,
+              32,
+              75,
+              151,
+              42,
+              39,
+              172,
+              145,
+              244,
+              138,
+              122,
+              94,
+              212,
+              202,
+              242,
+              129,
+              243,
+              89,
+              132,
+              233,
+              82,
+              63,
+              244,
+              113,
+              64,
+              7,
+              162,
+              45,
+              101,
+              185,
+              67,
+              171,
+              31,
+              29,
+              22,
+              213,
+              143,
+              220,
+              85,
+              79,
+              88,
+              63,
+              71,
+              153,
+              87,
+              138,
+              162,
+              122,
+              244,
+              219
+            ],
+            "signed_tx_hex": "6d2f1da82c10a029cd77f4ae504f6708cbd0f7581feb18414cc330e3c707dcc83621d19dec916e6de9ff8e2c3dc7290f09720f52e88ec47fff77f114b198a0d4",
+            "signer_public_key": [
+              66,
+              175,
+              145,
+              206,
+              238,
+              204,
+              176,
+              86,
+              82,
+              206,
+              196,
+              101,
+              172,
+              62,
+              128,
+              51,
+              72,
+              132,
+              202,
+              101,
+              62,
+              143,
+              151,
+              228,
+              242,
+              169,
+              250,
+              205,
+              46,
+              221,
+              184,
+              213,
+              112
+            ]
+          }
+        ]
+      },
+      "encrypted": false
+    }
+  ],
+  "chain_encryption_tests": [
+    {
+      "id": "monster_encrypted_bitcoin",
+      "description": "Monster encrypted with bitcoin derived key",
+      "schema": "monster_encrypted",
+      "root_type": "Monster",
+      "encryption_key": "bitcoin",
+      "data": {
+        "id": "monster-001",
+        "name": "Test Dragon",
+        "color": "Blue",
+        "pos": {
+          "x": 1.5,
+          "y": 2.5,
+          "z": 3.5
+        },
+        "created_at": 1704067200000,
+        "hp": 250,
+        "mana": 500,
+        "secret_location": {
+          "lat": 37.7749,
+          "lon": -122.4194
+        },
+        "inventory": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90
+        ],
+        "secret_notes": "This monster guards the treasure!",
+        "damage_multiplier": 1.5,
+        "experience": 123456.789,
+        "is_elite": true,
+        "loot_values": [
+          100,
+          200,
+          300,
+          500,
+          1000
+        ],
+        "secret_codes": [
+          222,
+          173,
+          190,
+          239
+        ],
+        "weapons": [
+          {
+            "name": "Fire Sword",
+            "damage": 50
+          },
+          {
+            "name": "Ice Staff",
+            "damage": 75
+          }
+        ]
+      }
+    },
+    {
+      "id": "monster_encrypted_ethereum",
+      "description": "Monster encrypted with ethereum derived key",
+      "schema": "monster_encrypted",
+      "root_type": "Monster",
+      "encryption_key": "ethereum",
+      "data": {
+        "id": "monster-001",
+        "name": "Test Dragon",
+        "color": "Blue",
+        "pos": {
+          "x": 1.5,
+          "y": 2.5,
+          "z": 3.5
+        },
+        "created_at": 1704067200000,
+        "hp": 250,
+        "mana": 500,
+        "secret_location": {
+          "lat": 37.7749,
+          "lon": -122.4194
+        },
+        "inventory": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90
+        ],
+        "secret_notes": "This monster guards the treasure!",
+        "damage_multiplier": 1.5,
+        "experience": 123456.789,
+        "is_elite": true,
+        "loot_values": [
+          100,
+          200,
+          300,
+          500,
+          1000
+        ],
+        "secret_codes": [
+          222,
+          173,
+          190,
+          239
+        ],
+        "weapons": [
+          {
+            "name": "Fire Sword",
+            "damage": 50
+          },
+          {
+            "name": "Ice Staff",
+            "damage": 75
+          }
+        ]
+      }
+    },
+    {
+      "id": "monster_encrypted_solana",
+      "description": "Monster encrypted with solana derived key",
+      "schema": "monster_encrypted",
+      "root_type": "Monster",
+      "encryption_key": "solana",
+      "data": {
+        "id": "monster-001",
+        "name": "Test Dragon",
+        "color": "Blue",
+        "pos": {
+          "x": 1.5,
+          "y": 2.5,
+          "z": 3.5
+        },
+        "created_at": 1704067200000,
+        "hp": 250,
+        "mana": 500,
+        "secret_location": {
+          "lat": 37.7749,
+          "lon": -122.4194
+        },
+        "inventory": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90
+        ],
+        "secret_notes": "This monster guards the treasure!",
+        "damage_multiplier": 1.5,
+        "experience": 123456.789,
+        "is_elite": true,
+        "loot_values": [
+          100,
+          200,
+          300,
+          500,
+          1000
+        ],
+        "secret_codes": [
+          222,
+          173,
+          190,
+          239
+        ],
+        "weapons": [
+          {
+            "name": "Fire Sword",
+            "damage": 50
+          },
+          {
+            "name": "Ice Staff",
+            "damage": 75
+          }
+        ]
+      }
+    },
+    {
+      "id": "monster_encrypted_sui",
+      "description": "Monster encrypted with sui derived key",
+      "schema": "monster_encrypted",
+      "root_type": "Monster",
+      "encryption_key": "sui",
+      "data": {
+        "id": "monster-001",
+        "name": "Test Dragon",
+        "color": "Blue",
+        "pos": {
+          "x": 1.5,
+          "y": 2.5,
+          "z": 3.5
+        },
+        "created_at": 1704067200000,
+        "hp": 250,
+        "mana": 500,
+        "secret_location": {
+          "lat": 37.7749,
+          "lon": -122.4194
+        },
+        "inventory": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90
+        ],
+        "secret_notes": "This monster guards the treasure!",
+        "damage_multiplier": 1.5,
+        "experience": 123456.789,
+        "is_elite": true,
+        "loot_values": [
+          100,
+          200,
+          300,
+          500,
+          1000
+        ],
+        "secret_codes": [
+          222,
+          173,
+          190,
+          239
+        ],
+        "weapons": [
+          {
+            "name": "Fire Sword",
+            "damage": 50
+          },
+          {
+            "name": "Ice Staff",
+            "damage": 75
+          }
+        ]
+      }
+    },
+    {
+      "id": "monster_encrypted_cosmos",
+      "description": "Monster encrypted with cosmos derived key",
+      "schema": "monster_encrypted",
+      "root_type": "Monster",
+      "encryption_key": "cosmos",
+      "data": {
+        "id": "monster-001",
+        "name": "Test Dragon",
+        "color": "Blue",
+        "pos": {
+          "x": 1.5,
+          "y": 2.5,
+          "z": 3.5
+        },
+        "created_at": 1704067200000,
+        "hp": 250,
+        "mana": 500,
+        "secret_location": {
+          "lat": 37.7749,
+          "lon": -122.4194
+        },
+        "inventory": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90
+        ],
+        "secret_notes": "This monster guards the treasure!",
+        "damage_multiplier": 1.5,
+        "experience": 123456.789,
+        "is_elite": true,
+        "loot_values": [
+          100,
+          200,
+          300,
+          500,
+          1000
+        ],
+        "secret_codes": [
+          222,
+          173,
+          190,
+          239
+        ],
+        "weapons": [
+          {
+            "name": "Fire Sword",
+            "damage": 50
+          },
+          {
+            "name": "Ice Staff",
+            "damage": 75
+          }
+        ]
+      }
+    },
+    {
+      "id": "monster_encrypted_polkadot",
+      "description": "Monster encrypted with polkadot derived key",
+      "schema": "monster_encrypted",
+      "root_type": "Monster",
+      "encryption_key": "polkadot",
+      "data": {
+        "id": "monster-001",
+        "name": "Test Dragon",
+        "color": "Blue",
+        "pos": {
+          "x": 1.5,
+          "y": 2.5,
+          "z": 3.5
+        },
+        "created_at": 1704067200000,
+        "hp": 250,
+        "mana": 500,
+        "secret_location": {
+          "lat": 37.7749,
+          "lon": -122.4194
+        },
+        "inventory": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90
+        ],
+        "secret_notes": "This monster guards the treasure!",
+        "damage_multiplier": 1.5,
+        "experience": 123456.789,
+        "is_elite": true,
+        "loot_values": [
+          100,
+          200,
+          300,
+          500,
+          1000
+        ],
+        "secret_codes": [
+          222,
+          173,
+          190,
+          239
+        ],
+        "weapons": [
+          {
+            "name": "Fire Sword",
+            "damage": 50
+          },
+          {
+            "name": "Ice Staff",
+            "damage": 75
+          }
+        ]
+      }
+    },
+    {
+      "id": "monster_encrypted_cardano",
+      "description": "Monster encrypted with cardano derived key",
+      "schema": "monster_encrypted",
+      "root_type": "Monster",
+      "encryption_key": "cardano",
+      "data": {
+        "id": "monster-001",
+        "name": "Test Dragon",
+        "color": "Blue",
+        "pos": {
+          "x": 1.5,
+          "y": 2.5,
+          "z": 3.5
+        },
+        "created_at": 1704067200000,
+        "hp": 250,
+        "mana": 500,
+        "secret_location": {
+          "lat": 37.7749,
+          "lon": -122.4194
+        },
+        "inventory": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90
+        ],
+        "secret_notes": "This monster guards the treasure!",
+        "damage_multiplier": 1.5,
+        "experience": 123456.789,
+        "is_elite": true,
+        "loot_values": [
+          100,
+          200,
+          300,
+          500,
+          1000
+        ],
+        "secret_codes": [
+          222,
+          173,
+          190,
+          239
+        ],
+        "weapons": [
+          {
+            "name": "Fire Sword",
+            "damage": 50
+          },
+          {
+            "name": "Ice Staff",
+            "damage": 75
+          }
+        ]
+      }
+    },
+    {
+      "id": "monster_encrypted_tezos",
+      "description": "Monster encrypted with tezos derived key",
+      "schema": "monster_encrypted",
+      "root_type": "Monster",
+      "encryption_key": "tezos",
+      "data": {
+        "id": "monster-001",
+        "name": "Test Dragon",
+        "color": "Blue",
+        "pos": {
+          "x": 1.5,
+          "y": 2.5,
+          "z": 3.5
+        },
+        "created_at": 1704067200000,
+        "hp": 250,
+        "mana": 500,
+        "secret_location": {
+          "lat": 37.7749,
+          "lon": -122.4194
+        },
+        "inventory": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90
+        ],
+        "secret_notes": "This monster guards the treasure!",
+        "damage_multiplier": 1.5,
+        "experience": 123456.789,
+        "is_elite": true,
+        "loot_values": [
+          100,
+          200,
+          300,
+          500,
+          1000
+        ],
+        "secret_codes": [
+          222,
+          173,
+          190,
+          239
+        ],
+        "weapons": [
+          {
+            "name": "Fire Sword",
+            "damage": 50
+          },
+          {
+            "name": "Ice Staff",
+            "damage": 75
+          }
+        ]
+      }
+    },
+    {
+      "id": "monster_encrypted_near",
+      "description": "Monster encrypted with near derived key",
+      "schema": "monster_encrypted",
+      "root_type": "Monster",
+      "encryption_key": "near",
+      "data": {
+        "id": "monster-001",
+        "name": "Test Dragon",
+        "color": "Blue",
+        "pos": {
+          "x": 1.5,
+          "y": 2.5,
+          "z": 3.5
+        },
+        "created_at": 1704067200000,
+        "hp": 250,
+        "mana": 500,
+        "secret_location": {
+          "lat": 37.7749,
+          "lon": -122.4194
+        },
+        "inventory": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90
+        ],
+        "secret_notes": "This monster guards the treasure!",
+        "damage_multiplier": 1.5,
+        "experience": 123456.789,
+        "is_elite": true,
+        "loot_values": [
+          100,
+          200,
+          300,
+          500,
+          1000
+        ],
+        "secret_codes": [
+          222,
+          173,
+          190,
+          239
+        ],
+        "weapons": [
+          {
+            "name": "Fire Sword",
+            "damage": 50
+          },
+          {
+            "name": "Ice Staff",
+            "damage": 75
+          }
+        ]
+      }
+    },
+    {
+      "id": "monster_encrypted_aptos",
+      "description": "Monster encrypted with aptos derived key",
+      "schema": "monster_encrypted",
+      "root_type": "Monster",
+      "encryption_key": "aptos",
+      "data": {
+        "id": "monster-001",
+        "name": "Test Dragon",
+        "color": "Blue",
+        "pos": {
+          "x": 1.5,
+          "y": 2.5,
+          "z": 3.5
+        },
+        "created_at": 1704067200000,
+        "hp": 250,
+        "mana": 500,
+        "secret_location": {
+          "lat": 37.7749,
+          "lon": -122.4194
+        },
+        "inventory": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90
+        ],
+        "secret_notes": "This monster guards the treasure!",
+        "damage_multiplier": 1.5,
+        "experience": 123456.789,
+        "is_elite": true,
+        "loot_values": [
+          100,
+          200,
+          300,
+          500,
+          1000
+        ],
+        "secret_codes": [
+          222,
+          173,
+          190,
+          239
+        ],
+        "weapons": [
+          {
+            "name": "Fire Sword",
+            "damage": 50
+          },
+          {
+            "name": "Ice Staff",
+            "damage": 75
+          }
+        ]
+      }
+    }
+  ],
+  "test_instructions": {
+    "unencrypted": [
+      "1. Parse JSON data",
+      "2. Build FlatBuffer using schema",
+      "3. Serialize to binary",
+      "4. Verify all field values match expected",
+      "5. Share binary with other languages for compatibility check"
+    ],
+    "encrypted": [
+      "1. Parse JSON data",
+      "2. Build FlatBuffer using schema",
+      "3. Encrypt buffer using specified key/IV",
+      "4. Verify encrypted fields are no longer readable",
+      "5. Decrypt buffer using same key/IV",
+      "6. Verify all field values match original",
+      "7. Share encrypted binary with other languages",
+      "8. Verify cross-language decryption produces identical results"
+    ],
+    "signature": [
+      "1. Generate key pair for specified curve",
+      "2. Sign test message using private key",
+      "3. Verify signature using public key",
+      "4. Share signature with other languages for verification",
+      "5. Verify cross-language signature verification works"
+    ]
+  }
+}

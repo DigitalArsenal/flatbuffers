@@ -57,6 +57,9 @@ option(FLATBUFFERS_SKIP_MONSTER_EXTRA
 option(FLATBUFFERS_STRICT_MODE
       "Build flatbuffers with all warnings as errors (-Werror or /WX)."
       OFF)
+option(FLATBUFFERS_USE_CRYPTOPP
+      "Use Crypto++ library for encryption (replaces custom crypto implementation)."
+      OFF)
 
 if(NOT DEFINED FLATBUFFERS_CPP_STD)
   set(FLATBUFFERS_CPP_STD 11)
@@ -112,11 +115,27 @@ endif()
 add_definitions(-DFLATBUFFERS_LOCALE_INDEPENDENT=$<BOOL:${FLATBUFFERS_LOCALE_INDEPENDENT}>)
 
 if(NOT WIN32)
-  include(CheckSymbolExists)
   check_symbol_exists(realpath "stdlib.h" HAVE_REALPATH)
   if(NOT HAVE_REALPATH)
     add_definitions(-DFLATBUFFERS_NO_ABSOLUTE_PATH_RESOLUTION)
   endif()
+endif()
+
+# =============================================================================
+# Crypto++ library for encryption (optional, replaces custom implementation)
+# =============================================================================
+if(FLATBUFFERS_USE_CRYPTOPP)
+  include(FetchContent)
+  FetchContent_Declare(
+    cryptopp-cmake
+    GIT_REPOSITORY https://github.com/abdes/cryptopp-cmake.git
+    GIT_TAG        CRYPTOPP_8_9_0
+  )
+  set(CRYPTOPP_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+  set(CRYPTOPP_INSTALL OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(cryptopp-cmake)
+  add_definitions(-DFLATBUFFERS_USE_CRYPTOPP=1)
+  message(STATUS "Using Crypto++ for encryption")
 endif()
 
 set(FlatBuffers_Library_SRCS
@@ -136,6 +155,7 @@ set(FlatBuffers_Library_SRCS
   include/flatbuffers/hash.h
   include/flatbuffers/idl.h
   include/flatbuffers/minireflect.h
+  include/flatbuffers/options.h
   include/flatbuffers/reflection.h
   include/flatbuffers/reflection_generated.h
   include/flatbuffers/registry.h
@@ -147,12 +167,15 @@ set(FlatBuffers_Library_SRCS
   include/flatbuffers/vector.h
   include/flatbuffers/vector_downward.h
   include/flatbuffers/verifier.h
+  include/flatbuffers/encryption.h
+  src/encryption.cpp
   src/file_manager.cpp
   src/file_name_manager.cpp
   src/idl_parser.cpp
   src/idl_gen_text.cpp
   src/reflection.cpp
   src/util.cpp
+  src/options.cpp
 )
 
 set(FlatBuffers_Compiler_SRCS
@@ -447,31 +470,50 @@ if(FLATBUFFERS_BUILD_FLATLIB)
   )
   target_link_libraries(flatbuffers PRIVATE $<BUILD_INTERFACE:ProjectConfig>)
 
+  # Link Crypto++ if enabled
+  if(FLATBUFFERS_USE_CRYPTOPP)
+    target_link_libraries(flatbuffers PUBLIC cryptopp)
+  endif()
+
   if(FLATBUFFERS_ENABLE_PCH)
     add_pch_to_target(flatbuffers include/flatbuffers/pch/pch.h)
   endif()
 endif()
 
+option(ENABLE_DEBUG_SYMBOLS "Enable debug symbols for flatc" OFF)
+
 if(FLATBUFFERS_BUILD_FLATC)
   add_executable(flatc ${FlatBuffers_Compiler_SRCS})
+
   if(FLATBUFFERS_ENABLE_PCH)
     add_pch_to_target(flatc include/flatbuffers/pch/flatc_pch.h)
   endif()
 
   target_link_libraries(flatc PRIVATE $<BUILD_INTERFACE:ProjectConfig>)
+
+  # Link Crypto++ if enabled
+  if(FLATBUFFERS_USE_CRYPTOPP)
+    target_link_libraries(flatc PRIVATE cryptopp)
+  endif()
+
   target_compile_options(flatc
     PRIVATE
       $<$<AND:$<BOOL:${MSVC_LIKE}>,$<CONFIG:Release>>:
         /MT
+      >
+      $<$<BOOL:${ENABLE_DEBUG_SYMBOLS}>:
+        -g -O0
       >
   )
 
   if(FLATBUFFERS_CODE_SANITIZE AND NOT WIN32)
     add_fsanitize_to_target(flatc ${FLATBUFFERS_CODE_SANITIZE})
   endif()
+
   if(NOT FLATBUFFERS_FLATC_EXECUTABLE)
     set(FLATBUFFERS_FLATC_EXECUTABLE $<TARGET_FILE:flatc>)
   endif()
+
   if(FLATBUFFERS_STATIC_FLATC AND NOT MSVC)
     target_link_libraries(flatc PRIVATE -static)
   endif()
@@ -485,6 +527,10 @@ endif()
 if(FLATBUFFERS_BUILD_SHAREDLIB)
   add_library(flatbuffers_shared SHARED ${FlatBuffers_Library_SRCS})
   target_link_libraries(flatbuffers_shared PRIVATE $<BUILD_INTERFACE:ProjectConfig>)
+  # Link Crypto++ if enabled
+  if(FLATBUFFERS_USE_CRYPTOPP)
+    target_link_libraries(flatbuffers_shared PUBLIC cryptopp)
+  endif()
   # FlatBuffers use calendar-based versioning and do not provide any ABI
   # stability guarantees. Therefore, always use the full version as SOVERSION
   # in order to avoid breaking reverse dependencies on upgrades.
@@ -705,6 +751,9 @@ if(FLATBUFFERS_BUILD_TESTS)
 endif()
 
 include(CMake/BuildFlatBuffers.cmake)
+
+# WASM build support (requires Emscripten)
+include(CMake/BuildWasm.cmake)
 
 if(UNIX)
     # Use of CPack only supported on Linux systems.

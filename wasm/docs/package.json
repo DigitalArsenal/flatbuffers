@@ -1,0 +1,24 @@
+{
+  "name": "flatbuffers-crypto-wallet-demo",
+  "version": "1.0.0",
+  "description": "Browser demo for FlatBuffers WASM crypto capabilities",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.9.7",
+    "@scure/bip32": "^2.0.1",
+    "bip39": "^3.1.0",
+    "buffer": "^6.0.3",
+    "qrcode": "^1.5.3",
+    "vcard-cryptoperson": "^1.1.10"
+  },
+  "devDependencies": {
+    "marked": "^15.0.0",
+    "vite": "^5.0.0",
+    "vite-plugin-singlefile": "^2.0.0"
+  }
+}

@@ -1,0 +1,84 @@
+// E2E Cross-Language Test Schema
+// This schema defines encrypted messages that will be:
+// 1. Generated in all 7 languages via WASM flatc
+// 2. Created using native FlatBuffer libraries
+// 3. Encrypted with ECDH-derived session keys
+// 4. Decrypted and read in all languages
+
+namespace E2E.Crypto;
+
+/// Supported elliptic curves for key exchange
+enum Curve : byte {
+  X25519 = 0,
+  Secp256k1 = 1,
+  P256 = 2,
+}
+
+/// Key exchange algorithm
+enum KeyExchangeAlgorithm : byte {
+  ECDH = 0,
+}
+
+/// Symmetric encryption algorithm
+enum EncryptionAlgorithm : byte {
+  AES_256_CTR = 0,
+}
+
+/// Public key for key exchange (as a table to support all languages)
+table PublicKey {
+  /// Key bytes (32 or 33 bytes depending on curve)
+  data:[ubyte];
+  /// Length of valid key data (32 for X25519/P-256, 33 for secp256k1 compressed)
+  length:ubyte;
+}
+
+/// Encryption header - sent out-of-band with encrypted message
+table EncryptionHeader {
+  /// Protocol version
+  version:uint16 = 1;
+  /// Key exchange algorithm
+  key_exchange:KeyExchangeAlgorithm = ECDH;
+  /// Elliptic curve used
+  curve:Curve;
+  /// Encryption algorithm
+  encryption:EncryptionAlgorithm = AES_256_CTR;
+  /// Ephemeral public key from sender (for ECDH)
+  ephemeral_public_key:PublicKey;
+  /// Sender identifier (optional)
+  sender_id:string;
+  /// Timestamp (Unix epoch seconds)
+  timestamp:uint64;
+}
+
+/// A simple payload for testing
+table Payload {
+  /// Message content
+  message:string;
+  /// Numeric value
+  value:int32;
+  /// Binary data
+  data:[ubyte];
+  /// Nested messages
+  nested:[Payload];
+  /// Boolean flag
+  is_encrypted:bool = false;
+}
+
+/// Wrapper for encrypted/unencrypted messages
+table SecureMessage {
+  /// Unique message identifier
+  id:string;
+  /// Sender identifier
+  sender:string;
+  /// Recipient identifier
+  recipient:string;
+  /// Message payload (can be encrypted)
+  payload:Payload;
+  /// Timestamp
+  timestamp:uint64;
+  /// Signature (optional, for signed messages)
+  signature:[ubyte];
+}
+
+root_type SecureMessage;
+file_identifier "SECM";

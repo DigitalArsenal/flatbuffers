@@ -1,0 +1,62 @@
+{
+  "bitcoin": {
+    "private_key_hex": "c40f8569f3fc0cb7ac055f750fe2c54a01ff11a5ea1a60fc494d6e7c9d03bd7f",
+    "public_key_hex": "42af91ceeeccb05652cec465ac3e80334884ca653e8f97e4f2a9facd2eddb8d570",
+    "address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+    "scheme": "ECDSA_secp256k1"
+  },
+  "ethereum": {
+    "private_key_hex": "a15e083cc8c1696251e70b714704277d3cf2747b3c64fa4b85e983be86b58a50",
+    "public_key_hex": "e72510501f075d0a5d500cda3e3616fa74b44bb55859e30d6be02d2014e3567953",
+    "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f81a5d",
+    "scheme": "ECDSA_secp256k1"
+  },
+  "solana": {
+    "private_key_hex": "1c7e090afdc360d19390b6cc1044e0aa73eb1aeda0198a8c45c59ced975eca6b42971ac893bfead05e3caed212a98a7698acd722ad6b227fb32561a40f24b1e1",
+    "public_key_hex": "4a1eead1e1fdea74cdd74465d76db0a84c3354365050dcb6412419854b48bd74",
+    "address": "4fYNw3dojWmQ4dXtSGE9epjRGy9pFSx62YypT7avPYvA",
+    "scheme": "Ed25519"
+  },
+  "sui": {
+    "private_key_hex": "4b484c475036eb053dd18f56fa85e0b9948a5b4f065de13910a2a1958df796e22ffcfd1e3bcc156b35ed9f605c33a73ee590cc279e67f3d4e1bc9c80655d71f7",
+    "public_key_hex": "4bab82a18f300c74d26d1009ac4c878f55bbd1601cacd882f7a5dbab53cf8137",
+    "address": "0x2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+    "scheme": "Ed25519"
+  },
+  "cosmos": {
+    "private_key_hex": "17aef67f95f9f082a684ae06afc75b4f66c5e4c32a89f7fc793ec731842d1e4c",
+    "public_key_hex": "af438776ec886907aaf1cdb1ee88e17ca00adffd9cbcf0be9dbfebbc1847d1734b",
+    "address": "cosmos1hsk6jryyqjfhp5dhc55tc9jtckygx0eph6dd02",
+    "scheme": "ECDSA_secp256k1"
+  },
+  "polkadot": {
+    "private_key_hex": "c84c18b6514eb0dcb7055b2fc7fb44f556d83c28fc4eabbbd2d4cb0272fb87fc",
+    "public_key_hex": "6adfd2ec8ce9f696ec83099b94a44dffb7a36dcb2cf56a8b762cd60ebd1fa542",
+    "address": "14ShUZUYUR35RBZW6uVVt1zXDxmSQddkeDdXf1JkMA6P7GNY",
+    "scheme": "Sr25519"
+  },
+  "cardano": {
+    "private_key_hex": "8ce7279cdfaf01ae3f5bc96ec284300b4cea781f353f4ce1d5e65e337eb8158a7245bde1fc8db01f8ca3a81fe0a19fc8527a2501a0c5b31a07f8f11c24655cbe",
+    "public_key_hex": "73201844b66d4a10f1a7bfc48828eb7eac9581d516f6c8fdf7ee5db86db5d6e7",
+    "address": "addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3jcu5d8ps7zex2k2xt3uqxgjqnnj83ws8lhrn648jjxtwq2ytjqp",
+    "scheme": "Ed25519"
+  },
+  "tezos": {
+    "private_key_hex": "7ea77e85a526206236e75a0882d4dcdf4cb40286d2ad984ced0d705f366b7f5f87486c33a6daf1245f1efe974ea3294ddbacbe144a1c5ffcee004f65032a910d",
+    "public_key_hex": "8eb745f6127833de94f0a3d9f63959efc44cb2722791b0bb0d10deafe4c17dac",
+    "address": "tz1VSUr8wwNhLAzempoch5d6hLRiTh8Cjcjb",
+    "scheme": "Ed25519"
+  },
+  "near": {
+    "private_key_hex": "beab7691dcd67a5954b16b8b833666ded5871e435ef88826be3a439149271f19d709d3ab99703c7db1a267c08cee0278720eae702478042cf8757e8cb490715a",
+    "public_key_hex": "8e783ada3a0ce7dd5e30e0cecb96b8ab69149474eeedd2b519bdd2cbdcf7f13d",
+    "address": "alice.near",
+    "scheme": "Ed25519"
+  },
+  "aptos": {
+    "private_key_hex": "30a78bd34c656cb16317e0c41cd76614a2f218b3bce37b67989b472f530ca60c5548bfbfc577b85b5fa283b57894554b2b75275535e450bcaef9a22d8ee1b3a7",
+    "public_key_hex": "f4561dfc814fa31491376d3df0ebeb561f2772095bbc7bd21eae28a33c65a267",
+    "address": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    "scheme": "Ed25519"
+  }
+}

@@ -100,6 +100,102 @@ The flatbuffers package in Conan Center is maintained by
 If the version is out of date or the package does not work,
 please create an issue or pull request on the [Conan Center Index repository](https://github.com/conan-io/conan-center-index).
 
+## Building for WebAssembly (WASM)
+
+Build a WebAssembly version of the FlatBuffers compiler with JavaScript/TypeScript
+bindings using Emscripten. This provides an in-browser and Node.js compatible
+`flatc` with an API for schema management, JSON↔Binary conversion, and code generation.
+
+### Quick Start
+
+The simplest way to build the WASM module:
+
+```sh
+./scripts/build_wasm.sh
+```
+
+This script:
+1. Downloads Emscripten SDK via CMake FetchContent
+2. Installs and activates the SDK
+3. Builds the `flatc_wasm` target
+
+Output files are placed in `build/wasm/`:
+- `flatc.js` - ES6 module loader
+- `flatc.wasm` - WebAssembly binary
+
+### Manual Build
+
+If you prefer manual control or already have Emscripten installed:
+
+**Step 1: Initial configure (fetches emsdk)**
+
+```sh
+cmake -B build/wasm -S . -DFLATBUFFERS_BUILD_WASM=ON
+```
+
+This downloads the Emscripten SDK to `build/wasm/_deps/emsdk-src/`.
+
+**Step 2: Install and activate emsdk**
+
+```sh
+cd build/wasm/_deps/emsdk-src
+./emsdk install latest
+./emsdk activate latest
+source ./emsdk_env.sh
+cd -
+```
+
+**Step 3: Reconfigure with Emscripten toolchain**
+
+```sh
+cmake -B build/wasm -S . \
+  -DFLATBUFFERS_BUILD_WASM=ON \
+  -DFLATBUFFERS_BUILD_TESTS=OFF \
+  -DFLATBUFFERS_BUILD_FLATC=OFF \
+  -DCMAKE_TOOLCHAIN_FILE=build/wasm/_deps/emsdk-src/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake
+```
+
+**Step 4: Build**
+
+```sh
+cmake --build build/wasm --target flatc_wasm -j
+```
+
+### Using an Existing Emscripten Installation
+
+If you already have Emscripten installed and activated in your environment:
+
+```sh
+cmake -B build/wasm -S . \
+  -DFLATBUFFERS_BUILD_WASM=ON \
+  -DFLATBUFFERS_BUILD_TESTS=OFF \
+  -DCMAKE_TOOLCHAIN_FILE=$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake
+
+cmake --build build/wasm --target flatc_wasm -j
+```
+
+### Build Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `FLATBUFFERS_BUILD_WASM` | OFF | Enable WASM build |
+| `CMAKE_BUILD_TYPE` | Release | Use `Debug` for assertions and source maps |
+
+### Usage Example
+
+```javascript
+import FlatcWasm from './flatc.js';
+
+const flatc = await FlatcWasm();
+
+// Get version
+console.log(flatc.getVersion());
+
+// TODO: Full API documentation for schema management,
+// conversion, and code generation will be added as
+// the WASM bindings are implemented.
+```
+
 ## Building with VCPKG
 
 You can download and install flatbuffers using the [vcpkg](https://github.com/Microsoft/vcpkg/) dependency manager:

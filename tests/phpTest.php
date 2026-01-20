@@ -1,12 +1,31 @@
 <?php
+
+chdir(__DIR__);
+
 // manual load for testing. please use PSR style autoloader when you use flatbuffers.
-require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "Constants.php"));
-require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "ByteBuffer.php"));
-require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "FlatbufferBuilder.php"));
-require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "Table.php"));
-require join(DIRECTORY_SEPARATOR, array(dirname(dirname(__FILE__)), "php", "Struct.php"));
-foreach (glob(join(DIRECTORY_SEPARATOR, array(dirname(__FILE__), "MyGame", "Example", "*.php"))) as $file) {
-    require $file;
+$phpLibDir = dirname(__DIR__);
+require join(DIRECTORY_SEPARATOR, array($phpLibDir, "php", "Constants.php"));
+require join(DIRECTORY_SEPARATOR, array($phpLibDir, "php", "ByteBuffer.php"));
+require join(DIRECTORY_SEPARATOR, array($phpLibDir, "php", "FlatbufferBuilder.php"));
+require join(DIRECTORY_SEPARATOR, array($phpLibDir, "php", "Table.php"));
+require join(DIRECTORY_SEPARATOR, array($phpLibDir, "php", "Struct.php"));
+
+$generatedRoot = getenv('PHP_GENERATED_ROOT');
+if ($generatedRoot === false || $generatedRoot === '') {
+    $generatedRoot = __DIR__;
+}
+$generatedRoot = rtrim($generatedRoot, DIRECTORY_SEPARATOR);
+$myGameRoot = join(DIRECTORY_SEPARATOR, array($generatedRoot, "MyGame"));
+if (!is_dir($myGameRoot)) {
+    throw new Exception("Could not find generated MyGame classes under {$myGameRoot}");
+}
+$iterator = new RecursiveIteratorIterator(
+    new RecursiveDirectoryIterator($myGameRoot, FilesystemIterator::SKIP_DOTS)
+);
+foreach ($iterator as $file) {
+    if (pathinfo($file, PATHINFO_EXTENSION) === 'php') {
+        require $file;
+    }
 }
 
 function main()

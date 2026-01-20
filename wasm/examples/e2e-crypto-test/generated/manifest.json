@@ -1,0 +1,95 @@
+{
+  "schema": "schemas/message.fbs",
+  "generated": "2026-01-09T02:34:09.829Z",
+  "languages": [
+    {
+      "lang": "typescript",
+      "success": true,
+      "files": [
+        "e2-e/crypto/curve.ts",
+        "e2-e/crypto/key-exchange-algorithm.ts",
+        "e2-e/crypto/encryption-algorithm.ts",
+        "e2-e/crypto/public-key.ts",
+        "e2-e/crypto/encryption-header.ts",
+        "e2-e/crypto/payload.ts",
+        "e2-e/crypto/secure-message.ts",
+        "e2-e/crypto.ts"
+      ]
+    },
+    {
+      "lang": "go",
+      "success": true,
+      "files": [
+        "E2E/Crypto/Curve.go",
+        "E2E/Crypto/KeyExchangeAlgorithm.go",
+        "E2E/Crypto/EncryptionAlgorithm.go",
+        "E2E/Crypto/PublicKey.go",
+        "E2E/Crypto/EncryptionHeader.go",
+        "E2E/Crypto/Payload.go",
+        "E2E/Crypto/SecureMessage.go"
+      ]
+    },
+    {
+      "lang": "python",
+      "success": true,
+      "files": [
+        "E2E/Crypto/__init__.py",
+        "E2E/Crypto/Curve.py",
+        "E2E/Crypto/KeyExchangeAlgorithm.py",
+        "E2E/Crypto/EncryptionAlgorithm.py",
+        "E2E/Crypto/PublicKey.py",
+        "E2E/Crypto/EncryptionHeader.py",
+        "E2E/Crypto/Payload.py",
+        "E2E/Crypto/SecureMessage.py",
+        "E2E/Crypto/Curve.pyi",
+        "E2E/Crypto/KeyExchangeAlgorithm.pyi",
+        "E2E/Crypto/EncryptionAlgorithm.pyi",
+        "E2E/Crypto/PublicKey.pyi",
+        "E2E/Crypto/EncryptionHeader.pyi",
+        "E2E/Crypto/Payload.pyi",
+        "E2E/Crypto/SecureMessage.pyi",
+        "E2E/__init__.py"
+      ]
+    },
+    {
+      "lang": "rust",
+      "success": true,
+      "files": [
+        "message_generated.rs"
+      ]
+    },
+    {
+      "lang": "java",
+      "success": true,
+      "files": [
+        "E2E/Crypto/Curve.java",
+        "E2E/Crypto/KeyExchangeAlgorithm.java",
+        "E2E/Crypto/EncryptionAlgorithm.java",
+        "E2E/Crypto/PublicKey.java",
+        "E2E/Crypto/EncryptionHeader.java",
+        "E2E/Crypto/Payload.java",
+        "E2E/Crypto/SecureMessage.java"
+      ]
+    },
+    {
+      "lang": "csharp",
+      "success": true,
+      "files": [
+        "E2E/Crypto/Curve.cs",
+        "E2E/Crypto/KeyExchangeAlgorithm.cs",
+        "E2E/Crypto/EncryptionAlgorithm.cs",
+        "E2E/Crypto/PublicKey.cs",
+        "E2E/Crypto/EncryptionHeader.cs",
+        "E2E/Crypto/Payload.cs",
+        "E2E/Crypto/SecureMessage.cs"
+      ]
+    },
+    {
+      "lang": "swift",
+      "success": true,
+      "files": [
+        "message_generated.swift"
+      ]
+    }
+  ]
+}

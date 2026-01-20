@@ -1,0 +1,32 @@
+{
+  "x25519": {
+    "alice": {
+      "private": "70a030e23419eeb376d52f216bd73d2a8a03fa5aa69c5d9180c2304a301f0052",
+      "public": "ebba9aefe0d6b9ef04d3a530ccb4726f384310621a51e921e414caa05f971f22"
+    },
+    "bob": {
+      "private": "10edc6c407f39f8ab30a6fcbcf345884ad9eb90a69c6fdd587bfed3e4b4b9358",
+      "public": "6d869c8f4f1e9ab9c35999a663f9507b58c6ca2a5f45e54aa3c2008117aa3969"
+    }
+  },
+  "secp256k1": {
+    "alice": {
+      "private": "74e0e6638670be4275bdd5f204d100e0eabf5f921cc5189109f88360d42cd4ea",
+      "public": "032a2a0b69da24ad1dec84a13086e732110496f9d648de4c5aaeadd5289f50a109"
+    },
+    "bob": {
+      "private": "fa5445e96a79469d25b98bf8d663d4f481494fda055ebb847440767b12606dd3",
+      "public": "03a629df7aa75b4c217315d3b8202682b0d82d4766ed7d9195e0f3a86445439f30"
+    }
+  },
+  "p256": {
+    "alice": {
+      "private": "ee9814ad2b422f55f7654ffd1408a497f48a0f34062ed233a440916149adf693",
+      "public": "02eeed01b2cb5d69b67ebbdd226a3b93ba5ded5e328ccfad186e6a2e70720ccf2e"
+    },
+    "bob": {
+      "private": "6a9a156af4c56110a253d005110bbd369eccf2d7619dfdc3d7601fd1afff672c",
+      "public": "039e8212e9f6890fe459cecbadc645cbc5107764ae58ce87cd11e115ec04815c6d"
+    }
+  }
+}

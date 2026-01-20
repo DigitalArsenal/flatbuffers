@@ -1,0 +1,14 @@
+{
+  "x25519": {
+    "recipientPrivateKey": "90226ebccd375543ba0bc3a9bc05eb9fa34e9fa94673b4007fa352e7128c625f",
+    "recipientPublicKey": "68f0a3e726f9b918cd6c893ca028f8aaa4046f4fc0c3a173cdc0afebd0204111"
+  },
+  "secp256k1": {
+    "recipientPrivateKey": "21f9bb1c81984233265b17bf308fb2dc1335a34ef558687c7fd391f4d792e615",
+    "recipientPublicKey": "02902034a92c438493189f114f78a8cc417fa8858d7c0f6ec65b9f78649ebfa940"
+  },
+  "p256": {
+    "recipientPrivateKey": "5ad188357a4b0d3fcdd2c31bcc1903137b9f77c3d94c72201a48b9134a304824",
+    "recipientPublicKey": "032a314637f7a5ba6c3bec052cdc1af7a6f50047e92e011b29d88bc5cb9e271525"
+  }
+}

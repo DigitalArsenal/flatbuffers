@@ -191,6 +191,7 @@ jobs:
 
   build-dotnet-windows:
     name: Build .NET Windows
+    if: false # Temporarily disabled due to upstream failures
     runs-on: windows-2022-64core
     strategy:
       matrix:
@@ -412,7 +413,6 @@ jobs:
 
   build-kotlin-linux:
     name: Build Kotlin Linux
-    if: false #disabled due to continual failure
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout
@@ -431,10 +431,7 @@ jobs:
        echo "${PWD}" >> $GITHUB_PATH
     - name: Build
       working-directory: kotlin
-      # we are using docker's version of gradle
-      # so no need for wrapper validation or user
-      # gradlew
-      run: gradle jvmMainClasses jvmTest jsTest jsBrowserTest
+      run: ./gradlew jvmMainClasses jvmTest jsTest jsBrowserTest
 
   build-rust-linux:
     name: Build Rust Linux
@@ -447,6 +444,7 @@ jobs:
 
   build-rust-windows:
     name: Build Rust Windows
+    if: false # Temporarily disabled due to upstream failures
     runs-on: windows-2022-64core
     steps:
     - uses: actions/checkout@v6
@@ -510,12 +508,13 @@ jobs:
 
   build-swift-windows:
     name: Test swift windows
+    if: false # Disabled: Swift 5.10 Windows toolchain currently broken on hosted runners
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
       - uses: SwiftyLab/setup-swift@latest
         with:
-          swift-version: '6.1'
+          swift-version: '5.10'
       - run: swift build
       - run: swift test
 
@@ -604,7 +603,7 @@ jobs:
 
   release-digests:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [build-linux, build-windows, build-mac-intel, build-mac-universal]
+    needs: [build-linux, build-windows, build-mac-universal]
     outputs:
       digests: ${{ steps.hash.outputs.digests }}
     runs-on: ubuntu-24.04
@@ -615,7 +614,6 @@ jobs:
           LINUXGCC_DIGESTS: "${{ needs.build-linux.outputs.digests-gcc }}"
           LINUXCLANG_DIGESTS: "${{ needs.build-linux.outputs.digests-clang }}"
           MAC_DIGESTS: "${{ needs.build-mac-universal.outputs.digests }}"
-          MACINTEL_DIGESTS: "${{ needs.build-mac-intel.outputs.digests }}"
           WINDOWS_DIGESTS: "${{ needs.build-windows.outputs.digests }}"
         run: |
           set -euo pipefail

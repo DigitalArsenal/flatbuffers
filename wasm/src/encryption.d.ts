@@ -174,6 +174,30 @@ export declare function clearIVTracking(key: Uint8Array): void;
 export declare function clearAllIVTracking(): void;
 
 // =============================================================================
+// Security Utilities
+// =============================================================================
+
+/**
+ * Best-effort zeroing of a Uint8Array.
+ *
+ * SECURITY NOTE: JavaScript does not guarantee that this actually clears memory.
+ * The JIT compiler may optimize away the fill operation, or the original data
+ * may remain in other memory locations (copies, V8 internal structures, etc.).
+ * This is a best-effort mitigation, not a security guarantee.
+ *
+ * @param arr - Array to zero
+ */
+export declare function zeroBytes(arr: Uint8Array): void;
+
+/**
+ * Securely destroy a key by zeroing its contents.
+ * This is a convenience wrapper around zeroBytes for semantic clarity.
+ *
+ * @param key - Key to destroy
+ */
+export declare function destroyKey(key: Uint8Array): void;
+
+// =============================================================================
 // Symmetric Encryption (AES-256-CTR)
 // =============================================================================
 
@@ -630,6 +654,82 @@ export declare class EncryptionContext {
    * Encrypt vector data in buffer (modifies buffer in-place)
    */
   encryptVector(buffer: Uint8Array, offset: number, elementSize: number, count: number, fieldId: number): void;
+
+  // ===========================================================================
+  // High-Performance Streaming Encryption Methods
+  // ===========================================================================
+
+  /**
+   * Get a cached field key, deriving it via HKDF only on first access.
+   * @param fieldId - Field identifier (0-65535)
+   * @returns 32-byte derived key for this field
+   */
+  getFieldKey(fieldId: number): Uint8Array;
+
+  /**
+   * Compute a unique IV for a (fieldId, recordCounter) pair using XOR.
+   * @param fieldId - Field identifier (0-65535)
+   * @param recordCounter - Record sequence number (0 to 2^53-1 safely in JS)
+   * @returns 16-byte IV unique to this (fieldId, recordCounter) pair
+   */
+  computeFieldIV(fieldId: number, recordCounter: number): Uint8Array;
+
+  /**
+   * High-performance field encryption for streaming/bulk operations.
+   * @param buffer - Buffer containing data to encrypt (modified in-place)
+   * @param offset - Start offset in buffer
+   * @param size - Number of bytes to encrypt
+   * @param fieldId - Field identifier for key derivation
+   * @param recordCounter - Record sequence number for IV uniqueness
+   */
+  encryptField(buffer: Uint8Array, offset: number, size: number, fieldId: number, recordCounter: number): void;
+
+  /**
+   * High-performance buffer encryption for streaming/bulk operations.
+   * @param buffer - Buffer to encrypt (modified in-place)
+   * @param recordCounter - Record sequence number for IV uniqueness
+   * @param fieldId - Optional field ID (defaults to 0)
+   */
+  encryptBuffer(buffer: Uint8Array, recordCounter: number, fieldId?: number): void;
+
+  /**
+   * Decrypt a buffer encrypted with encryptBuffer().
+   * @param buffer - Buffer to decrypt (modified in-place)
+   * @param recordCounter - Record sequence number (must match encryption)
+   * @param fieldId - Optional field ID (must match encryption)
+   */
+  decryptBuffer(buffer: Uint8Array, recordCounter: number, fieldId?: number): void;
+
+  /**
+   * Clear the field key cache with secure zeroing.
+   * @param secureZero - Whether to zero keys before clearing (default: true)
+   */
+  clearKeyCache(secureZero?: boolean): void;
+
+  /**
+   * Get the number of cached field keys.
+   * @returns Number of cached keys
+   */
+  getCacheSize(): number;
+
+  /**
+   * Securely destroy this encryption context.
+   *
+   * This method:
+   * 1. Zeros all cached field keys
+   * 2. Zeros the master key
+   * 3. Zeros the nonce
+   * 4. Clears IV tracking for this key
+   *
+   * After calling destroy(), this context cannot be used for encryption/decryption.
+   */
+  destroy(): void;
+
+  /**
+   * Check if this context has been destroyed.
+   * @returns True if destroy() has been called
+   */
+  isDestroyed(): boolean;
 }
 
 // =============================================================================

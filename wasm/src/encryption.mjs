@@ -12,6 +12,40 @@
  * - P-256 ECDH and ECDSA (NIST)
  * - Ed25519 signatures
  * - HKDF-SHA256 key derivation
+ *
+ * SECURITY THREAT MODEL:
+ * ----------------------
+ * This module provides cryptographic operations in JavaScript/WASM environments.
+ * Users should understand the following security boundaries:
+ *
+ * 1. MEMORY PROTECTION LIMITATIONS:
+ *    - JavaScript does not provide secure memory that can be locked or protected
+ *    - Keys and plaintext may remain in memory after use until garbage collected
+ *    - The zeroBytes() function attempts best-effort memory clearing but cannot
+ *      guarantee immediate zeroing due to JS engine optimizations
+ *    - Browser extensions, debugging tools, or memory dumps may expose secrets
+ *    - For high-security applications, consider using WebCrypto API with
+ *      non-extractable keys where possible
+ *
+ * 2. SIDE-CHANNEL CONSIDERATIONS:
+ *    - WASM execution may be vulnerable to timing attacks
+ *    - Cache-timing attacks are possible in shared environments
+ *    - Do not use in multi-tenant environments where attackers control co-located code
+ *
+ * 3. RANDOM NUMBER GENERATION:
+ *    - Requires crypto.getRandomValues() (browser) or Node.js crypto module
+ *    - Will throw an error if no secure random source is available
+ *    - Never use in environments without proper entropy sources
+ *
+ * 4. AUTHENTICATION:
+ *    - encryptBuffer() uses AES-CTR WITHOUT authentication by default
+ *    - For tamper detection, use encryptAuthenticated() or add HMAC at transport layer
+ *    - Unauthenticated encryption is vulnerable to bit-flipping attacks
+ *
+ * 5. KEY MANAGEMENT:
+ *    - This module does not persist or protect keys at rest
+ *    - Users are responsible for secure key storage and rotation
+ *    - Use destroyKey() and destroy() methods when done with sensitive material
  */
 
 // WASM module instance (set by initEncryption)
@@ -443,49 +477,105 @@ function readString(ptr, maxLen = 32) {
 // Cached Node.js crypto module (lazy-loaded)
 let nodeCryptoModule = null;
 
+// Flag to track if we've already warned about RNG issues
+let rngWarningShown = false;
+
 /**
  * Get cryptographically secure random bytes (works in Node.js and browser)
+ *
+ * This function provides defense-in-depth by:
+ * 1. Using the most secure available source (crypto.getRandomValues or Node.js crypto)
+ * 2. Validating the output is not all zeros (catastrophic RNG failure detection)
+ * 3. Throwing clear errors when no secure source is available
+ *
  * @param {number} size - Number of random bytes
  * @returns {Uint8Array}
- * @throws {Error} If no cryptographic random source is available
+ * @throws {CryptoError} If no cryptographic random source is available or RNG fails
  */
 function getRandomBytes(size) {
   if (size <= 0) {
-    throw new Error('Size must be a positive integer');
+    throw new CryptoError(
+      CryptoErrorCode.INVALID_INPUT,
+      'Size must be a positive integer'
+    );
   }
+
+  let bytes;
 
   // Browser environment - check for SecureContext
   if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
     try {
-      return globalThis.crypto.getRandomValues(new Uint8Array(size));
+      bytes = globalThis.crypto.getRandomValues(new Uint8Array(size));
     } catch (e) {
       // getRandomValues may fail if not in a secure context
-      throw new Error(`crypto.getRandomValues failed: ${e.message}. Ensure you are in a secure context (HTTPS).`);
+      throw new CryptoError(
+        CryptoErrorCode.KEY_GENERATION_FAILED,
+        `crypto.getRandomValues failed: ${e.message}. Ensure you are in a secure context (HTTPS or localhost).`,
+        e
+      );
     }
-  }
-
-  // Node.js environment - use cached module
-  if (typeof process !== 'undefined' && process.versions?.node) {
+  } else if (typeof process !== 'undefined' && process.versions?.node) {
+    // Node.js environment - use cached module
     if (!nodeCryptoModule) {
       // Node.js has crypto as a built-in, access via globalThis or lazy import
       // In Node.js 18+, crypto is available on globalThis
       if (globalThis.crypto?.randomBytes) {
         nodeCryptoModule = globalThis.crypto;
       } else {
-        // Fallback: use Function constructor to avoid static analysis of require
-        // This is necessary because we're in an ESM module
+        // Fallback: use dynamic import for ESM compatibility
         try {
           // eslint-disable-next-line no-new-func
           nodeCryptoModule = new Function('return require("crypto")')();
-        } catch {
-          throw new Error('Node.js crypto module not available');
+        } catch (e) {
+          throw new CryptoError(
+            CryptoErrorCode.KEY_GENERATION_FAILED,
+            'Node.js crypto module not available. Ensure you are running Node.js 14+ with crypto support.',
+            e
+          );
         }
       }
     }
-    return new Uint8Array(nodeCryptoModule.randomBytes(size));
+
+    try {
+      bytes = new Uint8Array(nodeCryptoModule.randomBytes(size));
+    } catch (e) {
+      throw new CryptoError(
+        CryptoErrorCode.KEY_GENERATION_FAILED,
+        `Node.js randomBytes failed: ${e.message}`,
+        e
+      );
+    }
+  } else {
+    throw new CryptoError(
+      CryptoErrorCode.KEY_GENERATION_FAILED,
+      'No cryptographic random source available. Use a modern browser with HTTPS or Node.js 14+. ' +
+      'Do NOT use this library with insecure random sources - cryptographic security depends on proper entropy.'
+    );
   }
 
-  throw new Error('No cryptographic random source available. Use a modern browser with HTTPS or Node.js 18+.');
+  // Defense-in-depth: verify we didn't get all zeros (catastrophic RNG failure)
+  // This catches scenarios like:
+  // - Broken PRNG implementations
+  // - VM snapshot issues where entropy pool wasn't reseeded
+  // - Hardware RNG failures
+  if (size >= 16) {
+    let allZeros = true;
+    for (let i = 0; i < bytes.length; i++) {
+      if (bytes[i] !== 0) {
+        allZeros = false;
+        break;
+      }
+    }
+    if (allZeros) {
+      throw new CryptoError(
+        CryptoErrorCode.KEY_GENERATION_FAILED,
+        'CRITICAL: Random number generator returned all zeros. This indicates a catastrophic RNG failure. ' +
+        'Do NOT proceed with cryptographic operations. Check your system entropy source.'
+      );
+    }
+  }
+
+  return bytes;
 }
 
 /**
@@ -527,6 +617,63 @@ function secureDeallocate(ptr, size) {
  */
 function deallocate(ptr) {
   if (ptr !== 0) wasmModule.free(ptr);
+}
+
+/**
+ * Best-effort zeroing of a Uint8Array.
+ *
+ * SECURITY NOTE: JavaScript does not guarantee that this actually clears memory.
+ * The JIT compiler may optimize away the fill operation, or the original data
+ * may remain in other memory locations (copies, V8 internal structures, etc.).
+ * This is a best-effort mitigation, not a security guarantee.
+ *
+ * For truly secure key handling, consider:
+ * - Using WebCrypto API with non-extractable keys
+ * - Using native modules in Node.js with secure memory
+ * - Keeping keys in WASM linear memory (use secureDeallocate)
+ *
+ * @param {Uint8Array} arr - Array to zero
+ */
+export function zeroBytes(arr) {
+  if (!(arr instanceof Uint8Array)) return;
+
+  // Use crypto.getRandomValues first to make optimization harder,
+  // then fill with zeros. This two-step process makes it harder for
+  // the optimizer to detect and eliminate the zeroing operation.
+  try {
+    if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.getRandomValues) {
+      globalThis.crypto.getRandomValues(arr);
+    }
+  } catch {
+    // Ignore errors, continue to zero
+  }
+
+  // Now zero the array
+  arr.fill(0);
+
+  // Volatile read to prevent dead-store elimination (best effort)
+  // Access the first and last elements to force materialization
+  if (arr.length > 0) {
+    // eslint-disable-next-line no-unused-expressions
+    arr[0] | arr[arr.length - 1];
+  }
+}
+
+/**
+ * Securely destroy a key by zeroing its contents.
+ * This is a convenience wrapper around zeroBytes for semantic clarity.
+ *
+ * @param {Uint8Array} key - Key to destroy
+ * @example
+ * const key = hkdf(ikm, salt, info, 32);
+ * try {
+ *   // use key for encryption
+ * } finally {
+ *   destroyKey(key);
+ * }
+ */
+export function destroyKey(key) {
+  zeroBytes(key);
 }
 
 /**
@@ -2017,16 +2164,22 @@ export class EncryptionContext {
   }
 
   /**
-   * Clear the field key cache.
+   * Clear the field key cache with secure zeroing.
    *
    * Call this when you're done with a batch of records and want to free memory.
    * The keys will be re-derived on next use if needed.
    *
-   * Note: For security-sensitive applications, consider that cached keys
-   * remain in JavaScript memory until garbage collected. This method
-   * clears the Map but doesn't securely zero the key bytes.
+   * This method attempts to zero all cached keys before clearing the Map.
+   * See zeroBytes() documentation for security limitations.
+   *
+   * @param {boolean} [secureZero=true] - Whether to zero keys before clearing
    */
-  clearKeyCache() {
+  clearKeyCache(secureZero = true) {
+    if (secureZero) {
+      for (const key of this.#fieldKeyCache.values()) {
+        zeroBytes(key);
+      }
+    }
     this.#fieldKeyCache.clear();
   }
 
@@ -2038,6 +2191,70 @@ export class EncryptionContext {
    */
   getCacheSize() {
     return this.#fieldKeyCache.size;
+  }
+
+  /**
+   * Securely destroy this encryption context.
+   *
+   * This method:
+   * 1. Zeros all cached field keys
+   * 2. Zeros the master key
+   * 3. Zeros the nonce
+   * 4. Clears IV tracking for this key
+   *
+   * After calling destroy(), this context cannot be used for encryption/decryption.
+   * Any attempt to use it will result in errors or undefined behavior.
+   *
+   * IMPORTANT: Call this method when you're done with the context to minimize
+   * the window during which key material is exposed in memory.
+   *
+   * @example
+   * const ctx = new EncryptionContext(key);
+   * try {
+   *   encryptBuffer(buffer, schema, ctx, 'MyTable');
+   * } finally {
+   *   ctx.destroy();
+   * }
+   */
+  destroy() {
+    // Clear cached field keys with secure zeroing
+    this.clearKeyCache(true);
+
+    // Clear IV tracking for this key before zeroing it
+    if (this.#key) {
+      clearIVTracking(this.#key);
+      zeroBytes(this.#key);
+      this.#key = null;
+    }
+
+    // Zero the nonce
+    if (this.#nonce) {
+      zeroBytes(this.#nonce);
+      this.#nonce = null;
+    }
+
+    // Zero ephemeral keys if present (ECIES)
+    if (this.#ephemeralPublicKey) {
+      zeroBytes(this.#ephemeralPublicKey);
+      this.#ephemeralPublicKey = null;
+    }
+
+    if (this.#recipientKeyId) {
+      zeroBytes(this.#recipientKeyId);
+      this.#recipientKeyId = null;
+    }
+
+    // Clear string references
+    this.#algorithm = null;
+    this.#context = null;
+  }
+
+  /**
+   * Check if this context has been destroyed.
+   * @returns {boolean} True if destroy() has been called
+   */
+  isDestroyed() {
+    return this.#key === null;
   }
 }
 
@@ -2510,12 +2727,29 @@ function processTable(buffer, tableOffset, schema, ctx) {
  * - Structs: NOT supported (will throw an error)
  * - Nested tables: NOT traversed (see LIMITATION above)
  *
- * SECURITY NOTE: This function uses AES-CTR without authentication (no HMAC).
- * This preserves the FlatBuffer binary layout but does not detect tampering.
- * For tamper detection, either:
- * 1. Use encryptAuthenticated() to encrypt the entire buffer (changes format)
- * 2. Add an HMAC of the encrypted buffer at the transport layer
- * 3. Use a transport that provides integrity (TLS, authenticated channels)
+ * ⚠️  SECURITY WARNING: UNAUTHENTICATED ENCRYPTION ⚠️
+ *
+ * This function uses AES-CTR WITHOUT authentication (no HMAC/MAC).
+ * This means:
+ * - An attacker CAN MODIFY the ciphertext without detection
+ * - Bit-flipping attacks can corrupt specific fields predictably
+ * - You CANNOT detect if the data was tampered with during transit
+ *
+ * This is acceptable ONLY when:
+ * - The transport layer provides integrity (TLS, authenticated channels)
+ * - You add your own MAC/HMAC verification around the encrypted buffer
+ * - You understand and accept the bit-flipping attack risk
+ *
+ * For most use cases, prefer encryptAuthenticated() which provides both
+ * confidentiality AND integrity protection via Encrypt-then-MAC.
+ *
+ * If you must use this function, consider adding HMAC verification:
+ * @example
+ * // Add authentication manually
+ * const { buffer, nonce } = encryptBuffer(buf, schema, key, 'MyTable');
+ * const mac = hmacSha256(key, buffer);
+ * // Store: nonce + buffer + mac
+ * // On decrypt: verify HMAC first, then decryptBuffer
  *
  * @param {Uint8Array} buffer - FlatBuffer to encrypt (modified in-place)
  * @param {Object|string} schema - Parsed schema or schema content string
@@ -2698,6 +2932,19 @@ export default {
 
   // Classes
   EncryptionContext,
+
+  // Security utilities
+  zeroBytes,
+  destroyKey,
+
+  // IV management
+  generateIV,
+  clearIVTracking,
+  clearAllIVTracking,
+
+  // Non-destructive encryption
+  encryptBytesCopy,
+  decryptBytesCopy,
 
   // Header utilities
   createEncryptionHeader,

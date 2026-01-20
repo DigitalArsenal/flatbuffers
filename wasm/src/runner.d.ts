@@ -57,7 +57,33 @@ export interface GenerateJSONOptions {
   defaultsJson?: boolean;
   /** Output encoding (default: "utf8") */
   encoding?: "utf8" | null;
+  /** Skip FlatBuffer format validation (default: false) - use with caution */
+  skipValidation?: boolean;
 }
+
+// =============================================================================
+// Security Limits
+// =============================================================================
+
+/**
+ * Maximum total size of all schema files combined (10 MB)
+ */
+export declare const MAX_SCHEMA_TOTAL_SIZE: number;
+
+/**
+ * Maximum number of files in a schema input
+ */
+export declare const MAX_SCHEMA_FILES: number;
+
+/**
+ * Maximum depth of include directives
+ */
+export declare const MAX_INCLUDE_DEPTH: number;
+
+/**
+ * Maximum size of a single binary input (100 MB)
+ */
+export declare const MAX_BINARY_SIZE: number;
 
 /**
  * Options for code generation.

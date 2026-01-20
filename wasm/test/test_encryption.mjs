@@ -28,6 +28,11 @@ import {
   sha256,
   encryptBytes,
   decryptBytes,
+  encryptBytesCopy,
+  decryptBytesCopy,
+  generateIV,
+  clearIVTracking,
+  clearAllIVTracking,
   hkdf,
   x25519GenerateKeyPair,
   x25519SharedSecret,
@@ -53,6 +58,8 @@ import {
   computeKeyId,
   encryptionHeaderToJSON,
   encryptionHeaderFromJSON,
+  CryptoError,
+  CryptoErrorCode,
   KEY_SIZE,
   IV_SIZE,
   SHA256_SIZE,
@@ -354,6 +361,9 @@ async function main() {
     const data1 = new Uint8Array(plaintext);
     const data2 = new Uint8Array(plaintext);
 
+    // Clear IV tracking before test to allow these specific IVs
+    clearIVTracking(key);
+
     encryptBytes(data1, key, new Uint8Array(IV_SIZE).fill(0x01));
     encryptBytes(data2, key, new Uint8Array(IV_SIZE).fill(0x02));
 
@@ -365,6 +375,221 @@ async function main() {
       }
     }
     assert(!same, 'different IVs should produce different ciphertext');
+  });
+
+  // ==========================================================================
+  // Security Tests - IV Reuse Prevention (VULN-001)
+  // ==========================================================================
+  log('\n[Security: IV Reuse Prevention]');
+
+  await test('encryptBytes throws on IV reuse with same key', async () => {
+    const key = randomBytes(KEY_SIZE);
+    const iv = randomBytes(IV_SIZE);
+    const data1 = new TextEncoder().encode('First message');
+    const data2 = new TextEncoder().encode('Second message');
+
+    // Clear any previous tracking for this key
+    clearIVTracking(key);
+
+    // First encryption should succeed
+    encryptBytes(data1, key, iv);
+
+    // Second encryption with same IV should throw
+    assertThrows(
+      () => encryptBytes(data2, key, iv),
+      'IV has already been used',
+      'should throw on IV reuse'
+    );
+  });
+
+  await test('encryptBytes allows same IV with different keys', async () => {
+    const key1 = randomBytes(KEY_SIZE);
+    const key2 = randomBytes(KEY_SIZE);
+    const iv = randomBytes(IV_SIZE);
+
+    // Clear tracking
+    clearIVTracking(key1);
+    clearIVTracking(key2);
+
+    const data1 = new TextEncoder().encode('Message for key1');
+    const data2 = new TextEncoder().encode('Message for key2');
+
+    // Both should succeed since they use different keys
+    encryptBytes(data1, key1, iv);
+    encryptBytes(data2, key2, iv);
+    // No exception means test passed
+  });
+
+  await test('clearIVTracking allows IV reuse after clearing', async () => {
+    const key = randomBytes(KEY_SIZE);
+    const iv = randomBytes(IV_SIZE);
+
+    clearIVTracking(key);
+
+    const data1 = new TextEncoder().encode('First');
+    encryptBytes(data1, key, iv);
+
+    // Clear tracking
+    clearIVTracking(key);
+
+    // Now the same IV should work again
+    const data2 = new TextEncoder().encode('Second');
+    encryptBytes(data2, key, iv);
+    // No exception means test passed
+  });
+
+  await test('clearAllIVTracking clears all keys', async () => {
+    const key1 = randomBytes(KEY_SIZE);
+    const key2 = randomBytes(KEY_SIZE);
+    const iv1 = randomBytes(IV_SIZE);
+    const iv2 = randomBytes(IV_SIZE);
+
+    clearAllIVTracking();
+
+    encryptBytes(new TextEncoder().encode('msg1'), key1, iv1);
+    encryptBytes(new TextEncoder().encode('msg2'), key2, iv2);
+
+    // Clear all
+    clearAllIVTracking();
+
+    // Both should work again
+    encryptBytes(new TextEncoder().encode('msg3'), key1, iv1);
+    encryptBytes(new TextEncoder().encode('msg4'), key2, iv2);
+  });
+
+  await test('generateIV produces valid random IVs', async () => {
+    const iv1 = generateIV();
+    const iv2 = generateIV();
+
+    assertEqual(iv1.length, IV_SIZE, 'IV should be 16 bytes');
+    assertEqual(iv2.length, IV_SIZE, 'IV should be 16 bytes');
+
+    // IVs should be different (with overwhelming probability)
+    let same = true;
+    for (let i = 0; i < IV_SIZE; i++) {
+      if (iv1[i] !== iv2[i]) {
+        same = false;
+        break;
+      }
+    }
+    assert(!same, 'generated IVs should be unique');
+  });
+
+  // ==========================================================================
+  // Security Tests - Non-Destructive Encryption (VULN-004)
+  // ==========================================================================
+  log('\n[Security: Non-Destructive Encryption]');
+
+  await test('encryptBytesCopy preserves original data', async () => {
+    const key = randomBytes(KEY_SIZE);
+    const originalPlaintext = new TextEncoder().encode('Original message');
+    const plaintext = new Uint8Array(originalPlaintext);
+
+    clearIVTracking(key);
+
+    const { ciphertext, iv } = encryptBytesCopy(plaintext, key);
+
+    // Original should be unchanged
+    assertArrayEqual(plaintext, originalPlaintext, 'original should be preserved');
+
+    // Ciphertext should be different from plaintext
+    let same = true;
+    for (let i = 0; i < plaintext.length; i++) {
+      if (ciphertext[i] !== plaintext[i]) {
+        same = false;
+        break;
+      }
+    }
+    assert(!same, 'ciphertext should differ from plaintext');
+
+    assertEqual(iv.length, IV_SIZE, 'IV should be 16 bytes');
+  });
+
+  await test('encryptBytesCopy auto-generates IV when not provided', async () => {
+    const key = randomBytes(KEY_SIZE);
+    const plaintext = new TextEncoder().encode('Test message');
+
+    clearIVTracking(key);
+
+    const result1 = encryptBytesCopy(plaintext, key);
+    const result2 = encryptBytesCopy(plaintext, key);
+
+    // IVs should be different
+    let sameIV = true;
+    for (let i = 0; i < IV_SIZE; i++) {
+      if (result1.iv[i] !== result2.iv[i]) {
+        sameIV = false;
+        break;
+      }
+    }
+    assert(!sameIV, 'auto-generated IVs should be unique');
+  });
+
+  await test('encryptBytesCopy with explicit IV tracks IV usage', async () => {
+    const key = randomBytes(KEY_SIZE);
+    const iv = randomBytes(IV_SIZE);
+    const plaintext = new TextEncoder().encode('Test');
+
+    clearIVTracking(key);
+
+    // First call should succeed
+    encryptBytesCopy(plaintext, key, iv);
+
+    // Second call with same IV should throw
+    assertThrows(
+      () => encryptBytesCopy(plaintext, key, iv),
+      'IV has already been used',
+      'should track IV usage'
+    );
+  });
+
+  await test('decryptBytesCopy preserves original ciphertext', async () => {
+    const key = randomBytes(KEY_SIZE);
+    const plaintext = new TextEncoder().encode('Secret message');
+
+    clearIVTracking(key);
+
+    const { ciphertext, iv } = encryptBytesCopy(plaintext, key);
+    const originalCiphertext = new Uint8Array(ciphertext);
+
+    const decrypted = decryptBytesCopy(ciphertext, key, iv);
+
+    // Ciphertext should be unchanged
+    assertArrayEqual(ciphertext, originalCiphertext, 'ciphertext should be preserved');
+
+    // Decrypted should match original plaintext
+    assertArrayEqual(decrypted, plaintext, 'decryption should recover plaintext');
+  });
+
+  await test('encryptBytesCopy/decryptBytesCopy roundtrip', async () => {
+    const key = randomBytes(KEY_SIZE);
+    const originalMessage = 'Hello, World! This is a test of non-destructive encryption.';
+    const plaintext = new TextEncoder().encode(originalMessage);
+
+    clearIVTracking(key);
+
+    const { ciphertext, iv } = encryptBytesCopy(plaintext, key);
+    const decrypted = decryptBytesCopy(ciphertext, key, iv);
+
+    const decryptedMessage = new TextDecoder().decode(decrypted);
+    assertEqual(decryptedMessage, originalMessage, 'roundtrip should preserve message');
+  });
+
+  await test('IV_REUSE error has correct error code', async () => {
+    const key = randomBytes(KEY_SIZE);
+    const iv = randomBytes(IV_SIZE);
+
+    clearIVTracking(key);
+
+    encryptBytes(new TextEncoder().encode('first'), key, iv);
+
+    try {
+      encryptBytes(new TextEncoder().encode('second'), key, iv);
+      throw new Error('Expected IV_REUSE error');
+    } catch (e) {
+      assert(e instanceof CryptoError, 'should be CryptoError');
+      assertEqual(e.code, CryptoErrorCode.IV_REUSE, 'should have IV_REUSE code');
+    }
   });
 
   // ==========================================================================

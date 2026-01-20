@@ -8,6 +8,39 @@
 import createFlatcModule from "../dist/flatc-wasm.js";
 import { generateAlignedCode as generateAligned } from "./aligned-codegen.mjs";
 
+// =============================================================================
+// Security Limits (VULN-002 fix)
+// =============================================================================
+
+/**
+ * Maximum total size of all schema files combined (10 MB)
+ * Prevents memory exhaustion attacks via large schemas
+ */
+const MAX_SCHEMA_TOTAL_SIZE = 10 * 1024 * 1024;
+
+/**
+ * Maximum number of files in a schema input
+ * Prevents DoS via excessive file count
+ */
+const MAX_SCHEMA_FILES = 1000;
+
+/**
+ * Maximum depth of include directives
+ * Prevents stack overflow and DoS via deeply nested includes
+ */
+const MAX_INCLUDE_DEPTH = 50;
+
+/**
+ * Maximum size of a single binary input (100 MB)
+ * Prevents memory exhaustion via large binary files
+ */
+const MAX_BINARY_SIZE = 100 * 1024 * 1024;
+
+/**
+ * Minimum valid FlatBuffer size (must have at least root offset)
+ */
+const MIN_FLATBUFFER_SIZE = 4;
+
 /**
  * Validates that a path is safe and doesn't contain path traversal attempts.
  * @param {string} path - The path to validate
@@ -36,9 +69,9 @@ function validatePath(path, context = 'path') {
 }
 
 /**
- * Validates schema input structure.
+ * Validates schema input structure with security limits.
  * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput
- * @throws {Error} If the schema input is invalid
+ * @throws {Error} If the schema input is invalid or exceeds security limits
  */
 function validateSchemaInput(schemaInput) {
   if (!schemaInput || typeof schemaInput !== 'object') {
@@ -58,9 +91,170 @@ function validateSchemaInput(schemaInput) {
     throw new Error(`Schema entry "${schemaInput.entry}" not found in files. Available: ${Object.keys(schemaInput.files).join(', ')}`);
   }
 
-  // Validate all file paths
-  for (const filePath of Object.keys(schemaInput.files)) {
+  const fileKeys = Object.keys(schemaInput.files);
+
+  // VULN-002 FIX: Check file count limit
+  if (fileKeys.length > MAX_SCHEMA_FILES) {
+    throw new Error(`Schema input exceeds maximum file count (${MAX_SCHEMA_FILES})`);
+  }
+
+  // Validate all file paths and calculate total size
+  let totalSize = 0;
+  for (const filePath of fileKeys) {
     validatePath(filePath, 'schema file path');
+
+    const content = schemaInput.files[filePath];
+    const contentSize = typeof content === 'string' ? content.length : content.byteLength;
+    totalSize += contentSize;
+
+    // VULN-002 FIX: Check cumulative size limit
+    if (totalSize > MAX_SCHEMA_TOTAL_SIZE) {
+      throw new Error(`Schema input exceeds maximum total size (${MAX_SCHEMA_TOTAL_SIZE} bytes)`);
+    }
+  }
+
+  // VULN-002 FIX: Check for circular includes and include depth
+  validateIncludeDepth(schemaInput);
+}
+
+/**
+ * Validates that schema includes don't exceed max depth and aren't circular.
+ * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput
+ * @throws {Error} If includes are circular or too deep
+ */
+function validateIncludeDepth(schemaInput) {
+  const { entry, files } = schemaInput;
+
+  // Extract includes from a schema file
+  function extractIncludes(content) {
+    const includes = [];
+    // Match: include "path"; or include 'path';
+    const regex = /include\s+["']([^"']+)["']\s*;/g;
+    let match;
+    const contentStr = typeof content === 'string' ? content : new TextDecoder().decode(content);
+    while ((match = regex.exec(contentStr)) !== null) {
+      includes.push(match[1]);
+    }
+    return includes;
+  }
+
+  // Resolve include path relative to current file
+  function resolveIncludePath(currentFile, includePath) {
+    // If include is absolute (starts with /), use as-is
+    if (includePath.startsWith('/')) {
+      return includePath;
+    }
+    // Otherwise, resolve relative to current file's directory
+    const lastSlash = currentFile.lastIndexOf('/');
+    const dir = lastSlash > 0 ? currentFile.slice(0, lastSlash) : '';
+    const resolved = dir ? `${dir}/${includePath}` : includePath;
+    // Normalize path (remove ./ and resolve ../)
+    return resolved.replace(/\/\.\//g, '/').replace(/[^/]+\/\.\.\//g, '');
+  }
+
+  // DFS to check include depth and cycles
+  function checkIncludes(file, visited, depth) {
+    if (depth > MAX_INCLUDE_DEPTH) {
+      throw new Error(`Schema include depth exceeds maximum (${MAX_INCLUDE_DEPTH}). This may indicate circular includes or overly complex schema structure.`);
+    }
+
+    if (visited.has(file)) {
+      throw new Error(`Circular include detected: "${file}" is included in a cycle. Circular includes are not allowed.`);
+    }
+
+    const content = files[file];
+    if (!content) {
+      // File not in provided files - might be resolved by flatc's include paths
+      return;
+    }
+
+    visited.add(file);
+
+    const includes = extractIncludes(content);
+    for (const includePath of includes) {
+      const resolvedPath = resolveIncludePath(file, includePath);
+      checkIncludes(resolvedPath, new Set(visited), depth + 1);
+    }
+  }
+
+  checkIncludes(entry, new Set(), 0);
+}
+
+/**
+ * Validates a FlatBuffer binary for basic structural integrity.
+ * This is a security check to prevent crashes from malformed input.
+ *
+ * VULN-003 FIX: Basic FlatBuffer format validation
+ *
+ * @param {Uint8Array} buffer - The binary data to validate
+ * @throws {Error} If the binary is malformed or exceeds size limits
+ */
+function validateFlatBufferBinary(buffer) {
+  if (!(buffer instanceof Uint8Array)) {
+    throw new Error('Binary input must be a Uint8Array');
+  }
+
+  // Check size limits
+  if (buffer.length > MAX_BINARY_SIZE) {
+    throw new Error(`Binary input exceeds maximum size (${MAX_BINARY_SIZE} bytes)`);
+  }
+
+  if (buffer.length < MIN_FLATBUFFER_SIZE) {
+    throw new Error(`Binary input too small: must be at least ${MIN_FLATBUFFER_SIZE} bytes`);
+  }
+
+  // Read root table offset (little-endian u32 at offset 0)
+  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  const rootOffset = view.getUint32(0, true);
+
+  // Validate root offset points within the buffer
+  // The root offset is the offset from the start of the buffer to the root table
+  if (rootOffset >= buffer.length) {
+    throw new Error(`Invalid FlatBuffer: root offset (${rootOffset}) points outside buffer (size: ${buffer.length})`);
+  }
+
+  // If buffer has a file identifier (bytes 4-7), it should be printable ASCII or null
+  // File identifiers are optional but if present should be valid
+  if (buffer.length >= 8) {
+    const hasFileId = rootOffset >= 8; // File ID is stored at offset 4-7 if root is at 8+
+    if (hasFileId) {
+      for (let i = 4; i < 8; i++) {
+        const byte = buffer[i];
+        // Allow printable ASCII (32-126) or null (0)
+        if (byte !== 0 && (byte < 32 || byte > 126)) {
+          // Not a valid file identifier - this might be a size-prefixed buffer
+          // or just data at this location, so we don't fail, just skip validation
+          break;
+        }
+      }
+    }
+  }
+
+  // Additional sanity check: if we can read the vtable offset from the root table,
+  // verify it's within bounds
+  if (rootOffset + 4 <= buffer.length) {
+    const vtableOffsetSigned = view.getInt32(rootOffset, true);
+    const vtablePos = rootOffset - vtableOffsetSigned;
+
+    // vtable should be within buffer and before the root table
+    if (vtablePos < 0 || vtablePos >= buffer.length) {
+      throw new Error(`Invalid FlatBuffer: vtable position (${vtablePos}) is out of bounds`);
+    }
+
+    // Read vtable size (first 2 bytes of vtable)
+    if (vtablePos + 2 <= buffer.length) {
+      const vtableSize = view.getUint16(vtablePos, true);
+
+      // vtable size should be reasonable (at least 4 bytes for size + table size fields)
+      if (vtableSize < 4) {
+        throw new Error(`Invalid FlatBuffer: vtable size (${vtableSize}) is too small`);
+      }
+
+      // vtable shouldn't extend past buffer
+      if (vtablePos + vtableSize > buffer.length) {
+        throw new Error(`Invalid FlatBuffer: vtable extends past buffer end`);
+      }
+    }
   }
 }
 
@@ -378,9 +572,14 @@ export class FlatcRunner {
    * @param {boolean} [options.rawBinary=true] - Allow raw binary.
    * @param {boolean} [options.defaultsJson=false] - Include default values.
    * @param {"utf8"|null} [options.encoding="utf8"] - Output encoding.
+   * @param {boolean} [options.skipValidation=false] - Skip FlatBuffer format validation.
    * @returns {string|Uint8Array}
    */
   generateJSON(schemaInput, binaryInput, options = {}) {
+    // VULN-003 FIX: Validate binary input before processing
+    if (!options.skipValidation) {
+      validateFlatBufferBinary(binaryInput.data);
+    }
     // Handle binary path - ensure it has an extension flatc recognizes
     const binaryPath = binaryInput.path.includes(".")
       ? binaryInput.path

@@ -28,6 +28,7 @@ export declare const CryptoErrorCode: {
   AUTHENTICATION_FAILED: 'AUTHENTICATION_FAILED';
   MEMORY_ERROR: 'MEMORY_ERROR';
   INVALID_INPUT: 'INVALID_INPUT';
+  IV_REUSE: 'IV_REUSE';
 };
 
 export type CryptoErrorCodeType = typeof CryptoErrorCode[keyof typeof CryptoErrorCode];
@@ -152,18 +153,43 @@ export declare function hmacSha256Verify(
 ): boolean;
 
 // =============================================================================
+// IV Management (Security)
+// =============================================================================
+
+/**
+ * Generate a cryptographically random IV
+ * @returns 16-byte random IV
+ */
+export declare function generateIV(): Uint8Array;
+
+/**
+ * Clear IV tracking for a specific key (call when key is rotated/destroyed)
+ * @param key - The key to clear tracking for
+ */
+export declare function clearIVTracking(key: Uint8Array): void;
+
+/**
+ * Clear all IV tracking (use with caution - only for testing or full reset)
+ */
+export declare function clearAllIVTracking(): void;
+
+// =============================================================================
 // Symmetric Encryption (AES-256-CTR)
 // =============================================================================
 
 /**
  * Encrypt data in-place using AES-256-CTR
  *
- * WARNING: This function modifies the data array in-place.
- * CTR mode is a stream cipher - each (key, IV) pair must be unique.
+ * SECURITY: This function tracks IV usage per key to prevent catastrophic IV reuse.
+ * Each (key, IV) pair can only be used once. Attempting to reuse an IV will throw.
+ *
+ * WARNING: This function modifies the data array in-place. If you need to preserve
+ * the original plaintext, use encryptBytesCopy() instead.
  *
  * @param data - Data to encrypt (modified in-place)
  * @param key - 32-byte key
- * @param iv - 16-byte IV (must be unique per encryption)
+ * @param iv - 16-byte IV (must be unique per encryption with this key)
+ * @throws CryptoError with code IV_REUSE if IV has been used before with this key
  */
 export declare function encryptBytes(
   data: Uint8Array,
@@ -172,14 +198,55 @@ export declare function encryptBytes(
 ): void;
 
 /**
+ * Encrypt data and return a copy (non-destructive)
+ *
+ * SECURITY: This function tracks IV usage per key to prevent catastrophic IV reuse.
+ * Each (key, IV) pair can only be used once. Attempting to reuse an IV will throw.
+ *
+ * This is the recommended function for most use cases as it preserves the original data.
+ *
+ * @param data - Data to encrypt (not modified)
+ * @param key - 32-byte key
+ * @param iv - 16-byte IV (auto-generated if not provided)
+ * @returns Object containing ciphertext and the IV used
+ * @throws CryptoError with code IV_REUSE if IV has been used before with this key
+ */
+export declare function encryptBytesCopy(
+  data: Uint8Array,
+  key: Uint8Array,
+  iv?: Uint8Array | null
+): { ciphertext: Uint8Array; iv: Uint8Array };
+
+/**
  * Decrypt data in-place using AES-256-CTR
- * Same as encryptBytes (CTR mode is symmetric)
+ *
+ * Note: Decryption does not check IV reuse since the IV comes from the ciphertext.
+ *
+ * @param data - Data to decrypt (modified in-place)
+ * @param key - 32-byte key
+ * @param iv - 16-byte IV
  */
 export declare function decryptBytes(
   data: Uint8Array,
   key: Uint8Array,
   iv: Uint8Array
 ): void;
+
+/**
+ * Decrypt data and return a copy (non-destructive)
+ *
+ * This is the recommended function for most use cases as it preserves the original data.
+ *
+ * @param data - Data to decrypt (not modified)
+ * @param key - 32-byte key
+ * @param iv - 16-byte IV
+ * @returns Decrypted plaintext
+ */
+export declare function decryptBytesCopy(
+  data: Uint8Array,
+  key: Uint8Array,
+  iv: Uint8Array
+): Uint8Array;
 
 // =============================================================================
 // Authenticated Encryption (Encrypt-then-MAC)

@@ -284,6 +284,177 @@ test("runCommand returns non-zero code on invalid args", () => {
   assertEqual(result.code !== 0 || result.stderr.length > 0, true, "error on invalid flag");
 });
 
+// ==========================================================================
+// Security Tests - Schema Validation (VULN-002)
+// ==========================================================================
+console.log("\n7. Security: Schema validation:");
+
+test("rejects schema input exceeding file count limit", () => {
+  const files = {};
+  // Create more than MAX_SCHEMA_FILES (1000)
+  for (let i = 0; i < 1001; i++) {
+    files[`file${i}.fbs`] = 'table Test { x: int; }';
+  }
+  let threw = false;
+  let errorMsg = '';
+  try {
+    runner.generateCode({ entry: 'file0.fbs', files }, 'ts');
+  } catch (e) {
+    threw = true;
+    errorMsg = e.message;
+  }
+  assertEqual(threw, true, "threw error on too many files");
+  assertContains(errorMsg, "maximum file count", "mentions file count limit");
+});
+
+test("rejects schema input exceeding total size limit", () => {
+  // Create a single large file (> 10 MB)
+  const largeContent = 'x'.repeat(11 * 1024 * 1024);
+  let threw = false;
+  let errorMsg = '';
+  try {
+    runner.generateCode({ entry: 'large.fbs', files: { 'large.fbs': largeContent } }, 'ts');
+  } catch (e) {
+    threw = true;
+    errorMsg = e.message;
+  }
+  assertEqual(threw, true, "threw error on large schema");
+  assertContains(errorMsg, "maximum total size", "mentions size limit");
+});
+
+test("rejects circular includes", () => {
+  const files = {
+    'a.fbs': 'include "b.fbs";\ntable A { x: int; }',
+    'b.fbs': 'include "a.fbs";\ntable B { y: int; }',
+  };
+  let threw = false;
+  let errorMsg = '';
+  try {
+    runner.generateCode({ entry: 'a.fbs', files }, 'ts');
+  } catch (e) {
+    threw = true;
+    errorMsg = e.message;
+  }
+  assertEqual(threw, true, "threw error on circular include");
+  assertContains(errorMsg, "Circular include", "mentions circular include");
+});
+
+test("rejects deeply nested includes", () => {
+  const files = {};
+  // Create a chain of 60 includes (exceeds MAX_INCLUDE_DEPTH of 50)
+  for (let i = 0; i < 60; i++) {
+    if (i < 59) {
+      files[`level${i}.fbs`] = `include "level${i + 1}.fbs";\ntable Level${i} { x: int; }`;
+    } else {
+      files[`level${i}.fbs`] = `table Level${i} { x: int; }`;
+    }
+  }
+  let threw = false;
+  let errorMsg = '';
+  try {
+    runner.generateCode({ entry: 'level0.fbs', files }, 'ts');
+  } catch (e) {
+    threw = true;
+    errorMsg = e.message;
+  }
+  assertEqual(threw, true, "threw error on deep nesting");
+  assertContains(errorMsg, "include depth exceeds", "mentions depth limit");
+});
+
+test("accepts valid nested includes within limit", () => {
+  const files = {};
+  // Create a chain of 10 includes (within limit)
+  for (let i = 0; i < 10; i++) {
+    if (i < 9) {
+      files[`level${i}.fbs`] = `include "level${i + 1}.fbs";\ntable Level${i} { x: int; }`;
+    } else {
+      files[`level${i}.fbs`] = `table Level${i} { x: int; }\nroot_type Level${i};`;
+    }
+  }
+  // Should not throw
+  const code = runner.generateCode({ entry: 'level0.fbs', files }, 'ts');
+  assertEqual(typeof code, 'object', 'returns code object');
+});
+
+// ==========================================================================
+// Security Tests - Binary Validation (VULN-003)
+// ==========================================================================
+console.log("\n8. Security: Binary validation:");
+
+test("rejects binary input that is too small", () => {
+  let threw = false;
+  let errorMsg = '';
+  try {
+    runner.generateJSON(schemaInput, { path: 'test.bin', data: new Uint8Array([1, 2]) });
+  } catch (e) {
+    threw = true;
+    errorMsg = e.message;
+  }
+  assertEqual(threw, true, "threw error on small binary");
+  assertContains(errorMsg, "too small", "mentions size");
+});
+
+test("rejects binary with invalid root offset", () => {
+  // Create binary with root offset pointing outside buffer
+  const binary = new Uint8Array(8);
+  const view = new DataView(binary.buffer);
+  view.setUint32(0, 1000, true); // Root offset way outside buffer
+
+  let threw = false;
+  let errorMsg = '';
+  try {
+    runner.generateJSON(schemaInput, { path: 'test.bin', data: binary });
+  } catch (e) {
+    threw = true;
+    errorMsg = e.message;
+  }
+  assertEqual(threw, true, "threw error on invalid root offset");
+  assertContains(errorMsg, "root offset", "mentions root offset");
+});
+
+test("rejects non-Uint8Array binary input", () => {
+  let threw = false;
+  let errorMsg = '';
+  try {
+    runner.generateJSON(schemaInput, { path: 'test.bin', data: [1, 2, 3, 4, 5, 6, 7, 8] });
+  } catch (e) {
+    threw = true;
+    errorMsg = e.message;
+  }
+  assertEqual(threw, true, "threw error on non-Uint8Array");
+  assertContains(errorMsg, "Uint8Array", "mentions Uint8Array");
+});
+
+test("skipValidation option bypasses binary validation", () => {
+  // Create invalid binary
+  const binary = new Uint8Array(8);
+  const view = new DataView(binary.buffer);
+  view.setUint32(0, 1000, true); // Invalid root offset
+
+  let threw = false;
+  try {
+    // This should skip validation and fail later in flatc
+    runner.generateJSON(schemaInput, { path: 'test.bin', data: binary }, { skipValidation: true });
+  } catch (e) {
+    threw = true;
+    // Should throw from flatc, not from validation
+    assertEqual(e.message.includes('root offset') === false, true, 'error not from validation');
+  }
+  // It will throw eventually from flatc, but not from our validation
+  assertEqual(threw, true, "flatc still fails on invalid binary");
+});
+
+test("accepts valid FlatBuffer binary", () => {
+  // First generate a valid binary
+  const binary = runner.generateBinary(schemaInput, monsterJson);
+  assertInstanceOf(binary, Uint8Array, "binary is Uint8Array");
+
+  // Then convert back to JSON (should pass validation)
+  const json = runner.generateJSON(schemaInput, { path: 'monster.bin', data: binary });
+  assertEqual(typeof json, 'string', 'returns JSON string');
+  assertContains(json, 'Orc', 'contains monster name');
+});
+
 // Summary
 console.log("\n=== Test Summary ===");
 console.log(`Passed: ${passed}`);

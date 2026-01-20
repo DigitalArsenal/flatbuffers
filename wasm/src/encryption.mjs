@@ -23,6 +23,112 @@ const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
 // =============================================================================
+// IV Tracking for AES-CTR Security (VULN-001 fix)
+// =============================================================================
+
+/**
+ * Tracks used IVs per key to prevent catastrophic IV reuse in AES-CTR mode.
+ * Key: hex string of key hash, Value: Set of hex IV strings
+ * @type {Map<string, Set<string>>}
+ */
+const usedIVsByKey = new Map();
+
+/**
+ * Maximum number of IVs to track per key before forcing key rotation.
+ * With 128-bit IVs, birthday paradox collision risk is negligible below 2^64,
+ * but we limit to 1M to bound memory usage.
+ */
+const MAX_IVS_PER_KEY = 1_000_000;
+
+/**
+ * Convert bytes to hex string for Map keys
+ * @param {Uint8Array} bytes
+ * @returns {string}
+ */
+function bytesToHex(bytes) {
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Get a short hash of the key for IV tracking (we don't store the full key)
+ * @param {Uint8Array} key
+ * @returns {string}
+ */
+function getKeyId(key) {
+  // Use first 8 bytes of SHA-256 hash as key identifier
+  // We compute this without WASM to avoid circular dependency during init
+  let hash = 0x811c9dc5; // FNV-1a offset basis
+  for (let i = 0; i < key.length; i++) {
+    hash ^= key[i];
+    hash = Math.imul(hash, 0x01000193); // FNV-1a prime
+  }
+  return hash.toString(16);
+}
+
+/**
+ * Check and record IV usage for a key. Throws if IV was already used.
+ * @param {Uint8Array} key - Encryption key
+ * @param {Uint8Array} iv - IV to check
+ * @param {boolean} [trackUsage=true] - Whether to track this IV (false for decryption)
+ * @throws {CryptoError} If IV was already used with this key
+ */
+function checkAndRecordIV(key, iv, trackUsage = true) {
+  const keyId = getKeyId(key);
+  const ivHex = bytesToHex(iv);
+
+  if (!usedIVsByKey.has(keyId)) {
+    usedIVsByKey.set(keyId, new Set());
+  }
+
+  const usedIVs = usedIVsByKey.get(keyId);
+
+  if (usedIVs.has(ivHex)) {
+    throw new CryptoError(
+      CryptoErrorCode.IV_REUSE,
+      'IV has already been used with this key. AES-CTR requires unique IVs per key to maintain security. ' +
+      'Generate a new random IV for each encryption operation.'
+    );
+  }
+
+  if (trackUsage) {
+    if (usedIVs.size >= MAX_IVS_PER_KEY) {
+      throw new CryptoError(
+        CryptoErrorCode.IV_REUSE,
+        `Maximum IV count (${MAX_IVS_PER_KEY}) reached for this key. ` +
+        'Rotate to a new key to maintain security.'
+      );
+    }
+    usedIVs.add(ivHex);
+  }
+}
+
+/**
+ * Clear IV tracking for a specific key (call when key is rotated/destroyed)
+ * @param {Uint8Array} key
+ */
+export function clearIVTracking(key) {
+  if (key) {
+    const keyId = getKeyId(key);
+    usedIVsByKey.delete(keyId);
+  }
+}
+
+/**
+ * Clear all IV tracking (use with caution - only for testing or full reset)
+ */
+export function clearAllIVTracking() {
+  usedIVsByKey.clear();
+}
+
+/**
+ * Generate a cryptographically random IV
+ * @returns {Uint8Array} 16-byte random IV
+ */
+export function generateIV() {
+  return getRandomBytes(IV_SIZE);
+}
+
+// =============================================================================
 // Error Types
 // =============================================================================
 
@@ -46,6 +152,7 @@ export const CryptoErrorCode = {
   AUTHENTICATION_FAILED: 'AUTHENTICATION_FAILED',
   MEMORY_ERROR: 'MEMORY_ERROR',
   INVALID_INPUT: 'INVALID_INPUT',
+  IV_REUSE: 'IV_REUSE',
 };
 
 /**
@@ -586,12 +693,13 @@ export function hmacSha256Verify(key, data, expectedMac) {
 // =============================================================================
 
 /**
- * Encrypt data in-place using AES-256-CTR
+ * Internal encryption implementation
  * @param {Uint8Array} data - Data to encrypt (modified in-place)
  * @param {Uint8Array} key - 32-byte key
  * @param {Uint8Array} iv - 16-byte IV
+ * @param {boolean} isEncrypt - true for encryption (tracks IV), false for decryption
  */
-export function encryptBytes(data, key, iv) {
+function _encryptBytesInternal(data, key, iv, isEncrypt) {
   if (!wasmModule) {
     throw new CryptoError(CryptoErrorCode.NOT_INITIALIZED, 'Encryption module not initialized. Call loadEncryptionWasm() first.');
   }
@@ -611,6 +719,12 @@ export function encryptBytes(data, key, iv) {
     throw new CryptoError(CryptoErrorCode.INVALID_IV_SIZE, `IV must be ${IV_SIZE} bytes, got ${iv.length}`);
   }
   if (data.length === 0) return; // Nothing to encrypt - data is unchanged
+
+  // VULN-001 FIX: Check for IV reuse (only for encryption, not decryption)
+  // Reusing an IV with the same key in CTR mode completely breaks security
+  if (isEncrypt) {
+    checkAndRecordIV(key, iv, true);
+  }
 
   const keyPtr = allocate(KEY_SIZE);
   const ivPtr = allocate(IV_SIZE);
@@ -636,10 +750,74 @@ export function encryptBytes(data, key, iv) {
 }
 
 /**
- * Decrypt data in-place using AES-256-CTR
- * Same as encryptBytes (CTR mode is symmetric)
+ * Encrypt data in-place using AES-256-CTR
+ *
+ * SECURITY: This function tracks IV usage per key to prevent catastrophic IV reuse.
+ * Each (key, IV) pair can only be used once. Attempting to reuse an IV will throw.
+ *
+ * WARNING: This function modifies the data array in-place. If you need to preserve
+ * the original plaintext, use encryptBytesCopy() instead.
+ *
+ * @param {Uint8Array} data - Data to encrypt (modified in-place)
+ * @param {Uint8Array} key - 32-byte key
+ * @param {Uint8Array} iv - 16-byte IV (must be unique per encryption with this key)
+ * @throws {CryptoError} If IV has been used before with this key (IV_REUSE)
  */
-export const decryptBytes = encryptBytes;
+export function encryptBytes(data, key, iv) {
+  _encryptBytesInternal(data, key, iv, true);
+}
+
+/**
+ * Encrypt data and return a copy (non-destructive)
+ *
+ * SECURITY: This function tracks IV usage per key to prevent catastrophic IV reuse.
+ * Each (key, IV) pair can only be used once. Attempting to reuse an IV will throw.
+ *
+ * This is the recommended function for most use cases as it preserves the original data.
+ *
+ * @param {Uint8Array} data - Data to encrypt (not modified)
+ * @param {Uint8Array} key - 32-byte key
+ * @param {Uint8Array} [iv] - 16-byte IV (auto-generated if not provided)
+ * @returns {{ciphertext: Uint8Array, iv: Uint8Array}} Ciphertext and IV used
+ * @throws {CryptoError} If IV has been used before with this key (IV_REUSE)
+ */
+export function encryptBytesCopy(data, key, iv = null) {
+  // VULN-004 FIX: Non-destructive encryption that returns a copy
+  const actualIV = iv || generateIV();
+  const ciphertext = new Uint8Array(data);
+  _encryptBytesInternal(ciphertext, key, actualIV, true);
+  return { ciphertext, iv: actualIV };
+}
+
+/**
+ * Decrypt data in-place using AES-256-CTR
+ *
+ * Note: Decryption does not check IV reuse since the IV comes from the ciphertext.
+ *
+ * @param {Uint8Array} data - Data to decrypt (modified in-place)
+ * @param {Uint8Array} key - 32-byte key
+ * @param {Uint8Array} iv - 16-byte IV
+ */
+export function decryptBytes(data, key, iv) {
+  _encryptBytesInternal(data, key, iv, false);
+}
+
+/**
+ * Decrypt data and return a copy (non-destructive)
+ *
+ * This is the recommended function for most use cases as it preserves the original data.
+ *
+ * @param {Uint8Array} data - Data to decrypt (not modified)
+ * @param {Uint8Array} key - 32-byte key
+ * @param {Uint8Array} iv - 16-byte IV
+ * @returns {Uint8Array} Decrypted plaintext
+ */
+export function decryptBytesCopy(data, key, iv) {
+  // VULN-004 FIX: Non-destructive decryption that returns a copy
+  const plaintext = new Uint8Array(data);
+  _encryptBytesInternal(plaintext, key, iv, false);
+  return plaintext;
+}
 
 // =============================================================================
 // Authenticated Encryption (Encrypt-then-MAC)

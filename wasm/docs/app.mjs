@@ -3182,6 +3182,17 @@ const studioState = {
   enums: [],
   structs: [],
   currentBuffer: null,
+  // Bulk Builder state
+  bulkMode: false,
+  bulkConfig: {
+    count: 100,
+    encryptEnabled: true,
+    publicKey: null,
+    privateKey: null,
+  },
+  bulkBuffers: [],       // Array of { index, data, binary, encrypted?, header? }
+  bulkSelectedIndex: 0,
+  bulkDecrypted: false,
 };
 
 // Schema Editor File System State
@@ -3913,7 +3924,7 @@ function loadSampleProject() {
   loadSampleProjectSilent();
   renderSchemaFileTree();
   selectSchemaFile('schema.fbs');
-  setStudioStatus('Sample project loaded', 'success');
+  parseStudioSchema();
 }
 
 function initStudio() {
@@ -3926,6 +3937,12 @@ function initStudio() {
       tab.classList.add('active');
       const panel = document.getElementById(`studio-${tabId}`);
       if (panel) panel.classList.add('active');
+
+      // Show codegen notice only on Code Generator tab
+      const codegenNotice = $('studio-codegen-notice');
+      if (codegenNotice) {
+        codegenNotice.style.display = (tabId === 'code-gen') ? 'flex' : 'none';
+      }
     });
   });
 
@@ -3940,6 +3957,11 @@ function initStudio() {
     selectSchemaFile(schemaFiles.currentFile);
   } else if (schemaFiles.entryPoint) {
     selectSchemaFile(schemaFiles.entryPoint);
+  }
+
+  // Auto-parse schema to populate table selectors
+  if (Object.keys(schemaFiles.files).length > 0) {
+    parseStudioSchema();
   }
 
   // Load sample project button
@@ -4066,6 +4088,83 @@ function initStudio() {
   $('studio-build-buffer')?.addEventListener('click', buildStudioBuffer);
   $('studio-clear-form')?.addEventListener('click', clearStudioForm);
   $('studio-download-buffer')?.addEventListener('click', downloadStudioBuffer);
+
+  // Bulk Builder Mode Toggle
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => toggleStudioBuilderMode(btn.dataset.mode));
+  });
+
+  // Bulk Builder Config
+  $('bulk-record-count')?.addEventListener('change', (e) => {
+    studioState.bulkConfig.count = parseInt(e.target.value) || 100;
+  });
+
+  $('bulk-encrypt-enabled')?.addEventListener('change', (e) => {
+    studioState.bulkConfig.encryptEnabled = e.target.checked;
+    const pubGroup = $('bulk-pubkey-group');
+    const privGroup = $('bulk-privkey-group');
+    if (pubGroup) pubGroup.style.opacity = e.target.checked ? '1' : '0.5';
+    if (privGroup) privGroup.style.opacity = e.target.checked ? '1' : '0.5';
+  });
+
+  $('bulk-public-key')?.addEventListener('input', onBulkPublicKeyChange);
+  $('bulk-private-key')?.addEventListener('input', onBulkPrivateKeyChange);
+
+  // Quick fill Bob's keys
+  $('bulk-use-bob-pubkey')?.addEventListener('click', () => {
+    if (state.pki.bob) {
+      const input = $('bulk-public-key');
+      if (input) input.value = toHexCompact(state.pki.bob.publicKey);
+      onBulkPublicKeyChange();
+    } else {
+      alert('No PKI keys available. Please login first.');
+    }
+  });
+
+  $('bulk-use-bob-privkey')?.addEventListener('click', () => {
+    if (state.pki.bob) {
+      const input = $('bulk-private-key');
+      if (input) input.value = toHexCompact(state.pki.bob.privateKey);
+      onBulkPrivateKeyChange();
+    } else {
+      alert('No PKI keys available. Please login first.');
+    }
+  });
+
+  // Bulk Builder Actions
+  $('bulk-generate-btn')?.addEventListener('click', generateBulkStudioBuffers);
+  $('bulk-toggle-decrypt')?.addEventListener('click', toggleBulkDecryption);
+  $('bulk-download-all')?.addEventListener('click', downloadBulkBuffers);
+  $('bulk-clear-btn')?.addEventListener('click', clearBulkResults);
+
+  // Bulk Hex Navigation
+  $('bulk-hex-prev')?.addEventListener('click', () => {
+    if (studioState.bulkSelectedIndex > 0) {
+      studioState.bulkSelectedIndex--;
+      displayBulkHexView(studioState.bulkSelectedIndex);
+      // Update selected row
+      const container = $('bulk-results-table');
+      if (container) {
+        container.querySelectorAll('tr.selected').forEach(r => r.classList.remove('selected'));
+        const row = container.querySelector(`tr[data-index="${studioState.bulkSelectedIndex}"]`);
+        if (row) row.classList.add('selected');
+      }
+    }
+  });
+
+  $('bulk-hex-next')?.addEventListener('click', () => {
+    if (studioState.bulkSelectedIndex < studioState.bulkBuffers.length - 1) {
+      studioState.bulkSelectedIndex++;
+      displayBulkHexView(studioState.bulkSelectedIndex);
+      // Update selected row
+      const container = $('bulk-results-table');
+      if (container) {
+        container.querySelectorAll('tr.selected').forEach(r => r.classList.remove('selected'));
+        const row = container.querySelector(`tr[data-index="${studioState.bulkSelectedIndex}"]`);
+        if (row) row.classList.add('selected');
+      }
+    }
+  });
 
   // Downloads
   $('studio-download-flatc-wasm')?.addEventListener('click', () => {
@@ -5029,6 +5128,447 @@ function downloadStudioBuffer() {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// =============================================================================
+// Bulk Builder Functions
+// =============================================================================
+
+function toggleStudioBuilderMode(mode) {
+  studioState.bulkMode = (mode === 'bulk');
+
+  // Update mode toggle buttons
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === mode);
+  });
+
+  // Show/hide relevant sections
+  const singleForm = $('studio-builder-form');
+  const bulkConfig = $('studio-bulk-config');
+  const singleFooter = $('studio-single-footer');
+  const bulkFooter = $('studio-bulk-footer');
+  const decodedPane = $('studio-decoded-pane');
+  const bulkResults = $('studio-bulk-results');
+  const bulkHexNav = $('bulk-hex-nav');
+  const singleEncryptLabel = $('single-encrypt-label');
+
+  if (studioState.bulkMode) {
+    if (singleForm) singleForm.style.display = 'none';
+    if (bulkConfig) bulkConfig.style.display = 'block';
+    if (singleFooter) singleFooter.style.display = 'none';
+    if (bulkFooter) bulkFooter.style.display = 'flex';
+    if (decodedPane) decodedPane.style.display = 'none';
+    if (bulkResults) bulkResults.style.display = 'flex';
+    if (bulkHexNav) bulkHexNav.style.display = 'flex';
+    if (singleEncryptLabel) singleEncryptLabel.style.display = 'none';
+
+    // Initialize keys to Bob's if available
+    initBulkKeys();
+  } else {
+    if (singleForm) singleForm.style.display = 'block';
+    if (bulkConfig) bulkConfig.style.display = 'none';
+    if (singleFooter) singleFooter.style.display = 'flex';
+    if (bulkFooter) bulkFooter.style.display = 'none';
+    if (decodedPane) decodedPane.style.display = 'flex';
+    if (bulkResults) bulkResults.style.display = 'none';
+    if (bulkHexNav) bulkHexNav.style.display = 'none';
+    if (singleEncryptLabel) singleEncryptLabel.style.display = 'flex';
+  }
+}
+
+function initBulkKeys() {
+  const pubKeyInput = $('bulk-public-key');
+  const privKeyInput = $('bulk-private-key');
+
+  if (state.pki.bob) {
+    // Default to Bob's keys
+    if (pubKeyInput) pubKeyInput.value = toHexCompact(state.pki.bob.publicKey);
+    if (privKeyInput) privKeyInput.value = toHexCompact(state.pki.bob.privateKey);
+    studioState.bulkConfig.publicKey = ensureUint8Array(state.pki.bob.publicKey);
+    studioState.bulkConfig.privateKey = ensureUint8Array(state.pki.bob.privateKey);
+    updateBulkKeyStatus('bulk-pubkey-status', true, "Bob's key loaded");
+    updateBulkKeyStatus('bulk-privkey-status', true, "Bob's key loaded");
+  } else {
+    if (pubKeyInput) pubKeyInput.value = '';
+    if (privKeyInput) privKeyInput.value = '';
+    studioState.bulkConfig.publicKey = null;
+    studioState.bulkConfig.privateKey = null;
+    updateBulkKeyStatus('bulk-pubkey-status', false, 'No PKI keys - login first');
+    updateBulkKeyStatus('bulk-privkey-status', false, 'No PKI keys - login first');
+  }
+}
+
+function updateBulkKeyStatus(elementId, valid, message) {
+  const el = $(elementId);
+  if (!el) return;
+  el.textContent = message;
+  el.className = 'key-status ' + (valid ? 'valid' : 'invalid');
+}
+
+function parseHexKey(hexString) {
+  const cleaned = hexString.replace(/^0x/, '').replace(/\s/g, '');
+  if (!/^[0-9a-fA-F]*$/.test(cleaned)) {
+    return { valid: false, error: 'Invalid hex characters' };
+  }
+  if (cleaned.length % 2 !== 0) {
+    return { valid: false, error: 'Odd number of hex digits' };
+  }
+  if (cleaned.length === 0) {
+    return { valid: false, error: 'Empty key' };
+  }
+  const bytes = new Uint8Array(cleaned.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(cleaned.substr(i * 2, 2), 16);
+  }
+  return { valid: true, bytes };
+}
+
+function onBulkPublicKeyChange() {
+  const input = $('bulk-public-key');
+  const value = input?.value.trim() || '';
+
+  if (!value) {
+    // Empty = use Bob's if available
+    if (state.pki.bob) {
+      studioState.bulkConfig.publicKey = ensureUint8Array(state.pki.bob.publicKey);
+      updateBulkKeyStatus('bulk-pubkey-status', true, "Using Bob's key");
+    } else {
+      studioState.bulkConfig.publicKey = null;
+      updateBulkKeyStatus('bulk-pubkey-status', false, 'No key provided');
+    }
+    return;
+  }
+
+  const result = parseHexKey(value);
+  if (result.valid) {
+    studioState.bulkConfig.publicKey = result.bytes;
+    updateBulkKeyStatus('bulk-pubkey-status', true, `Valid key (${result.bytes.length} bytes)`);
+  } else {
+    studioState.bulkConfig.publicKey = null;
+    updateBulkKeyStatus('bulk-pubkey-status', false, result.error);
+  }
+}
+
+function onBulkPrivateKeyChange() {
+  const input = $('bulk-private-key');
+  const value = input?.value.trim() || '';
+
+  if (!value) {
+    if (state.pki.bob) {
+      studioState.bulkConfig.privateKey = ensureUint8Array(state.pki.bob.privateKey);
+      updateBulkKeyStatus('bulk-privkey-status', true, "Using Bob's key");
+    } else {
+      studioState.bulkConfig.privateKey = null;
+      updateBulkKeyStatus('bulk-privkey-status', false, 'No key provided');
+    }
+    return;
+  }
+
+  const result = parseHexKey(value);
+  if (result.valid) {
+    studioState.bulkConfig.privateKey = result.bytes;
+    updateBulkKeyStatus('bulk-privkey-status', true, `Valid key (${result.bytes.length} bytes)`);
+  } else {
+    studioState.bulkConfig.privateKey = null;
+    updateBulkKeyStatus('bulk-privkey-status', false, result.error);
+  }
+}
+
+function generateSampleValue(type, index, fieldName) {
+  const t = type.toLowerCase();
+
+  if (t === 'string') {
+    return `${fieldName}_${index}`;
+  } else if (t === 'bool') {
+    return Math.random() > 0.5;
+  } else if (t.startsWith('[')) {
+    // Vector type
+    const innerType = t.slice(1, -1);
+    const len = 3 + Math.floor(Math.random() * 5);
+    return Array.from({ length: len }, (_, i) => generateSampleValue(innerType, i, ''));
+  } else if (['byte', 'ubyte', 'short', 'ushort', 'int', 'uint'].includes(t)) {
+    return Math.floor(Math.random() * 100) + index;
+  } else if (t === 'long' || t === 'ulong') {
+    return Math.floor(Math.random() * 1e9) + index;
+  } else if (t === 'float' || t === 'double') {
+    return Math.round(Math.random() * 100 * 100) / 100;
+  } else {
+    // Enum or struct - return 0 or first value
+    return 0;
+  }
+}
+
+function getStudioSampleDataGenerator(tableName) {
+  // Check schemaConfig for known schemas
+  for (const [key, config] of Object.entries(schemaConfig)) {
+    if (tableName.toLowerCase().includes(key)) {
+      return config.sampleData;
+    }
+  }
+
+  // Generic generator based on parsed table fields
+  const table = studioState.tables.find(t => t.name === tableName);
+  if (!table) return null;
+
+  return (index) => {
+    const data = {};
+    for (const field of table.fields) {
+      data[field.name] = generateSampleValue(field.type, index, field.name);
+    }
+    return data;
+  };
+}
+
+async function generateBulkStudioBuffers() {
+  const tableName = $('studio-builder-table')?.value;
+  if (!tableName) {
+    alert('Please select a table first');
+    return;
+  }
+
+  const count = parseInt($('bulk-record-count')?.value) || 100;
+  const encryptEnabled = $('bulk-encrypt-enabled')?.checked;
+  const encrypt = encryptEnabled && studioState.bulkConfig.publicKey;
+
+  if (encryptEnabled && !studioState.bulkConfig.publicKey) {
+    alert('Please provide a valid public key for encryption');
+    return;
+  }
+
+  const btn = $('bulk-generate-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+  }
+
+  try {
+    studioState.bulkBuffers = [];
+    studioState.bulkDecrypted = false;
+    studioState.bulkSelectedIndex = 0;
+
+    // Get sample data generator for the selected table
+    const sampleGen = getStudioSampleDataGenerator(tableName);
+    if (!sampleGen) {
+      throw new Error(`No sample data generator for table: ${tableName}`);
+    }
+
+    const encoder = new TextEncoder();
+
+    for (let i = 0; i < count; i++) {
+      const data = sampleGen(i);
+      const json = JSON.stringify(data);
+      const binary = encoder.encode(json);
+
+      const record = {
+        index: i,
+        data,
+        binary: new Uint8Array(binary),
+        size: binary.length,
+      };
+
+      if (encrypt) {
+        // Simple XOR encryption with derived key for demo purposes
+        const encrypted = new Uint8Array(binary);
+        const key = studioState.bulkConfig.publicKey;
+        for (let j = 0; j < encrypted.length; j++) {
+          encrypted[j] ^= key[j % key.length];
+        }
+        record.encrypted = encrypted;
+      }
+
+      studioState.bulkBuffers.push(record);
+
+      // Update progress every 100 records
+      if (i % 100 === 0 && btn) {
+        const progress = Math.round((i / count) * 100);
+        btn.textContent = `Generating... ${progress}%`;
+        await new Promise(r => setTimeout(r, 0)); // yield to UI
+      }
+    }
+
+    // Update stats display
+    const totalSize = studioState.bulkBuffers.reduce((sum, b) => sum + b.size, 0);
+    const statsEl = $('bulk-stats');
+    if (statsEl) statsEl.textContent = `${count} records, ${formatBulkSize(totalSize)}`;
+
+    // Enable action buttons
+    const downloadBtn = $('bulk-download-all');
+    const decryptBtn = $('bulk-toggle-decrypt');
+    if (downloadBtn) downloadBtn.disabled = false;
+    if (decryptBtn) decryptBtn.disabled = !encrypt;
+
+    // Render results table
+    renderBulkStudioResults();
+
+    // Show first record in hex view
+    displayBulkHexView(0);
+
+  } catch (err) {
+    console.error('Bulk generation failed:', err);
+    alert('Error: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Generate';
+    }
+  }
+}
+
+function formatBulkSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function renderBulkStudioResults() {
+  const container = $('bulk-results-table');
+  if (!container) return;
+
+  const records = studioState.bulkBuffers;
+  if (records.length === 0) {
+    container.innerHTML = '<div class="empty-state">Generate bulk records to see results</div>';
+    return;
+  }
+
+  const hasEncrypted = records[0].encrypted != null;
+
+  // Build table header based on first record's fields
+  const firstData = records[0].data;
+  const fieldKeys = Object.keys(firstData).slice(0, 3); // First 3 fields
+
+  let html = '<table class="bulk-results-table"><thead><tr>';
+  html += '<th class="col-index">#</th>';
+  for (const key of fieldKeys) {
+    html += `<th>${key}</th>`;
+  }
+  html += `<th class="col-hex">${hasEncrypted && !studioState.bulkDecrypted ? 'Encrypted' : 'Bytes'}</th>`;
+  html += '</tr></thead><tbody>';
+
+  // Render rows (limit to first 100 for performance)
+  const displayCount = Math.min(records.length, 100);
+  for (let i = 0; i < displayCount; i++) {
+    const record = records[i];
+    const selected = i === studioState.bulkSelectedIndex ? 'selected' : '';
+    html += `<tr class="${selected}" data-index="${i}">`;
+    html += `<td class="col-index">${record.index}</td>`;
+
+    for (const key of fieldKeys) {
+      const val = record.data[key];
+      const displayVal = typeof val === 'object' ? JSON.stringify(val).slice(0, 20) : String(val).slice(0, 20);
+      html += `<td>${displayVal}</td>`;
+    }
+
+    // Show encrypted or plain bytes
+    const buf = (hasEncrypted && !studioState.bulkDecrypted) ? record.encrypted : record.binary;
+    const hexPreview = toHex(buf.slice(0, 8)) + '...';
+    html += `<td class="col-hex">${hexPreview}</td>`;
+    html += '</tr>';
+  }
+
+  if (records.length > 100) {
+    html += `<tr><td colspan="${fieldKeys.length + 2}" style="text-align: center; color: var(--white-40);">... and ${records.length - 100} more records</td></tr>`;
+  }
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+
+  // Add click handlers to rows
+  container.querySelectorAll('tbody tr[data-index]').forEach(row => {
+    row.addEventListener('click', () => {
+      const idx = parseInt(row.dataset.index);
+      studioState.bulkSelectedIndex = idx;
+      displayBulkHexView(idx);
+      // Update selected class
+      container.querySelectorAll('tr.selected').forEach(r => r.classList.remove('selected'));
+      row.classList.add('selected');
+    });
+  });
+}
+
+function displayBulkHexView(index) {
+  const record = studioState.bulkBuffers[index];
+  if (!record) return;
+
+  const hasEncrypted = record.encrypted != null;
+  const buffer = (hasEncrypted && !studioState.bulkDecrypted) ? record.encrypted : record.binary;
+
+  displayStudioHexView(buffer);
+
+  // Update navigation
+  const indexEl = $('bulk-hex-index');
+  if (indexEl) indexEl.textContent = `${index + 1} / ${studioState.bulkBuffers.length}`;
+}
+
+function toggleBulkDecryption() {
+  if (!studioState.bulkConfig.privateKey) {
+    alert('Please provide a valid private key for decryption');
+    return;
+  }
+
+  studioState.bulkDecrypted = !studioState.bulkDecrypted;
+
+  const btn = $('bulk-toggle-decrypt');
+  if (btn) btn.textContent = studioState.bulkDecrypted ? 'Show Encrypted' : 'Decrypt All';
+
+  // Re-render table and hex view
+  renderBulkStudioResults();
+  displayBulkHexView(studioState.bulkSelectedIndex);
+}
+
+function downloadBulkBuffers() {
+  if (studioState.bulkBuffers.length === 0) return;
+
+  const hasEncrypted = studioState.bulkBuffers[0].encrypted != null;
+
+  // Create a simple concatenated format with length prefixes
+  const chunks = [];
+  const header = new TextEncoder().encode(JSON.stringify({
+    count: studioState.bulkBuffers.length,
+    encrypted: hasEncrypted && !studioState.bulkDecrypted,
+  }) + '\n');
+  chunks.push(header);
+
+  for (const record of studioState.bulkBuffers) {
+    const buf = (hasEncrypted && !studioState.bulkDecrypted) ? record.encrypted : record.binary;
+    // 4-byte length prefix
+    const lenBuf = new ArrayBuffer(4);
+    new DataView(lenBuf).setUint32(0, buf.length, true);
+    chunks.push(new Uint8Array(lenBuf));
+    chunks.push(buf);
+  }
+
+  const blob = new Blob(chunks);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = hasEncrypted && !studioState.bulkDecrypted ? 'bulk_encrypted.efbs' : 'bulk_data.fbs';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function clearBulkResults() {
+  studioState.bulkBuffers = [];
+  studioState.bulkSelectedIndex = 0;
+  studioState.bulkDecrypted = false;
+
+  const container = $('bulk-results-table');
+  if (container) container.innerHTML = '<div class="empty-state">Generate bulk records to see results</div>';
+
+  const hexView = $('studio-hex-view');
+  if (hexView) hexView.innerHTML = '<div class="empty-state">Build a buffer to see output</div>';
+
+  const statsEl = $('bulk-stats');
+  if (statsEl) statsEl.textContent = '';
+
+  const downloadBtn = $('bulk-download-all');
+  const decryptBtn = $('bulk-toggle-decrypt');
+  if (downloadBtn) downloadBtn.disabled = true;
+  if (decryptBtn) decryptBtn.disabled = true;
+
+  const indexEl = $('bulk-hex-index');
+  if (indexEl) indexEl.textContent = '0 / 0';
 }
 
 function downloadTextFile(content, filename) {

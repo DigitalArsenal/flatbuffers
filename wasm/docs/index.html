@@ -1,0 +1,1841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="description" content="DA FlatBuffers - Binary serialization with field-level encryption">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DA FlatBuffers</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@400;500;600;700&family=SF+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Video Background -->
+  <div class="video-background">
+    <video autoplay loop muted playsinline id="bg-video">
+      <source src="https://customer-cbeadsgr09pnsezs.cloudflarestream.com/90bb1b34646b81b3b63e5a854ea00da3/manifest/video.m3u8" type="application/x-mpegURL">
+    </video>
+    <div class="video-overlay"></div>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="nav-bar">
+    <div class="nav-content">
+      <a href="https://github.com/DigitalArsenal/flatbuffers" target="_blank" class="nav-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+        </svg>
+        <span>DA FlatBuffers</span>
+      </a>
+      <div class="nav-links" id="demo-nav-links">
+        <a href="#overview" class="nav-link active" data-tab="overview">Overview</a>
+        <a href="#pki" class="nav-link" data-tab="pki">PKI</a>
+        <a href="#fields" class="nav-link" data-tab="fields">Field Encryption</a>
+        <a href="#buffers" class="nav-link" data-tab="buffers">Bulk Generation</a>
+        <a href="#schema" class="nav-link" data-tab="schema">Schema</a>
+        <a href="#streaming" class="nav-link" data-tab="streaming">Streaming</a>
+        <a href="#identity" class="nav-link" data-tab="identity">Identity</a>
+        <a href="#studio" class="nav-link" data-tab="studio">Studio</a>
+        <a href="#runtimes" class="nav-link" data-tab="runtimes">Runtimes</a>
+        <span class="nav-divider"></span>
+        <a href="https://flatbuffers.dev" target="_blank" class="nav-link nav-link-external">Docs</a>
+      </div>
+      <div class="nav-actions">
+        <span id="nav-status" class="nav-status"></span>
+        <button id="nav-keys" class="nav-btn glass-btn" style="display: none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
+          </svg>
+        </button>
+        <button id="nav-logout" class="nav-btn glass-btn" style="display: none;">Logout</button>
+        <button id="nav-menu-btn" class="nav-menu-btn" aria-label="Toggle menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Mobile Menu -->
+  <div id="nav-mobile-menu" class="nav-mobile-menu">
+    <a href="#overview" class="nav-link" data-tab="overview">Overview</a>
+    <a href="#pki" class="nav-link" data-tab="pki">PKI</a>
+    <a href="#fields" class="nav-link" data-tab="fields">Field Encryption</a>
+    <a href="#buffers" class="nav-link" data-tab="buffers">Bulk Generation</a>
+    <a href="#schema" class="nav-link" data-tab="schema">Schema</a>
+    <a href="#streaming" class="nav-link" data-tab="streaming">Streaming</a>
+    <a href="#identity" class="nav-link" data-tab="identity">Identity</a>
+    <a href="#studio" class="nav-link" data-tab="studio">Studio</a>
+    <a href="#runtimes" class="nav-link" data-tab="runtimes">Runtimes</a>
+    <span class="nav-divider"></span>
+    <a href="https://flatbuffers.dev" target="_blank" class="nav-link nav-link-external">Docs</a>
+  </div>
+
+  <!-- Hero / Login Section -->
+  <section id="hero-section" class="hero-section">
+    <div class="hero-content">
+      <h1 class="hero-title">Digital Arsenal<br/>Flatbuffers</h1>
+      <p class="hero-subtitle">Binary serialization with field-level encryption, HD wallet derivation, and streaming dispatch</p>
+
+      <!-- CI Status Badges -->
+      <div class="ci-badges">
+        <a href="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/build.yml" target="_blank">
+          <img src="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/build.yml/badge.svg" alt="Build Status">
+        </a>
+        <a href="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/docs.yml" target="_blank">
+          <img src="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/docs.yml/badge.svg" alt="Docs Status">
+        </a>
+        <a href="https://github.com/DigitalArsenal/flatbuffers" target="_blank">
+          <img src="https://img.shields.io/github/stars/DigitalArsenal/flatbuffers?style=social" alt="GitHub Stars">
+        </a>
+        <a href="https://github.com/DigitalArsenal/flatbuffers/fork" target="_blank">
+          <img src="https://img.shields.io/github/forks/DigitalArsenal/flatbuffers?style=social" alt="GitHub Forks">
+        </a>
+      </div>
+
+      <div class="login-glass" id="login-card">
+        <div class="method-tabs">
+          <button class="method-tab active" data-method="password">Password</button>
+          <button class="method-tab" data-method="seed">Seed Phrase</button>
+        </div>
+
+        <form id="password-method" class="method-content active" onsubmit="return false;">
+          <div class="glass-input-group">
+            <input type="text" id="wallet-username" class="glass-input" placeholder="Username" autocomplete="username">
+          </div>
+          <div class="glass-input-group">
+            <input type="password" id="wallet-password" class="glass-input" placeholder="Password (24+ chars)" autocomplete="new-password">
+            <div class="entropy-bar">
+              <div class="entropy-fill" id="strength-fill"></div>
+            </div>
+            <span class="entropy-label"><span id="entropy-bits">0</span> bits entropy</span>
+          </div>
+          <button id="derive-from-password" class="glass-btn primary full-width" disabled type="button">
+            Enter Demo
+          </button>
+        </form>
+
+        <div id="seed-method" class="method-content">
+          <div class="glass-input-group">
+            <textarea id="seed-phrase" class="glass-input glass-textarea" rows="3" placeholder="Enter 12 or 24 word seed phrase..."></textarea>
+            <div class="seed-actions">
+              <button id="generate-seed" class="glass-btn small">Generate</button>
+              <button id="validate-seed" class="glass-btn small">Validate</button>
+            </div>
+          </div>
+          <button id="derive-from-seed" class="glass-btn primary full-width" disabled>
+            Enter Demo
+          </button>
+        </div>
+      </div>
+
+      <div class="hero-stats" id="hero-stats" style="display: none;">
+        <div class="stat-item">
+          <span class="stat-value" id="hero-wallet-type">BTC</span>
+          <span class="stat-label">Network</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" id="hero-address">--</span>
+          <span class="stat-label">Address</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="scroll-indicator" id="scroll-indicator" style="display: none;">
+      <span>Scroll to explore</span>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 5v14M19 12l-7 7-7-7"></path>
+      </svg>
+    </div>
+  </section>
+
+  <!-- Main App Content -->
+  <main id="main-app" class="main-app" style="display: none;">
+
+    <!-- Overview Section - Compliance and capabilities -->
+    <section id="overview-tab" class="content-section active">
+      <div class="section-header">
+        <h2 class="section-title">Field-Level Encryption for FlatBuffers</h2>
+        <p class="section-desc">AES-256 encryption with HD wallet key derivation, meeting federal data-at-rest requirements</p>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Capabilities</h3>
+        <div class="overview-grid">
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+            <div class="overview-content">
+              <h4>Field-Level Encryption</h4>
+              <p>Encrypt individual fields within FlatBuffer records. The binary structure stays intact so upstream code can read encrypted values without schema changes.</p>
+            </div>
+          </div>
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+              </svg>
+            </div>
+            <div class="overview-content">
+              <h4>HD Wallet Key Derivation</h4>
+              <p>Keys derived from BIP-39 seed phrases using HKDF-SHA256. Each field can have its own derived key for granular access control.</p>
+            </div>
+          </div>
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+            </div>
+            <div class="overview-content">
+              <h4>High Performance</h4>
+              <p>Generate and encrypt 1 million records at 50+ MB/s using WebAssembly. Streaming export avoids memory accumulation.</p>
+            </div>
+          </div>
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v6l4 2"/>
+              </svg>
+            </div>
+            <div class="overview-content">
+              <h4>Zero Server Dependency</h4>
+              <p>All cryptographic operations run client-side in the browser. No data leaves your device unless you explicitly export it.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Cryptographic Implementation</h3>
+        <div class="crypto-specs">
+          <div class="spec-row">
+            <span class="spec-label">Symmetric Encryption</span>
+            <span class="spec-value">AES-256-CTR</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Key Derivation</span>
+            <span class="spec-value">HKDF-SHA256</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Key Exchange</span>
+            <span class="spec-value">X25519 ECDH (Curve25519)</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Digital Signatures</span>
+            <span class="spec-value">Ed25519</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">HD Wallet</span>
+            <span class="spec-value">BIP-39 / BIP-32 / BIP-44</span>
+          </div>
+          <div class="spec-row">
+            <span class="spec-label">Runtime</span>
+            <span class="spec-value" id="crypto-runtime">WebAssembly (Crypto++)</span>
+          </div>
+          <div class="spec-row" id="fips-mode-row" style="display: none;">
+            <span class="spec-label">FIPS 140-3</span>
+            <span class="spec-value fips-indicator" id="fips-mode-value">
+              <span class="fips-badge">FIPS Mode</span>
+              OpenSSL Provider (P-256, AES-256-GCM)
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Federal Compliance Standards</h3>
+        <p class="card-desc">This implementation uses cryptographic algorithms approved for protecting federal data at rest:</p>
+
+        <div class="compliance-grid">
+          <a href="https://media.defense.gov/2022/Sep/07/2003071836/-1/-1/0/CSI_CNSA_2.0_FAQ_.PDF" target="_blank" class="compliance-card">
+            <div class="compliance-header">
+              <span class="compliance-badge">NSA</span>
+              <h4>CNSA 2.0</h4>
+            </div>
+            <p>Commercial National Security Algorithm Suite 2.0 mandates AES-256 for all National Security Systems. Quantum-resistant algorithm support required by 2025.</p>
+            <span class="compliance-link">View PDF &rarr;</span>
+          </a>
+
+          <a href="https://csrc.nist.gov/pubs/sp/800/111/final" target="_blank" class="compliance-card">
+            <div class="compliance-header">
+              <span class="compliance-badge">NIST</span>
+              <h4>SP 800-111</h4>
+            </div>
+            <p>Guide to Storage Encryption Technologies for End User Devices. Endorses AES-256 for data at rest with proper key management.</p>
+            <span class="compliance-link">View Publication &rarr;</span>
+          </a>
+
+          <a href="https://csrc.nist.gov/pubs/fips/140-3/final" target="_blank" class="compliance-card">
+            <div class="compliance-header">
+              <span class="compliance-badge">FIPS</span>
+              <h4>140-3</h4>
+            </div>
+            <p>Security Requirements for Cryptographic Modules. AES-256 is approved for all security levels (1-4) in federal cryptographic modules.</p>
+            <span class="compliance-link">View Standard &rarr;</span>
+          </a>
+
+          <a href="https://www.cyber.mil/stigs" target="_blank" class="compliance-card">
+            <div class="compliance-header">
+              <span class="compliance-badge">DoD</span>
+              <h4>STIGs</h4>
+            </div>
+            <p>Security Technical Implementation Guides require FIPS 140-validated AES encryption for protecting CUI and classified information.</p>
+            <span class="compliance-link">View STIG Library &rarr;</span>
+          </a>
+        </div>
+
+        <div class="compliance-note">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+          <span><strong>Cryptographic Backends:</strong> Default build uses Crypto++ (FIPS 140-2, full algorithm support including X25519/Ed25519/secp256k1). For FIPS 140-3 compliance, an OpenSSL 3.0.9 FIPS Provider build is available (Certificate #4282, NIST curves only). See <code>wasm/openssl-fips/</code>.</span>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Use Cases</h3>
+        <div class="usecases-grid">
+          <div class="usecase-item">
+            <h4>Defense &amp; Intelligence</h4>
+            <p>Field-level encryption for mission data with per-user key derivation and need-to-know access control.</p>
+          </div>
+          <div class="usecase-item">
+            <h4>Healthcare (HIPAA)</h4>
+            <p>Encrypt PHI fields while leaving non-sensitive metadata readable for indexing and routing.</p>
+          </div>
+          <div class="usecase-item">
+            <h4>Financial Services</h4>
+            <p>Protect PII and transaction data at rest with audit-ready key management from HD wallets.</p>
+          </div>
+          <div class="usecase-item">
+            <h4>Zero-Trust Architectures</h4>
+            <p>Data remains encrypted until the authorized recipient decrypts with their derived key.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PKI Section (Alice/Bob Public Key Encryption) -->
+    <section id="pki-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Public Key Infrastructure</h2>
+        <p class="section-desc">Alice encrypts data with Bob's public key. Only Bob can decrypt with his private key.</p>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-controls" id="pki-controls" style="display: none;">
+          <div class="algorithm-display">
+            <span class="algorithm-label">Algorithm:</span>
+            <span id="pki-algorithm-display" class="algorithm-value">X25519</span>
+          </div>
+          <button id="pki-clear-keys" class="glass-btn" style="display: none;">Clear Saved Keys</button>
+        </div>
+
+        <!-- Key Pairs Display -->
+        <div class="pki-parties" id="pki-parties" style="display: none;">
+          <div class="pki-party alice">
+            <div class="party-header">
+              <span class="party-icon">A</span>
+              <span class="party-name">Alice (Sender)</span>
+            </div>
+            <div class="derivation-path">
+              <label>HD Path</label>
+              <code id="alice-path">m/44'/0'/0'/0/0</code>
+            </div>
+            <div class="key-item">
+              <label>Public Key</label>
+              <code id="alice-public-key">--</code>
+            </div>
+            <div class="key-item private-key">
+              <label>Private Key <span class="key-warning-badge">Secret</span></label>
+              <code id="alice-private-key" class="blur-key">--</code>
+            </div>
+          </div>
+
+          <div class="pki-arrow">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+            <span>Encrypted with Bob's Public Key</span>
+          </div>
+
+          <div class="pki-party bob">
+            <div class="party-header">
+              <span class="party-icon">B</span>
+              <span class="party-name">Bob (Recipient)</span>
+            </div>
+            <div class="derivation-path">
+              <label>HD Path</label>
+              <code id="bob-path">m/44'/0'/0'/0/1</code>
+            </div>
+            <div class="key-item">
+              <label>Public Key</label>
+              <code id="bob-public-key">--</code>
+            </div>
+            <div class="key-item private-key">
+              <label>Private Key <span class="key-warning-badge">Secret</span></label>
+              <code id="bob-private-key" class="blur-key">--</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- How It Works Explanation -->
+        <div class="encryption-explainer" id="encryption-explainer" style="display: none;">
+          <h3 class="card-subtitle">How ECIES Encryption Works</h3>
+          <div class="explainer-grid">
+            <div class="explainer-card">
+              <div class="explainer-icon">1</div>
+              <div class="explainer-content">
+                <h4>Ephemeral Key Generation</h4>
+                <p>Alice generates a one-time ephemeral key pair for each encryption. This provides <strong>forward secrecy</strong> - if Alice's main key is compromised, past messages remain secure.</p>
+              </div>
+            </div>
+            <div class="explainer-card">
+              <div class="explainer-icon">2</div>
+              <div class="explainer-content">
+                <h4>ECDH Key Exchange</h4>
+                <p>Alice uses her ephemeral private key and Bob's public key to compute a <strong>shared secret</strong> via Elliptic Curve Diffie-Hellman. Only Alice and Bob can derive this shared secret.</p>
+              </div>
+            </div>
+            <div class="explainer-card">
+              <div class="explainer-icon">3</div>
+              <div class="explainer-content">
+                <h4>HKDF Key Derivation</h4>
+                <p>The shared secret is passed through <strong>HKDF-SHA256</strong> to derive a symmetric AES-256 key and nonce. This stretches the shared secret into cryptographically strong key material.</p>
+              </div>
+            </div>
+            <div class="explainer-card">
+              <div class="explainer-icon">4</div>
+              <div class="explainer-content">
+                <h4>AES-256-CTR Encryption</h4>
+                <p>Data is encrypted using <strong>AES-256 in CTR mode</strong>. CTR mode is a stream cipher that preserves plaintext length - critical for FlatBuffers where field sizes must remain constant.</p>
+              </div>
+            </div>
+            <div class="explainer-card">
+              <div class="explainer-icon">5</div>
+              <div class="explainer-content">
+                <h4>Header Transmission</h4>
+                <p>The ephemeral public key and nonce are sent as a <strong>header</strong> alongside the ciphertext. Bob uses this header plus his private key to derive the same symmetric key and decrypt.</p>
+              </div>
+            </div>
+          </div>
+          <div class="explainer-note">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 16v-4M12 8h.01"/>
+            </svg>
+            <span><strong>Why CTR mode?</strong> FlatBuffers uses fixed-size fields with known offsets. CTR mode encrypts each field to the same length as the plaintext, preserving the binary structure. Block cipher modes like CBC would add padding and break the schema.</span>
+          </div>
+        </div>
+
+        <!-- Encryption Demo -->
+        <div class="pki-demo" id="pki-demo" style="display: none;">
+          <h3 class="card-subtitle">Encryption Flow</h3>
+
+          <div class="pki-step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+              <label>Alice's Message (Plaintext)</label>
+              <textarea id="pki-plaintext" class="glass-input glass-textarea" rows="2" placeholder="Enter a secret message for Bob..."></textarea>
+            </div>
+          </div>
+
+          <div class="pki-step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+              <button id="pki-encrypt" class="glass-btn primary">Encrypt for Bob</button>
+              <p class="step-desc">Alice encrypts using Bob's public key. An ephemeral key pair is generated for forward secrecy.</p>
+            </div>
+          </div>
+
+          <div class="pki-step" id="pki-ciphertext-step" style="display: none;">
+            <div class="step-number">3</div>
+            <div class="step-content">
+              <label>Ciphertext (Sent to Bob)</label>
+              <code id="pki-ciphertext" class="hex-display">--</code>
+              <label style="margin-top: 0.5rem;">Encryption Header (ECIES Metadata)</label>
+              <pre id="pki-header" class="header-json">--</pre>
+            </div>
+          </div>
+
+          <div class="pki-step" id="pki-decrypt-step" style="display: none;">
+            <div class="step-number">4</div>
+            <div class="step-content">
+              <button id="pki-decrypt" class="glass-btn">Bob Decrypts</button>
+              <p class="step-desc">Bob uses his private key to decrypt the message.</p>
+            </div>
+          </div>
+
+          <div class="pki-step" id="pki-result-step" style="display: none;">
+            <div class="step-number">5</div>
+            <div class="step-content">
+              <label>Decrypted Message (Bob sees)</label>
+              <div id="pki-decrypted" class="decrypted-result">--</div>
+              <div class="verification-badge" id="pki-verification">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                  <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+                <span>Decryption successful - Messages match!</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Wrong Key Demo -->
+        <div class="pki-security" id="pki-security" style="display: none;">
+          <h3 class="card-subtitle">Security Demonstration</h3>
+          <button id="pki-wrong-key" class="glass-btn">Try Decrypting with Alice's Key</button>
+          <div id="pki-wrong-result" class="wrong-key-result" style="display: none;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="15" y1="9" x2="9" y2="15"/>
+              <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            <span>Decryption failed - Only Bob's private key can decrypt!</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Field Encryption Section - Second, shows field-level detail -->
+    <section id="fields-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Field-Level Encryption</h2>
+        <p class="section-desc">Generate FlatBuffer records and visualize individual field encryption using Alice/Bob keys</p>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-controls">
+          <select id="schema-select" class="glass-select">
+            <option value="monster">Monster Schema</option>
+            <option value="weapon">Weapon Schema</option>
+            <option value="galaxy">Galaxy Schema</option>
+          </select>
+          <button id="generate-single" class="glass-btn primary">Generate Record</button>
+          <button id="toggle-field-decrypt" class="glass-btn" disabled>Decrypt</button>
+        </div>
+
+        <!-- FlatBuffer Header -->
+        <div class="fb-header-display" id="fb-header" style="display: none;">
+          <h3 class="card-subtitle">Binary Structure</h3>
+          <div class="header-grid">
+            <div class="header-cell">
+              <span class="header-label">Root Offset</span>
+              <code class="header-hex" id="root-offset-hex">--</code>
+              <span class="header-value" id="root-offset-val">--</span>
+            </div>
+            <div class="header-cell">
+              <span class="header-label">File ID</span>
+              <code class="header-hex" id="file-id-hex">--</code>
+              <span class="header-value" id="file-id-val">--</span>
+            </div>
+            <div class="header-cell">
+              <span class="header-label">VTable Size</span>
+              <code class="header-hex" id="vtable-size-hex">--</code>
+              <span class="header-value" id="vtable-size-val">--</span>
+            </div>
+            <div class="header-cell">
+              <span class="header-label">Table Size</span>
+              <code class="header-hex" id="table-size-hex">--</code>
+              <span class="header-value" id="table-size-val">--</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Field Table -->
+        <div class="field-table-wrap" id="field-table-container" style="display: none;">
+          <table class="field-table" id="field-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Offset</th>
+                <th>Encrypted</th>
+                <th class="decrypt-col">Decrypted</th>
+                <th class="decrypt-col">Value</th>
+              </tr>
+            </thead>
+            <tbody id="field-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bulk Generation Section -->
+    <section id="buffers-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Bulk Generation</h2>
+        <p class="section-desc">Generate up to 1 million FlatBuffer records - encrypted or plain</p>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Export to File (Memory Efficient)</h3>
+        <p class="card-desc">Generate records and download directly - no memory accumulation.</p>
+        <div class="card-controls">
+          <select id="bulk-schema" class="glass-select">
+            <option value="monster">Monster</option>
+            <option value="weapon">Weapon</option>
+            <option value="galaxy">Galaxy</option>
+          </select>
+          <select id="buffer-count" class="glass-select">
+            <option value="100">100 records</option>
+            <option value="1000">1,000 records</option>
+            <option value="10000">10,000 records</option>
+            <option value="100000">100,000 records</option>
+            <option value="1000000">1,000,000 records</option>
+          </select>
+          <button id="download-encrypted" class="glass-btn primary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download Encrypted
+          </button>
+          <button id="download-plain" class="glass-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download Plain
+          </button>
+        </div>
+
+        <!-- Download Progress -->
+        <div class="progress-container" id="download-progress" style="display: none;">
+          <div class="progress-track">
+            <div class="progress-fill" id="download-progress-fill"></div>
+          </div>
+          <span class="progress-text" id="download-progress-text">Preparing...</span>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Import from File</h3>
+        <p class="card-desc">Upload an .efbs file to decrypt and verify records.</p>
+        <div class="card-controls">
+          <input type="file" id="upload-file" accept=".efbs" class="file-input" />
+          <label for="upload-file" class="glass-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Choose File
+          </label>
+          <span id="upload-filename" class="file-label">No file selected</span>
+        </div>
+
+        <!-- Upload Progress -->
+        <div class="progress-container" id="upload-progress" style="display: none;">
+          <div class="progress-track">
+            <div class="progress-fill" id="upload-progress-fill"></div>
+          </div>
+          <span class="progress-text" id="upload-progress-text">Reading file...</span>
+        </div>
+
+        <!-- Upload Results -->
+        <div id="upload-results" class="upload-results" style="display: none;"></div>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Generate in Memory (Small Datasets)</h3>
+        <p class="card-desc">Generate records in memory for inspection. Best for &lt;10,000 records.</p>
+        <div class="card-controls">
+          <button id="generate-buffers" class="glass-btn primary">Encrypt for Bob</button>
+          <button id="generate-plain" class="glass-btn">Plain (No Encryption)</button>
+          <button id="toggle-encryption" class="glass-btn" disabled>Bob Decrypts</button>
+          <button id="clear-buffers" class="glass-btn" disabled>Clear</button>
+        </div>
+
+        <div class="stats-grid" id="stats-bar" style="display: none;">
+          <div class="stat-cell">
+            <span class="stat-number" id="stat-count">0</span>
+            <span class="stat-label">Records</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-number" id="stat-size">0 KB</span>
+            <span class="stat-label">Total Size</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-number" id="stat-time">0 ms</span>
+            <span class="stat-label">Time</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-number" id="stat-memory">--</span>
+            <span class="stat-label">Throughput</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card" id="data-card" style="display: none;">
+        <h3 class="card-subtitle">Generated Records <span id="visible-range" class="range-label"></span></h3>
+        <div class="virtual-table-wrapper" id="virtual-table-wrapper"></div>
+
+        <!-- Record Detail Panel -->
+        <div id="record-detail-panel" class="detail-panel" style="display: none;">
+          <div class="detail-header">
+            <h4 id="detail-record-index">Record #1</h4>
+            <button id="close-detail-panel" class="close-btn">&times;</button>
+          </div>
+          <div class="detail-grid">
+            <div class="detail-section">
+              <h5>JSON Data</h5>
+              <pre id="detail-json" class="code-block"></pre>
+            </div>
+            <div class="detail-section">
+              <h5>FlatBuffer Hex <span id="detail-size" class="size-badge"></span></h5>
+              <pre id="detail-hex" class="code-block hex"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Schema Viewer Section -->
+    <section id="schema-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Schema Viewer</h2>
+        <p class="section-desc">View FlatBuffers schema (.fbs) and equivalent JSON Schema</p>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-controls">
+          <select id="schema-type-select" class="glass-select">
+            <option value="monster">Monster Schema</option>
+            <option value="weapon">Weapon Schema</option>
+            <option value="galaxy">Galaxy Schema</option>
+          </select>
+        </div>
+
+        <div class="schema-grid">
+          <div class="schema-panel">
+            <div class="schema-header">
+              <h4>.fbs Schema</h4>
+              <button id="copy-fbs" class="glass-btn small">Copy</button>
+            </div>
+            <pre id="fbs-content" class="code-block fbs"></pre>
+          </div>
+          <div class="schema-panel">
+            <div class="schema-header">
+              <h4>JSON Schema</h4>
+              <button id="copy-json-schema" class="glass-btn small">Copy</button>
+            </div>
+            <pre id="json-schema-content" class="code-block json"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- JSON <-> FlatBuffer Conversion -->
+      <div class="glass-card">
+        <h3 class="card-subtitle">Convert JSON &harr; FlatBuffer</h3>
+        <div class="card-controls">
+          <select id="convert-schema-select" class="glass-select">
+            <option value="monster">Monster</option>
+            <option value="weapon">Weapon</option>
+            <option value="galaxy">Galaxy</option>
+          </select>
+        </div>
+
+        <div class="conversion-grid">
+          <div class="conversion-panel">
+            <h5>JSON Input</h5>
+            <textarea id="json-input" class="code-input" placeholder='{"name": "Orc", "hp": 100, "mana": 50}'></textarea>
+            <button id="json-to-fb" class="glass-btn primary">Convert to FlatBuffer &rarr;</button>
+          </div>
+          <div class="conversion-panel">
+            <h5>Hex Input (FlatBuffer)</h5>
+            <textarea id="fb-hex-input" class="code-input" placeholder="0C 00 00 00 4D 4F 4E 53 ..."></textarea>
+            <button id="fb-to-json" class="glass-btn primary">&larr; Convert to JSON</button>
+          </div>
+        </div>
+
+        <div id="conversion-result" class="conversion-result" style="display: none;">
+          <div class="result-section">
+            <h5>FlatBuffer Output <span id="fb-output-size" class="size-badge"></span></h5>
+            <pre id="fb-output" class="code-block hex"></pre>
+          </div>
+          <div class="result-section">
+            <h5>JSON Output</h5>
+            <pre id="json-output" class="code-block json"></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Streaming Section -->
+    <section id="streaming-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Streaming Dispatcher</h2>
+        <p class="section-desc">Route mixed FlatBuffer messages to ring buffers by type</p>
+      </div>
+
+      <div class="glass-card">
+        <div class="streaming-grid">
+          <div class="stream-config">
+            <label>Monster (MONS)</label>
+            <input type="number" id="stream-monster-count" class="glass-input" value="1000" min="0" max="100000" step="100">
+          </div>
+          <div class="stream-config">
+            <label>Weapon (WEAP)</label>
+            <input type="number" id="stream-weapon-count" class="glass-input" value="500" min="0" max="100000" step="100">
+          </div>
+          <div class="stream-config">
+            <label>Galaxy (GALX)</label>
+            <input type="number" id="stream-galaxy-count" class="glass-input" value="200" min="0" max="100000" step="100">
+          </div>
+          <div class="stream-config">
+            <label>Batch Size</label>
+            <input type="number" id="stream-batch-size" class="glass-input" value="100" min="1" max="1000">
+          </div>
+          <div class="stream-config">
+            <label>Delay (ms)</label>
+            <input type="number" id="stream-delay" class="glass-input" value="10" min="0" max="1000">
+          </div>
+        </div>
+
+        <div class="card-controls">
+          <button id="start-streaming" class="glass-btn primary">Start Stream</button>
+          <button id="stop-streaming" class="glass-btn" disabled>Stop</button>
+          <button id="clear-streaming" class="glass-btn">Reset</button>
+        </div>
+
+        <!-- Progress -->
+        <div class="stream-progress" id="stream-progress" style="display: none;">
+          <div class="progress-track">
+            <div class="progress-fill" id="stream-progress-fill"></div>
+          </div>
+          <div class="progress-label">
+            <span id="stream-processed">0</span> / <span id="stream-total">0</span> messages
+            <span class="progress-bytes">(<span id="stream-bytes">0 KB</span>)</span>
+          </div>
+        </div>
+
+        <!-- Ring Buffer Stats -->
+        <div class="ring-stats-grid" id="ring-buffer-stats">
+          <div class="ring-card monster" data-type="MONS">
+            <div class="ring-header">
+              <span class="ring-dot"></span>
+              <span class="ring-title">Monster (MONS)</span>
+            </div>
+            <div class="ring-bar">
+              <div class="ring-fill" id="ring-fill-MONS"></div>
+            </div>
+            <div class="ring-numbers">
+              <span><span id="ring-count-MONS">0</span> / <span id="ring-capacity-MONS">1000</span></span>
+              <span class="ring-total">Total: <span id="ring-total-MONS">0</span></span>
+            </div>
+          </div>
+          <div class="ring-card weapon" data-type="WEAP">
+            <div class="ring-header">
+              <span class="ring-dot"></span>
+              <span class="ring-title">Weapon (WEAP)</span>
+            </div>
+            <div class="ring-bar">
+              <div class="ring-fill" id="ring-fill-WEAP"></div>
+            </div>
+            <div class="ring-numbers">
+              <span><span id="ring-count-WEAP">0</span> / <span id="ring-capacity-WEAP">500</span></span>
+              <span class="ring-total">Total: <span id="ring-total-WEAP">0</span></span>
+            </div>
+          </div>
+          <div class="ring-card galaxy" data-type="GALX">
+            <div class="ring-header">
+              <span class="ring-dot"></span>
+              <span class="ring-title">Galaxy (GALX)</span>
+            </div>
+            <div class="ring-bar">
+              <div class="ring-fill" id="ring-fill-GALX"></div>
+            </div>
+            <div class="ring-numbers">
+              <span><span id="ring-count-GALX">0</span> / <span id="ring-capacity-GALX">200</span></span>
+              <span class="ring-total">Total: <span id="ring-total-GALX">0</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Completion -->
+        <div class="completion-card" id="completion-stats" style="display: none;">
+          <h4>Stream Complete</h4>
+          <div class="completion-grid">
+            <span>Messages</span><span id="complete-messages">--</span>
+            <span>Bytes</span><span id="complete-bytes">--</span>
+            <span>Time</span><span id="complete-time">--</span>
+            <span>Throughput</span><span id="complete-throughput">--</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Identity Section -->
+    <section id="identity-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Cryptographic Identity</h2>
+        <p class="section-desc">Generate a vCard with your public keys for secure sharing</p>
+      </div>
+
+      <div class="glass-card">
+        <div class="identity-form">
+          <div class="form-row">
+            <div class="glass-input-group">
+              <label>Full Name</label>
+              <input type="text" id="vcard-name" class="glass-input" placeholder="John Doe">
+            </div>
+            <div class="glass-input-group">
+              <label>Email</label>
+              <input type="email" id="vcard-email" class="glass-input" placeholder="john@example.com">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="glass-input-group">
+              <label>Organization</label>
+              <input type="text" id="vcard-org" class="glass-input" placeholder="Company Name">
+            </div>
+            <div class="glass-input-group">
+              <label>Title</label>
+              <input type="text" id="vcard-title" class="glass-input" placeholder="Software Engineer">
+            </div>
+          </div>
+          <label class="checkbox-label">
+            <input type="checkbox" id="include-keys" checked>
+            <span>Include cryptographic public keys</span>
+          </label>
+        </div>
+
+        <button id="generate-vcard" class="glass-btn primary">Generate vCard</button>
+
+        <div id="vcard-result" class="vcard-result" style="display: none;">
+          <div class="qr-container">
+            <canvas id="qr-code"></canvas>
+          </div>
+          <div class="vcard-actions">
+            <button id="download-vcard" class="glass-btn">Download .vcf</button>
+            <button id="copy-vcard" class="glass-btn">Copy</button>
+          </div>
+          <details class="vcard-details">
+            <summary>View Raw vCard</summary>
+            <pre id="vcard-preview"></pre>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- Studio Section -->
+    <section id="studio-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">FlatBuffer Studio</h2>
+        <p class="section-desc">Create schemas, generate code, and build FlatBuffers in the browser <span id="flatc-version" class="flatc-version"></span></p>
+      </div>
+
+      <div class="studio-container">
+        <!-- Studio Tabs -->
+        <div class="studio-tabs">
+          <button class="studio-tab active" data-studio-tab="schema-editor">Schema Editor</button>
+          <button class="studio-tab" data-studio-tab="schema-builder">Schema Builder</button>
+          <button class="studio-tab" data-studio-tab="code-gen">Code Generator</button>
+          <button class="studio-tab" data-studio-tab="data-builder">Data Builder</button>
+          <button class="studio-tab" data-studio-tab="downloads">Downloads</button>
+        </div>
+
+        <!-- Schema Editor Panel -->
+        <div id="studio-schema-editor" class="studio-panel active">
+          <div class="schema-editor-layout">
+            <!-- Left: File Tree -->
+            <div class="schema-file-tree">
+              <div class="pane-header">
+                <h4>Files</h4>
+                <div class="pane-actions">
+                  <button id="schema-new-file" class="glass-btn small icon-btn" title="New File">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="12" y1="18" x2="12" y2="12"></line>
+                      <line x1="9" y1="15" x2="15" y2="15"></line>
+                    </svg>
+                  </button>
+                  <button id="schema-new-folder" class="glass-btn small icon-btn" title="New Folder">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                      <line x1="12" y1="11" x2="12" y2="17"></line>
+                      <line x1="9" y1="14" x2="15" y2="14"></line>
+                    </svg>
+                  </button>
+                  <label class="glass-btn small icon-btn" title="Upload Files">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    <input type="file" id="studio-upload-schema" accept=".fbs,.json" multiple hidden>
+                  </label>
+                </div>
+              </div>
+              <div class="file-tree-body" id="schema-file-tree">
+                <div class="empty-state small">No files yet</div>
+              </div>
+              <div class="pane-footer small">
+                <button id="studio-load-sample" class="glass-btn small full-width">Load Sample Project</button>
+              </div>
+            </div>
+
+            <!-- Center: Editor -->
+            <div class="schema-editor-main">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4 id="schema-editor-title">Schema Definition</h4>
+                  <div class="pane-actions">
+                    <span id="schema-current-file" class="current-file-indicator"></span>
+                  </div>
+                </div>
+                <div class="pane-body code-editor-body">
+                  <textarea id="studio-schema-input" class="code-textarea" spellcheck="false" placeholder="// Select or create a file to begin editing..."></textarea>
+                </div>
+                <div class="pane-footer">
+                  <button id="studio-parse-schema" class="glass-btn primary">Parse All &amp; Validate</button>
+                  <span id="studio-schema-status" class="status-text"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Parsed Structure -->
+            <div class="schema-parsed-pane">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4>Parsed Structure</h4>
+                </div>
+                <div class="pane-body">
+                  <div id="studio-parsed-view" class="parsed-view">
+                    <div class="empty-state">Parse schemas to see structure</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Schema Builder Panel -->
+        <div id="studio-schema-builder" class="studio-panel">
+          <div class="schema-builder-layout">
+            <!-- Left: Item List -->
+            <div class="schema-builder-sidebar">
+              <div class="builder-config">
+                <div class="glass-input-group">
+                  <label>Namespace</label>
+                  <input type="text" id="builder-namespace" class="glass-input" placeholder="MyGame.Sample">
+                </div>
+                <div class="glass-input-group" id="builder-root-type-group" style="display: none;">
+                  <label>Root Type</label>
+                  <select id="builder-root-type" class="glass-select">
+                    <option value="">Select root type...</option>
+                  </select>
+                </div>
+                <div class="builder-config-row">
+                  <div class="glass-input-group">
+                    <label>File ID <span class="label-hint">(4 chars)</span></label>
+                    <input type="text" id="builder-file-identifier" class="glass-input" placeholder="XXXX" maxlength="4" style="width: 70px; font-family: monospace;">
+                  </div>
+                  <div class="glass-input-group">
+                    <label>Extension</label>
+                    <input type="text" id="builder-file-extension" class="glass-input" placeholder="bin" style="width: 70px;">
+                  </div>
+                </div>
+                <details class="builder-advanced">
+                  <summary>Advanced Options</summary>
+                  <div class="glass-input-group">
+                    <label>Includes <span class="label-hint">(one per line)</span></label>
+                    <textarea id="builder-includes" class="glass-input" placeholder="other.fbs&#10;common/types.fbs" rows="2"></textarea>
+                  </div>
+                  <div class="glass-input-group">
+                    <label>Custom Attributes <span class="label-hint">(one per line)</span></label>
+                    <textarea id="builder-attributes" class="glass-input" placeholder="my_custom_attr&#10;another_attr" rows="2"></textarea>
+                  </div>
+                </details>
+              </div>
+              <div class="builder-add-section">
+                <div class="builder-add-dropdown">
+                  <button id="builder-add-btn" class="glass-btn small">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add Item
+                  </button>
+                  <div id="builder-add-menu" class="builder-add-menu" style="display: none;">
+                    <button data-item-type="table">Table</button>
+                    <button data-item-type="enum">Enum</button>
+                    <button data-item-type="struct">Struct</button>
+                    <button data-item-type="union">Union</button>
+                    <button data-item-type="rpc">RPC Service</button>
+                  </div>
+                </div>
+              </div>
+              <div id="builder-item-list" class="builder-item-list">
+                <div class="empty-state">Add a table, enum, or struct to begin</div>
+              </div>
+            </div>
+
+            <!-- Center: Item Editor -->
+            <div class="schema-builder-editor">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4 id="builder-editor-title">Item Editor</h4>
+                </div>
+                <div class="pane-body">
+                  <div id="builder-editor-content" class="builder-editor-content">
+                    <div class="empty-state">Select an item to edit</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Preview -->
+            <div class="schema-builder-preview">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4>Preview</h4>
+                  <div class="pane-actions">
+                    <div class="builder-preview-toggle">
+                      <button id="builder-preview-fbs" class="toggle-btn active">FBS</button>
+                      <button id="builder-preview-json" class="toggle-btn">JSON Schema</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="pane-body">
+                  <pre id="builder-preview-code" class="builder-preview-code">// Schema preview will appear here...</pre>
+                </div>
+                <div class="pane-footer">
+                  <span id="builder-validation-status" class="builder-validation-status"></span>
+                  <button id="builder-copy-code" class="glass-btn small">Copy</button>
+                  <button id="builder-export-editor" class="glass-btn small primary">Export to Editor</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Code Generator Panel -->
+        <div id="studio-code-gen" class="studio-panel">
+          <div class="code-gen-layout">
+            <!-- Left: Options -->
+            <div class="code-gen-options">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4>Options</h4>
+                </div>
+                <div class="pane-body">
+                  <div class="codegen-options-content">
+                    <div class="glass-input-group">
+                      <label>Target Language</label>
+                      <select id="studio-codegen-lang" class="glass-select">
+                        <option value="ts">TypeScript</option>
+                        <option value="python">Python</option>
+                        <option value="cpp">C++</option>
+                        <option value="rust">Rust</option>
+                        <option value="go">Go</option>
+                        <option value="java">Java</option>
+                        <option value="csharp">C#</option>
+                        <option value="kotlin">Kotlin</option>
+                        <option value="swift">Swift</option>
+                        <option value="jsonschema">JSON Schema</option>
+                      </select>
+                    </div>
+                    <div class="codegen-checkboxes">
+                      <label class="checkbox-label">
+                        <input type="checkbox" id="studio-opt-mutable" checked>
+                        <span>Mutable APIs</span>
+                      </label>
+                      <label class="checkbox-label">
+                        <input type="checkbox" id="studio-opt-object-api" checked>
+                        <span>Object API</span>
+                      </label>
+                    </div>
+                    <button id="studio-generate-code" class="glass-btn primary full-width">Generate Code</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Center: File Tree -->
+            <div class="code-gen-files">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4>Generated Files</h4>
+                  <span id="codegen-file-count" class="file-count-badge"></span>
+                </div>
+                <div class="pane-body">
+                  <div id="codegen-file-tree" class="codegen-file-tree">
+                    <div class="empty-state small">Generate code to see files</div>
+                  </div>
+                </div>
+                <div class="pane-footer">
+                  <button id="studio-download-code" class="glass-btn small full-width">Download All</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Code View -->
+            <div class="code-gen-content">
+              <div class="studio-pane">
+                <div class="pane-header">
+                  <h4 id="codegen-current-file">Generated Code</h4>
+                  <div class="pane-actions">
+                    <button id="studio-copy-code" class="glass-btn small">Copy</button>
+                  </div>
+                </div>
+                <div class="pane-body code-view-body">
+                  <pre id="studio-generated-code" class="code-display">// Generated code will appear here...</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Data Builder Panel -->
+        <div id="studio-data-builder" class="studio-panel">
+          <div class="studio-split three-col">
+            <div class="studio-pane">
+              <div class="pane-header">
+                <h4>Data Entry</h4>
+                <select id="studio-builder-table" class="glass-select compact">
+                  <option value="">Select Table</option>
+                </select>
+              </div>
+              <div class="pane-body">
+                <div id="studio-builder-form" class="builder-form">
+                  <div class="empty-state">Parse a schema and select a table</div>
+                </div>
+              </div>
+              <div class="pane-footer">
+                <button id="studio-build-buffer" class="glass-btn primary">Build Buffer</button>
+                <button id="studio-clear-form" class="glass-btn small">Clear</button>
+              </div>
+            </div>
+            <div class="studio-pane">
+              <div class="pane-header">
+                <h4>Buffer Output</h4>
+                <label class="checkbox-label">
+                  <input type="checkbox" id="studio-encrypt-buffer">
+                  <span>Encrypt</span>
+                </label>
+              </div>
+              <div class="pane-body">
+                <div id="studio-hex-view" class="hex-view">
+                  <div class="empty-state">Build a buffer to see output</div>
+                </div>
+              </div>
+              <div class="pane-footer">
+                <button id="studio-download-buffer" class="glass-btn small" disabled>Download .bin</button>
+                <label class="glass-btn small">
+                  Upload .bin
+                  <input type="file" id="studio-upload-buffer" accept=".bin,.fb" hidden>
+                </label>
+              </div>
+            </div>
+            <div class="studio-pane">
+              <div class="pane-header">
+                <h4>Decoded JSON</h4>
+              </div>
+              <div class="pane-body">
+                <pre id="studio-decoded-view" class="json-view"><div class="empty-state">Build or upload a buffer</div></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Downloads Panel -->
+        <div id="studio-downloads" class="studio-panel">
+          <div class="downloads-grid">
+            <div class="download-card">
+              <div class="download-icon ts">TS</div>
+              <h4>TypeScript / JavaScript</h4>
+              <p>NPM package with full TypeScript definitions</p>
+              <code class="install-cmd">npm install flatbuffers</code>
+              <a href="https://www.npmjs.com/package/flatbuffers" target="_blank" class="glass-btn small">NPM</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon py">PY</div>
+              <h4>Python</h4>
+              <p>PyPI package for Python 3.x</p>
+              <code class="install-cmd">pip install flatbuffers</code>
+              <a href="https://pypi.org/project/flatbuffers/" target="_blank" class="glass-btn small">PyPI</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon rs">RS</div>
+              <h4>Rust</h4>
+              <p>Cargo crate with no_std support</p>
+              <code class="install-cmd">cargo add flatbuffers</code>
+              <a href="https://crates.io/crates/flatbuffers" target="_blank" class="glass-btn small">Crates.io</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon go">GO</div>
+              <h4>Go</h4>
+              <p>Go module with generics support</p>
+              <code class="install-cmd">go get github.com/google/flatbuffers/go</code>
+              <a href="https://pkg.go.dev/github.com/google/flatbuffers/go" target="_blank" class="glass-btn small">Pkg.dev</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon cpp">C++</div>
+              <h4>C++</h4>
+              <p>Header-only library, C++11 compatible</p>
+              <code class="install-cmd">#include "flatbuffers/flatbuffers.h"</code>
+              <a href="https://github.com/google/flatbuffers/tree/master/include" target="_blank" class="glass-btn small">GitHub</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon cs">C#</div>
+              <h4>C# / .NET</h4>
+              <p>NuGet package for .NET Standard 2.0+</p>
+              <code class="install-cmd">dotnet add package FlatBuffers</code>
+              <a href="https://www.nuget.org/packages/Google.FlatBuffers" target="_blank" class="glass-btn small">NuGet</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon java">JV</div>
+              <h4>Java</h4>
+              <p>Maven Central artifact</p>
+              <code class="install-cmd">com.google.flatbuffers:flatbuffers-java</code>
+              <a href="https://central.sonatype.com/artifact/com.google.flatbuffers/flatbuffers-java" target="_blank" class="glass-btn small">Maven</a>
+            </div>
+            <div class="download-card">
+              <div class="download-icon swift">SW</div>
+              <h4>Swift</h4>
+              <p>Swift Package Manager</p>
+              <code class="install-cmd">.package(url: "flatbuffers.git")</code>
+              <a href="https://github.com/google/flatbuffers/tree/master/swift" target="_blank" class="glass-btn small">GitHub</a>
+            </div>
+            <div class="download-card featured">
+              <div class="download-icon wasm">WA</div>
+              <h4>WASM Compiler (flatc)</h4>
+              <p>Run flatc in the browser or Node.js</p>
+              <div class="download-actions">
+                <button id="studio-download-flatc-wasm" class="glass-btn primary small">flatc.wasm</button>
+                <button id="studio-download-flatc-js" class="glass-btn small">flatc.mjs</button>
+              </div>
+            </div>
+            <div class="download-card featured">
+              <div class="download-icon enc">EN</div>
+              <h4>Encryption Module (WASM)</h4>
+              <p>AES-256, X25519, secp256k1, P-256, Ed25519</p>
+              <div class="download-actions">
+                <button id="studio-download-enc-wasm" class="glass-btn primary small">encryption.wasm</button>
+                <button id="studio-download-enc-js" class="glass-btn small">encryption.mjs</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- WASM Runtimes Section -->
+    <section id="runtimes-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">WASM Runtime Integration</h2>
+        <p class="section-desc">Run the encryption module in any language with WebAssembly support</p>
+      </div>
+
+      <!-- Introduction Card -->
+      <div class="glass-card">
+        <h3 class="card-subtitle">Why WASM Runtimes?</h3>
+        <div class="runtime-intro">
+          <div class="runtime-benefit">
+            <div class="benefit-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
+            <div class="benefit-content">
+              <h4>Single Auditable Implementation</h4>
+              <p>One C++/Crypto++ codebase compiled to WASM. Audit once, deploy everywhere.</p>
+            </div>
+          </div>
+          <div class="runtime-benefit">
+            <div class="benefit-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v6l4 2"/>
+              </svg>
+            </div>
+            <div class="benefit-content">
+              <h4>Battle-Tested Crypto</h4>
+              <p>Crypto++ has 30+ years of production use in security-critical applications.</p>
+            </div>
+          </div>
+          <div class="runtime-benefit">
+            <div class="benefit-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                <polyline points="22,6 12,13 2,6"/>
+              </svg>
+            </div>
+            <div class="benefit-content">
+              <h4>Cross-Language Interop</h4>
+              <p>Data encrypted in Go can be decrypted in Python, Rust, Java, and vice versa.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Runtime Cards Grid -->
+      <div class="glass-card">
+        <h3 class="card-subtitle">Available Runtimes</h3>
+        <p class="card-desc">Download pre-built bindings and template projects for your language:</p>
+
+        <div class="runtimes-grid">
+          <!-- Go Card -->
+          <div class="runtime-card" data-lang="go">
+            <div class="runtime-header">
+              <div class="runtime-icon go">GO</div>
+              <div class="runtime-meta">
+                <h4>Go</h4>
+                <span class="runtime-engine">wazero</span>
+              </div>
+            </div>
+            <p>Pure Go WebAssembly runtime - no CGo required</p>
+            <div class="runtime-features">
+              <span class="feature-tag">Zero dependencies</span>
+              <span class="feature-tag">CGo-free</span>
+            </div>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="go-bindings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download
+              </button>
+              <a href="docs/go.md" class="glass-btn small">Docs</a>
+            </div>
+            <code class="install-cmd">go get github.com/tetratelabs/wazero</code>
+          </div>
+
+          <!-- Python Card -->
+          <div class="runtime-card" data-lang="python">
+            <div class="runtime-header">
+              <div class="runtime-icon py">PY</div>
+              <div class="runtime-meta">
+                <h4>Python</h4>
+                <span class="runtime-engine">wasmer / wasmtime</span>
+              </div>
+            </div>
+            <p>Run WASM modules with wasmer-python or wasmtime</p>
+            <div class="runtime-features">
+              <span class="feature-tag">PyPI ready</span>
+              <span class="feature-tag">Type hints</span>
+            </div>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="python-bindings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download
+              </button>
+              <a href="docs/python.md" class="glass-btn small">Docs</a>
+            </div>
+            <code class="install-cmd">pip install wasmer wasmer-compiler-cranelift</code>
+          </div>
+
+          <!-- Rust Card -->
+          <div class="runtime-card" data-lang="rust">
+            <div class="runtime-header">
+              <div class="runtime-icon rs">RS</div>
+              <div class="runtime-meta">
+                <h4>Rust</h4>
+                <span class="runtime-engine">wasmer</span>
+              </div>
+            </div>
+            <p>Native Rust bindings with wasmer crate</p>
+            <div class="runtime-features">
+              <span class="feature-tag">no_std support</span>
+              <span class="feature-tag">Memory safe</span>
+            </div>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="rust-bindings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download
+              </button>
+              <a href="docs/rust.md" class="glass-btn small">Docs</a>
+            </div>
+            <code class="install-cmd">cargo add wasmer</code>
+          </div>
+
+          <!-- Java Card -->
+          <div class="runtime-card" data-lang="java">
+            <div class="runtime-header">
+              <div class="runtime-icon java">JV</div>
+              <div class="runtime-meta">
+                <h4>Java</h4>
+                <span class="runtime-engine">Chicory</span>
+              </div>
+            </div>
+            <p>Pure Java WASM interpreter - no JNI required</p>
+            <div class="runtime-features">
+              <span class="feature-tag">Pure Java</span>
+              <span class="feature-tag">JNI-free</span>
+            </div>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="java-bindings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download
+              </button>
+              <a href="docs/java.md" class="glass-btn small">Docs</a>
+            </div>
+            <code class="install-cmd">com.dylibso.chicory:runtime:1.5.3</code>
+          </div>
+
+          <!-- C# Card -->
+          <div class="runtime-card" data-lang="csharp">
+            <div class="runtime-header">
+              <div class="runtime-icon cs">C#</div>
+              <div class="runtime-meta">
+                <h4>C# / .NET</h4>
+                <span class="runtime-engine">Wasmtime</span>
+              </div>
+            </div>
+            <p>.NET 6+ support via Wasmtime NuGet package</p>
+            <div class="runtime-features">
+              <span class="feature-tag">.NET 6+</span>
+              <span class="feature-tag">NuGet</span>
+            </div>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="csharp-bindings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download
+              </button>
+              <a href="docs/csharp.md" class="glass-btn small">Docs</a>
+            </div>
+            <code class="install-cmd">dotnet add package Wasmtime</code>
+          </div>
+
+          <!-- Swift Card -->
+          <div class="runtime-card" data-lang="swift">
+            <div class="runtime-header">
+              <div class="runtime-icon swift">SW</div>
+              <div class="runtime-meta">
+                <h4>Swift</h4>
+                <span class="runtime-engine">WasmKit</span>
+              </div>
+            </div>
+            <p>Swift Package Manager compatible WASM runtime</p>
+            <div class="runtime-features">
+              <span class="feature-tag">SPM</span>
+              <span class="feature-tag">iOS/macOS</span>
+            </div>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="swift-bindings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download
+              </button>
+              <a href="docs/swift.md" class="glass-btn small">Docs</a>
+            </div>
+            <code class="install-cmd">.package(url: "WasmKit.git")</code>
+          </div>
+
+          <!-- Node.js Card -->
+          <div class="runtime-card" data-lang="nodejs">
+            <div class="runtime-header">
+              <div class="runtime-icon ts">JS</div>
+              <div class="runtime-meta">
+                <h4>Node.js</h4>
+                <span class="runtime-engine">V8 (native)</span>
+              </div>
+            </div>
+            <p>Native WebAssembly support in Node.js 16+</p>
+            <div class="runtime-features">
+              <span class="feature-tag">Native V8</span>
+              <span class="feature-tag">ESM/CJS</span>
+            </div>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="nodejs-bindings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download
+              </button>
+              <a href="docs/nodejs.md" class="glass-btn small">Docs</a>
+            </div>
+            <code class="install-cmd">npm install flatc-wasm</code>
+          </div>
+
+          <!-- Browser Card -->
+          <div class="runtime-card" data-lang="browser">
+            <div class="runtime-header">
+              <div class="runtime-icon wasm">WA</div>
+              <div class="runtime-meta">
+                <h4>Browser</h4>
+                <span class="runtime-engine">V8/SpiderMonkey/JSC</span>
+              </div>
+            </div>
+            <p>Works in all modern browsers with WebAssembly</p>
+            <div class="runtime-features">
+              <span class="feature-tag">All browsers</span>
+              <span class="feature-tag">Vite/Webpack</span>
+            </div>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="browser-bindings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download
+              </button>
+              <a href="docs/browser.md" class="glass-btn small">Docs</a>
+            </div>
+            <code class="install-cmd">npm install flatc-wasm</code>
+          </div>
+        </div>
+      </div>
+
+      <!-- Core Downloads Card -->
+      <div class="glass-card">
+        <h3 class="card-subtitle">Core WASM Module</h3>
+        <p class="card-desc">Download the core encryption module for manual integration:</p>
+
+        <div class="core-downloads">
+          <div class="core-download-item">
+            <div class="download-icon enc">WA</div>
+            <div class="core-download-info">
+              <h4>flatc-encryption.wasm</h4>
+              <p>Core encryption module compiled from Crypto++ (~1.2MB)</p>
+            </div>
+            <button id="download-core-wasm" class="glass-btn primary">Download .wasm</button>
+          </div>
+          <div class="core-download-item">
+            <div class="download-icon ts">JS</div>
+            <div class="core-download-info">
+              <h4>encryption.mjs</h4>
+              <p>JavaScript loader with TypeScript definitions</p>
+            </div>
+            <button id="download-core-loader" class="glass-btn">Download .mjs</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Documentation Links Card -->
+      <div class="glass-card">
+        <h3 class="card-subtitle">Documentation</h3>
+        <div class="docs-grid">
+          <a href="docs/README.md" class="doc-link-card">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            <h4>Getting Started</h4>
+            <p>Quick start guide for all languages</p>
+          </a>
+          <a href="docs/README.md#api-reference" class="doc-link-card">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="16 18 22 12 16 6"/>
+              <polyline points="8 6 2 12 8 18"/>
+            </svg>
+            <h4>API Reference</h4>
+            <p>Complete function documentation</p>
+          </a>
+          <a href="docs/README.md#security-considerations" class="doc-link-card">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <h4>Security Guide</h4>
+            <p>Best practices and threat model</p>
+          </a>
+          <a href="docs/README.md#performance-optimization" class="doc-link-card">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+            <h4>Performance</h4>
+            <p>Optimization and benchmarks</p>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Keys Modal -->
+  <div id="keys-modal" class="modal">
+    <div class="modal-glass modal-wide">
+      <div class="modal-header">
+        <h3>Your Keys</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Base Keys Section -->
+        <div class="keys-section">
+          <h4 class="section-label">Base Keys</h4>
+          <div class="key-item">
+            <label>X25519 Public Key (Encryption)</label>
+            <code id="wallet-x25519-pub"></code>
+          </div>
+          <div class="key-item">
+            <label>Ed25519 Public Key (Signing)</label>
+            <code id="wallet-ed25519-pub"></code>
+          </div>
+          <div class="key-item">
+            <label>secp256k1 Public Key (Bitcoin/Ethereum)</label>
+            <code id="wallet-secp256k1-pub"></code>
+          </div>
+        </div>
+
+        <!-- HD Wallet Section -->
+        <div class="keys-section hd-section">
+          <h4 class="section-label">HD Wallet Derivation (BIP44)</h4>
+
+          <div class="hd-path-builder">
+            <div class="path-display">
+              <span class="path-prefix">m/</span>
+              <span class="path-segment">
+                <select id="hd-purpose" class="glass-select compact">
+                  <option value="44">44' (BIP44)</option>
+                  <option value="49">49' (BIP49 SegWit)</option>
+                  <option value="84">84' (BIP84 Native SegWit)</option>
+                </select>
+              </span>
+              <span class="path-sep">/</span>
+              <span class="path-segment">
+                <select id="hd-coin" class="glass-select compact">
+                  <option value="0" data-symbol="BTC" data-name="Bitcoin">0' (Bitcoin)</option>
+                  <option value="60" data-symbol="ETH" data-name="Ethereum">60' (Ethereum)</option>
+                  <option value="501" data-symbol="SOL" data-name="Solana">501' (Solana)</option>
+                  <option value="2" data-symbol="LTC" data-name="Litecoin">2' (Litecoin)</option>
+                  <option value="145" data-symbol="BCH" data-name="Bitcoin Cash">145' (Bitcoin Cash)</option>
+                  <option value="3" data-symbol="DOGE" data-name="Dogecoin">3' (Dogecoin)</option>
+                  <option value="118" data-symbol="ATOM" data-name="Cosmos">118' (Cosmos)</option>
+                  <option value="330" data-symbol="ALGO" data-name="Algorand">330' (Algorand)</option>
+                  <option value="354" data-symbol="DOT" data-name="Polkadot">354' (Polkadot)</option>
+                  <option value="1815" data-symbol="ADA" data-name="Cardano">1815' (Cardano)</option>
+                </select>
+              </span>
+              <span class="path-sep">/</span>
+              <span class="path-segment">
+                <input type="number" id="hd-account" class="glass-input compact" value="0" min="0" max="2147483647">
+                <span class="hardened-mark">'</span>
+              </span>
+              <span class="path-sep">/</span>
+              <span class="path-segment">
+                <select id="hd-change" class="glass-select compact">
+                  <option value="0">0 (External)</option>
+                  <option value="1">1 (Change)</option>
+                </select>
+              </span>
+              <span class="path-sep">/</span>
+              <span class="path-segment">
+                <input type="number" id="hd-index" class="glass-input compact" value="0" min="0" max="2147483647">
+              </span>
+            </div>
+
+            <div class="path-summary">
+              <code id="full-path">m/44'/0'/0'/0/0</code>
+              <button id="derive-address" class="glass-btn primary small">Derive</button>
+            </div>
+          </div>
+
+          <!-- Derived Address Display -->
+          <div id="derived-result" class="derived-result" style="display: none;">
+            <div class="derived-header">
+              <span class="crypto-icon" id="derived-icon"></span>
+              <span class="crypto-name" id="derived-crypto-name">Bitcoin</span>
+            </div>
+
+            <div class="key-item">
+              <label>Public Key</label>
+              <code id="derived-pubkey"></code>
+            </div>
+
+            <div class="key-item">
+              <label>Address</label>
+              <div class="address-row">
+                <code id="derived-address"></code>
+                <a id="derived-explorer-link" href="#" target="_blank" class="explorer-link glass-btn small">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                  </svg>
+                  View on Explorer
+                </a>
+              </div>
+            </div>
+
+            <div class="balance-row" id="balance-row" style="display: none;">
+              <span class="balance-label">Balance:</span>
+              <span class="balance-value" id="derived-balance">Loading...</span>
+            </div>
+
+            <div class="qr-row">
+              <canvas id="address-qr" width="128" height="128"></canvas>
+            </div>
+          </div>
+
+          <!-- Quick Derive Buttons -->
+          <div class="quick-derive">
+            <span class="quick-label">Quick derive:</span>
+            <button class="glass-btn small" data-coin="0" data-purpose="84">BTC</button>
+            <button class="glass-btn small" data-coin="60" data-purpose="44">ETH</button>
+            <button class="glass-btn small" data-coin="501" data-purpose="44">SOL</button>
+            <button class="glass-btn small" data-coin="2" data-purpose="44">LTC</button>
+            <button class="glass-btn small" data-coin="3" data-purpose="44">DOGE</button>
+          </div>
+        </div>
+
+        <div class="key-warning">
+          Private keys are stored in memory only and will be lost on refresh.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help Modal -->
+  <div id="help-modal" class="modal">
+    <div class="modal-glass">
+      <div class="modal-header">
+        <h3 id="help-title"></h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="help-body"></div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <span id="status">Loading WASM modules...</span>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script type="module" src="app.mjs"></script>
+</body>
+</html>

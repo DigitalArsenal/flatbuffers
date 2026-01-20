@@ -2243,16 +2243,68 @@ ls wasm/dist/
 cd wasm && npm test
 ```
 
-### Build Targets
+### CMake Targets
 
-| Target | Description |
-|--------|-------------|
-| `flatc_wasm` | Separate .js and .wasm files |
-| `flatc_wasm_inline` | Single .js file with inlined WASM |
-| `flatc_wasm_npm` | NPM package (uses inline version) |
-| `flatc_wasm_test` | Run basic tests |
-| `flatc_wasm_test_all` | Run comprehensive tests |
-| `flatc_wasm_benchmark` | Run performance benchmarks |
+#### Demo/Webserver Targets (no Emscripten required)
+
+These targets run the interactive demo webserver using pre-built WASM modules:
+
+```bash
+# Configure without WASM build
+cmake -B build -S .
+
+# Start the development webserver (http://localhost:3000)
+cmake --build build --target wasm_demo
+
+# Build the demo for production deployment
+cmake --build build --target wasm_demo_build
+```
+
+| Target            | Description                                            |
+|-------------------|--------------------------------------------------------|
+| `wasm_demo`       | Start development webserver at `http://localhost:3000` |
+| `wasm_demo_build` | Build demo for production (outputs to `wasm/docs/dist/`) |
+
+#### WASM Build Targets (requires Emscripten)
+
+These targets build the WASM modules from source:
+
+```bash
+# Configure with WASM build enabled
+cmake -B build -S . -DFLATBUFFERS_BUILD_WASM=ON
+
+# Build all WASM modules
+cmake --build build --target wasm_build
+
+# Build WASM and start webserver in one command
+cmake --build build --target wasm_build_and_serve
+```
+
+| Target                 | Description                                             |
+|------------------------|---------------------------------------------------------|
+| `wasm_build`           | Build all WASM modules (flatc_wasm + flatc_wasm_wasi)   |
+| `wasm_build_and_serve` | Build WASM modules then start development webserver     |
+| `flatc_wasm`           | Build main WASM module (separate .js and .wasm files)   |
+| `flatc_wasm_inline`    | Build single .js file with inlined WASM                 |
+| `flatc_wasm_npm`       | Build NPM package (uses inline version)                 |
+| `flatc_wasm_wasi`      | Build WASI standalone encryption module                 |
+
+#### Test Targets
+
+| Target                   | Description                      |
+|--------------------------|----------------------------------|
+| `flatc_wasm_test`        | Run basic WASM tests             |
+| `flatc_wasm_test_all`    | Run comprehensive test suite     |
+| `flatc_wasm_test_parity` | Run WASM vs native parity tests  |
+| `flatc_wasm_benchmark`   | Run performance benchmarks       |
+
+#### Browser Example Targets
+
+| Target                 | Description                          |
+|------------------------|--------------------------------------|
+| `browser_wallet_serve` | Start crypto wallet demo (port 3000) |
+| `browser_wallet_build` | Build wallet demo for production     |
+| `browser_examples`     | Start all browser demos              |
 
 ---
 

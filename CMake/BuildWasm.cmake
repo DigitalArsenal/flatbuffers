@@ -19,14 +19,25 @@ include(FetchContent)
 option(FLATBUFFERS_BUILD_WASM "Build WebAssembly version of flatc" OFF)
 
 # =============================================================================
-# Standalone Demo Target (always available, doesn't require WASM build)
+# Standalone Demo Targets (always available, doesn't require WASM build)
 # =============================================================================
-# This target runs the demo directly with npm, no Emscripten needed
+# These targets run the demo directly with npm, no Emscripten needed
+#
+# Usage from project root:
+#   cmake -B build -S .
+#   cmake --build build --target wasm_demo        # Start webserver
+#   cmake --build build --target wasm_demo_build  # Build for production
+#
+# To also build WASM:
+#   cmake -B build -S . -DFLATBUFFERS_BUILD_WASM=ON
+#   cmake --build build --target wasm_build       # Build WASM modules
+#   cmake --build build --target wasm_build_and_serve  # Build + serve
 
 find_program(NPM_EXECUTABLE_DEMO npm)
 if(NPM_EXECUTABLE_DEMO)
-  set(WASM_DEMO_DIR "${CMAKE_SOURCE_DIR}/wasm/examples/wasm-daflatbuffers")
+  set(WASM_DEMO_DIR "${CMAKE_SOURCE_DIR}/wasm/docs")
 
+  # wasm_demo - Start the development webserver (uses pre-built WASM from wasm/dist)
   add_custom_target(wasm_demo
     COMMAND ${NPM_EXECUTABLE_DEMO} install
     COMMAND ${NPM_EXECUTABLE_DEMO} run dev
@@ -35,12 +46,23 @@ if(NPM_EXECUTABLE_DEMO)
     COMMENT "Starting wasm-daflatbuffers demo (http://localhost:3000)"
   )
 
+  # wasm_demo_build - Build the demo for production
   add_custom_target(wasm_demo_build
     COMMAND ${NPM_EXECUTABLE_DEMO} install
     COMMAND ${NPM_EXECUTABLE_DEMO} run build
     WORKING_DIRECTORY ${WASM_DEMO_DIR}
     COMMENT "Building wasm-daflatbuffers demo for production"
   )
+
+  message(STATUS "")
+  message(STATUS "=== WASM Demo Targets (no Emscripten required) ===")
+  message(STATUS "  wasm_demo            - Start development webserver")
+  message(STATUS "  wasm_demo_build      - Build demo for production")
+  if(NOT FLATBUFFERS_BUILD_WASM)
+    message(STATUS "")
+    message(STATUS "To build WASM modules, reconfigure with -DFLATBUFFERS_BUILD_WASM=ON")
+  endif()
+  message(STATUS "")
 endif()
 
 if(NOT FLATBUFFERS_BUILD_WASM)
@@ -400,8 +422,7 @@ module.exports.default = createModule;
   # Browser example targets (also available in Emscripten build)
   find_program(NPM_EXECUTABLE npm)
   if(NPM_EXECUTABLE AND NODE_EXECUTABLE)
-    set(BROWSER_EXAMPLES_DIR "${CMAKE_SOURCE_DIR}/wasm/examples")
-    set(BROWSER_WALLET_DIR "${BROWSER_EXAMPLES_DIR}/wasm-daflatbuffers")
+    set(BROWSER_WALLET_DIR "${CMAKE_SOURCE_DIR}/wasm/docs")
 
     add_custom_target(browser_wallet_install
       COMMAND ${NPM_EXECUTABLE} install
@@ -435,11 +456,35 @@ module.exports.default = createModule;
 
     add_custom_target(browser_examples DEPENDS browser_wallet_serve)
 
+    # Convenience targets for building WASM and serving
+    # wasm_build - Build all WASM modules
+    add_custom_target(wasm_build
+      DEPENDS flatc_wasm flatc_wasm_wasi
+      COMMENT "Building all WASM modules"
+    )
+
+    # wasm_build_and_serve - Build WASM then start webserver
+    add_custom_target(wasm_build_and_serve
+      DEPENDS flatc_wasm_wasi browser_wallet_install
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${BROWSER_WALLET_DIR}/public"
+      COMMAND ${CMAKE_COMMAND} -E create_symlink
+        "${WASM_OUTPUT_DIR}/flatc-encryption.wasm"
+        "${BROWSER_WALLET_DIR}/public/flatc-encryption.wasm"
+      COMMAND ${NPM_EXECUTABLE} run dev
+      WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
+      USES_TERMINAL
+      COMMENT "Building WASM and starting development server (http://localhost:3000)"
+    )
+
     message(STATUS "")
     message(STATUS "Browser example targets:")
     message(STATUS "  browser_wallet_serve - Start crypto wallet demo (port 3000)")
     message(STATUS "  browser_wallet_build - Build wallet demo for production")
     message(STATUS "  browser_examples     - Start all browser demos")
+    message(STATUS "")
+    message(STATUS "Convenience targets:")
+    message(STATUS "  wasm_build           - Build all WASM modules")
+    message(STATUS "  wasm_build_and_serve - Build WASM then start webserver")
   endif()
 
   return()
@@ -596,8 +641,7 @@ message(STATUS "")
 find_program(NPM_EXECUTABLE npm)
 
 if(NPM_EXECUTABLE AND NODE_EXECUTABLE)
-  set(BROWSER_EXAMPLES_DIR "${CMAKE_SOURCE_DIR}/wasm/examples")
-  set(BROWSER_WALLET_DIR "${BROWSER_EXAMPLES_DIR}/wasm-daflatbuffers")
+  set(BROWSER_WALLET_DIR "${CMAKE_SOURCE_DIR}/wasm/docs")
 
   # Browser wallet demo - install dependencies
   add_custom_target(browser_wallet_install
@@ -639,10 +683,34 @@ if(NPM_EXECUTABLE AND NODE_EXECUTABLE)
     COMMENT "Starting browser examples"
   )
 
+  # Convenience targets for building WASM and serving
+  # wasm_build - Build all WASM modules
+  add_custom_target(wasm_build
+    DEPENDS flatc_wasm flatc_wasm_wasi
+    COMMENT "Building all WASM modules"
+  )
+
+  # wasm_build_and_serve - Build WASM then start webserver
+  add_custom_target(wasm_build_and_serve
+    DEPENDS flatc_wasm_wasi browser_wallet_install
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${BROWSER_WALLET_DIR}/public"
+    COMMAND ${CMAKE_COMMAND} -E create_symlink
+      "${WASM_OUTPUT_DIR}/flatc-encryption.wasm"
+      "${BROWSER_WALLET_DIR}/public/flatc-encryption.wasm"
+    COMMAND ${NPM_EXECUTABLE} run dev
+    WORKING_DIRECTORY ${BROWSER_WALLET_DIR}
+    USES_TERMINAL
+    COMMENT "Building WASM and starting development server (http://localhost:3000)"
+  )
+
   message(STATUS "Browser example targets:")
   message(STATUS "  browser_wallet_serve - Start crypto wallet demo (port 3000)")
   message(STATUS "  browser_wallet_build - Build wallet demo for production")
   message(STATUS "  browser_examples     - Start all browser demos")
+  message(STATUS "")
+  message(STATUS "Convenience targets:")
+  message(STATUS "  wasm_build           - Build all WASM modules")
+  message(STATUS "  wasm_build_and_serve - Build WASM then start webserver")
   message(STATUS "")
 endif()
 

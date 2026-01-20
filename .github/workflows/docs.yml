@@ -3,7 +3,7 @@ on:
   # For manual pushes.
   workflow_dispatch:
 
-  # Pushes to master that touch docs or wasm/examples/wasm-daflatbuffers
+  # Pushes to master that touch docs or wasm/docs
   push:
     branches:
       - master
@@ -30,15 +30,15 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: wasm/examples/wasm-daflatbuffers/package-lock.json
+          cache-dependency-path: wasm/docs/package-lock.json
 
       # Build wasm-daflatbuffers demo (this will be the landing page)
       - name: Build wasm-daflatbuffers demo
-        working-directory: wasm/examples/wasm-daflatbuffers
+        working-directory: wasm/docs
         run: |
           echo "=== Checking required files ==="
-          ls -la ../../src/
-          ls -la ../../dist/
+          ls -la ../src/
+          ls -la ../dist/
           echo "=== Installing dependencies ==="
           npm ci
           echo "=== Building demo ==="
@@ -70,10 +70,15 @@ jobs:
         run: |
           mkdir -p site
           # Copy wasm-daflatbuffers demo as the root landing page
-          cp -r wasm/examples/wasm-daflatbuffers/dist/* site/
+          cp -r wasm/docs/dist/* site/
           # Copy mkdocs documentation to /docs/ subdirectory
           mkdir -p site/docs
           cp -r mkdocs-site/* site/docs/
+          # Copy WASM runtime documentation to /docs/wasm-runtimes/
+          if [ -d "wasm/docs/docs" ]; then
+            mkdir -p site/docs/wasm-runtimes
+            cp -r wasm/docs/docs/* site/docs/wasm-runtimes/
+          fi
           # Add CNAME if it exists
           if [ -f docs/source/CNAME ]; then
             cp docs/source/CNAME site/

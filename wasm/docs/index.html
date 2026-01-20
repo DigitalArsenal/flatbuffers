@@ -944,7 +944,7 @@
         <p class="section-desc">Create schemas, generate code, and build FlatBuffers in the browser <span id="flatc-version" class="flatc-version"></span></p>
       </div>
 
-      <div class="studio-notice">
+      <div class="studio-notice" id="studio-codegen-notice" style="display: none;">
         <span class="notice-icon">i</span>
         <span>Generated code does not include encryption. For encryption support, see <a href="#runtimes" data-tab="runtimes">WASM Runtimes</a>.</span>
       </div>
@@ -1218,24 +1218,72 @@
             <div class="studio-pane">
               <div class="pane-header">
                 <h4>Data Entry</h4>
+                <div class="mode-toggle">
+                  <button class="mode-btn active" data-mode="single">Single</button>
+                  <button class="mode-btn" data-mode="bulk">Bulk</button>
+                </div>
                 <select id="studio-builder-table" class="glass-select compact">
                   <option value="">Select Table</option>
                 </select>
               </div>
               <div class="pane-body">
+                <!-- Single Mode Form -->
                 <div id="studio-builder-form" class="builder-form">
                   <div class="empty-state">Parse a schema and select a table</div>
                 </div>
+                <!-- Bulk Mode Config -->
+                <div id="studio-bulk-config" class="bulk-config" style="display: none;">
+                  <div class="bulk-input-group">
+                    <label>Record Count</label>
+                    <input type="number" id="bulk-record-count" class="glass-input" value="100" min="1" max="10000" step="10">
+                  </div>
+                  <div class="bulk-encryption-section">
+                    <div class="section-header">
+                      <h5>Encryption Settings</h5>
+                      <label class="checkbox-label">
+                        <input type="checkbox" id="bulk-encrypt-enabled" checked>
+                        <span>Enable</span>
+                      </label>
+                    </div>
+                    <div class="bulk-input-group" id="bulk-pubkey-group">
+                      <label>
+                        Recipient Public Key
+                        <button type="button" class="link-btn" id="bulk-use-bob-pubkey">(use Bob's)</button>
+                      </label>
+                      <textarea id="bulk-public-key" class="glass-input key-input" rows="2" placeholder="Hex-encoded public key..."></textarea>
+                      <span class="key-status" id="bulk-pubkey-status"></span>
+                    </div>
+                    <div class="bulk-input-group" id="bulk-privkey-group">
+                      <label>
+                        Decryption Private Key
+                        <button type="button" class="link-btn" id="bulk-use-bob-privkey">(use Bob's)</button>
+                      </label>
+                      <textarea id="bulk-private-key" class="glass-input key-input" rows="2" placeholder="Hex-encoded private key..."></textarea>
+                      <span class="key-status" id="bulk-privkey-status"></span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="pane-footer">
+              <!-- Single Mode Footer -->
+              <div class="pane-footer" id="studio-single-footer">
                 <button id="studio-build-buffer" class="glass-btn primary">Build Buffer</button>
                 <button id="studio-clear-form" class="glass-btn small">Clear</button>
+              </div>
+              <!-- Bulk Mode Footer -->
+              <div class="pane-footer" id="studio-bulk-footer" style="display: none;">
+                <button id="bulk-generate-btn" class="glass-btn primary">Generate</button>
+                <button id="bulk-clear-btn" class="glass-btn small">Clear</button>
               </div>
             </div>
             <div class="studio-pane">
               <div class="pane-header">
                 <h4>Buffer Output</h4>
-                <label class="checkbox-label">
+                <div class="bulk-hex-nav" id="bulk-hex-nav" style="display: none;">
+                  <button id="bulk-hex-prev" class="glass-btn small icon-btn">&lt;</button>
+                  <span id="bulk-hex-index">0 / 0</span>
+                  <button id="bulk-hex-next" class="glass-btn small icon-btn">&gt;</button>
+                </div>
+                <label class="checkbox-label" id="single-encrypt-label">
                   <input type="checkbox" id="studio-encrypt-buffer">
                   <span>Encrypt</span>
                 </label>
@@ -1253,12 +1301,29 @@
                 </label>
               </div>
             </div>
-            <div class="studio-pane">
+            <!-- Single Mode: Decoded JSON Pane -->
+            <div class="studio-pane" id="studio-decoded-pane">
               <div class="pane-header">
                 <h4>Decoded JSON</h4>
               </div>
               <div class="pane-body">
                 <pre id="studio-decoded-view" class="json-view"><div class="empty-state">Build or upload a buffer</div></pre>
+              </div>
+            </div>
+            <!-- Bulk Mode: Results Pane -->
+            <div class="studio-pane" id="studio-bulk-results" style="display: none;">
+              <div class="pane-header">
+                <h4>Bulk Results</h4>
+                <span id="bulk-stats" class="stats-badge"></span>
+              </div>
+              <div class="pane-body">
+                <div id="bulk-results-table" class="bulk-results-wrapper">
+                  <div class="empty-state">Generate bulk records to see results</div>
+                </div>
+              </div>
+              <div class="pane-footer">
+                <button id="bulk-toggle-decrypt" class="glass-btn small" disabled>Decrypt All</button>
+                <button id="bulk-download-all" class="glass-btn small" disabled>Download All</button>
               </div>
             </div>
           </div>

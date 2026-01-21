@@ -135,6 +135,32 @@ JavaScript/WASM provides no secure memory:
 
 ---
 
+### VULN-005: WASM RNG Quality - **DOCUMENTED**
+
+**Status**: The WASM module's random number generator occasionally produces duplicate key pairs in rapid succession.
+
+**Impact**:
+
+- Key generation functions (`x25519GenerateKeyPair`, `secp256k1GenerateKeyPair`, `p256GenerateKeyPair`) may return identical keys on consecutive calls
+- In ECIES scenarios, this could lead to ephemeral key reuse (reduced to static-ephemeral security)
+
+**Root Cause**: Likely insufficient entropy seeding in the WASM environment or timing-based seed collisions.
+
+**Workaround**: Application code should verify key uniqueness when generating multiple keys:
+
+```javascript
+let key1 = x25519GenerateKeyPair();
+let key2 = x25519GenerateKeyPair();
+// Regenerate if keys match (rare but possible)
+while (arraysEqual(key1.publicKey, key2.publicKey)) {
+  key2 = x25519GenerateKeyPair();
+}
+```
+
+**Recommendation**: Investigate and fix WASM RNG entropy source; consider using Web Crypto API for key generation when available.
+
+---
+
 ## Updated Security Checklist
 
 - [x] IV reuse prevention (VULN-001)

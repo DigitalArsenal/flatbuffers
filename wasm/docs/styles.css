@@ -1772,6 +1772,18 @@ body {
   overflow: hidden;
 }
 
+.modal-glass.login-modal-content {
+  max-width: 420px;
+}
+
+.modal-glass.login-modal-content .modal-body {
+  padding: 24px;
+}
+
+.modal-glass.login-modal-content .method-tabs {
+  margin-bottom: 20px;
+}
+
 .modal-header {
   display: flex;
   align-items: center;

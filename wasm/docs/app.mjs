@@ -1033,19 +1033,15 @@ function login(keys) {
   state.addresses = generateAddresses(keys);
   state.selectedCrypto = 'btc';
 
-  // Hide login card, show hero stats and scroll indicator
-  $('login-card').style.display = 'none';
-  $('hero-stats').style.display = 'flex';
-  $('scroll-indicator').style.display = 'flex';
+  // Close login modal if open
+  $('login-modal')?.classList.remove('active');
 
   // Update hero stats display
   $('hero-wallet-type').textContent = cryptoConfig[state.selectedCrypto].name;
   $('hero-address').textContent = truncateAddress(state.addresses[state.selectedCrypto]);
 
-  // Show main app content
-  $('main-app').style.display = 'block';
-
-  // Show nav action buttons
+  // Show nav action buttons, hide login button
+  $('nav-login').style.display = 'none';
   $('nav-keys').style.display = 'flex';
   $('nav-logout').style.display = 'flex';
 
@@ -1101,36 +1097,33 @@ function logout() {
   // Clear HD wallet state
   state.masterSeed = null;
   state.hdRoot = null;
-  localStorage.clear();
-  // Hide main app content
-  $('main-app').style.display = 'none';
+  // Don't clear localStorage completely - keep stored wallet
+  // Only clear session-specific data
+  localStorage.removeItem('flatbuffers-pki-keys');
 
-  // Hide hero stats and scroll indicator, show login card
-  $('hero-stats').style.display = 'none';
-  $('scroll-indicator').style.display = 'none';
-  $('login-card').style.display = 'block';
+  // Update hero stats to show logged out state
+  $('hero-wallet-type').textContent = '--';
+  $('hero-address').textContent = '--';
 
-  // Hide nav action buttons
+  // Show login button, hide other nav action buttons
+  $('nav-login').style.display = 'flex';
   $('nav-keys').style.display = 'none';
   $('nav-logout').style.display = 'none';
 
   // Clear form inputs
-  $('wallet-username').value = '';
-  $('wallet-password').value = '';
-  $('seed-phrase').value = '';
+  const usernameEl = $('wallet-username');
+  const passwordEl = $('wallet-password');
+  const seedEl = $('seed-phrase');
+  if (usernameEl) usernameEl.value = '';
+  if (passwordEl) passwordEl.value = '';
+  if (seedEl) seedEl.value = '';
   updatePasswordStrength('');
   clearBufferDisplay();
   clearFieldDisplay();
 
   // Clear HD wallet UI
-  $('derived-result').style.display = 'none';
-
-  // Reset to first tab (Overview) and scroll to top
-  document.querySelectorAll('.nav-link[data-tab]').forEach(l => l.classList.remove('active'));
-  const firstLink = document.querySelector('.nav-link[data-tab="overview"]');
-  if (firstLink) firstLink.classList.add('active');
-  const mainApp = $('main-app');
-  if (mainApp) mainApp.scrollTop = 0;
+  const derivedResult = $('derived-result');
+  if (derivedResult) derivedResult.style.display = 'none';
 }
 
 // =============================================================================
@@ -3159,29 +3152,41 @@ function setupLoginHandlers() {
   const storedPasskey = hasPasskey();
 
   if (storedWallet || storedPasskey) {
-    $('stored-tab').style.display = '';
+    const storedTab = $('stored-tab');
+    if (storedTab) storedTab.style.display = '';
+
     const date = storedWallet?.date || new Date(JSON.parse(localStorage.getItem(PASSKEY_CREDENTIAL_KEY))?.timestamp).toLocaleDateString();
-    $('stored-wallet-date').textContent = `Saved on ${date}`;
+    const dateEl = $('stored-wallet-date');
+    if (dateEl) dateEl.textContent = `Saved on ${date}`;
 
     // Show appropriate unlock sections
-    if (storedWallet) {
-      $('stored-pin-section').style.display = 'block';
-    } else {
-      $('stored-pin-section').style.display = 'none';
+    const pinSection = $('stored-pin-section');
+    const passkeySection = $('stored-passkey-section');
+    const divider = $('stored-divider');
+
+    if (storedWallet && pinSection) {
+      pinSection.style.display = 'block';
+    } else if (pinSection) {
+      pinSection.style.display = 'none';
     }
 
-    if (storedPasskey) {
-      $('stored-passkey-section').style.display = 'block';
-      if (storedWallet) {
-        $('stored-divider').style.display = 'flex';
+    if (storedPasskey && passkeySection) {
+      passkeySection.style.display = 'block';
+      if (storedWallet && divider) {
+        divider.style.display = 'flex';
       }
     }
 
-    // Auto-switch to stored tab when a saved wallet exists
+    // Auto-switch to stored tab and open modal when a saved wallet exists
     document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.method-content').forEach(c => c.classList.remove('active'));
-    $('stored-tab').classList.add('active');
-    $('stored-method').classList.add('active');
+    if (storedTab) storedTab.classList.add('active');
+    const storedMethod = $('stored-method');
+    if (storedMethod) storedMethod.classList.add('active');
+
+    // Auto-open login modal when there's a stored wallet
+    const loginModal = $('login-modal');
+    if (loginModal) loginModal.classList.add('active');
   }
 
   // Hide passkey buttons if not supported
@@ -3467,6 +3472,9 @@ function setupLoginHandlers() {
 
 function setupMainAppHandlers() {
   // Nav actions
+  $('nav-login')?.addEventListener('click', () => {
+    $('login-modal').classList.add('active');
+  });
   $('nav-logout').addEventListener('click', logout);
   $('nav-keys').addEventListener('click', () => {
     $('keys-modal').classList.add('active');

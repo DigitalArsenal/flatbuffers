@@ -241,11 +241,14 @@ body {
 .nav-btn {
   padding: 8px 16px;
   font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .nav-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 
 /* =============================================================================
@@ -526,6 +529,7 @@ body {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  text-align: center;
 }
 
 .method-tab.active {
@@ -568,6 +572,200 @@ body {
   display: flex;
   gap: 8px;
   margin-top: 12px;
+}
+
+/* Remember Wallet / PIN Input */
+.remember-wallet-group {
+  margin: 16px 0;
+  padding: 12px;
+  background: var(--white-05);
+  border-radius: var(--radius-sm);
+}
+
+.glass-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--white-80);
+  user-select: none;
+}
+
+.glass-checkbox input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.glass-checkbox .checkmark {
+  width: 20px;
+  height: 20px;
+  background: var(--white-10);
+  border: 1px solid var(--white-20);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.glass-checkbox input:checked + .checkmark {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.glass-checkbox .checkmark::after {
+  content: '';
+  display: none;
+  width: 6px;
+  height: 10px;
+  border: solid var(--white);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-bottom: 2px;
+}
+
+.glass-checkbox input:checked + .checkmark::after {
+  display: block;
+}
+
+.pin-input-group {
+  margin-top: 12px;
+}
+
+.pin-input {
+  text-align: center;
+  letter-spacing: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.pin-input-large {
+  text-align: center;
+  letter-spacing: 6px;
+  font-size: 16px;
+  font-weight: 500;
+  font-family: var(--font-mono);
+}
+
+/* Stored Wallet Tab */
+.stored-wallet-info {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.stored-wallet-info svg {
+  color: var(--success);
+  margin-bottom: 12px;
+}
+
+.stored-wallet-info p {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--white-90);
+  margin-bottom: 4px;
+}
+
+.stored-wallet-info .stored-wallet-date {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+#forget-stored-wallet {
+  margin-top: 12px;
+  background: transparent;
+  color: var(--white-50);
+  border: 1px solid var(--white-20);
+}
+
+#forget-stored-wallet:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+/* Remember Method Selector (PIN vs Passkey) */
+.remember-options {
+  margin-top: 12px;
+}
+
+.remember-method-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 4px;
+  background: var(--white-05);
+  border-radius: 8px;
+}
+
+.remember-method-btn {
+  flex: 1;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--white-50);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.remember-method-btn.active {
+  background: var(--glass-hover);
+  color: var(--white);
+}
+
+.remember-method-btn:hover:not(.active) {
+  color: var(--white-80);
+}
+
+.passkey-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: var(--white-05);
+  border-radius: 8px;
+  color: var(--white-60);
+  font-size: 13px;
+}
+
+.passkey-info svg {
+  flex-shrink: 0;
+  color: var(--success);
+}
+
+/* Stored Wallet Passkey */
+.passkey-unlock-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.passkey-unlock-btn svg {
+  flex-shrink: 0;
+}
+
+.stored-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 16px 0;
+  color: var(--white-40);
+  font-size: 12px;
+}
+
+.stored-divider::before,
+.stored-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--white-10);
 }
 
 /* =============================================================================
@@ -1740,10 +1938,15 @@ body {
   font-size: 12px;
   min-width: auto;
   width: auto;
-  padding: 8px 12px;
+}
+
+.glass-select.compact {
+  padding: 8px 32px 8px 12px;
+  background-position: right 10px center;
 }
 
 .glass-input.compact {
+  padding: 8px 12px;
   width: 70px;
   text-align: center;
   /* Hide number input spinners */
@@ -3064,7 +3267,6 @@ details[open] .collapse-icon {
 /* Button with icon */
 .glass-btn svg {
   vertical-align: middle;
-  margin-right: 6px;
   margin-top: -2px;
 }
 
@@ -4093,6 +4295,111 @@ details[open] .collapse-icon {
 
 .link-btn:hover {
   text-decoration: underline;
+}
+
+/* Key Verification Section */
+.bulk-key-verification {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--white-05);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+}
+
+.verification-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--white-70);
+  margin-bottom: 12px;
+}
+
+.verification-header svg {
+  color: #22c55e;
+}
+
+.verification-addresses {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.verification-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.chain-label {
+  width: 50px;
+  color: var(--white-50);
+  font-weight: 500;
+}
+
+.addr-code {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--white-60);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.balance-badge {
+  padding: 2px 8px;
+  background: var(--white-10);
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--white-70);
+}
+
+.balance-badge.has-value {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.verification-note {
+  margin: 12px 0 0 0;
+  font-size: 11px;
+  color: var(--white-40);
+  font-style: italic;
+}
+
+.verification-note.trusted {
+  color: #22c55e;
+}
+
+.verification-note.untrusted {
+  color: #f59e0b;
+}
+
+/* Decryption Details */
+.decryption-details {
+  margin-top: 16px;
+}
+
+.decryption-details summary {
+  font-size: 12px;
+  color: var(--white-50);
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.decryption-details summary:hover {
+  color: var(--white-70);
+}
+
+.decryption-details[open] summary {
+  margin-bottom: 12px;
+}
+
+.decryption-details .bulk-input-group {
+  margin-bottom: 12px;
 }
 
 .bulk-hex-nav {
@@ -5175,6 +5482,13 @@ details[open] .collapse-icon {
    Adversarial Security Section
    ============================================================================= */
 
+/* Network icons - remove background for icons with built-in colors */
+.network-icon.sol,
+.network-icon.sui,
+.network-icon.monad {
+  background: transparent;
+}
+
 /* Intro Card */
 .adversarial-intro-card {
   margin-bottom: 24px;
@@ -5196,8 +5510,13 @@ details[open] .collapse-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--white-20);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+}
+
+.intro-icon svg {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
 .intro-content h3 {

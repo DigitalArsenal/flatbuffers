@@ -484,6 +484,363 @@ function validateSeedPhrase(phrase) {
 }
 
 // =============================================================================
+// PIN-Encrypted Wallet Storage
+// =============================================================================
+
+const STORED_WALLET_KEY = 'encrypted_wallet';
+
+/**
+ * Derive an encryption key from a 6-digit PIN using HKDF
+ */
+function deriveKeyFromPIN(pin) {
+  const encoder = new TextEncoder();
+  const pinBytes = encoder.encode(pin);
+  // Use a fixed salt for PIN derivation (since PIN is low entropy, we rely on the
+  // encryption being local-only and rate-limited by user interaction)
+  const salt = encoder.encode('flatbuffers-wallet-pin-v1');
+  const pinHash = sha256(new Uint8Array([...salt, ...pinBytes]));
+  const encryptionKey = hkdf(pinHash, salt, encoder.encode('pin-encryption-key'), 32);
+  const iv = hkdf(pinHash, salt, encoder.encode('pin-encryption-iv'), 16);
+  return { encryptionKey, iv };
+}
+
+/**
+ * Encrypt wallet data with a 6-digit PIN and store in localStorage
+ */
+async function storeWalletWithPIN(pin, walletData) {
+  if (!/^\d{6}$/.test(pin)) {
+    throw new Error('PIN must be exactly 6 digits');
+  }
+
+  const { encryptionKey, iv } = deriveKeyFromPIN(pin);
+
+  // Serialize wallet data to JSON, then to bytes
+  const encoder = new TextEncoder();
+  const plaintext = encoder.encode(JSON.stringify(walletData));
+
+  // Encrypt using AES-256-GCM via Web Crypto API
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    encryptionKey,
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt']
+  );
+
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    plaintext
+  );
+
+  // Store as base64
+  const stored = {
+    ciphertext: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
+    timestamp: Date.now(),
+    version: 1
+  };
+
+  localStorage.setItem(STORED_WALLET_KEY, JSON.stringify(stored));
+  return true;
+}
+
+/**
+ * Retrieve and decrypt wallet data from localStorage using PIN
+ */
+async function retrieveWalletWithPIN(pin) {
+  if (!/^\d{6}$/.test(pin)) {
+    throw new Error('PIN must be exactly 6 digits');
+  }
+
+  const storedJson = localStorage.getItem(STORED_WALLET_KEY);
+  if (!storedJson) {
+    throw new Error('No stored wallet found');
+  }
+
+  const stored = JSON.parse(storedJson);
+  const { encryptionKey, iv } = deriveKeyFromPIN(pin);
+
+  // Decode base64 ciphertext
+  const ciphertext = Uint8Array.from(atob(stored.ciphertext), c => c.charCodeAt(0));
+
+  // Decrypt using AES-256-GCM via Web Crypto API
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    encryptionKey,
+    { name: 'AES-GCM' },
+    false,
+    ['decrypt']
+  );
+
+  try {
+    const plaintext = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      cryptoKey,
+      ciphertext
+    );
+
+    const decoder = new TextDecoder();
+    const walletData = JSON.parse(decoder.decode(plaintext));
+    return walletData;
+  } catch (e) {
+    throw new Error('Invalid PIN or corrupted data');
+  }
+}
+
+/**
+ * Check if there's a stored wallet in localStorage
+ */
+function hasStoredWallet() {
+  const stored = localStorage.getItem(STORED_WALLET_KEY);
+  if (!stored) return null;
+  try {
+    const data = JSON.parse(stored);
+    return {
+      exists: true,
+      timestamp: data.timestamp,
+      date: new Date(data.timestamp).toLocaleDateString()
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Remove stored wallet from localStorage
+ */
+function forgetStoredWallet() {
+  localStorage.removeItem(STORED_WALLET_KEY);
+  localStorage.removeItem(PASSKEY_CREDENTIAL_KEY);
+}
+
+// =============================================================================
+// Passkey (WebAuthn) Wallet Storage
+// =============================================================================
+
+const PASSKEY_CREDENTIAL_KEY = 'passkey_credential';
+const PASSKEY_WALLET_KEY = 'passkey_wallet';
+
+/**
+ * Check if WebAuthn/Passkeys are supported
+ */
+function isPasskeySupported() {
+  return window.PublicKeyCredential !== undefined &&
+    typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function';
+}
+
+/**
+ * Check if a passkey is registered for this wallet
+ */
+function hasPasskey() {
+  return localStorage.getItem(PASSKEY_CREDENTIAL_KEY) !== null;
+}
+
+/**
+ * Generate a random challenge for WebAuthn
+ */
+function generateChallenge() {
+  const challenge = new Uint8Array(32);
+  crypto.getRandomValues(challenge);
+  return challenge;
+}
+
+/**
+ * Register a passkey and store wallet data encrypted with the PRF extension
+ * Falls back to storing with credential ID as key material if PRF not supported
+ */
+async function registerPasskeyAndStoreWallet(walletData) {
+  if (!isPasskeySupported()) {
+    throw new Error('Passkeys are not supported on this device');
+  }
+
+  const challenge = generateChallenge();
+  const userId = new Uint8Array(16);
+  crypto.getRandomValues(userId);
+
+  const publicKeyCredentialCreationOptions = {
+    challenge,
+    rp: {
+      name: 'FlatBuffers Wallet',
+      id: window.location.hostname
+    },
+    user: {
+      id: userId,
+      name: 'wallet-user',
+      displayName: 'Wallet User'
+    },
+    pubKeyCredParams: [
+      { alg: -7, type: 'public-key' },   // ES256
+      { alg: -257, type: 'public-key' }  // RS256
+    ],
+    authenticatorSelection: {
+      authenticatorAttachment: 'platform',
+      userVerification: 'required',
+      residentKey: 'required'
+    },
+    timeout: 60000,
+    attestation: 'none',
+    extensions: {
+      prf: {
+        eval: {
+          first: new TextEncoder().encode('flatbuffers-wallet-encryption-key')
+        }
+      }
+    }
+  };
+
+  try {
+    const credential = await navigator.credentials.create({
+      publicKey: publicKeyCredentialCreationOptions
+    });
+
+    // Get PRF result if available, otherwise use credential ID
+    const prfResult = credential.getClientExtensionResults()?.prf?.results?.first;
+    let encryptionKeyMaterial;
+
+    if (prfResult) {
+      encryptionKeyMaterial = new Uint8Array(prfResult);
+    } else {
+      // Fallback: use credential ID + rawId as key material
+      encryptionKeyMaterial = new Uint8Array(credential.rawId);
+    }
+
+    // Derive encryption key from the key material
+    const encoder = new TextEncoder();
+    const salt = encoder.encode('flatbuffers-passkey-v1');
+    const keyHash = sha256(new Uint8Array([...salt, ...encryptionKeyMaterial]));
+    const encryptionKey = hkdf(keyHash, salt, encoder.encode('passkey-encryption-key'), 32);
+    const iv = hkdf(keyHash, salt, encoder.encode('passkey-encryption-iv'), 16);
+
+    // Encrypt wallet data
+    const plaintext = encoder.encode(JSON.stringify(walletData));
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      encryptionKey,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt']
+    );
+
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      cryptoKey,
+      plaintext
+    );
+
+    // Store credential info and encrypted wallet
+    const credentialData = {
+      id: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
+      hasPRF: !!prfResult,
+      timestamp: Date.now()
+    };
+
+    const encryptedWallet = {
+      ciphertext: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
+      timestamp: Date.now(),
+      version: 1
+    };
+
+    localStorage.setItem(PASSKEY_CREDENTIAL_KEY, JSON.stringify(credentialData));
+    localStorage.setItem(PASSKEY_WALLET_KEY, JSON.stringify(encryptedWallet));
+
+    return true;
+  } catch (err) {
+    if (err.name === 'NotAllowedError') {
+      throw new Error('Passkey registration was cancelled');
+    }
+    throw err;
+  }
+}
+
+/**
+ * Authenticate with passkey and retrieve wallet data
+ */
+async function authenticatePasskeyAndRetrieveWallet() {
+  if (!isPasskeySupported()) {
+    throw new Error('Passkeys are not supported on this device');
+  }
+
+  const credentialJson = localStorage.getItem(PASSKEY_CREDENTIAL_KEY);
+  const walletJson = localStorage.getItem(PASSKEY_WALLET_KEY);
+
+  if (!credentialJson || !walletJson) {
+    throw new Error('No passkey wallet found');
+  }
+
+  const credentialData = JSON.parse(credentialJson);
+  const encryptedWallet = JSON.parse(walletJson);
+  const credentialId = Uint8Array.from(atob(credentialData.id), c => c.charCodeAt(0));
+
+  const challenge = generateChallenge();
+
+  const publicKeyCredentialRequestOptions = {
+    challenge,
+    allowCredentials: [{
+      id: credentialId,
+      type: 'public-key',
+      transports: ['internal']
+    }],
+    userVerification: 'required',
+    timeout: 60000,
+    extensions: {
+      prf: {
+        eval: {
+          first: new TextEncoder().encode('flatbuffers-wallet-encryption-key')
+        }
+      }
+    }
+  };
+
+  try {
+    const assertion = await navigator.credentials.get({
+      publicKey: publicKeyCredentialRequestOptions
+    });
+
+    // Get PRF result if available, otherwise use credential ID
+    const prfResult = assertion.getClientExtensionResults()?.prf?.results?.first;
+    let encryptionKeyMaterial;
+
+    if (prfResult) {
+      encryptionKeyMaterial = new Uint8Array(prfResult);
+    } else {
+      // Fallback: use credential ID as key material
+      encryptionKeyMaterial = new Uint8Array(assertion.rawId);
+    }
+
+    // Derive encryption key from the key material
+    const encoder = new TextEncoder();
+    const salt = encoder.encode('flatbuffers-passkey-v1');
+    const keyHash = sha256(new Uint8Array([...salt, ...encryptionKeyMaterial]));
+    const encryptionKey = hkdf(keyHash, salt, encoder.encode('passkey-encryption-key'), 32);
+    const iv = hkdf(keyHash, salt, encoder.encode('passkey-encryption-iv'), 16);
+
+    // Decrypt wallet data
+    const ciphertext = Uint8Array.from(atob(encryptedWallet.ciphertext), c => c.charCodeAt(0));
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      encryptionKey,
+      { name: 'AES-GCM' },
+      false,
+      ['decrypt']
+    );
+
+    const plaintext = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      cryptoKey,
+      ciphertext
+    );
+
+    const decoder = new TextDecoder();
+    return JSON.parse(decoder.decode(plaintext));
+  } catch (err) {
+    if (err.name === 'NotAllowedError') {
+      throw new Error('Passkey authentication was cancelled');
+    }
+    throw new Error('Passkey authentication failed');
+  }
+}
+
+// =============================================================================
 // HD Wallet Derivation
 // =============================================================================
 
@@ -727,6 +1084,9 @@ function login(keys) {
 
   // Initialize schema viewer
   updateSchemaViewer();
+
+  // Update adversarial security section (wallet addresses and balances)
+  updateAdversarialSecurity();
 }
 
 function logout() {
@@ -2221,7 +2581,8 @@ function deriveKeyFromPath(path) {
   if (!state.hdRoot) {
     throw new Error('HD wallet not initialized');
   }
-  const derived = state.hdRoot.derivePath(path);
+  // @scure/bip32 HDKey uses derive() method, not derivePath()
+  const derived = state.hdRoot.derive(path);
   return derived.privateKey;
 }
 
@@ -2782,13 +3143,92 @@ const helpContent = {
 // UI Event Handlers
 // =============================================================================
 
+// Track selected remember method (pin or passkey) for each login type
+const rememberMethod = {
+  password: 'passkey',
+  seed: 'passkey'
+};
+
 function setupLoginHandlers() {
+  // Check for stored wallet on init
+  const storedWallet = hasStoredWallet();
+  const storedPasskey = hasPasskey();
+
+  if (storedWallet || storedPasskey) {
+    $('stored-tab').style.display = '';
+    const date = storedWallet?.date || new Date(JSON.parse(localStorage.getItem(PASSKEY_CREDENTIAL_KEY))?.timestamp).toLocaleDateString();
+    $('stored-wallet-date').textContent = `Saved on ${date}`;
+
+    // Show appropriate unlock sections
+    if (storedWallet) {
+      $('stored-pin-section').style.display = 'block';
+    } else {
+      $('stored-pin-section').style.display = 'none';
+    }
+
+    if (storedPasskey) {
+      $('stored-passkey-section').style.display = 'block';
+      if (storedWallet) {
+        $('stored-divider').style.display = 'flex';
+      }
+    }
+  }
+
+  // Hide passkey buttons if not supported
+  if (!isPasskeySupported()) {
+    $('passkey-btn-password')?.style && ($('passkey-btn-password').style.display = 'none');
+    $('passkey-btn-seed')?.style && ($('passkey-btn-seed').style.display = 'none');
+  }
+
   document.querySelectorAll('.method-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.method-content').forEach(c => c.classList.remove('active'));
       tab.classList.add('active');
       $(`${tab.dataset.method}-method`).classList.add('active');
+    });
+  });
+
+  // Remember method selector (PIN vs Passkey)
+  document.querySelectorAll('.remember-method-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.target; // 'password' or 'seed'
+      const method = btn.dataset.method; // 'pin' or 'passkey'
+      rememberMethod[target] = method;
+
+      // Update active state
+      document.querySelectorAll(`.remember-method-btn[data-target="${target}"]`).forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Toggle visibility
+      $(`pin-group-${target}`).style.display = method === 'pin' ? 'block' : 'none';
+      $(`passkey-info-${target}`).style.display = method === 'passkey' ? 'flex' : 'none';
+    });
+  });
+
+  // Remember wallet checkbox handlers - show/hide options
+  $('remember-wallet-password')?.addEventListener('change', (e) => {
+    $('remember-options-password').style.display = e.target.checked ? 'block' : 'none';
+    if (e.target.checked && rememberMethod.password === 'pin') {
+      $('pin-input-password').focus();
+    }
+  });
+
+  $('remember-wallet-seed')?.addEventListener('change', (e) => {
+    $('remember-options-seed').style.display = e.target.checked ? 'block' : 'none';
+    if (e.target.checked && rememberMethod.seed === 'pin') {
+      $('pin-input-seed').focus();
+    }
+  });
+
+  // PIN input validation - only allow digits
+  ['pin-input-password', 'pin-input-seed', 'pin-input-unlock'].forEach(id => {
+    $(id)?.addEventListener('input', (e) => {
+      e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+      // Enable unlock button when PIN is 6 digits
+      if (id === 'pin-input-unlock') {
+        $('unlock-stored-wallet').disabled = e.target.value.length !== 6;
+      }
     });
   });
 
@@ -2803,9 +3243,18 @@ function setupLoginHandlers() {
   $('derive-from-password').addEventListener('click', async () => {
     const username = $('wallet-username').value;
     const password = $('wallet-password').value;
+    const rememberWallet = $('remember-wallet-password')?.checked;
+    const usePasskey = rememberMethod.password === 'passkey';
+    const pin = $('pin-input-password')?.value;
+
     console.log('Login clicked, username:', username, 'password length:', password.length);
     if (!username || password.length < 24) {
       console.log('Login validation failed');
+      return;
+    }
+
+    if (rememberWallet && !usePasskey && (!pin || pin.length !== 6)) {
+      alert('Please enter a 6-digit PIN to store your wallet');
       return;
     }
 
@@ -2817,6 +3266,28 @@ function setupLoginHandlers() {
       console.log('Calling deriveKeysFromPassword...');
       const keys = await deriveKeysFromPassword(username, password);
       console.log('Keys derived, hdRoot after derivation:', !!state.hdRoot);
+
+      // Store wallet if remember is checked
+      if (rememberWallet) {
+        const walletData = {
+          type: 'password',
+          username,
+          password,
+          masterSeed: Array.from(state.masterSeed)
+        };
+
+        if (usePasskey) {
+          await registerPasskeyAndStoreWallet(walletData);
+          $('stored-passkey-section').style.display = 'block';
+        } else {
+          await storeWalletWithPIN(pin, walletData);
+          $('stored-pin-section').style.display = 'block';
+        }
+        // Show stored tab for next time
+        $('stored-tab').style.display = '';
+        $('stored-wallet-date').textContent = `Saved on ${new Date().toLocaleDateString()}`;
+      }
+
       login(keys);
       console.log('Login complete, hdRoot:', !!state.hdRoot);
     } catch (err) {
@@ -2824,7 +3295,7 @@ function setupLoginHandlers() {
       alert('Error: ' + err.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Login / Create Wallet';
+      btn.textContent = 'Enter Demo';
     }
   });
 
@@ -2857,18 +3328,129 @@ function setupLoginHandlers() {
     const phrase = $('seed-phrase').value;
     if (!validateSeedPhrase(phrase)) return;
 
+    const rememberWallet = $('remember-wallet-seed')?.checked;
+    const usePasskey = rememberMethod.seed === 'passkey';
+    const pin = $('pin-input-seed')?.value;
+
+    if (rememberWallet && !usePasskey && (!pin || pin.length !== 6)) {
+      alert('Please enter a 6-digit PIN to store your wallet');
+      return;
+    }
+
     const btn = $('derive-from-seed');
     btn.disabled = true;
     btn.textContent = 'Logging in...';
 
     try {
       const keys = await deriveKeysFromSeed(phrase);
+
+      // Store wallet if remember is checked
+      if (rememberWallet) {
+        const walletData = {
+          type: 'seed',
+          seedPhrase: phrase,
+          masterSeed: Array.from(state.masterSeed)
+        };
+
+        if (usePasskey) {
+          await registerPasskeyAndStoreWallet(walletData);
+          $('stored-passkey-section').style.display = 'block';
+        } else {
+          await storeWalletWithPIN(pin, walletData);
+          $('stored-pin-section').style.display = 'block';
+        }
+        // Show stored tab for next time
+        $('stored-tab').style.display = '';
+        $('stored-wallet-date').textContent = `Saved on ${new Date().toLocaleDateString()}`;
+      }
+
       login(keys);
     } catch (err) {
       alert('Error: ' + err.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Login with Seed Phrase';
+      btn.textContent = 'Enter Demo';
+    }
+  });
+
+  // Unlock stored wallet with PIN handler
+  $('unlock-stored-wallet')?.addEventListener('click', async () => {
+    const pin = $('pin-input-unlock')?.value;
+    if (!pin || pin.length !== 6) {
+      alert('Please enter a 6-digit PIN');
+      return;
+    }
+
+    const btn = $('unlock-stored-wallet');
+    btn.disabled = true;
+    btn.textContent = 'Unlocking...';
+
+    try {
+      const walletData = await retrieveWalletWithPIN(pin);
+
+      // Restore wallet based on type
+      let keys;
+      if (walletData.type === 'password') {
+        keys = await deriveKeysFromPassword(walletData.username, walletData.password);
+      } else if (walletData.type === 'seed') {
+        keys = await deriveKeysFromSeed(walletData.seedPhrase);
+      } else {
+        throw new Error('Unknown wallet type');
+      }
+
+      login(keys);
+    } catch (err) {
+      alert('Error: ' + err.message);
+      $('pin-input-unlock').value = '';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Unlock with PIN';
+    }
+  });
+
+  // Unlock stored wallet with Passkey handler
+  $('unlock-with-passkey')?.addEventListener('click', async () => {
+    const btn = $('unlock-with-passkey');
+    btn.disabled = true;
+    btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v3H7V7a5 5 0 0 1 5-5z"/><rect x="3" y="10" width="18" height="12" rx="2"/><circle cx="12" cy="16" r="1"/></svg> Authenticating...';
+
+    try {
+      const walletData = await authenticatePasskeyAndRetrieveWallet();
+
+      // Restore wallet based on type
+      let keys;
+      if (walletData.type === 'password') {
+        keys = await deriveKeysFromPassword(walletData.username, walletData.password);
+      } else if (walletData.type === 'seed') {
+        keys = await deriveKeysFromSeed(walletData.seedPhrase);
+      } else {
+        throw new Error('Unknown wallet type');
+      }
+
+      login(keys);
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v3H7V7a5 5 0 0 1 5-5z"/><rect x="3" y="10" width="18" height="12" rx="2"/><circle cx="12" cy="16" r="1"/></svg> Unlock with Passkey';
+    }
+  });
+
+  // Forget stored wallet handler
+  $('forget-stored-wallet')?.addEventListener('click', () => {
+    if (confirm('Are you sure you want to forget your stored wallet? You will need to enter your password or seed phrase again.')) {
+      forgetStoredWallet();
+      // Also clear passkey data
+      localStorage.removeItem(PASSKEY_WALLET_KEY);
+      $('stored-tab').style.display = 'none';
+      $('stored-pin-section').style.display = 'block';
+      $('stored-passkey-section').style.display = 'none';
+      $('stored-divider').style.display = 'none';
+      // Switch to password tab
+      document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.method-content').forEach(c => c.classList.remove('active'));
+      $('password-method').classList.add('active');
+      document.querySelector('.method-tab[data-method="password"]').classList.add('active');
     }
   });
 }
@@ -2979,7 +3561,7 @@ function setupMainAppHandlers() {
   };
 
   const hdElements = [hdPurpose, hdCoin, hdAccount, hdChange, hdIndex];
-  console.log('HD elements found:', hdElements.map(el => el ? el.id : 'null'));
+  // console.log('HD elements found:', hdElements.map(el => el ? el.id : 'null'));
 
   hdElements.forEach(el => {
     if (el) {
@@ -3993,7 +4575,9 @@ function loadSampleProjectSilent() {
     schemaFiles.files[path] = { content, modified: false };
   }
   schemaFiles.entryPoint = 'schema.fbs';
-  schemaFiles.currentFile = 'schema.fbs';
+  // Don't set currentFile here - let selectSchemaFile handle it
+  // to avoid the save-before-load overwriting the new content
+  schemaFiles.currentFile = null;
   saveSchemaFilesToStorage();
 }
 
@@ -4030,7 +4614,16 @@ function initStudio() {
 
   // Initialize file tree - load from storage or load sample project
   const hasStoredFiles = loadSchemaFilesFromStorage();
-  if (!hasStoredFiles || Object.keys(schemaFiles.files).length === 0) {
+
+  // Check if stored files have actual schema content (not just comments)
+  const hasValidContent = Object.values(schemaFiles.files).some(file => {
+    const content = file.content || '';
+    // Remove comments and whitespace, check if anything remains
+    const stripped = content.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim();
+    return stripped.length > 0;
+  });
+
+  if (!hasStoredFiles || Object.keys(schemaFiles.files).length === 0 || !hasValidContent) {
     // Load sample project by default so users have something to work with
     loadSampleProjectSilent();
   }
@@ -4183,33 +4776,46 @@ function initStudio() {
 
   $('bulk-encrypt-enabled')?.addEventListener('change', (e) => {
     studioState.bulkConfig.encryptEnabled = e.target.checked;
-    const pubGroup = $('bulk-pubkey-group');
-    const privGroup = $('bulk-privkey-group');
-    if (pubGroup) pubGroup.style.opacity = e.target.checked ? '1' : '0.5';
-    if (privGroup) privGroup.style.opacity = e.target.checked ? '1' : '0.5';
+    const verificationSection = $('bulk-key-verification');
+    if (verificationSection) verificationSection.style.opacity = e.target.checked ? '1' : '0.5';
   });
 
-  $('bulk-public-key')?.addEventListener('input', onBulkPublicKeyChange);
-  $('bulk-private-key')?.addEventListener('input', onBulkPrivateKeyChange);
+  // Key selector change handler
+  $('bulk-key-selector')?.addEventListener('change', (e) => {
+    const value = e.target.value;
+    const customGroup = $('bulk-custom-key-group');
 
-  // Quick fill Bob's keys
-  $('bulk-use-bob-pubkey')?.addEventListener('click', () => {
-    if (state.pki.bob) {
-      const input = $('bulk-public-key');
-      if (input) input.value = toHexCompact(state.pki.bob.publicKey);
+    // Show/hide custom key input
+    if (customGroup) {
+      customGroup.style.display = value === 'custom' ? 'block' : 'none';
+    }
+
+    // Update the encryption key based on selection
+    updateBulkEncryptionKey(value);
+  });
+
+  // Custom public key input
+  $('bulk-public-key')?.addEventListener('input', () => {
+    const selector = $('bulk-key-selector');
+    if (selector?.value === 'custom') {
       onBulkPublicKeyChange();
-    } else {
-      alert('No PKI keys available. Please login first.');
     }
   });
 
-  $('bulk-use-bob-privkey')?.addEventListener('click', () => {
-    if (state.pki.bob) {
-      const input = $('bulk-private-key');
-      if (input) input.value = toHexCompact(state.pki.bob.privateKey);
+  // Decrypt key selector
+  $('bulk-decrypt-selector')?.addEventListener('change', (e) => {
+    const value = e.target.value;
+    const customGroup = $('bulk-custom-privkey-group');
+    if (customGroup) {
+      customGroup.style.display = value === 'custom' ? 'block' : 'none';
+    }
+    updateBulkDecryptionKey(value);
+  });
+
+  $('bulk-private-key')?.addEventListener('input', () => {
+    const selector = $('bulk-decrypt-selector');
+    if (selector?.value === 'custom') {
       onBulkPrivateKeyChange();
-    } else {
-      alert('No PKI keys available. Please login first.');
     }
   });
 
@@ -5259,24 +5865,29 @@ function toggleStudioBuilderMode(mode) {
 }
 
 function initBulkKeys() {
-  const pubKeyInput = $('bulk-public-key');
-  const privKeyInput = $('bulk-private-key');
+  const keySelector = $('bulk-key-selector');
+  const decryptSelector = $('bulk-decrypt-selector');
 
+  // Reset selectors to default (Bob)
+  if (keySelector) keySelector.value = 'bob';
+  if (decryptSelector) decryptSelector.value = 'bob';
+
+  // Hide custom key inputs
+  const customKeyGroup = $('bulk-custom-key-group');
+  const customPrivKeyGroup = $('bulk-custom-privkey-group');
+  if (customKeyGroup) customKeyGroup.style.display = 'none';
+  if (customPrivKeyGroup) customPrivKeyGroup.style.display = 'none';
+
+  // Initialize with Bob's keys if available
   if (state.pki.bob) {
-    // Default to Bob's keys
-    if (pubKeyInput) pubKeyInput.value = toHexCompact(state.pki.bob.publicKey);
-    if (privKeyInput) privKeyInput.value = toHexCompact(state.pki.bob.privateKey);
     studioState.bulkConfig.publicKey = ensureUint8Array(state.pki.bob.publicKey);
     studioState.bulkConfig.privateKey = ensureUint8Array(state.pki.bob.privateKey);
-    updateBulkKeyStatus('bulk-pubkey-status', true, "Bob's key loaded");
-    updateBulkKeyStatus('bulk-privkey-status', true, "Bob's key loaded");
+    // Trigger verification display update
+    updateBulkEncryptionKey('bob');
   } else {
-    if (pubKeyInput) pubKeyInput.value = '';
-    if (privKeyInput) privKeyInput.value = '';
     studioState.bulkConfig.publicKey = null;
     studioState.bulkConfig.privateKey = null;
-    updateBulkKeyStatus('bulk-pubkey-status', false, 'No PKI keys - login first');
-    updateBulkKeyStatus('bulk-privkey-status', false, 'No PKI keys - login first');
+    updateKeyVerification(null, '');
   }
 }
 
@@ -5353,6 +5964,205 @@ function onBulkPrivateKeyChange() {
   } else {
     studioState.bulkConfig.privateKey = null;
     updateBulkKeyStatus('bulk-privkey-status', false, result.error);
+  }
+}
+
+/**
+ * Update bulk encryption key based on selector value
+ */
+async function updateBulkEncryptionKey(selectorValue) {
+  let publicKey = null;
+  let keyLabel = '';
+
+  if (selectorValue === 'bob' && state.pki.bob) {
+    publicKey = ensureUint8Array(state.pki.bob.publicKey);
+    keyLabel = "Bob's key";
+  } else if (selectorValue === 'alice' && state.pki.alice) {
+    publicKey = ensureUint8Array(state.pki.alice.publicKey);
+    keyLabel = "Alice's key";
+  } else if (selectorValue === 'custom') {
+    const input = $('bulk-public-key');
+    const value = input?.value.trim() || '';
+    if (value) {
+      const result = parseHexKey(value);
+      if (result.valid) {
+        publicKey = result.bytes;
+        keyLabel = 'Custom key';
+        updateBulkKeyStatus('bulk-pubkey-status', true, `Valid (${result.bytes.length} bytes)`);
+      } else {
+        updateBulkKeyStatus('bulk-pubkey-status', false, result.error);
+      }
+    }
+  }
+
+  studioState.bulkConfig.publicKey = publicKey;
+
+  // Update key verification display
+  await updateKeyVerification(publicKey, keyLabel);
+}
+
+/**
+ * Update bulk decryption key based on selector value
+ */
+function updateBulkDecryptionKey(selectorValue) {
+  let privateKey = null;
+
+  if (selectorValue === 'bob' && state.pki.bob) {
+    privateKey = ensureUint8Array(state.pki.bob.privateKey);
+  } else if (selectorValue === 'alice' && state.pki.alice) {
+    privateKey = ensureUint8Array(state.pki.alice.privateKey);
+  } else if (selectorValue === 'custom') {
+    const input = $('bulk-private-key');
+    const value = input?.value.trim() || '';
+    if (value) {
+      const result = parseHexKey(value);
+      if (result.valid) {
+        privateKey = result.bytes;
+        updateBulkKeyStatus('bulk-privkey-status', true, `Valid (${result.bytes.length} bytes)`);
+      } else {
+        updateBulkKeyStatus('bulk-privkey-status', false, result.error);
+      }
+    }
+  }
+
+  studioState.bulkConfig.privateKey = privateKey;
+}
+
+/**
+ * Update key verification display with derived addresses and balances
+ */
+async function updateKeyVerification(publicKey, keyLabel) {
+  // Get all address/balance elements
+  const elements = {
+    btc: { addr: $('bulk-verify-btc-addr'), bal: $('bulk-verify-btc-bal') },
+    eth: { addr: $('bulk-verify-eth-addr'), bal: $('bulk-verify-eth-bal') },
+    sol: { addr: $('bulk-verify-sol-addr'), bal: $('bulk-verify-sol-bal') },
+    sui: { addr: $('bulk-verify-sui-addr'), bal: $('bulk-verify-sui-bal') },
+    monad: { addr: $('bulk-verify-monad-addr'), bal: $('bulk-verify-monad-bal') },
+    ada: { addr: $('bulk-verify-ada-addr'), bal: $('bulk-verify-ada-bal') },
+  };
+  const noteEl = $('bulk-verify-note');
+
+  // Reset all to default state
+  const resetAll = () => {
+    for (const chain of Object.values(elements)) {
+      if (chain.addr) chain.addr.textContent = '--';
+      if (chain.bal) {
+        chain.bal.textContent = '--';
+        chain.bal.className = 'balance-badge';
+      }
+    }
+  };
+
+  if (!publicKey) {
+    resetAll();
+    if (noteEl) {
+      noteEl.textContent = 'Select a recipient to verify their key.';
+      noteEl.className = 'verification-note';
+    }
+    return;
+  }
+
+  // Show loading state for all
+  for (const chain of Object.values(elements)) {
+    if (chain.bal) chain.bal.textContent = '...';
+  }
+
+  try {
+    // Derive addresses from the public key
+    // Note: Different chains use different key types, so we derive what we can
+    // secp256k1 keys (33 bytes compressed) -> BTC, ETH, Monad
+    // ed25519 keys (32 bytes) -> SOL, SUI, ADA
+    const btcAddress = publicKey.length === 33 ? generateBtcAddress(publicKey) : null;
+    const ethAddress = deriveEthAddress(publicKey);
+    const solAddress = publicKey.length === 32 ? generateSolAddress(publicKey) : null;
+    const suiAddress = publicKey.length === 32 ? deriveSuiAddress(publicKey, 'ed25519') : null;
+    const monadAddress = ethAddress; // Monad uses same address format as Ethereum
+    const adaAddress = publicKey.length === 32 ? deriveCardanoAddress(publicKey) : null;
+
+    // Update address displays
+    if (elements.btc.addr) elements.btc.addr.textContent = truncateAddress(btcAddress || 'N/A');
+    if (elements.eth.addr) elements.eth.addr.textContent = truncateAddress(ethAddress || 'N/A');
+    if (elements.sol.addr) elements.sol.addr.textContent = truncateAddress(solAddress || 'N/A');
+    if (elements.sui.addr) elements.sui.addr.textContent = truncateAddress(suiAddress || 'N/A');
+    if (elements.monad.addr) elements.monad.addr.textContent = truncateAddress(monadAddress || 'N/A');
+    if (elements.ada.addr) elements.ada.addr.textContent = truncateAddress(adaAddress || 'N/A');
+
+    // Fetch all balances in parallel
+    const balancePromises = [
+      btcAddress ? fetchBtcBalance(btcAddress).catch(() => ({ balance: '0' })) : Promise.resolve({ balance: '0' }),
+      ethAddress ? fetchEthBalance(ethAddress).catch(() => ({ balance: '0' })) : Promise.resolve({ balance: '0' }),
+      solAddress ? fetchSolBalance(solAddress).catch(() => ({ balance: '0' })) : Promise.resolve({ balance: '0' }),
+      suiAddress ? fetchSuiBalance(suiAddress).catch(() => ({ balance: '0' })) : Promise.resolve({ balance: '0' }),
+      monadAddress ? fetchMonadBalance(monadAddress).catch(() => ({ balance: '0' })) : Promise.resolve({ balance: '0' }),
+      adaAddress ? fetchAdaBalance(adaAddress).catch(() => ({ balance: '0' })) : Promise.resolve({ balance: '0' }),
+    ];
+
+    const results = await Promise.all(balancePromises);
+    const [btcResult, ethResult, solResult, suiResult, monadResult, adaResult] = results;
+
+    // Helper to update balance display
+    const updateBal = (el, balance, unit) => {
+      if (!el) return 0;
+      const val = parseFloat(balance) || 0;
+      el.textContent = val > 0 ? `${val.toFixed(val < 0.0001 ? 8 : 4)} ${unit}` : `0 ${unit}`;
+      el.className = val > 0 ? 'balance-badge has-value' : 'balance-badge';
+      return val;
+    };
+
+    // Update all balance displays and calculate total
+    let totalValue = 0;
+    totalValue += updateBal(elements.btc.bal, btcResult.balance, 'BTC');
+    totalValue += updateBal(elements.eth.bal, ethResult.balance, 'ETH');
+    totalValue += updateBal(elements.sol.bal, solResult.balance, 'SOL');
+    totalValue += updateBal(elements.sui.bal, suiResult.balance, 'SUI');
+    totalValue += updateBal(elements.monad.bal, monadResult.balance, 'MON');
+    totalValue += updateBal(elements.ada.bal, adaResult.balance, 'ADA');
+
+    // Update trust note
+    if (noteEl) {
+      if (totalValue > 0) {
+        noteEl.textContent = `${keyLabel} has value on-chain - key appears trustworthy.`;
+        noteEl.className = 'verification-note trusted';
+      } else {
+        noteEl.textContent = `${keyLabel} has no on-chain value. Consider verifying this key through other means.`;
+        noteEl.className = 'verification-note untrusted';
+      }
+    }
+  } catch (e) {
+    console.error('Key verification error:', e);
+    if (noteEl) {
+      noteEl.textContent = 'Could not verify key addresses.';
+      noteEl.className = 'verification-note';
+    }
+  }
+}
+
+/**
+ * Derive Ethereum address from a public key (secp256k1)
+ */
+function deriveEthAddress(publicKey) {
+  try {
+    // For secp256k1 compressed public keys (33 bytes)
+    if (publicKey.length === 33) {
+      // Decompress the public key to get uncompressed form
+      const point = secp256k1.ProjectivePoint.fromHex(publicKey);
+      const uncompressed = point.toRawBytes(false).slice(1); // Remove 04 prefix
+      const hash = keccak_256(uncompressed);
+      return '0x' + toHex(hash.slice(-20));
+    }
+    // For uncompressed public keys (65 bytes with 04 prefix or 64 bytes without)
+    if (publicKey.length === 65) {
+      const hash = keccak_256(publicKey.slice(1));
+      return '0x' + toHex(hash.slice(-20));
+    }
+    if (publicKey.length === 64) {
+      const hash = keccak_256(publicKey);
+      return '0x' + toHex(hash.slice(-20));
+    }
+    return null;
+  } catch (e) {
+    return null;
   }
 }
 
@@ -7176,6 +7986,115 @@ async function fetchMonadBalance(address) {
 }
 
 /**
+ * Fetch Bitcoin balance for an address using public API
+ * @param {string} address - Bitcoin address
+ * @returns {Promise<{balance: string, error?: string}>}
+ */
+async function fetchBtcBalance(address) {
+  try {
+    // Using blockchain.info API (free, no key required)
+    const response = await fetch(`https://blockchain.info/q/addressbalance/${address}`);
+    if (!response.ok) {
+      return { balance: '0', error: 'API error' };
+    }
+    const satoshis = await response.text();
+    const btc = parseInt(satoshis, 10) / 1e8;
+    return { balance: btc.toFixed(8) };
+  } catch (e) {
+    console.error('BTC balance fetch error:', e);
+    return { balance: '0', error: e.message };
+  }
+}
+
+/**
+ * Fetch Ethereum balance for an address using public API
+ * @param {string} address - Ethereum address with 0x prefix
+ * @returns {Promise<{balance: string, error?: string}>}
+ */
+async function fetchEthBalance(address) {
+  try {
+    // Using Cloudflare's Ethereum gateway
+    const response = await fetch('https://cloudflare-eth.com', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_getBalance',
+        params: [address, 'latest']
+      })
+    });
+    const data = await response.json();
+    if (data.error) {
+      return { balance: '0', error: data.error.message };
+    }
+    const balanceWei = BigInt(data.result || '0x0');
+    const balanceEth = Number(balanceWei) / 1e18;
+    return { balance: balanceEth.toFixed(6) };
+  } catch (e) {
+    console.error('ETH balance fetch error:', e);
+    return { balance: '0', error: e.message };
+  }
+}
+
+/**
+ * Fetch Solana balance for an address using public RPC
+ * @param {string} address - Solana address (base58)
+ * @returns {Promise<{balance: string, error?: string}>}
+ */
+async function fetchSolBalance(address) {
+  try {
+    const response = await fetch('https://api.mainnet-beta.solana.com', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getBalance',
+        params: [address]
+      })
+    });
+    const data = await response.json();
+    if (data.error) {
+      return { balance: '0', error: data.error.message };
+    }
+    // Balance is in lamports (1 SOL = 10^9 lamports)
+    const lamports = data.result?.value || 0;
+    const sol = lamports / 1e9;
+    return { balance: sol.toFixed(6) };
+  } catch (e) {
+    console.error('SOL balance fetch error:', e);
+    return { balance: '0', error: e.message };
+  }
+}
+
+/**
+ * Fetch Cardano balance for an address using Blockfrost public API
+ * @param {string} address - Cardano address (bech32)
+ * @returns {Promise<{balance: string, error?: string}>}
+ */
+async function fetchAdaBalance(address) {
+  try {
+    // Using Koios free API (no key required for basic queries)
+    const response = await fetch(`https://api.koios.rest/api/v1/address_info?_address=${address}`);
+    if (!response.ok) {
+      return { balance: '0', error: 'API error' };
+    }
+    const data = await response.json();
+    if (data && data[0] && data[0].balance) {
+      // Balance is in lovelace (1 ADA = 10^6 lovelace)
+      const lovelace = BigInt(data[0].balance);
+      const ada = Number(lovelace) / 1e6;
+      return { balance: ada.toFixed(6) };
+    }
+    return { balance: '0' };
+  } catch (e) {
+    console.error('ADA balance fetch error:', e);
+    return { balance: '0', error: e.message };
+  }
+}
+
+/**
  * Derive a Cardano address from an Ed25519 public key
  * Uses Bech32 encoding with "addr" prefix for mainnet
  * This is a simplified address (enterprise address without staking key)
@@ -7386,20 +8305,28 @@ async function updateAdversarialSecurity() {
   const trustNote = $('trust-note');
   if (trustNote) trustNote.textContent = 'Fetching balances from blockchain...';
 
-  // Fetch balances in parallel (with error handling for each)
+  // Fetch all balances in parallel (with error handling for each)
   const fetchResults = await Promise.allSettled([
-    fetchSuiBalance(suiAddress || ''),
+    btcAddress ? fetchBtcBalance(btcAddress) : Promise.resolve({ balance: '0' }),
+    ethAddress ? fetchEthBalance(ethAddress) : Promise.resolve({ balance: '0' }),
+    solAddress ? fetchSolBalance(solAddress) : Promise.resolve({ balance: '0' }),
+    suiAddress ? fetchSuiBalance(suiAddress) : Promise.resolve({ balance: '0' }),
     monadAddress ? fetchMonadBalance(monadAddress) : Promise.resolve({ balance: '0' }),
+    adaAddress ? fetchAdaBalance(adaAddress) : Promise.resolve({ balance: '0' }),
   ]);
 
-  // Process SUI balance
-  const suiResult = fetchResults[0].status === 'fulfilled' ? fetchResults[0].value : { balance: '0' };
-  const monadResult = fetchResults[1].status === 'fulfilled' ? fetchResults[1].value : { balance: '0' };
+  // Extract results
+  const [btcResult, ethResult, solResult, suiResult, monadResult, adaResult] = fetchResults.map(
+    r => r.status === 'fulfilled' ? r.value : { balance: '0' }
+  );
 
   // Update balance displays
-  const updateBalance = (network, balance) => {
+  const updateBalance = (network, balance, decimals = 4) => {
     const balEl = $(`wallet-${network}-balance`);
-    if (balEl) balEl.textContent = balance;
+    if (balEl) {
+      const val = parseFloat(balance) || 0;
+      balEl.textContent = val > 0 ? val.toFixed(val < 0.0001 ? 8 : decimals) : '0';
+    }
 
     const card = $(`wallet-${network}-card`);
     if (card) {
@@ -7409,19 +8336,22 @@ async function updateAdversarialSecurity() {
     }
   };
 
-  // Update with fetched balances
-  updateBalance('sui', suiResult.balance);
-  updateBalance('monad', monadResult.balance);
+  // Update all balances
+  updateBalance('btc', btcResult.balance, 8);
+  updateBalance('eth', ethResult.balance, 6);
+  updateBalance('sol', solResult.balance, 6);
+  updateBalance('sui', suiResult.balance, 4);
+  updateBalance('monad', monadResult.balance, 4);
+  updateBalance('ada', adaResult.balance, 6);
 
-  // For networks where we don't have easy APIs, show "--"
-  // In production you'd use proper APIs for each
-  updateBalance('btc', '--');
-  updateBalance('eth', '--');
-  updateBalance('sol', '--');
-  updateBalance('ada', '--');
-
-  // Calculate trust level based on available balances
-  const totalValue = parseFloat(suiResult.balance) + parseFloat(monadResult.balance);
+  // Calculate trust level based on all balances
+  const totalValue =
+    parseFloat(btcResult.balance) +
+    parseFloat(ethResult.balance) +
+    parseFloat(solResult.balance) +
+    parseFloat(suiResult.balance) +
+    parseFloat(monadResult.balance) +
+    parseFloat(adaResult.balance);
 
   // Update trust meter if it exists
   const trustFill = $('trust-fill');

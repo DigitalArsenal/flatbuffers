@@ -56,6 +56,24 @@ int32_t wasi_has_cryptopp() {
 }
 
 // =============================================================================
+// Entropy Management
+// =============================================================================
+
+// Inject external entropy into the RNG pool
+// This allows JavaScript to provide entropy from crypto.getRandomValues()
+// which has better entropy sources than WASM's limited environment
+// seed: entropy bytes (recommended: 32-64 bytes)
+// size: size of seed data
+// Returns 0 on success, -1 on error
+int32_t wasi_inject_entropy(const uint8_t* seed, uint32_t size) {
+  if (!seed || size == 0) {
+    return -1;
+  }
+  flatbuffers::InjectEntropy(seed, size);
+  return 0;
+}
+
+// =============================================================================
 // Memory Management
 // =============================================================================
 

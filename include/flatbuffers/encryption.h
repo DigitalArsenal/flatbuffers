@@ -434,6 +434,16 @@ bool P256Verify(
 // =============================================================================
 
 /**
+ * Inject external entropy into the RNG pool.
+ * This is critical for WASM environments where the default entropy sources
+ * may be limited. Call this with output from crypto.getRandomValues() or
+ * similar high-quality entropy sources before generating keys.
+ * @param seed Entropy bytes (recommended: 32-64 bytes)
+ * @param size Size of seed data
+ */
+void InjectEntropy(const uint8_t* seed, size_t size);
+
+/**
  * SHA-256 hash
  */
 void SHA256(const uint8_t* data, size_t size, uint8_t* hash);

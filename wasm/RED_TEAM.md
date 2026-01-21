@@ -135,29 +135,31 @@ JavaScript/WASM provides no secure memory:
 
 ---
 
-### VULN-005: WASM RNG Quality - **DOCUMENTED**
+### VULN-005: WASM RNG Quality - **FIXED**
 
-**Status**: The WASM module's random number generator occasionally produces duplicate key pairs in rapid succession.
+**Previous State**: The WASM module's random number generator occasionally produced duplicate key pairs in rapid succession due to limited entropy in the WASM environment.
 
-**Impact**:
+**Remediation Applied**:
+- Added `InjectEntropy()` function to the C++ encryption module that seeds the global RNG pool
+- Added `wasi_inject_entropy` WASM export to allow JavaScript to inject entropy
+- Modified all key generation functions to call `injectEntropy()` before generating keys
+- JavaScript now injects 64 bytes from `crypto.getRandomValues()` before each key generation
 
-- Key generation functions (`x25519GenerateKeyPair`, `secp256k1GenerateKeyPair`, `p256GenerateKeyPair`) may return identical keys on consecutive calls
-- In ECIES scenarios, this could lead to ephemeral key reuse (reduced to static-ephemeral security)
+**Code Changes**:
+- [encryption.cpp](../src/encryption.cpp): Added `GetGlobalRNG()` and `InjectEntropy()`, updated all key generation to use shared RNG
+- [encryption_wasi.cpp](../src/encryption_wasi.cpp): Added `wasi_inject_entropy()` export
+- [encryption.h](../include/flatbuffers/encryption.h): Added `InjectEntropy()` declaration
+- [encryption.mjs](src/encryption.mjs): Added `injectEntropy()` helper, called before all key generation
+- [BuildWasm.cmake](../CMake/BuildWasm.cmake): Added `_wasi_inject_entropy` to exported functions
 
-**Root Cause**: Likely insufficient entropy seeding in the WASM environment or timing-based seed collisions.
-
-**Workaround**: Application code should verify key uniqueness when generating multiple keys:
-
+**New Key Generation Flow**:
 ```javascript
-let key1 = x25519GenerateKeyPair();
-let key2 = x25519GenerateKeyPair();
-// Regenerate if keys match (rare but possible)
-while (arraysEqual(key1.publicKey, key2.publicKey)) {
-  key2 = x25519GenerateKeyPair();
-}
+// Each call to x25519GenerateKeyPair() now:
+// 1. Gets 64 bytes from crypto.getRandomValues() (browser/Node.js)
+// 2. Passes entropy to WASM via wasi_inject_entropy()
+// 3. WASM incorporates entropy into Crypto++ RNG pool
+// 4. Generates key pair with properly-seeded RNG
 ```
-
-**Recommendation**: Investigate and fix WASM RNG entropy source; consider using Web Crypto API for key generation when available.
 
 ---
 
@@ -169,6 +171,7 @@ while (arraysEqual(key1.publicKey, key2.publicKey)) {
 - [x] Non-destructive API variants (VULN-004)
 - [x] **Authenticated encryption default** - FIXED
 - [x] **Deprecation warnings for unsafe APIs** - FIXED
+- [x] **WASM RNG entropy injection (VULN-005)** - FIXED
 - [x] Path traversal validation
 - [x] Circular include detection
 - [x] Constant-time MAC verification

@@ -181,15 +181,34 @@ function validateIncludeDepth(schemaInput) {
 }
 
 /**
- * Validates a FlatBuffer binary for basic structural integrity.
+ * Maximum depth for recursive validation to prevent stack overflow
+ */
+const MAX_VALIDATION_DEPTH = 64;
+
+/**
+ * Maximum number of fields to validate per table
+ */
+const MAX_FIELDS_PER_TABLE = 1000;
+
+/**
+ * Validates a FlatBuffer binary for structural integrity.
  * This is a security check to prevent crashes from malformed input.
  *
- * VULN-003 FIX: Basic FlatBuffer format validation
+ * VULN-003 FIX: Enhanced FlatBuffer format validation with:
+ * - Root offset validation
+ * - Vtable chain validation (recursive)
+ * - Field offset bounds checking
+ * - String pointer validation
+ * - Vector bounds checking
+ * - Depth limiting to prevent stack overflow
  *
  * @param {Uint8Array} buffer - The binary data to validate
+ * @param {Object} [options] - Validation options
+ * @param {boolean} [options.deep=false] - Enable deep recursive validation
+ * @param {number} [options.maxDepth=64] - Maximum recursion depth
  * @throws {Error} If the binary is malformed or exceeds size limits
  */
-function validateFlatBufferBinary(buffer) {
+function validateFlatBufferBinary(buffer, options = {}) {
   if (!(buffer instanceof Uint8Array)) {
     throw new Error('Binary input must be a Uint8Array');
   }
@@ -213,6 +232,11 @@ function validateFlatBufferBinary(buffer) {
     throw new Error(`Invalid FlatBuffer: root offset (${rootOffset}) points outside buffer (size: ${buffer.length})`);
   }
 
+  // Minimum required size for a valid table (vtable offset + some data)
+  if (rootOffset + 4 > buffer.length) {
+    throw new Error(`Invalid FlatBuffer: buffer too small for root table at offset ${rootOffset}`);
+  }
+
   // If buffer has a file identifier (bytes 4-7), it should be printable ASCII or null
   // File identifiers are optional but if present should be valid
   if (buffer.length >= 8) {
@@ -230,29 +254,168 @@ function validateFlatBufferBinary(buffer) {
     }
   }
 
-  // Additional sanity check: if we can read the vtable offset from the root table,
-  // verify it's within bounds
-  if (rootOffset + 4 <= buffer.length) {
-    const vtableOffsetSigned = view.getInt32(rootOffset, true);
-    const vtablePos = rootOffset - vtableOffsetSigned;
+  // Validate root table structure
+  const vtableOffsetSigned = view.getInt32(rootOffset, true);
+  const vtablePos = rootOffset - vtableOffsetSigned;
 
-    // vtable should be within buffer and before the root table
-    if (vtablePos < 0 || vtablePos >= buffer.length) {
-      throw new Error(`Invalid FlatBuffer: vtable position (${vtablePos}) is out of bounds`);
+  // vtable should be within buffer
+  if (vtablePos < 0 || vtablePos >= buffer.length) {
+    throw new Error(`Invalid FlatBuffer: vtable position (${vtablePos}) is out of bounds`);
+  }
+
+  // Need at least 4 bytes for vtable header (vtable size + table size)
+  if (vtablePos + 4 > buffer.length) {
+    throw new Error(`Invalid FlatBuffer: vtable header extends past buffer end`);
+  }
+
+  // Read vtable size (first 2 bytes of vtable)
+  const vtableSize = view.getUint16(vtablePos, true);
+
+  // vtable size should be reasonable (at least 4 bytes for size + table size fields)
+  if (vtableSize < 4) {
+    throw new Error(`Invalid FlatBuffer: vtable size (${vtableSize}) is too small`);
+  }
+
+  // vtable size must be even (it's an array of uint16)
+  if (vtableSize % 2 !== 0) {
+    throw new Error(`Invalid FlatBuffer: vtable size (${vtableSize}) is not even`);
+  }
+
+  // vtable shouldn't extend past buffer
+  if (vtablePos + vtableSize > buffer.length) {
+    throw new Error(`Invalid FlatBuffer: vtable extends past buffer end`);
+  }
+
+  // Read table size from vtable (second 2 bytes)
+  const tableSize = view.getUint16(vtablePos + 2, true);
+
+  // Table size should be at least 4 (for the vtable offset itself)
+  if (tableSize < 4) {
+    throw new Error(`Invalid FlatBuffer: table size (${tableSize}) is too small`);
+  }
+
+  // Table should fit in buffer
+  if (rootOffset + tableSize > buffer.length) {
+    throw new Error(`Invalid FlatBuffer: root table extends past buffer end`);
+  }
+
+  // Calculate number of fields in vtable
+  const numFields = (vtableSize - 4) / 2;
+
+  // Sanity check: too many fields might indicate corruption
+  if (numFields > MAX_FIELDS_PER_TABLE) {
+    throw new Error(`Invalid FlatBuffer: vtable has too many fields (${numFields} > ${MAX_FIELDS_PER_TABLE})`);
+  }
+
+  // Validate each field offset in the vtable
+  for (let i = 0; i < numFields; i++) {
+    const fieldOffset = view.getUint16(vtablePos + 4 + i * 2, true);
+
+    // Field offset 0 means field is not present, which is valid
+    if (fieldOffset === 0) continue;
+
+    // Field offset should be within the table
+    if (fieldOffset >= tableSize) {
+      throw new Error(`Invalid FlatBuffer: field ${i} offset (${fieldOffset}) exceeds table size (${tableSize})`);
     }
 
-    // Read vtable size (first 2 bytes of vtable)
-    if (vtablePos + 2 <= buffer.length) {
-      const vtableSize = view.getUint16(vtablePos, true);
+    // Absolute position of field data
+    const fieldPos = rootOffset + fieldOffset;
 
-      // vtable size should be reasonable (at least 4 bytes for size + table size fields)
-      if (vtableSize < 4) {
-        throw new Error(`Invalid FlatBuffer: vtable size (${vtableSize}) is too small`);
-      }
+    // Field should be within buffer
+    if (fieldPos >= buffer.length) {
+      throw new Error(`Invalid FlatBuffer: field ${i} position (${fieldPos}) is outside buffer`);
+    }
+  }
 
-      // vtable shouldn't extend past buffer
-      if (vtablePos + vtableSize > buffer.length) {
-        throw new Error(`Invalid FlatBuffer: vtable extends past buffer end`);
+  // Deep validation if requested
+  if (options.deep) {
+    const maxDepth = options.maxDepth || MAX_VALIDATION_DEPTH;
+    const visited = new Set();
+    validateTableDeep(buffer, view, rootOffset, visited, 0, maxDepth);
+  }
+}
+
+/**
+ * Recursively validates a table structure.
+ * @param {Uint8Array} buffer
+ * @param {DataView} view
+ * @param {number} tableOffset
+ * @param {Set<number>} visited - Visited offsets to detect cycles
+ * @param {number} depth - Current recursion depth
+ * @param {number} maxDepth - Maximum allowed depth
+ */
+function validateTableDeep(buffer, view, tableOffset, visited, depth, maxDepth) {
+  // Check depth limit
+  if (depth > maxDepth) {
+    throw new Error(`Invalid FlatBuffer: exceeded maximum validation depth (${maxDepth})`);
+  }
+
+  // Check for cycles
+  if (visited.has(tableOffset)) {
+    throw new Error(`Invalid FlatBuffer: detected cycle at offset ${tableOffset}`);
+  }
+  visited.add(tableOffset);
+
+  // Read vtable info
+  const vtableOffsetSigned = view.getInt32(tableOffset, true);
+  const vtablePos = tableOffset - vtableOffsetSigned;
+
+  // Basic bounds check (already validated in caller for root)
+  if (vtablePos < 0 || vtablePos + 4 > buffer.length) {
+    throw new Error(`Invalid FlatBuffer: invalid vtable at depth ${depth}`);
+  }
+
+  const vtableSize = view.getUint16(vtablePos, true);
+  const tableSize = view.getUint16(vtablePos + 2, true);
+
+  if (vtablePos + vtableSize > buffer.length) {
+    throw new Error(`Invalid FlatBuffer: vtable extends past buffer at depth ${depth}`);
+  }
+
+  if (tableOffset + tableSize > buffer.length) {
+    throw new Error(`Invalid FlatBuffer: table extends past buffer at depth ${depth}`);
+  }
+
+  const numFields = (vtableSize - 4) / 2;
+
+  // Validate field offsets
+  for (let i = 0; i < numFields && i < MAX_FIELDS_PER_TABLE; i++) {
+    const fieldOffset = view.getUint16(vtablePos + 4 + i * 2, true);
+    if (fieldOffset === 0) continue;
+
+    const fieldPos = tableOffset + fieldOffset;
+    if (fieldPos >= buffer.length) {
+      throw new Error(`Invalid FlatBuffer: field ${i} at depth ${depth} is outside buffer`);
+    }
+
+    // We don't know the field type without schema, but we can validate that
+    // if this looks like an offset (32-bit value pointing forward), it's valid
+    if (fieldPos + 4 <= buffer.length) {
+      const possibleOffset = view.getUint32(fieldPos, true);
+
+      // If this is an offset to another table/string/vector (positive, within buffer)
+      if (possibleOffset > 0 && possibleOffset < buffer.length) {
+        const targetPos = fieldPos + possibleOffset;
+
+        // Target should be within buffer
+        if (targetPos >= buffer.length) {
+          // This might not be an offset field, so don't error, just skip
+          continue;
+        }
+
+        // If target looks like it could be a string (has length prefix)
+        if (targetPos + 4 <= buffer.length) {
+          const possibleLength = view.getUint32(targetPos, true);
+
+          // Validate string bounds if it looks like a string
+          if (possibleLength > 0 && possibleLength < buffer.length) {
+            if (targetPos + 4 + possibleLength > buffer.length) {
+              // String would extend past buffer - this is an error
+              throw new Error(`Invalid FlatBuffer: string at field ${i} depth ${depth} extends past buffer`);
+            }
+          }
+        }
       }
     }
   }

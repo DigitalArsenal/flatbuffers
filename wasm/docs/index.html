@@ -32,6 +32,7 @@
       <div class="nav-links" id="demo-nav-links">
         <a href="#overview" class="nav-link active" data-tab="overview">Overview</a>
         <a href="#pki" class="nav-link" data-tab="pki">PKI</a>
+        <a href="#adversarial" class="nav-link" data-tab="adversarial">Security</a>
         <a href="#fields" class="nav-link" data-tab="fields">Field Encryption</a>
         <a href="#buffers" class="nav-link" data-tab="buffers">Bulk Generation</a>
         <a href="#schema" class="nav-link" data-tab="schema">Schema</a>
@@ -41,9 +42,9 @@
         <a href="#runtimes" class="nav-link" data-tab="runtimes">Runtimes</a>
         <span class="nav-divider"></span>
         <a href="https://flatbuffers.dev" target="_blank" class="nav-link nav-link-external">Docs</a>
+        <span id="nav-status" class="nav-status"></span>
       </div>
       <div class="nav-actions">
-        <span id="nav-status" class="nav-status"></span>
         <button id="nav-keys" class="nav-btn glass-btn" style="display: none;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
@@ -65,6 +66,7 @@
   <div id="nav-mobile-menu" class="nav-mobile-menu">
     <a href="#overview" class="nav-link" data-tab="overview">Overview</a>
     <a href="#pki" class="nav-link" data-tab="pki">PKI</a>
+    <a href="#adversarial" class="nav-link" data-tab="adversarial">Security</a>
     <a href="#fields" class="nav-link" data-tab="fields">Field Encryption</a>
     <a href="#buffers" class="nav-link" data-tab="buffers">Bulk Generation</a>
     <a href="#schema" class="nav-link" data-tab="schema">Schema</a>
@@ -98,7 +100,7 @@
         </a>
       </div>
       <div class="contact-info">
-        <a href="mailto:tj@digitalarsenal.io" class="contact-link">tj@digitalarsenal.io</a>
+        <a href="#" class="contact-link" data-u="tj" data-d="digitalarsenal.io" onclick="this.href='mailto:'+this.dataset.u+'@'+this.dataset.d"></a>
       </div>
 
       <div class="login-glass" id="login-card">
@@ -513,6 +515,387 @@
       </div>
     </section>
 
+    <!-- Adversarial Security Section - Blockchain-based key integrity verification -->
+    <section id="adversarial-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Adversarial Security</h2>
+        <p class="section-desc">Cryptographic keys derive blockchain addresses. Value at an address proves key integrity.</p>
+      </div>
+
+      <!-- Always-visible explanation card -->
+      <div class="glass-card adversarial-intro-card">
+        <div class="adversarial-intro">
+          <div class="intro-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="var(--primary)" stroke="var(--primary)" stroke-width="1.5"/>
+              <path d="M9 12l2 2 4-4" stroke="var(--white)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="intro-content">
+            <h3>What is Adversarial Security?</h3>
+            <p>A novel trust mechanism where <strong>cryptocurrency value acts as a security bond</strong> for cryptographic keys. The same public key used for encryption can derive addresses on blockchain networks. If significant value remains at those addresses without being drained, it provides strong evidence that the private key hasn't been compromised.</p>
+          </div>
+        </div>
+
+        <div class="adversarial-principles">
+          <div class="principle">
+            <div class="principle-number">1</div>
+            <div class="principle-content">
+              <h4>Key Derivation</h4>
+              <p>Any cryptographic public key (secp256k1, Ed25519) can mathematically derive addresses on cryptocurrency networks like SUI and Monad. This is a one-way function &mdash; the address is uniquely tied to that key.</p>
+            </div>
+          </div>
+          <div class="principle">
+            <div class="principle-number">2</div>
+            <div class="principle-content">
+              <h4>Value as Trust Signal</h4>
+              <p>Anyone can send cryptocurrency to an address <em>without permission</em>. If you rely on a key being secure, you can deposit funds as a "security bond." The more value at stake, the higher the trust signal.</p>
+            </div>
+          </div>
+          <div class="principle">
+            <div class="principle-number">3</div>
+            <div class="principle-content">
+              <h4>Adversarial Assumption</h4>
+              <p>If a private key is compromised, a rational attacker drains the funds immediately. <strong>Undrained value = uncompromised key.</strong> Data signed by that key, or encrypted for it, can be trusted.</p>
+            </div>
+          </div>
+          <div class="principle">
+            <div class="principle-number">4</div>
+            <div class="principle-content">
+              <h4>Real-Time Proof</h4>
+              <p>Blockchain explorers show balances updated every block. This provides <strong>continuous, verifiable proof</strong> of key integrity &mdash; not a point-in-time certificate, but live security monitoring.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <!-- Concept Explainer with Animation -->
+        <div class="adversarial-concept" id="adversarial-concept">
+          <h3 class="card-subtitle">Trust Through Value</h3>
+          <p class="concept-intro">The flow below shows how a public key transforms into verifiable trust through blockchain-secured value.</p>
+
+          <!-- Animated Flow Diagram -->
+          <div class="adversarial-flow">
+            <svg class="flow-diagram" viewBox="0 0 800 120" preserveAspectRatio="xMidYMid meet">
+              <!-- Key Icon -->
+              <g class="flow-step" transform="translate(50, 20)">
+                <circle cx="40" cy="40" r="35" fill="none" stroke="var(--white-30)" stroke-width="2"/>
+                <path d="M40 25 L40 35 M40 45 L40 55 M30 40 L50 40" stroke="var(--white-60)" stroke-width="2" stroke-linecap="round"/>
+                <text x="40" y="95" text-anchor="middle" fill="var(--white-60)" font-size="11">Public Key</text>
+              </g>
+
+              <!-- Arrow 1 -->
+              <g class="flow-arrow arrow-1" transform="translate(130, 40)">
+                <line x1="0" y1="20" x2="80" y2="20" stroke="var(--white-20)" stroke-width="2" stroke-dasharray="4,4"/>
+                <polygon points="80,20 70,15 70,25" fill="var(--white-30)"/>
+                <text x="40" y="50" text-anchor="middle" fill="var(--white-40)" font-size="9">derives</text>
+              </g>
+
+              <!-- Address Icon (Hexagon) -->
+              <g class="flow-step" transform="translate(220, 20)">
+                <polygon points="40,5 70,22 70,58 40,75 10,58 10,22" fill="none" stroke="var(--white-30)" stroke-width="2"/>
+                <text x="40" y="45" text-anchor="middle" fill="var(--white-50)" font-size="10" font-family="var(--font-mono)">0x...</text>
+                <text x="40" y="95" text-anchor="middle" fill="var(--white-60)" font-size="11">Address</text>
+              </g>
+
+              <!-- Arrow 2 -->
+              <g class="flow-arrow arrow-2" transform="translate(300, 40)">
+                <line x1="0" y1="20" x2="80" y2="20" stroke="var(--white-20)" stroke-width="2" stroke-dasharray="4,4"/>
+                <polygon points="80,20 70,15 70,25" fill="var(--white-30)"/>
+                <text x="40" y="50" text-anchor="middle" fill="var(--white-40)" font-size="9">holds</text>
+              </g>
+
+              <!-- Value Icon (Money/Dollar) -->
+              <g class="flow-step" transform="translate(390, 20)">
+                <circle cx="40" cy="40" r="28" fill="none" stroke="var(--white-30)" stroke-width="2"/>
+                <text x="40" y="52" text-anchor="middle" fill="var(--white-50)" font-size="32" font-weight="bold">$</text>
+                <text x="40" y="95" text-anchor="middle" fill="var(--white-60)" font-size="11">Value</text>
+              </g>
+
+              <!-- Arrow 3 -->
+              <g class="flow-arrow arrow-3" transform="translate(470, 40)">
+                <line x1="0" y1="20" x2="80" y2="20" stroke="var(--white-20)" stroke-width="2" stroke-dasharray="4,4"/>
+                <polygon points="80,20 70,15 70,25" fill="var(--white-30)"/>
+                <text x="40" y="50" text-anchor="middle" fill="var(--white-40)" font-size="9">proves</text>
+              </g>
+
+              <!-- Shield Icon (Trust) -->
+              <g class="flow-step trust-icon" transform="translate(560, 20)">
+                <path d="M40 10 L65 20 L65 45 Q65 65 40 75 Q15 65 15 45 L15 20 Z" fill="none" stroke="var(--success)" stroke-width="2"/>
+                <polyline points="28,42 36,50 52,34" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <text x="40" y="95" text-anchor="middle" fill="var(--success)" font-size="11">Trust</text>
+              </g>
+            </svg>
+          </div>
+
+          <div class="concept-details">
+            <div class="concept-card">
+              <div class="concept-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 6v6l4 2"/>
+                </svg>
+              </div>
+              <div class="concept-text">
+                <h4>Real-Time Verification</h4>
+                <p>Chain monitoring shows whether funds remain per block &mdash; live proof of key security.</p>
+              </div>
+            </div>
+            <div class="concept-card">
+              <div class="concept-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+              </div>
+              <div class="concept-text">
+                <h4>Permissionless Trust</h4>
+                <p>Anyone can increase trust by sending funds to a key they rely on.</p>
+              </div>
+            </div>
+            <div class="concept-card">
+              <div class="concept-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <div class="concept-text">
+                <h4>Adversarial Assumption</h4>
+                <p>If key is compromised, rational attacker drains funds immediately.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Login Required State -->
+        <div class="adversarial-login-required" id="adversarial-login-required">
+          <div class="login-prompt">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--white-40)" stroke-width="1.5">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <p>Login to derive addresses from your keys and check live balances across multiple blockchain networks.</p>
+          </div>
+        </div>
+
+        <!-- Your Wallet Addresses (shown after login) -->
+        <div class="adversarial-balances" id="adversarial-balances" style="display: none;">
+          <div class="balances-header">
+            <h3 class="card-subtitle">Your Derived Addresses</h3>
+            <button id="refresh-balances" class="glass-btn small">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/>
+                <polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              Refresh
+            </button>
+          </div>
+          <p class="balances-intro">These addresses are mathematically derived from your HD wallet keys. Anyone can verify the derivation and send funds to increase trust in your keys.</p>
+
+          <div class="wallet-networks-grid" id="wallet-networks-grid">
+            <!-- Bitcoin -->
+            <div class="wallet-network-card" id="wallet-btc-card">
+              <div class="network-icon btc">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-1.67v-1.89c-1.05-.1-2.07-.45-2.81-.95l.47-1.84c.82.43 1.82.79 2.75.79.82 0 1.42-.29 1.42-.95 0-.63-.52-.97-1.73-1.39-1.73-.6-2.92-1.43-2.92-3.07 0-1.48 1.08-2.64 2.82-2.98V6h1.67v1.69c.82.08 1.59.29 2.22.59l-.43 1.77c-.63-.26-1.43-.55-2.32-.55-.92 0-1.24.38-1.24.83 0 .53.5.87 1.9 1.39 1.92.7 2.76 1.63 2.76 3.17-.01 1.53-1.12 2.72-2.89 3.1z"/>
+                </svg>
+              </div>
+              <div class="network-info">
+                <div class="network-name-row">
+                  <span class="network-name">Bitcoin</span>
+                  <span class="derivation-path">m/44'/0'/0'/0/0</span>
+                </div>
+                <a href="#" id="wallet-btc-explorer" class="network-address-link" target="_blank" rel="noopener">
+                  <code id="wallet-btc-address">--</code>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </a>
+                <div class="network-balance-row">
+                  <span class="balance-value" id="wallet-btc-balance">--</span>
+                  <span class="balance-unit">BTC</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Ethereum -->
+            <div class="wallet-network-card" id="wallet-eth-card">
+              <div class="network-icon eth">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 1.5l-7 10.8 7 4.2 7-4.2-7-10.8zm0 15.6l-7-4.2 7 9.6 7-9.6-7 4.2z"/>
+                </svg>
+              </div>
+              <div class="network-info">
+                <div class="network-name-row">
+                  <span class="network-name">Ethereum</span>
+                  <span class="derivation-path">m/44'/60'/0'/0/0</span>
+                </div>
+                <a href="#" id="wallet-eth-explorer" class="network-address-link" target="_blank" rel="noopener">
+                  <code id="wallet-eth-address">--</code>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </a>
+                <div class="network-balance-row">
+                  <span class="balance-value" id="wallet-eth-balance">--</span>
+                  <span class="balance-unit">ETH</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Solana -->
+            <div class="wallet-network-card" id="wallet-sol-card">
+              <div class="network-icon sol">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M4.5 18.5l3-3h12l-3 3h-12zm0-6.5l3-3h12l-3 3h-12zm15-6.5l-3 3h-12l3-3h12z"/>
+                </svg>
+              </div>
+              <div class="network-info">
+                <div class="network-name-row">
+                  <span class="network-name">Solana</span>
+                  <span class="derivation-path">m/44'/501'/0'/0'</span>
+                </div>
+                <a href="#" id="wallet-sol-explorer" class="network-address-link" target="_blank" rel="noopener">
+                  <code id="wallet-sol-address">--</code>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </a>
+                <div class="network-balance-row">
+                  <span class="balance-value" id="wallet-sol-balance">--</span>
+                  <span class="balance-unit">SOL</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- SUI -->
+            <div class="wallet-network-card" id="wallet-sui-card">
+              <div class="network-icon sui">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.18l6.9 3.45L12 11.08 5.1 7.63 12 4.18zM4 8.82l7 3.5v7.36l-7-3.5V8.82zm9 10.86v-7.36l7-3.5v7.36l-7 3.5z"/>
+                </svg>
+              </div>
+              <div class="network-info">
+                <div class="network-name-row">
+                  <span class="network-name">SUI</span>
+                  <span class="derivation-path">m/44'/784'/0'/0'/0'</span>
+                </div>
+                <a href="#" id="wallet-sui-explorer" class="network-address-link" target="_blank" rel="noopener">
+                  <code id="wallet-sui-address">--</code>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </a>
+                <div class="network-balance-row">
+                  <span class="balance-value" id="wallet-sui-balance">--</span>
+                  <span class="balance-unit">SUI</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Monad -->
+            <div class="wallet-network-card" id="wallet-monad-card">
+              <div class="network-icon monad">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M8 12l2 2 4-4" stroke="var(--black)" stroke-width="2" fill="none"/>
+                </svg>
+              </div>
+              <div class="network-info">
+                <div class="network-name-row">
+                  <span class="network-name">Monad</span>
+                  <span class="derivation-path">m/44'/60'/0'/0/0</span>
+                </div>
+                <a href="#" id="wallet-monad-explorer" class="network-address-link" target="_blank" rel="noopener">
+                  <code id="wallet-monad-address">--</code>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </a>
+                <div class="network-balance-row">
+                  <span class="balance-value" id="wallet-monad-balance">--</span>
+                  <span class="balance-unit">MON</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Cardano -->
+            <div class="wallet-network-card" id="wallet-ada-card">
+              <div class="network-icon ada">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="12" r="10"/>
+                  <circle cx="12" cy="12" r="3" fill="var(--black)"/>
+                </svg>
+              </div>
+              <div class="network-info">
+                <div class="network-name-row">
+                  <span class="network-name">Cardano</span>
+                  <span class="derivation-path">m/1852'/1815'/0'/0/0</span>
+                </div>
+                <a href="#" id="wallet-ada-explorer" class="network-address-link" target="_blank" rel="noopener">
+                  <code id="wallet-ada-address">--</code>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </a>
+                <div class="network-balance-row">
+                  <span class="balance-value" id="wallet-ada-balance">--</span>
+                  <span class="balance-unit">ADA</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Trust Summary -->
+          <div class="trust-summary" id="trust-summary">
+            <div class="trust-meter">
+              <div class="trust-meter-label">
+                <span>Aggregate Security Bond</span>
+                <span class="trust-total" id="trust-total-value">$0.00</span>
+              </div>
+              <div class="trust-meter-bar">
+                <div class="trust-meter-fill" id="trust-meter-fill"></div>
+              </div>
+              <p class="trust-note" id="trust-note">Value at these addresses acts as collateral proving key security.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Keep old elements for backwards compatibility but hidden -->
+      <div style="display: none;">
+        <span id="alice-sui-address"></span>
+        <span id="alice-sui-balance"></span>
+        <a id="alice-sui-explorer"></a>
+        <span id="alice-monad-address"></span>
+        <span id="alice-monad-balance"></span>
+        <a id="alice-monad-explorer"></a>
+        <span id="bob-sui-address"></span>
+        <span id="bob-sui-balance"></span>
+        <a id="bob-sui-explorer"></a>
+        <span id="bob-monad-address"></span>
+        <span id="bob-monad-balance"></span>
+        <a id="bob-monad-explorer"></a>
+      </div>
+    </section>
+
     <!-- Field Encryption Section - Second, shows field-level detail -->
     <section id="fields-tab" class="content-section">
       <div class="section-header">
@@ -785,6 +1168,96 @@
       <div class="section-header">
         <h2 class="section-title">Streaming Dispatcher</h2>
         <p class="section-desc">Route mixed FlatBuffer messages to ring buffers by type</p>
+      </div>
+
+      <!-- Explanation Section -->
+      <div class="glass-card streaming-explainer">
+        <div class="explainer-header">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          <h3>How Streaming Works</h3>
+        </div>
+        <div class="explainer-content">
+          <div class="explainer-columns">
+            <div class="explainer-column">
+              <h4>Message Flow</h4>
+              <p>FlatBuffers are self-describing binary messages with a 4-byte type identifier prefix. The streaming dispatcher reads this identifier and routes each message to the appropriate ring buffer based on its type.</p>
+              <div class="explainer-code">
+                <code>[TYPE_ID:4bytes][SIZE:4bytes][FLATBUFFER:N bytes]</code>
+              </div>
+            </div>
+            <div class="explainer-column">
+              <h4>Ring Buffers</h4>
+              <p>Each message type has a dedicated ring buffer with a fixed capacity. When full, oldest messages are overwritten (FIFO). This enables constant-memory streaming for high-throughput scenarios without allocations.</p>
+              <ul class="explainer-list">
+                <li><strong>O(1)</strong> insertion and removal</li>
+                <li><strong>Zero allocation</strong> after initialization</li>
+                <li><strong>Lock-free</strong> single-producer design</li>
+              </ul>
+            </div>
+            <div class="explainer-column">
+              <h4>Use Cases</h4>
+              <ul class="explainer-list">
+                <li><strong>Telemetry</strong> - Route sensor data by device type</li>
+                <li><strong>Gaming</strong> - Separate entity updates from events</li>
+                <li><strong>Finance</strong> - Dispatch orders, trades, and quotes</li>
+                <li><strong>IoT</strong> - Process heterogeneous device streams</li>
+              </ul>
+            </div>
+          </div>
+          <div class="explainer-diagram">
+            <svg viewBox="0 0 600 120" class="stream-diagram">
+              <!-- Input stream -->
+              <g class="stream-input">
+                <rect x="10" y="40" width="80" height="40" rx="4" fill="var(--white-10)" stroke="var(--glass-border)"/>
+                <text x="50" y="65" text-anchor="middle" fill="var(--white-80)" font-size="12">Mixed Stream</text>
+              </g>
+              <!-- Arrow to dispatcher -->
+              <path d="M95 60 L140 60" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <!-- Dispatcher -->
+              <g class="stream-dispatcher">
+                <rect x="145" y="30" width="100" height="60" rx="4" fill="var(--primary)" fill-opacity="0.2" stroke="var(--primary)"/>
+                <text x="195" y="55" text-anchor="middle" fill="var(--white)" font-size="11">Dispatcher</text>
+                <text x="195" y="70" text-anchor="middle" fill="var(--white-60)" font-size="9">Read Type ID</text>
+              </g>
+              <!-- Arrows to buffers -->
+              <path d="M250 45 L300 25" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <path d="M250 60 L300 60" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <path d="M250 75 L300 95" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <!-- Ring buffers -->
+              <g class="ring-buffer-viz monster">
+                <rect x="305" y="10" width="120" height="30" rx="4" fill="rgba(239, 68, 68, 0.2)" stroke="rgb(239, 68, 68)"/>
+                <text x="365" y="30" text-anchor="middle" fill="var(--white-80)" font-size="10">Monster Ring</text>
+              </g>
+              <g class="ring-buffer-viz weapon">
+                <rect x="305" y="45" width="120" height="30" rx="4" fill="rgba(59, 130, 246, 0.2)" stroke="rgb(59, 130, 246)"/>
+                <text x="365" y="65" text-anchor="middle" fill="var(--white-80)" font-size="10">Weapon Ring</text>
+              </g>
+              <g class="ring-buffer-viz galaxy">
+                <rect x="305" y="80" width="120" height="30" rx="4" fill="rgba(168, 85, 247, 0.2)" stroke="rgb(168, 85, 247)"/>
+                <text x="365" y="100" text-anchor="middle" fill="var(--white-80)" font-size="10">Galaxy Ring</text>
+              </g>
+              <!-- Arrows to consumers -->
+              <path d="M430 25 L480 25" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <path d="M430 60 L480 60" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <path d="M430 95 L480 95" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <!-- Consumers -->
+              <g class="stream-consumers">
+                <rect x="485" y="10" width="100" height="100" rx="4" fill="var(--white-05)" stroke="var(--glass-border)"/>
+                <text x="535" y="35" text-anchor="middle" fill="var(--white-80)" font-size="10">Consumers</text>
+                <text x="535" y="55" text-anchor="middle" fill="var(--white-60)" font-size="9">Process by type</text>
+                <text x="535" y="70" text-anchor="middle" fill="var(--white-60)" font-size="9">at own pace</text>
+              </g>
+              <!-- Arrowhead marker -->
+              <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                  <polygon points="0 0, 10 3.5, 0 7" fill="var(--white-40)"/>
+                </marker>
+              </defs>
+            </svg>
+          </div>
+        </div>
       </div>
 
       <div class="glass-card">
@@ -1763,24 +2236,18 @@
     <div class="modal-glass modal-wide">
       <div class="modal-header">
         <h3>Your Keys</h3>
+        <span class="key-warning-header">Private keys stored in memory only</span>
         <button class="modal-close">&times;</button>
       </div>
       <div class="modal-body">
-        <!-- Base Keys Section -->
-        <div class="keys-section">
-          <h4 class="section-label">Base Keys</h4>
-          <div class="key-item">
-            <label>X25519 Public Key (Encryption)</label>
-            <code id="wallet-x25519-pub"></code>
-          </div>
-          <div class="key-item">
-            <label>Ed25519 Public Key (Signing)</label>
-            <code id="wallet-ed25519-pub"></code>
-          </div>
-          <div class="key-item">
-            <label>secp256k1 Public Key (Bitcoin/Ethereum)</label>
-            <code id="wallet-secp256k1-pub"></code>
-          </div>
+        <!-- Quick Derive Buttons (moved to top) -->
+        <div class="quick-derive">
+          <span class="quick-label">Quick derive:</span>
+          <button class="glass-btn small" data-coin="0" data-purpose="84">BTC</button>
+          <button class="glass-btn small" data-coin="60" data-purpose="44">ETH</button>
+          <button class="glass-btn small" data-coin="501" data-purpose="44">SOL</button>
+          <button class="glass-btn small" data-coin="2" data-purpose="44">LTC</button>
+          <button class="glass-btn small" data-coin="3" data-purpose="44">DOGE</button>
         </div>
 
         <!-- HD Wallet Section -->
@@ -1832,8 +2299,12 @@
 
             <div class="path-summary">
               <code id="full-path">m/44'/0'/0'/0/0</code>
-              <button id="derive-address" class="glass-btn primary small">Derive</button>
             </div>
+          </div>
+
+          <!-- HD Wallet Not Initialized Message -->
+          <div id="hd-not-initialized" class="hd-not-initialized" style="display: none;">
+            <p>HD wallet not initialized. Please log out and log back in with your password or seed phrase to enable HD derivation.</p>
           </div>
 
           <!-- Derived Address Display -->
@@ -1863,30 +2334,41 @@
               </div>
             </div>
 
-            <div class="balance-row" id="balance-row" style="display: none;">
-              <span class="balance-label">Balance:</span>
-              <span class="balance-value" id="derived-balance">Loading...</span>
+            <div class="balance-qr-row">
+              <div class="balance-section" id="balance-row" style="display: none;">
+                <span class="balance-label">Balance:</span>
+                <span class="balance-value" id="derived-balance">Loading...</span>
+              </div>
+              <div class="qr-section">
+                <canvas id="address-qr" width="96" height="96"></canvas>
+              </div>
             </div>
-
-            <div class="qr-row">
-              <canvas id="address-qr" width="128" height="128"></canvas>
-            </div>
-          </div>
-
-          <!-- Quick Derive Buttons -->
-          <div class="quick-derive">
-            <span class="quick-label">Quick derive:</span>
-            <button class="glass-btn small" data-coin="0" data-purpose="84">BTC</button>
-            <button class="glass-btn small" data-coin="60" data-purpose="44">ETH</button>
-            <button class="glass-btn small" data-coin="501" data-purpose="44">SOL</button>
-            <button class="glass-btn small" data-coin="2" data-purpose="44">LTC</button>
-            <button class="glass-btn small" data-coin="3" data-purpose="44">DOGE</button>
           </div>
         </div>
 
-        <div class="key-warning">
-          Private keys are stored in memory only and will be lost on refresh.
-        </div>
+        <!-- Base Keys Section (collapsible) -->
+        <details class="keys-section collapsible-section">
+          <summary class="section-label collapsible-header">
+            <span>Base Keys</span>
+            <svg class="collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </summary>
+          <div class="collapsible-content">
+            <div class="key-item">
+              <label>X25519 Public Key (Encryption)</label>
+              <code id="wallet-x25519-pub"></code>
+            </div>
+            <div class="key-item">
+              <label>Ed25519 Public Key (Signing)</label>
+              <code id="wallet-ed25519-pub"></code>
+            </div>
+            <div class="key-item">
+              <label>secp256k1 Public Key (Bitcoin/Ethereum)</label>
+              <code id="wallet-secp256k1-pub"></code>
+            </div>
+          </div>
+        </details>
       </div>
     </div>
   </div>
@@ -1908,7 +2390,20 @@
     <span id="status">Loading WASM modules...</span>
   </div>
 
+  <!-- Floating Contact Footer -->
+  <footer class="floating-footer">
+    <a href="#" data-u="tj" data-d="digitalarsenal.io" onclick="this.href='mailto:'+this.dataset.u+'@'+this.dataset.d"></a>
+  </footer>
+
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script type="module" src="app.mjs"></script>
+  <script>
+    // Obfuscated email protection - assembled at runtime to prevent scraping
+    document.querySelectorAll('a[data-u][data-d]').forEach(a => {
+      const e = a.dataset.u + '@' + a.dataset.d;
+      a.textContent = e;
+      a.href = 'mailto:' + e;
+    });
+  </script>
 </body>
 </html>

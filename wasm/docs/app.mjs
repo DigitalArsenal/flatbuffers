@@ -3072,14 +3072,13 @@ function clearStreaming() {
 function generateVCard(info) {
   const person = {};
 
-  if (info.name) {
-    const parts = info.name.split(' ');
-    if (parts.length > 1) {
-      person.FAMILY_NAME = parts.pop();
-      person.GIVEN_NAME = parts.join(' ');
-    } else {
-      person.GIVEN_NAME = info.name;
-    }
+  // Name components (vCard N property: family;given;middle;prefix;suffix)
+  if (info.firstName || info.lastName) {
+    if (info.lastName) person.FAMILY_NAME = info.lastName;
+    if (info.firstName) person.GIVEN_NAME = info.firstName;
+    if (info.middleName) person.ADDITIONAL_NAME = info.middleName;
+    if (info.prefix) person.HONORIFIC_PREFIX = info.prefix;
+    if (info.suffix) person.HONORIFIC_SUFFIX = info.suffix;
   }
 
   if (info.email) {
@@ -3643,15 +3642,19 @@ function setupMainAppHandlers() {
   // vCard
   $('generate-vcard')?.addEventListener('click', async () => {
     const info = {
-      name: $('vcard-name')?.value || '',
+      prefix: $('vcard-prefix')?.value || '',
+      firstName: $('vcard-firstname')?.value || '',
+      middleName: $('vcard-middlename')?.value || '',
+      lastName: $('vcard-lastname')?.value || '',
+      suffix: $('vcard-suffix')?.value || '',
       email: $('vcard-email')?.value || '',
       org: $('vcard-org')?.value || '',
       title: $('vcard-title')?.value || '',
       includeKeys: $('include-keys')?.checked || false,
     };
 
-    if (!info.name) {
-      alert('Please enter a name');
+    if (!info.firstName && !info.lastName) {
+      alert('Please enter at least a first or last name');
       return;
     }
 

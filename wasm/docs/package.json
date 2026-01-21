@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.7.2",
+    "@scure/base": "^1.2.4",
     "@scure/bip32": "^2.0.1",
     "bip39": "^3.1.0",
     "buffer": "^6.0.3",

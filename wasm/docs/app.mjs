@@ -14,6 +14,12 @@ import { HDKey } from '@scure/bip32';
 import { x25519 } from '@noble/curves/ed25519';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { p256 } from '@noble/curves/p256';
+import { blake2b } from '@noble/hashes/blake2b';
+import { keccak_256 } from '@noble/hashes/sha3';
+import { ripemd160 } from '@noble/hashes/ripemd160';
+import { sha256 as sha256Noble } from '@noble/hashes/sha256';
+import { base58check } from '@scure/base';
+import { base58 } from '@scure/base';
 import QRCode from 'qrcode';
 import { Buffer } from 'buffer';
 import { createV3 } from 'vcard-cryptoperson';
@@ -248,33 +254,45 @@ const coinTypeToConfig = Object.fromEntries(
   Object.entries(cryptoConfig).map(([key, config]) => [config.coinType, { key, ...config }])
 );
 
+// Create Base58Check encoder for Bitcoin (uses sha256 for checksum)
+const base58checkBtc = base58check(sha256Noble);
+
+/**
+ * Generate a Bitcoin P2PKH address from a compressed secp256k1 public key
+ * Uses @scure/base for proper Base58Check encoding
+ * @param {Uint8Array} publicKey - Compressed secp256k1 public key (33 bytes)
+ * @returns {string} Bitcoin address starting with '1'
+ */
 function generateBtcAddress(publicKey) {
-  const hash = sha256(publicKey);
-  return '1' + toBase58(hash.slice(0, 20));
+  // Hash160 = RIPEMD160(SHA256(publicKey))
+  const hash160 = ripemd160(sha256Noble(publicKey));
+  // Base58Check encode with version byte 0x00 (mainnet P2PKH)
+  return base58checkBtc.encode(new Uint8Array([0x00, ...hash160]));
 }
 
+/**
+ * Generate an Ethereum address from a secp256k1 public key
+ * Uses @noble/hashes keccak_256 for proper Ethereum address derivation
+ * @param {Uint8Array} publicKey - Compressed secp256k1 public key (33 bytes)
+ * @returns {string} Ethereum address with 0x prefix
+ */
 function generateEthAddress(publicKey) {
-  const hash = sha256(publicKey);
-  return '0x' + toHexCompact(hash.slice(12, 32));
+  // Decompress the public key to get uncompressed form
+  const point = secp256k1.ProjectivePoint.fromHex(publicKey);
+  const uncompressed = point.toRawBytes(false); // 65 bytes: 04 || x || y
+  // Keccak256 of the public key without the 04 prefix, take last 20 bytes
+  const hash = keccak_256(uncompressed.slice(1));
+  return '0x' + toHexCompact(hash.slice(-20));
 }
 
+/**
+ * Generate a Solana address from an Ed25519 public key
+ * Uses @scure/base for proper Base58 encoding
+ * @param {Uint8Array} publicKey - Ed25519 public key (32 bytes)
+ * @returns {string} Solana address
+ */
 function generateSolAddress(publicKey) {
-  return toBase58(publicKey);
-}
-
-function toBase58(bytes) {
-  const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-  let num = BigInt('0x' + toHexCompact(bytes));
-  let result = '';
-  while (num > 0) {
-    result = ALPHABET[Number(num % 58n)] + result;
-    num = num / 58n;
-  }
-  for (const byte of bytes) {
-    if (byte === 0) result = '1' + result;
-    else break;
-  }
-  return result || '1';
+  return base58.encode(publicKey);
 }
 
 function generateAddresses(wallet) {
@@ -416,6 +434,7 @@ async function deriveKeysFromPassword(username, password) {
   const hdSeed = hkdf(masterKey, new Uint8Array(0), encoder.encode('hd-wallet-seed'), 64);
   state.masterSeed = hdSeed;
   state.hdRoot = HDKey.fromMasterSeed(hdSeed);
+  console.log('HD wallet initialized from password, hdRoot:', !!state.hdRoot);
 
   const keys = {
     x25519: x25519GenerateKeyPair(),
@@ -444,6 +463,7 @@ async function deriveKeysFromSeed(seedPhrase) {
   // Store seed for HD wallet derivation (BIP39 standard)
   state.masterSeed = new Uint8Array(seed);
   state.hdRoot = HDKey.fromMasterSeed(new Uint8Array(seed));
+  console.log('HD wallet initialized from seed phrase, hdRoot:', !!state.hdRoot);
 
   const keys = {
     x25519: x25519GenerateKeyPair(),
@@ -475,12 +495,20 @@ function deriveHDKey(path) {
   if (!state.hdRoot) {
     throw new Error('HD wallet not initialized');
   }
-  // @scure/bip32 uses derivePath method
-  return state.hdRoot.derive(path);
+  // @scure/bip32 HDKey uses derive() method with path string
+  try {
+    return state.hdRoot.derive(path);
+  } catch (e) {
+    console.error('HD derivation error:', e, 'path:', path);
+    throw e;
+  }
 }
 
 /**
  * Generate address from public key based on coin type
+ * Note: HD derivation produces secp256k1 keys. For coins that use ed25519
+ * (Solana, etc.), this will generate a valid-looking address but not a
+ * standard address for that chain.
  */
 function generateAddressForCoin(publicKey, coinType) {
   const config = coinTypeToConfig[coinType];
@@ -499,13 +527,22 @@ function generateAddressForCoin(publicKey, coinType) {
     case 60:  // Ethereum
       return generateEthAddress(publicKey);
 
-    case 501: // Solana
-      return generateSolAddress(publicKey);
+    case 501: // Solana - uses ed25519, but we generate from secp256k1 for demo
+      // For proper Solana, would need ed25519 derivation (SLIP-0010)
+      return base58.encode(publicKey.slice(0, 32)); // Take first 32 bytes
+
+    case 118: // Cosmos
+    case 330: // Algorand
+    case 354: // Polkadot
+    case 1815: // Cardano
+      // These chains use different key schemes; show truncated key hash
+      const hash = sha256Noble(publicKey);
+      return toHexCompact(hash.slice(0, 20));
 
     default:
       // For unsupported coins, return a truncated public key hash
-      const hash = sha256(publicKey);
-      return toHexCompact(hash.slice(0, 20));
+      const defaultHash = sha256Noble(publicKey);
+      return toHexCompact(defaultHash.slice(0, 20));
   }
 }
 
@@ -534,7 +571,25 @@ function updatePathDisplay() {
  * Derive and display address from current path
  */
 async function deriveAndDisplayAddress() {
+  console.log('deriveAndDisplayAddress called, hdRoot:', !!state.hdRoot);
+
+  const hdNotInitialized = $('hd-not-initialized');
+  const derivedResult = $('derived-result');
+
+  // Show warning and hide result if wallet not initialized
+  if (!state.hdRoot) {
+    console.log('HD not initialized, showing warning. Element found:', !!hdNotInitialized);
+    if (hdNotInitialized) hdNotInitialized.style.display = 'block';
+    if (derivedResult) derivedResult.style.display = 'none';
+    return;
+  }
+
+  // Hide warning since wallet is initialized
+  if (hdNotInitialized) hdNotInitialized.style.display = 'none';
+
   const path = getHDPathFromUI();
+  console.log('Deriving path:', path);
+
   const coinType = parseInt($('hd-coin').value);
   const coinOption = $('hd-coin').selectedOptions[0];
   const cryptoName = coinOption.dataset.name || 'Unknown';
@@ -542,8 +597,10 @@ async function deriveAndDisplayAddress() {
 
   try {
     const childKey = deriveHDKey(path);
+    console.log('Derived childKey, publicKey length:', childKey.publicKey?.length);
     const publicKey = childKey.publicKey;
     const address = generateAddressForCoin(publicKey, coinType);
+    console.log('Generated address:', address);
 
     // Get config for explorer link
     const config = coinTypeToConfig[coinType];
@@ -568,8 +625,8 @@ async function deriveAndDisplayAddress() {
     // Generate QR code
     try {
       await QRCode.toCanvas($('address-qr'), address, {
-        width: 128,
-        margin: 2,
+        width: 96,
+        margin: 1,
         color: { dark: '#1e293b', light: '#ffffff' },
       });
     } catch (qrErr) {
@@ -592,7 +649,7 @@ async function deriveAndDisplayAddress() {
 
   } catch (err) {
     console.error('Derivation failed:', err);
-    alert('Failed to derive address: ' + err.message);
+    // Don't show alert, just log the error
   }
 }
 
@@ -2746,16 +2803,24 @@ function setupLoginHandlers() {
   $('derive-from-password').addEventListener('click', async () => {
     const username = $('wallet-username').value;
     const password = $('wallet-password').value;
-    if (!username || password.length < 24) return;
+    console.log('Login clicked, username:', username, 'password length:', password.length);
+    if (!username || password.length < 24) {
+      console.log('Login validation failed');
+      return;
+    }
 
     const btn = $('derive-from-password');
     btn.disabled = true;
     btn.textContent = 'Logging in...';
 
     try {
+      console.log('Calling deriveKeysFromPassword...');
       const keys = await deriveKeysFromPassword(username, password);
+      console.log('Keys derived, hdRoot after derivation:', !!state.hdRoot);
       login(keys);
+      console.log('Login complete, hdRoot:', !!state.hdRoot);
     } catch (err) {
+      console.error('Login error:', err);
       alert('Error: ' + err.message);
     } finally {
       btn.disabled = false;
@@ -2813,6 +2878,8 @@ function setupMainAppHandlers() {
   $('nav-logout').addEventListener('click', logout);
   $('nav-keys').addEventListener('click', () => {
     $('keys-modal').classList.add('active');
+    // Always call deriveAndDisplayAddress - it will show appropriate message if not initialized
+    deriveAndDisplayAddress();
   });
 
   // Modal close handlers
@@ -2857,6 +2924,10 @@ function setupMainAppHandlers() {
           mobileMenuBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
         }
       }
+      // Trigger adversarial security update when navigating to that tab
+      if (link.dataset.tab === 'adversarial') {
+        updateAdversarialSecurity();
+      }
     });
   });
 
@@ -2893,18 +2964,29 @@ function setupMainAppHandlers() {
   const hdAccount = $('hd-account');
   const hdChange = $('hd-change');
   const hdIndex = $('hd-index');
-  const deriveBtn = $('derive-address');
 
-  // Update path display on any change
-  [hdPurpose, hdCoin, hdAccount, hdChange, hdIndex].forEach(el => {
-    if (el) el.addEventListener('change', updatePathDisplay);
-    if (el) el.addEventListener('input', updatePathDisplay);
+  // Auto-derive on any change (with debounce for input fields)
+  let deriveTimeout = null;
+  const autoDerive = () => {
+    console.log('autoDerive triggered, hdRoot:', !!state.hdRoot);
+    updatePathDisplay();
+    // Always call deriveAndDisplayAddress - it shows warning if not initialized
+    clearTimeout(deriveTimeout);
+    deriveTimeout = setTimeout(() => {
+      console.log('Calling deriveAndDisplayAddress');
+      deriveAndDisplayAddress();
+    }, 300); // Debounce for typing
+  };
+
+  const hdElements = [hdPurpose, hdCoin, hdAccount, hdChange, hdIndex];
+  console.log('HD elements found:', hdElements.map(el => el ? el.id : 'null'));
+
+  hdElements.forEach(el => {
+    if (el) {
+      el.addEventListener('change', autoDerive);
+      el.addEventListener('input', autoDerive);
+    }
   });
-
-  // Derive button
-  if (deriveBtn) {
-    deriveBtn.addEventListener('click', deriveAndDisplayAddress);
-  }
 
   // Quick derive buttons
   document.querySelectorAll('.quick-derive .glass-btn').forEach(btn => {
@@ -6969,5 +7051,407 @@ function exportToSchemaEditor() {
 
   setStudioStatus(`Exported to ${filename}`, 'success');
 }
+
+// =============================================================================
+// Adversarial Security - Blockchain Address Derivation & Balance Checking
+// =============================================================================
+
+/**
+ * Derive a SUI address from a public key
+ * SUI uses BLAKE2b(flag || public_key) to derive addresses
+ * @param {Uint8Array} publicKey - The public key (32 bytes for Ed25519, 33 for secp256k1)
+ * @param {string} scheme - 'ed25519' (0x00), 'secp256k1' (0x01), or 'secp256r1' (0x02)
+ * @returns {string} The SUI address with 0x prefix
+ */
+function deriveSuiAddress(publicKey, scheme = 'ed25519') {
+  const schemeFlags = {
+    'ed25519': 0x00,
+    'secp256k1': 0x01,
+    'secp256r1': 0x02,
+  };
+  const flag = schemeFlags[scheme] ?? 0x00;
+
+  // Concatenate flag byte with public key
+  const data = new Uint8Array(1 + publicKey.length);
+  data[0] = flag;
+  data.set(publicKey, 1);
+
+  // BLAKE2b hash with 32-byte output
+  const hash = blake2b(data, { dkLen: 32 });
+
+  // Convert to hex with 0x prefix
+  return '0x' + Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Derive an Ethereum/Monad address from a secp256k1 public key
+ * Uses Keccak-256 hash of the uncompressed public key (minus prefix)
+ * @param {Uint8Array} publicKey - The secp256k1 public key (33 bytes compressed or 65 uncompressed)
+ * @returns {string} The Ethereum address with 0x prefix
+ */
+function deriveMonadAddress(publicKey) {
+  // If compressed (33 bytes), decompress it
+  let uncompressedPubKey;
+  if (publicKey.length === 33) {
+    // Use secp256k1 to decompress
+    const point = secp256k1.ProjectivePoint.fromHex(publicKey);
+    uncompressedPubKey = point.toRawBytes(false); // 65 bytes: 0x04 || x || y
+  } else if (publicKey.length === 65) {
+    uncompressedPubKey = publicKey;
+  } else {
+    throw new Error('Invalid public key length for Monad address derivation');
+  }
+
+  // Keccak-256 of the public key without the 0x04 prefix
+  const hash = keccak_256(uncompressedPubKey.slice(1));
+
+  // Take last 20 bytes
+  const address = hash.slice(-20);
+
+  // Convert to hex with 0x prefix and checksum
+  return '0x' + Array.from(address).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Fetch SUI balance for an address
+ * @param {string} address - SUI address with 0x prefix
+ * @returns {Promise<{balance: string, error?: string}>}
+ */
+async function fetchSuiBalance(address) {
+  try {
+    const response = await fetch('https://fullnode.mainnet.sui.io:443', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'suix_getBalance',
+        params: [address]
+      })
+    });
+    const data = await response.json();
+    if (data.error) {
+      return { balance: '0', error: data.error.message };
+    }
+    // Balance is in MIST (1 SUI = 10^9 MIST)
+    const balanceMist = BigInt(data.result?.totalBalance || '0');
+    const balanceSui = Number(balanceMist) / 1e9;
+    return { balance: balanceSui.toFixed(4) };
+  } catch (e) {
+    console.error('SUI balance fetch error:', e);
+    return { balance: '0', error: e.message };
+  }
+}
+
+/**
+ * Fetch Monad balance for an address
+ * @param {string} address - Ethereum address with 0x prefix
+ * @returns {Promise<{balance: string, error?: string}>}
+ */
+async function fetchMonadBalance(address) {
+  try {
+    // Using public RPC endpoint - may need to update this
+    const response = await fetch('https://testnet-rpc.monad.xyz', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_getBalance',
+        params: [address, 'latest']
+      })
+    });
+    const data = await response.json();
+    if (data.error) {
+      return { balance: '0', error: data.error.message };
+    }
+    // Balance is in wei (1 MON = 10^18 wei)
+    const balanceWei = BigInt(data.result || '0x0');
+    const balanceMon = Number(balanceWei) / 1e18;
+    return { balance: balanceMon.toFixed(4) };
+  } catch (e) {
+    console.error('Monad balance fetch error:', e);
+    return { balance: '0', error: e.message };
+  }
+}
+
+/**
+ * Derive a Cardano address from an Ed25519 public key
+ * Uses Bech32 encoding with "addr" prefix for mainnet
+ * This is a simplified address (enterprise address without staking key)
+ * @param {Uint8Array} publicKey - Ed25519 public key (32 bytes)
+ * @returns {string} The Cardano address in Bech32 format
+ */
+function deriveCardanoAddress(publicKey) {
+  // Cardano enterprise address (type 6): header byte 0x61 for mainnet
+  // Format: header || blake2b_224(public_key)
+  const keyHash = blake2b(publicKey, { dkLen: 28 }); // 224-bit hash
+  const addressBytes = new Uint8Array(29);
+  addressBytes[0] = 0x61; // Enterprise address, mainnet
+  addressBytes.set(keyHash, 1);
+
+  // Bech32 encode with "addr" prefix
+  return bech32Encode('addr', addressBytes);
+}
+
+/**
+ * Bech32 encoding for Cardano addresses
+ * @param {string} prefix - Human-readable part (e.g., "addr")
+ * @param {Uint8Array} data - Data bytes to encode
+ * @returns {string} Bech32-encoded string
+ */
+function bech32Encode(prefix, data) {
+  const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+
+  // Convert 8-bit data to 5-bit groups
+  const data5bit = convertBits(data, 8, 5, true);
+
+  // Create checksum
+  const checksumData = expandHrp(prefix).concat(data5bit).concat([0, 0, 0, 0, 0, 0]);
+  const polymod = bech32Polymod(checksumData) ^ 1;
+  const checksum = [];
+  for (let i = 0; i < 6; i++) {
+    checksum.push((polymod >> (5 * (5 - i))) & 31);
+  }
+
+  // Encode
+  let result = prefix + '1';
+  for (const d of data5bit.concat(checksum)) {
+    result += CHARSET[d];
+  }
+  return result;
+}
+
+function convertBits(data, fromBits, toBits, pad) {
+  let acc = 0;
+  let bits = 0;
+  const ret = [];
+  const maxv = (1 << toBits) - 1;
+  for (const value of data) {
+    acc = (acc << fromBits) | value;
+    bits += fromBits;
+    while (bits >= toBits) {
+      bits -= toBits;
+      ret.push((acc >> bits) & maxv);
+    }
+  }
+  if (pad) {
+    if (bits > 0) {
+      ret.push((acc << (toBits - bits)) & maxv);
+    }
+  }
+  return ret;
+}
+
+function expandHrp(hrp) {
+  const ret = [];
+  for (const c of hrp) {
+    ret.push(c.charCodeAt(0) >> 5);
+  }
+  ret.push(0);
+  for (const c of hrp) {
+    ret.push(c.charCodeAt(0) & 31);
+  }
+  return ret;
+}
+
+function bech32Polymod(values) {
+  const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+  let chk = 1;
+  for (const v of values) {
+    const b = chk >> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ v;
+    for (let i = 0; i < 5; i++) {
+      if ((b >> i) & 1) {
+        chk ^= GEN[i];
+      }
+    }
+  }
+  return chk;
+}
+
+/**
+ * Populate wallet addresses in the Adversarial Security section
+ * Uses addresses from state.addresses and derives additional ones from wallet keys
+ */
+function populateWalletAddresses() {
+  if (!state.wallet) return;
+
+  // Get addresses from state (already generated at login)
+  const btcAddress = state.addresses?.btc || '--';
+  const ethAddress = state.addresses?.eth || '--';
+  const solAddress = state.addresses?.sol || '--';
+
+  // Derive additional addresses
+  let suiAddress = '--';
+  let monadAddress = '--';
+  let adaAddress = '--';
+
+  if (state.wallet.ed25519?.publicKey) {
+    const ed25519Pub = ensureUint8Array(state.wallet.ed25519.publicKey);
+    suiAddress = deriveSuiAddress(ed25519Pub, 'ed25519');
+    adaAddress = deriveCardanoAddress(ed25519Pub);
+  }
+
+  if (state.wallet.secp256k1?.publicKey) {
+    // Monad uses same derivation as Ethereum
+    monadAddress = ethAddress;
+  }
+
+  // Update UI elements
+  const updateAddressCard = (network, address, explorerBase) => {
+    const addrEl = $(`wallet-${network}-address`);
+    const linkEl = $(`wallet-${network}-explorer`);
+
+    if (addrEl && address !== '--') {
+      // Truncate address for display
+      addrEl.textContent = address.length > 20
+        ? address.slice(0, 10) + '...' + address.slice(-8)
+        : address;
+      addrEl.title = address; // Full address on hover
+    }
+
+    if (linkEl && address !== '--') {
+      linkEl.href = explorerBase + address;
+    }
+  };
+
+  // Bitcoin
+  updateAddressCard('btc', btcAddress, 'https://blockstream.info/address/');
+
+  // Ethereum
+  updateAddressCard('eth', ethAddress, 'https://etherscan.io/address/');
+
+  // Solana
+  updateAddressCard('sol', solAddress, 'https://solscan.io/account/');
+
+  // SUI
+  updateAddressCard('sui', suiAddress, 'https://suiscan.xyz/mainnet/account/');
+
+  // Monad (uses same address as ETH)
+  updateAddressCard('monad', monadAddress, 'https://explorer.monad.xyz/address/');
+
+  // Cardano
+  updateAddressCard('ada', adaAddress, 'https://cardanoscan.io/address/');
+}
+
+/**
+ * Update the Adversarial Security UI with derived addresses and balances
+ */
+async function updateAdversarialSecurity() {
+  const loginRequired = $('adversarial-login-required');
+  const balancesSection = $('adversarial-balances');
+
+  // Check if we have wallet keys (not just PKI keys)
+  const hasWallet = state.wallet && (state.wallet.secp256k1 || state.wallet.ed25519);
+
+  if (!hasWallet) {
+    // Show login required, hide balances
+    if (loginRequired) loginRequired.style.display = 'block';
+    if (balancesSection) balancesSection.style.display = 'none';
+    const trustNote = $('trust-note');
+    if (trustNote) trustNote.textContent = 'Login to derive addresses and check balances.';
+    return;
+  }
+
+  // Hide login required, show the sections
+  if (loginRequired) loginRequired.style.display = 'none';
+  if (balancesSection) balancesSection.style.display = 'block';
+
+  // Populate addresses from wallet
+  populateWalletAddresses();
+
+  // Get addresses for balance fetching
+  const btcAddress = state.addresses?.btc;
+  const ethAddress = state.addresses?.eth;
+  const solAddress = state.addresses?.sol;
+
+  let suiAddress = null;
+  let adaAddress = null;
+  if (state.wallet.ed25519?.publicKey) {
+    const ed25519Pub = ensureUint8Array(state.wallet.ed25519.publicKey);
+    suiAddress = deriveSuiAddress(ed25519Pub, 'ed25519');
+    adaAddress = deriveCardanoAddress(ed25519Pub);
+  }
+
+  // Monad uses same address as Ethereum
+  const monadAddress = ethAddress;
+
+  // Set initial loading state for all balances
+  const networks = ['btc', 'eth', 'sol', 'sui', 'monad', 'ada'];
+  networks.forEach(net => {
+    const balEl = $(`wallet-${net}-balance`);
+    if (balEl) balEl.textContent = '...';
+  });
+  const trustNote = $('trust-note');
+  if (trustNote) trustNote.textContent = 'Fetching balances from blockchain...';
+
+  // Fetch balances in parallel (with error handling for each)
+  const fetchResults = await Promise.allSettled([
+    fetchSuiBalance(suiAddress || ''),
+    monadAddress ? fetchMonadBalance(monadAddress) : Promise.resolve({ balance: '0' }),
+  ]);
+
+  // Process SUI balance
+  const suiResult = fetchResults[0].status === 'fulfilled' ? fetchResults[0].value : { balance: '0' };
+  const monadResult = fetchResults[1].status === 'fulfilled' ? fetchResults[1].value : { balance: '0' };
+
+  // Update balance displays
+  const updateBalance = (network, balance) => {
+    const balEl = $(`wallet-${network}-balance`);
+    if (balEl) balEl.textContent = balance;
+
+    const card = $(`wallet-${network}-card`);
+    if (card) {
+      const hasBalance = parseFloat(balance) > 0;
+      card.classList.toggle('has-balance', hasBalance);
+      card.classList.toggle('secure', hasBalance);
+    }
+  };
+
+  // Update with fetched balances
+  updateBalance('sui', suiResult.balance);
+  updateBalance('monad', monadResult.balance);
+
+  // For networks where we don't have easy APIs, show "--"
+  // In production you'd use proper APIs for each
+  updateBalance('btc', '--');
+  updateBalance('eth', '--');
+  updateBalance('sol', '--');
+  updateBalance('ada', '--');
+
+  // Calculate trust level based on available balances
+  const totalValue = parseFloat(suiResult.balance) + parseFloat(monadResult.balance);
+
+  // Update trust meter if it exists
+  const trustFill = $('trust-fill');
+  if (trustFill) {
+    const trustPercent = Math.min(100, Math.log10(totalValue + 1) * 33);
+    trustFill.style.width = `${trustPercent}%`;
+  }
+
+  // Update trust note
+  if (trustNote) {
+    if (totalValue === 0) {
+      trustNote.textContent = 'No value locked. Send funds to these addresses to increase trust level.';
+    } else if (totalValue < 1) {
+      trustNote.textContent = `${totalValue.toFixed(4)} total value locked. Low trust level.`;
+    } else if (totalValue < 100) {
+      trustNote.textContent = `${totalValue.toFixed(2)} total value locked. Moderate trust level.`;
+    } else {
+      trustNote.textContent = `${totalValue.toFixed(2)} total value locked. High trust level established.`;
+    }
+  }
+}
+
+// Bind refresh button
+document.addEventListener('DOMContentLoaded', () => {
+  const refreshBtn = $('refresh-balances');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      updateAdversarialSecurity();
+    });
+  }
+});
 
 init();

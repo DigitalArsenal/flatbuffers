@@ -288,6 +288,17 @@ body {
   line-height: 1.4;
 }
 
+.hero-subtitle a {
+  color: var(--white);
+  text-decoration: none;
+  border-bottom: 1px solid var(--white-40);
+  transition: border-color 0.2s;
+}
+
+.hero-subtitle a:hover {
+  border-color: var(--white);
+}
+
 .ci-badges {
   display: flex;
   flex-wrap: wrap;

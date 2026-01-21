@@ -727,15 +727,24 @@ function readBytes(ptr, size) {
 export function sha256(data) {
   if (!wasmModule) throw new Error('Encryption module not initialized');
 
-  const dataPtr = allocate(data.length);
+  // Handle empty input specially - SHA-256 of empty input is a well-defined constant
+  // We still need to call the WASM function, but with a dummy 1-byte allocation
+  const dataLen = data.length;
+  const dataPtr = allocate(dataLen > 0 ? dataLen : 1);
   const hashPtr = allocate(SHA256_SIZE);
 
   try {
-    writeBytes(dataPtr, data);
-    wasmModule.wasi_sha256(dataPtr, data.length, hashPtr);
+    if (dataLen > 0) {
+      writeBytes(dataPtr, data);
+    }
+    wasmModule.wasi_sha256(dataPtr, dataLen, hashPtr);
     return readBytes(hashPtr, SHA256_SIZE);
   } finally {
-    secureDeallocate(dataPtr, data.length);
+    if (dataLen > 0) {
+      secureDeallocate(dataPtr, dataLen);
+    } else {
+      deallocate(dataPtr);
+    }
     deallocate(hashPtr);
   }
 }
@@ -2042,6 +2051,20 @@ export class EncryptionContext {
   }
 
   /**
+   * Decrypt scalar value (CTR mode - same operation as encrypt but no IV tracking)
+   * @param {Uint8Array} buffer
+   * @param {number} offset
+   * @param {number} size
+   * @param {number} fieldId
+   */
+  decryptScalar(buffer, offset, size, fieldId) {
+    const key = this.deriveFieldKey(fieldId);
+    const iv = this.deriveFieldIV(fieldId);
+    const data = buffer.subarray(offset, offset + size);
+    _encryptBytesInternal(data, key, iv, false);
+  }
+
+  /**
    * Encrypt string value
    * @param {Uint8Array} buffer
    * @param {number} offset
@@ -2053,6 +2076,20 @@ export class EncryptionContext {
     const iv = this.deriveFieldIV(fieldId);
     const data = buffer.subarray(offset, offset + length);
     _encryptBytesInternal(data, key, iv, true);
+  }
+
+  /**
+   * Decrypt string value (CTR mode - same operation as encrypt but no IV tracking)
+   * @param {Uint8Array} buffer
+   * @param {number} offset
+   * @param {number} length
+   * @param {number} fieldId
+   */
+  decryptString(buffer, offset, length, fieldId) {
+    const key = this.deriveFieldKey(fieldId);
+    const iv = this.deriveFieldIV(fieldId);
+    const data = buffer.subarray(offset, offset + length);
+    _encryptBytesInternal(data, key, iv, false);
   }
 
   /**
@@ -2068,6 +2105,21 @@ export class EncryptionContext {
     const iv = this.deriveFieldIV(fieldId);
     const data = buffer.subarray(offset, offset + elementSize * count);
     _encryptBytesInternal(data, key, iv, true);
+  }
+
+  /**
+   * Decrypt vector data (CTR mode - same operation as encrypt but no IV tracking)
+   * @param {Uint8Array} buffer
+   * @param {number} offset
+   * @param {number} elementSize
+   * @param {number} count
+   * @param {number} fieldId
+   */
+  decryptVector(buffer, offset, elementSize, count, fieldId) {
+    const key = this.deriveFieldKey(fieldId);
+    const iv = this.deriveFieldIV(fieldId);
+    const data = buffer.subarray(offset, offset + elementSize * count);
+    _encryptBytesInternal(data, key, iv, false);
   }
 
   // ===========================================================================

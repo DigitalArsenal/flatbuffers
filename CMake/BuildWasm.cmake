@@ -323,6 +323,8 @@ module.exports.default = createModule;
     # Module info
     "_wasi_get_version"
     "_wasi_has_cryptopp"
+    # Entropy management
+    "_wasi_inject_entropy"
     # Symmetric encryption (AES-256-CTR)
     "_wasi_encryption_create"
     "_wasi_encryption_destroy"

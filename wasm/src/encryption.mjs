@@ -580,6 +580,29 @@ function getRandomBytes(size) {
 }
 
 /**
+ * Inject external entropy into the WASM RNG pool.
+ * This is called automatically before key generation to ensure the WASM module
+ * has access to high-quality entropy from the browser/Node.js crypto APIs.
+ * @param {number} [entropyBytes=64] - Number of entropy bytes to inject
+ */
+function injectEntropy(entropyBytes = 64) {
+  if (!wasmModule) return;
+  if (!wasmModule.wasi_inject_entropy) return; // Old WASM without entropy support
+
+  const entropy = getRandomBytes(entropyBytes);
+  const ptr = wasmModule.malloc(entropyBytes);
+  if (ptr === 0) return;
+
+  try {
+    const view = new Uint8Array(wasmMemory.buffer, ptr, entropyBytes);
+    view.set(entropy);
+    wasmModule.wasi_inject_entropy(ptr, entropyBytes);
+  } finally {
+    wasmModule.free(ptr);
+  }
+}
+
+/**
  * Allocate memory in WASM heap
  * @param {number} size - Number of bytes to allocate
  * @returns {number} Pointer to allocated memory
@@ -1164,6 +1187,9 @@ export function x25519GenerateKeyPair(privateKey) {
     throw new Error(`Private key must be ${X25519_PRIVATE_KEY_SIZE} bytes`);
   }
 
+  // Inject entropy before key generation to ensure high-quality randomness
+  injectEntropy();
+
   const privPtr = allocate(X25519_PRIVATE_KEY_SIZE);
   const pubPtr = allocate(X25519_PUBLIC_KEY_SIZE);
 
@@ -1246,6 +1272,9 @@ export function secp256k1GenerateKeyPair(privateKey) {
   if (privateKey && privateKey.length !== SECP256K1_PRIVATE_KEY_SIZE) {
     throw new Error(`Private key must be ${SECP256K1_PRIVATE_KEY_SIZE} bytes`);
   }
+
+  // Inject entropy before key generation to ensure high-quality randomness
+  injectEntropy();
 
   const privPtr = allocate(SECP256K1_PRIVATE_KEY_SIZE);
   const pubPtr = allocate(SECP256K1_PUBLIC_KEY_SIZE);
@@ -1397,6 +1426,9 @@ export function p256GenerateKeyPair(privateKey) {
     throw new Error(`Private key must be ${P256_PRIVATE_KEY_SIZE} bytes`);
   }
 
+  // Inject entropy before key generation to ensure high-quality randomness
+  injectEntropy();
+
   const privPtr = allocate(P256_PRIVATE_KEY_SIZE);
   const pubPtr = allocate(P256_PUBLIC_KEY_SIZE);
 
@@ -1542,6 +1574,9 @@ export function p256Verify(publicKey, data, signature) {
  */
 export function ed25519GenerateKeyPair() {
   if (!wasmModule) throw new Error('Encryption module not initialized');
+
+  // Inject entropy before key generation to ensure high-quality randomness
+  injectEntropy();
 
   const privPtr = allocate(ED25519_PRIVATE_KEY_SIZE);
   const pubPtr = allocate(ED25519_PUBLIC_KEY_SIZE);

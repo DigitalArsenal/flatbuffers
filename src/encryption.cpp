@@ -41,6 +41,22 @@ namespace flatbuffers {
 // Crypto++ Implementation
 // =============================================================================
 
+// Global RNG that can be seeded with external entropy
+// This is critical for WASM environments where AutoSeededRandomPool
+// may not have access to good entropy sources like /dev/urandom
+static CryptoPP::AutoSeededRandomPool& GetGlobalRNG() {
+  static CryptoPP::AutoSeededRandomPool rng;
+  return rng;
+}
+
+// Inject external entropy into the global RNG
+// This should be called from JavaScript with crypto.getRandomValues() output
+void InjectEntropy(const uint8_t* seed, size_t size) {
+  if (seed && size > 0) {
+    GetGlobalRNG().IncorporateEntropy(seed, size);
+  }
+}
+
 namespace internal {
 
 void AESEncryptBlock(const uint8_t* key, const uint8_t* input, uint8_t* output) {
@@ -116,10 +132,8 @@ KeyPair X25519GenerateKeyPair() {
   kp.private_key.resize(kX25519PrivateKeySize);
   kp.public_key.resize(kX25519PublicKeySize);
 
-  CryptoPP::AutoSeededRandomPool rng;
   CryptoPP::x25519 x25519;
-
-  x25519.GenerateKeyPair(rng, kp.private_key.data(), kp.public_key.data());
+  x25519.GenerateKeyPair(GetGlobalRNG(), kp.private_key.data(), kp.public_key.data());
   return kp;
 }
 
@@ -141,9 +155,8 @@ KeyPair Secp256k1GenerateKeyPair() {
   KeyPair kp;
 
   try {
-    CryptoPP::AutoSeededRandomPool rng;
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::PrivateKey privateKey;
-    privateKey.Initialize(rng, CryptoPP::ASN1::secp256k1());
+    privateKey.Initialize(GetGlobalRNG(), CryptoPP::ASN1::secp256k1());
 
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::PublicKey publicKey;
     privateKey.MakePublicKey(publicKey);
@@ -230,14 +243,13 @@ Signature Secp256k1Sign(
   sig.algorithm = SignatureAlgorithm::Secp256k1_ECDSA;
 
   try {
-    CryptoPP::AutoSeededRandomPool rng;
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::PrivateKey key;
     key.Initialize(CryptoPP::ASN1::secp256k1(),
                    CryptoPP::Integer(private_key, kSecp256k1PrivateKeySize));
 
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::Signer signer(key);
     sig.data.resize(signer.MaxSignatureLength());
-    size_t sigLen = signer.SignMessage(rng, data, data_size, sig.data.data());
+    size_t sigLen = signer.SignMessage(GetGlobalRNG(), data, data_size, sig.data.data());
     sig.data.resize(sigLen);
   } catch (...) {
     sig.data.clear();
@@ -283,9 +295,8 @@ KeyPair P256GenerateKeyPair() {
   KeyPair kp;
 
   try {
-    CryptoPP::AutoSeededRandomPool rng;
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::PrivateKey privateKey;
-    privateKey.Initialize(rng, CryptoPP::ASN1::secp256r1());
+    privateKey.Initialize(GetGlobalRNG(), CryptoPP::ASN1::secp256r1());
 
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::PublicKey publicKey;
     privateKey.MakePublicKey(publicKey);
@@ -370,14 +381,13 @@ Signature P256Sign(
   sig.algorithm = SignatureAlgorithm::P256_ECDSA;
 
   try {
-    CryptoPP::AutoSeededRandomPool rng;
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::PrivateKey key;
     key.Initialize(CryptoPP::ASN1::secp256r1(),
                    CryptoPP::Integer(private_key, kP256PrivateKeySize));
 
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::Signer signer(key);
     sig.data.resize(signer.MaxSignatureLength());
-    size_t sigLen = signer.SignMessage(rng, data, data_size, sig.data.data());
+    size_t sigLen = signer.SignMessage(GetGlobalRNG(), data, data_size, sig.data.data());
     sig.data.resize(sigLen);
   } catch (...) {
     sig.data.clear();
@@ -427,9 +437,8 @@ KeyPair GenerateSigningKeyPair(SignatureAlgorithm algorithm) {
       kp.private_key.resize(kEd25519PrivateKeySize);
       kp.public_key.resize(kEd25519PublicKeySize);
 
-      CryptoPP::AutoSeededRandomPool rng;
       CryptoPP::ed25519::Signer signer;
-      signer.AccessPrivateKey().GenerateRandom(rng);
+      signer.AccessPrivateKey().GenerateRandom(GetGlobalRNG());
 
       // Get private key (seed)
       const CryptoPP::ed25519PrivateKey& privKey =
@@ -673,6 +682,7 @@ void EncryptBytes(uint8_t* data, size_t size,
 }
 
 // Stub implementations for ECDH/signatures without Crypto++
+void InjectEntropy(const uint8_t*, size_t) {}  // No-op without Crypto++
 KeyPair X25519GenerateKeyPair() { return KeyPair{}; }
 bool X25519SharedSecret(const uint8_t*, const uint8_t*, uint8_t*) { return false; }
 KeyPair Secp256k1GenerateKeyPair() { return KeyPair{}; }

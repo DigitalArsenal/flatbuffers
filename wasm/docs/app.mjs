@@ -1039,6 +1039,7 @@ function login(keys) {
   // Update hero stats display
   $('hero-wallet-type').textContent = cryptoConfig[state.selectedCrypto].name;
   $('hero-address').textContent = truncateAddress(state.addresses[state.selectedCrypto]);
+  $('hero-stats').classList.remove('hidden');
 
   // Show nav action buttons, hide login button
   $('nav-login').style.display = 'none';
@@ -1104,6 +1105,7 @@ function logout() {
   // Update hero stats to show logged out state
   $('hero-wallet-type').textContent = '--';
   $('hero-address').textContent = '--';
+  $('hero-stats').classList.add('hidden');
 
   // Show login button, hide other nav action buttons
   $('nav-login').style.display = 'flex';
@@ -2977,9 +2979,9 @@ async function startStreaming() {
   $('stream-progress').style.display = 'block';
   $('completion-stats').style.display = 'none';
 
-  // Set ring buffer capacities in UI
+  // Set queue capacities in UI
   for (const [fileId, count] of Object.entries(counts)) {
-    $(`ring-capacity-${fileId}`).textContent = count;
+    $(`queue-capacity-${fileId}`).textContent = count;
   }
 
   // Set callbacks
@@ -2990,15 +2992,15 @@ async function startStreaming() {
     $('stream-total').textContent = stats.total.toLocaleString();
     $('stream-bytes').textContent = formatBytes(stats.bytes);
 
-    // Update ring buffer stats
+    // Update queue stats
     for (const [fileId, typeStats] of Object.entries(stats.stats)) {
       const count = typeStats.totalReceived || 0;
       const capacity = typeStats.capacity || 1;
       const pctFull = Math.min(100, (count / capacity) * 100);
 
-      $(`ring-fill-${fileId}`).style.width = `${pctFull}%`;
-      $(`ring-count-${fileId}`).textContent = Math.min(count, capacity);
-      $(`ring-total-${fileId}`).textContent = count.toLocaleString();
+      $(`queue-fill-${fileId}`).style.width = `${pctFull}%`;
+      $(`queue-count-${fileId}`).textContent = Math.min(count, capacity);
+      $(`queue-total-${fileId}`).textContent = count.toLocaleString();
     }
   };
 

@@ -1,25 +1,45 @@
-# flatc-wasm
+<p align="center">
+  <img src="https://flatbuffers.dev/assets/flatbuffers_logo.svg" alt="FlatBuffers Logo" width="200"/>
+</p>
 
-FlatBuffers compiler (`flatc`) as a WebAssembly module. Run the FlatBuffers compiler directly in Node.js or the browser without native dependencies.
+<h1 align="center">flatc-wasm</h1>
+
+<p align="center">
+  <strong>FlatBuffers compiler as WebAssembly — run <code>flatc</code> in Node.js or the browser with zero native dependencies</strong>
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/flatc-wasm"><img src="https://img.shields.io/npm/v/flatc-wasm.svg" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/flatc-wasm"><img src="https://img.shields.io/npm/dm/flatc-wasm.svg" alt="npm downloads"></a>
+  <a href="https://github.com/AltAlpha/flatbuffers/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
+</p>
+
+---
 
 ## Features
 
-- **Schema Management**: Add, remove, list, and export FlatBuffer schemas
-- **JSON/Binary Conversion**: Convert between JSON and FlatBuffer binary formats
-- **Code Generation**: Generate code for 13 languages (C++, TypeScript, Go, Rust, etc.)
-- **JSON Schema Support**: Import JSON Schema and convert to FlatBuffer schemas
-- **Streaming Support**: Process large data with streaming APIs
-- **End-to-End Encryption**: AES-256-CTR encryption with ECDH key exchange (X25519, secp256k1, P-256)
-- **Digital Signatures**: Ed25519 and ECDSA signing for message authentication
-- **Cryptocurrency Compatible**: Keys work with Bitcoin, Ethereum, Solana, and 7 other blockchains
-- **Cross-Language**: Encryption works across Node.js, Go, Python, Rust, Java, C#, and Swift
-- **Zero Dependencies**: Self-contained WASM modules with inlined binaries
+| Category | Features |
+|----------|----------|
+| **Schema** | Add, remove, list, and export FlatBuffer schemas |
+| **Conversion** | JSON ↔ FlatBuffer binary with auto-detection |
+| **Code Gen** | 13 languages: C++, TypeScript, Go, Rust, Python, Java, C#, Swift, Kotlin, Dart, PHP, Lua, Nim |
+| **JSON Schema** | Import JSON Schema as input, export FlatBuffers to JSON Schema |
+| **Streaming** | Process large data with streaming APIs |
+| **Encryption** | AES-256-CTR + ECDH key exchange (X25519, secp256k1, P-256) |
+| **Signatures** | Ed25519 and ECDSA for message authentication |
+| **Crypto** | Compatible with Bitcoin, Ethereum, Solana, Cardano, + 6 more chains |
+| **Cross-Lang** | Same WASM runs in Node.js, Go, Python, Rust, Java, C#, Swift |
+| **Zero Deps** | Self-contained with inlined WASM binaries |
+
+---
 
 ## Installation
 
 ```bash
 npm install flatc-wasm
 ```
+
+---
 
 ## Table of Contents
 

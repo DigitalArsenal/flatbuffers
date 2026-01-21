@@ -33,7 +33,7 @@
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-blur: blur(20px);
 
-  /* Accent Colors for Ring Buffers */
+  /* Accent Colors for Message Queues */
   --monster: #ef4444;
   --weapon: #3b82f6;
   --galaxy: #8b5cf6;
@@ -345,6 +345,10 @@ body {
   margin-top: 32px;
 }
 
+.hero-stats.hidden {
+  display: none !important;
+}
+
 .hero-stats .stat-item {
   text-align: center;
 }
@@ -424,6 +428,20 @@ body {
 
 .glass-btn.primary:hover:not(:disabled) {
   background: var(--white-90);
+}
+
+/* Nav login button - shorter with subtle gradient */
+#nav-login {
+  padding: 8px 20px;
+  font-size: 13px;
+  background: linear-gradient(135deg, var(--white) 0%, var(--white-90) 100%);
+  border: 1px solid var(--white-80);
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.1);
+}
+
+#nav-login:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--white) 0%, var(--white) 100%);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
 }
 
 .glass-btn.small {
@@ -1552,10 +1570,10 @@ body {
 }
 
 /* =============================================================================
-   Ring Buffer Stats
+   Queue Stats
    ============================================================================= */
 
-.ring-stats-grid {
+.queue-stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
@@ -1563,41 +1581,41 @@ body {
 }
 
 @media (max-width: 768px) {
-  .ring-stats-grid {
+  .queue-stats-grid {
     grid-template-columns: 1fr;
   }
 }
 
-.ring-card {
+.queue-card {
   background: var(--white-05);
   border-radius: var(--radius-sm);
   padding: 20px;
 }
 
-.ring-header {
+.queue-header {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
 }
 
-.ring-dot {
+.queue-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
 }
 
-.ring-card.monster .ring-dot { background: var(--monster); }
-.ring-card.weapon .ring-dot { background: var(--weapon); }
-.ring-card.galaxy .ring-dot { background: var(--galaxy); }
+.queue-card.monster .queue-dot { background: var(--monster); }
+.queue-card.weapon .queue-dot { background: var(--weapon); }
+.queue-card.galaxy .queue-dot { background: var(--galaxy); }
 
-.ring-title {
+.queue-title {
   font-size: 14px;
   font-weight: 600;
   color: var(--white);
 }
 
-.ring-bar {
+.queue-bar {
   height: 6px;
   background: var(--white-10);
   border-radius: 3px;
@@ -1605,17 +1623,17 @@ body {
   margin-bottom: 12px;
 }
 
-.ring-fill {
+.queue-fill {
   height: 100%;
   width: 0%;
   transition: width 0.15s ease-out;
 }
 
-.ring-card.monster .ring-fill { background: var(--monster); }
-.ring-card.weapon .ring-fill { background: var(--weapon); }
-.ring-card.galaxy .ring-fill { background: var(--galaxy); }
+.queue-card.monster .queue-fill { background: var(--monster); }
+.queue-card.weapon .queue-fill { background: var(--weapon); }
+.queue-card.galaxy .queue-fill { background: var(--galaxy); }
 
-.ring-numbers {
+.queue-numbers {
   display: flex;
   justify-content: space-between;
   font-size: 13px;
@@ -1623,7 +1641,7 @@ body {
   color: var(--white-80);
 }
 
-.ring-total {
+.queue-total {
   color: var(--muted);
 }
 

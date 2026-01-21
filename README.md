@@ -157,6 +157,69 @@ const code = runner.generateCode(
 
 For full documentation, API reference, and build instructions, see [`wasm/README.md`](wasm/README.md).
 
+---
+
+## Encryption & Cryptocurrency Module
+
+> **[Full Documentation](wasm/README.md#encryption-module)**
+
+The `flatc-wasm` package includes a powerful **encryption module** built on Crypto++ compiled to WebAssembly. This enables secure FlatBuffer transmission with zero native dependencies.
+
+### Highlights
+
+| Feature | Description |
+|---------|-------------|
+| **End-to-End Encryption** | AES-256-CTR encryption with ECDH key exchange (X25519, secp256k1, P-256) |
+| **Digital Signatures** | Ed25519 and ECDSA (secp256k1, P-256) for message authentication |
+| **Cryptocurrency Compatible** | Keys work with Bitcoin, Ethereum, Solana, Cardano, Cosmos, SUI, and more |
+| **Cross-Language** | Same WASM module works in Node.js, Go, Python, Rust, Java, C#, and Swift |
+| **HD Wallet Support** | BIP-32/BIP-39 hierarchical deterministic wallet derivation |
+
+### Quick Example
+
+```javascript
+import {
+  x25519GenerateKeyPair,
+  x25519SharedSecret,
+  ed25519Sign,
+  encryptBytes,
+  hkdf
+} from 'flatc-wasm/encryption';
+
+// Generate keypairs
+const sender = x25519GenerateKeyPair();
+const recipient = x25519GenerateKeyPair();
+
+// ECDH key exchange + HKDF key derivation
+const shared = x25519SharedSecret(sender.privateKey, recipient.publicKey);
+const aesKey = hkdf(shared, null, new TextEncoder().encode('my-app'), 32);
+
+// Encrypt FlatBuffer data
+encryptBytes(flatbufferData, aesKey, iv);
+```
+
+### Supported Blockchains
+
+| Chain | Curve | Signature |
+|-------|-------|-----------|
+| Bitcoin, Ethereum, Cosmos | secp256k1 | ECDSA |
+| Solana, Cardano, Aptos, SUI, NEAR | X25519 | Ed25519 |
+| Polkadot, Tezos | X25519 | Ed25519 |
+
+### Interactive Demo
+
+Try the live demo with HD wallet generation, encryption, and vCard export:
+
+```bash
+# Start the demo server
+cmake -B build -S . && cmake --build build --target wasm_demo
+# Open http://localhost:3000
+```
+
+**[See full encryption documentation](wasm/README.md#encryption-module)**
+
+---
+
 ![logo](https://flatbuffers.dev/assets/flatbuffers_logo.svg) FlatBuffers
 ===========
 

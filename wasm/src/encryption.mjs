@@ -38,9 +38,10 @@
  *    - Never use in environments without proper entropy sources
  *
  * 4. AUTHENTICATION:
- *    - encryptBuffer() uses AES-CTR WITHOUT authentication by default
- *    - For tamper detection, use encryptAuthenticated() or add HMAC at transport layer
- *    - Unauthenticated encryption is vulnerable to bit-flipping attacks
+ *    - encryptBuffer() computes HMAC-SHA256 for integrity protection by default
+ *    - The MAC must be stored with encrypted data and passed to decryptBuffer()
+ *    - To disable authentication (not recommended), pass { authenticate: false }
+ *    - Low-level encryptBytes()/decryptBytes() are deprecated; use encryptAuthenticated()
  *
  * 5. KEY MANAGEMENT:
  *    - This module does not persist or protect keys at rest
@@ -896,8 +897,16 @@ function _encryptBytesInternal(data, key, iv, isEncrypt) {
   }
 }
 
+// Track deprecation warnings to avoid spamming console
+let encryptBytesWarningShown = false;
+let decryptBytesWarningShown = false;
+
 /**
  * Encrypt data in-place using AES-256-CTR
+ *
+ * @deprecated Use encryptAuthenticated() for integrity protection, or encryptBytesCopy()
+ * if you need raw CTR mode. This function provides NO authentication - data can be
+ * tampered with via bit-flipping attacks without detection.
  *
  * SECURITY: This function tracks IV usage per key to prevent catastrophic IV reuse.
  * Each (key, IV) pair can only be used once. Attempting to reuse an IV will throw.
@@ -911,6 +920,14 @@ function _encryptBytesInternal(data, key, iv, isEncrypt) {
  * @throws {CryptoError} If IV has been used before with this key (IV_REUSE)
  */
 export function encryptBytes(data, key, iv) {
+  if (!encryptBytesWarningShown) {
+    encryptBytesWarningShown = true;
+    console.warn(
+      '[flatc-wasm] encryptBytes() is deprecated and provides NO integrity protection. ' +
+      'Use encryptAuthenticated() instead, or pass { authenticate: false } to encryptBuffer() ' +
+      'if you explicitly need unauthenticated encryption.'
+    );
+  }
   _encryptBytesInternal(data, key, iv, true);
 }
 
@@ -939,6 +956,10 @@ export function encryptBytesCopy(data, key, iv = null) {
 /**
  * Decrypt data in-place using AES-256-CTR
  *
+ * @deprecated Use decryptAuthenticated() for integrity verification, or decryptBytesCopy()
+ * if you need raw CTR mode. This function provides NO authentication - tampered data
+ * will be decrypted without detection.
+ *
  * Note: Decryption does not check IV reuse since the IV comes from the ciphertext.
  *
  * @param {Uint8Array} data - Data to decrypt (modified in-place)
@@ -946,6 +967,14 @@ export function encryptBytesCopy(data, key, iv = null) {
  * @param {Uint8Array} iv - 16-byte IV
  */
 export function decryptBytes(data, key, iv) {
+  if (!decryptBytesWarningShown) {
+    decryptBytesWarningShown = true;
+    console.warn(
+      '[flatc-wasm] decryptBytes() is deprecated and provides NO integrity verification. ' +
+      'Use decryptAuthenticated() instead, or pass { mac } to decryptBuffer() ' +
+      'for integrity verification.'
+    );
+  }
   _encryptBytesInternal(data, key, iv, false);
 }
 
@@ -994,7 +1023,7 @@ export function encryptAuthenticated(plaintext, key, associatedData) {
 
   // Encrypt (copy plaintext to avoid modifying input)
   const ciphertext = new Uint8Array(plaintext);
-  encryptBytes(ciphertext, encKey, iv);
+  _encryptBytesInternal(ciphertext, encKey, iv, true);
 
   // Compute HMAC over: IV || ciphertext || associatedData
   const aadLen = associatedData ? associatedData.length : 0;
@@ -1060,7 +1089,7 @@ export function decryptAuthenticated(authenticatedCiphertext, key, associatedDat
 
   // Decrypt
   const plaintext = new Uint8Array(ciphertext);
-  decryptBytes(plaintext, encKey, iv);
+  _encryptBytesInternal(plaintext, encKey, iv, false);
 
   return plaintext;
 }
@@ -1932,6 +1961,16 @@ export class EncryptionContext {
   }
 
   /**
+   * Get a copy of the master key.
+   * WARNING: Handle with care - this returns the actual encryption key.
+   * Use only when necessary (e.g., for MAC computation).
+   * @returns {Uint8Array} Copy of the 32-byte master key
+   */
+  getKey() {
+    return new Uint8Array(this.#key);
+  }
+
+  /**
    * Check if context is valid
    * @returns {boolean}
    */
@@ -1999,7 +2038,7 @@ export class EncryptionContext {
     const key = this.deriveFieldKey(fieldId);
     const iv = this.deriveFieldIV(fieldId);
     const data = buffer.subarray(offset, offset + size);
-    encryptBytes(data, key, iv);
+    _encryptBytesInternal(data, key, iv, true);
   }
 
   /**
@@ -2013,7 +2052,7 @@ export class EncryptionContext {
     const key = this.deriveFieldKey(fieldId);
     const iv = this.deriveFieldIV(fieldId);
     const data = buffer.subarray(offset, offset + length);
-    encryptBytes(data, key, iv);
+    _encryptBytesInternal(data, key, iv, true);
   }
 
   /**
@@ -2028,7 +2067,7 @@ export class EncryptionContext {
     const key = this.deriveFieldKey(fieldId);
     const iv = this.deriveFieldIV(fieldId);
     const data = buffer.subarray(offset, offset + elementSize * count);
-    encryptBytes(data, key, iv);
+    _encryptBytesInternal(data, key, iv, true);
   }
 
   // ===========================================================================
@@ -2133,7 +2172,7 @@ export class EncryptionContext {
     const key = this.getFieldKey(fieldId);
     const iv = this.computeFieldIV(fieldId, recordCounter);
     const data = buffer.subarray(offset, offset + size);
-    encryptBytes(data, key, iv);
+    _encryptBytesInternal(data, key, iv, true);
   }
 
   /**
@@ -2610,7 +2649,7 @@ function processTable(buffer, tableOffset, schema, ctx) {
       }
       // Scalar type - encrypt in place
       const data = buffer.subarray(fieldLoc, fieldLoc + size);
-      encryptBytes(data, key, iv);
+      _encryptBytesInternal(data, key, iv, true);
     } else if (field.type === 'string') {
       // String: offset to string, then length-prefixed data
       if (fieldLoc + 4 > bufLen) {
@@ -2698,26 +2737,40 @@ function processTable(buffer, tableOffset, schema, ctx) {
  * @typedef {Object} EncryptBufferResult
  * @property {Uint8Array} buffer - The encrypted buffer (same reference as input)
  * @property {Uint8Array} nonce - The 16-byte nonce used for encryption (must be stored for decryption)
+ * @property {Uint8Array} [mac] - 32-byte HMAC-SHA256 authentication tag (when authenticate: true)
  */
 
 /**
- * Encrypt a FlatBuffer in-place.
+ * Options for buffer encryption
+ * @typedef {Object} EncryptBufferOptions
+ * @property {boolean} [authenticate=true] - Whether to compute HMAC for integrity protection.
+ *   When true (default), a 32-byte MAC is computed over nonce||buffer and included in the result.
+ *   This protects against bit-flipping attacks and tampering.
+ */
+
+/**
+ * Encrypt a FlatBuffer in-place with integrity protection.
  *
  * Fields marked with the (encrypted) attribute will be encrypted.
  * The buffer structure remains valid - only field values change.
  *
+ * **SECURITY**: By default (authenticate: true), this function computes an HMAC-SHA256
+ * over (nonce || encrypted_buffer) to provide integrity protection against tampering
+ * and bit-flipping attacks. The MAC must be stored alongside the encrypted data and
+ * passed to decryptBuffer() for verification.
+ *
  * WARNING: This function modifies the buffer in-place.
  *
  * IMPORTANT: When passing a raw key (Uint8Array or hex string), a random nonce is generated.
- * You MUST save the returned nonce and pass it to decryptBuffer for decryption.
- * For better control, use an EncryptionContext directly.
+ * You MUST save the returned nonce (and mac if authenticate: true) and pass them to
+ * decryptBuffer for decryption.
  *
  * LIMITATION: This function only encrypts fields in the ROOT table. Encrypted fields in
  * nested tables (tables referenced by the root table) are NOT processed. If you need to
  * encrypt fields in nested structures, you must either:
  * 1. Flatten your schema to avoid nesting
  * 2. Encrypt nested data before building the FlatBuffer
- * 3. Use encryptBytes() directly on the nested table's buffer region
+ * 3. Use encryptAuthenticated() directly on the nested table's buffer region
  *
  * SUPPORTED TYPES for encryption:
  * - Scalar types (int, float, bool, byte, etc.): fully supported
@@ -2727,53 +2780,44 @@ function processTable(buffer, tableOffset, schema, ctx) {
  * - Structs: NOT supported (will throw an error)
  * - Nested tables: NOT traversed (see LIMITATION above)
  *
- * ⚠️  SECURITY WARNING: UNAUTHENTICATED ENCRYPTION ⚠️
- *
- * This function uses AES-CTR WITHOUT authentication (no HMAC/MAC).
- * This means:
- * - An attacker CAN MODIFY the ciphertext without detection
- * - Bit-flipping attacks can corrupt specific fields predictably
- * - You CANNOT detect if the data was tampered with during transit
- *
- * This is acceptable ONLY when:
- * - The transport layer provides integrity (TLS, authenticated channels)
- * - You add your own MAC/HMAC verification around the encrypted buffer
- * - You understand and accept the bit-flipping attack risk
- *
- * For most use cases, prefer encryptAuthenticated() which provides both
- * confidentiality AND integrity protection via Encrypt-then-MAC.
- *
- * If you must use this function, consider adding HMAC verification:
- * @example
- * // Add authentication manually
- * const { buffer, nonce } = encryptBuffer(buf, schema, key, 'MyTable');
- * const mac = hmacSha256(key, buffer);
- * // Store: nonce + buffer + mac
- * // On decrypt: verify HMAC first, then decryptBuffer
- *
  * @param {Uint8Array} buffer - FlatBuffer to encrypt (modified in-place)
  * @param {Object|string} schema - Parsed schema or schema content string
  * @param {Uint8Array|string|EncryptionContext} key - Encryption key or context
  * @param {string} [rootType] - Root type name (required if schema is string)
- * @returns {EncryptBufferResult} Object with encrypted buffer and nonce
+ * @param {EncryptBufferOptions} [options] - Encryption options
+ * @param {boolean} [options.authenticate=true] - Compute HMAC for integrity (default: true)
+ * @returns {EncryptBufferResult} Object with encrypted buffer, nonce, and mac (if authenticated)
  *
  * @example
- * // Using raw key - MUST save the nonce
- * const { buffer, nonce } = encryptBuffer(buf, schema, key, 'MyTable');
- * // Store nonce alongside encrypted data for decryption
+ * // Default: authenticated encryption (recommended)
+ * const { buffer, nonce, mac } = encryptBuffer(buf, schema, key, 'MyTable');
+ * // Store: buffer + nonce + mac
+ * // Decrypt: decryptBuffer(buffer, schema, key, 'MyTable', nonce, { mac });
  *
  * @example
- * // Using EncryptionContext - manage nonce yourself
- * const ctx = new EncryptionContext(key, nonce);
- * const { buffer } = encryptBuffer(buf, schema, ctx, 'MyTable');
+ * // Legacy: unauthenticated encryption (NOT recommended)
+ * const { buffer, nonce } = encryptBuffer(buf, schema, key, 'MyTable', { authenticate: false });
+ * // WARNING: No integrity protection - vulnerable to bit-flipping attacks
+ *
+ * @example
+ * // Using EncryptionContext with authentication
+ * const ctx = new EncryptionContext(key);
+ * const { buffer, nonce, mac } = encryptBuffer(buf, schema, ctx, 'MyTable');
  */
-export function encryptBuffer(buffer, schema, key, rootType) {
+export function encryptBuffer(buffer, schema, key, rootType, options = {}) {
+  // Default to authenticated encryption
+  const authenticate = options.authenticate !== false;
+
   // Get or create encryption context
   let ctx;
+  let masterKey;
   if (key instanceof EncryptionContext) {
     ctx = key;
+    masterKey = ctx.getKey();
   } else {
     ctx = new EncryptionContext(key);
+    // Store the original key for MAC computation
+    masterKey = typeof key === 'string' ? hexToBytes(key) : key;
   }
 
   if (!ctx.isValid()) {
@@ -2795,44 +2839,93 @@ export function encryptBuffer(buffer, schema, key, rootType) {
   // Process the root table
   processTable(buffer, rootOffset, parsedSchema, ctx);
 
+  const nonce = ctx.getNonce();
+
+  // Compute MAC if authentication is enabled
+  if (authenticate) {
+    // Derive a separate MAC key from master key using HKDF
+    const macKey = hkdf(masterKey, null, textEncoder.encode('flatbuffer-mac-key'), KEY_SIZE);
+
+    // MAC covers: nonce || encrypted_buffer
+    const macInput = new Uint8Array(IV_SIZE + buffer.length);
+    macInput.set(nonce, 0);
+    macInput.set(buffer, IV_SIZE);
+    const mac = hmacSha256(macKey, macInput);
+
+    return { buffer, nonce, mac };
+  }
+
   // Return buffer and nonce - nonce is critical for decryption
-  return {
-    buffer,
-    nonce: ctx.getNonce(),
-  };
+  return { buffer, nonce };
 }
 
 /**
- * Decrypt a FlatBuffer in-place.
+ * Convert hex string to bytes
+ * @param {string} hex
+ * @returns {Uint8Array}
+ */
+function hexToBytes(hex) {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+/**
+ * Options for buffer decryption
+ * @typedef {Object} DecryptBufferOptions
+ * @property {Uint8Array} [mac] - 32-byte HMAC to verify before decryption.
+ *   If provided, the MAC is verified first and decryption only proceeds if valid.
+ *   This protects against tampering and bit-flipping attacks.
+ */
+
+/**
+ * Decrypt a FlatBuffer in-place with optional integrity verification.
  *
  * AES-CTR is symmetric, so decryption uses the same operation as encryption.
  * You MUST provide the same nonce that was used during encryption.
  *
- * WARNING: This function modifies the buffer in-place.
+ * **SECURITY**: If a MAC was returned from encryptBuffer(), you should pass it
+ * in options.mac for verification. This ensures the encrypted data has not been
+ * tampered with. Verification is performed BEFORE decryption - if the MAC is
+ * invalid, the buffer is left unchanged and an error is thrown.
+ *
+ * WARNING: This function modifies the buffer in-place (only after MAC verification passes).
  *
  * @param {Uint8Array} buffer - FlatBuffer to decrypt (modified in-place)
  * @param {Object|string} schema - Parsed schema or schema content string
  * @param {Uint8Array|string|EncryptionContext} key - Encryption key or context
  * @param {string} [rootType] - Root type name (required if schema is string)
  * @param {Uint8Array} [nonce] - The 16-byte nonce from encryption (required if key is not EncryptionContext)
+ * @param {DecryptBufferOptions} [options] - Decryption options
+ * @param {Uint8Array} [options.mac] - MAC from encryptBuffer() for integrity verification
  * @returns {Uint8Array} The decrypted buffer (same reference)
+ * @throws {CryptoError} If MAC verification fails (AUTHENTICATION_FAILED)
  *
  * @example
- * // Using raw key with nonce from encryptBuffer
- * const { buffer: encrypted, nonce } = encryptBuffer(buf, schema, key, 'MyTable');
+ * // With MAC verification (recommended)
+ * const { buffer: encrypted, nonce, mac } = encryptBuffer(buf, schema, key, 'MyTable');
  * // ... later ...
+ * decryptBuffer(encrypted, schema, key, 'MyTable', nonce, { mac });
+ *
+ * @example
+ * // Legacy: without MAC verification (NOT recommended)
+ * const { buffer: encrypted, nonce } = encryptBuffer(buf, schema, key, 'MyTable', { authenticate: false });
  * decryptBuffer(encrypted, schema, key, 'MyTable', nonce);
  *
  * @example
- * // Using EncryptionContext with saved nonce
+ * // Using EncryptionContext with saved nonce and MAC
  * const ctx = new EncryptionContext(key, savedNonce);
- * decryptBuffer(encrypted, schema, ctx, 'MyTable');
+ * decryptBuffer(encrypted, schema, ctx, 'MyTable', null, { mac: savedMac });
  */
-export function decryptBuffer(buffer, schema, key, rootType, nonce) {
+export function decryptBuffer(buffer, schema, key, rootType, nonce, options = {}) {
   // Get or create encryption context
   let ctx;
+  let masterKey;
   if (key instanceof EncryptionContext) {
     ctx = key;
+    masterKey = ctx.getKey();
   } else {
     // For raw keys, nonce is required for decryption
     if (!nonce) {
@@ -2842,10 +2935,37 @@ export function decryptBuffer(buffer, schema, key, rootType, nonce) {
       );
     }
     ctx = new EncryptionContext(key, nonce);
+    masterKey = typeof key === 'string' ? hexToBytes(key) : key;
   }
 
   if (!ctx.isValid()) {
     throw new Error('Invalid encryption key');
+  }
+
+  // Verify MAC if provided (BEFORE decryption)
+  if (options.mac) {
+    if (!(options.mac instanceof Uint8Array) || options.mac.length !== HMAC_SIZE) {
+      throw new CryptoError(
+        CryptoErrorCode.INVALID_INPUT,
+        `Invalid MAC: expected ${HMAC_SIZE}-byte Uint8Array`
+      );
+    }
+
+    // Derive MAC key
+    const macKey = hkdf(masterKey, null, textEncoder.encode('flatbuffer-mac-key'), KEY_SIZE);
+
+    // Recompute expected MAC
+    const actualNonce = ctx.getNonce();
+    const macInput = new Uint8Array(IV_SIZE + buffer.length);
+    macInput.set(actualNonce, 0);
+    macInput.set(buffer, IV_SIZE);
+
+    if (!hmacSha256Verify(macKey, macInput, options.mac)) {
+      throw new CryptoError(
+        CryptoErrorCode.AUTHENTICATION_FAILED,
+        'MAC verification failed: encrypted data may have been tampered with'
+      );
+    }
   }
 
   // Parse schema if needed

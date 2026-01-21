@@ -3176,6 +3176,12 @@ function setupLoginHandlers() {
         $('stored-divider').style.display = 'flex';
       }
     }
+
+    // Auto-switch to stored tab when a saved wallet exists
+    document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.method-content').forEach(c => c.classList.remove('active'));
+    $('stored-tab').classList.add('active');
+    $('stored-method').classList.add('active');
   }
 
   // Hide passkey buttons if not supported

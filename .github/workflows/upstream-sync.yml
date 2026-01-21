@@ -30,7 +30,7 @@ jobs:
       - name: Merge upstream/master into master
         run: |
           git checkout master
-          if git merge --no-edit upstream/master; then
+          if git merge --no-edit --allow-unrelated-histories upstream/master; then
             echo "Merge successful."
           else
             echo "Merge conflict detected; aborting sync."

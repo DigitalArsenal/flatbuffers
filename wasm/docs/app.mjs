@@ -2228,11 +2228,16 @@ function clearBufferDisplay() {
     state.paginatedTable = null;
   }
 
-  $('data-card').style.display = 'none';
-  $('stats-bar').style.display = 'none';
-  $('toggle-encryption').disabled = true;
-  $('clear-buffers').disabled = true;
-  $('visible-range').textContent = '';
+  const dataCard = $('data-card');
+  if (dataCard) dataCard.style.display = 'none';
+  const statsBar = $('stats-bar');
+  if (statsBar) statsBar.style.display = 'none';
+  const toggleEncEl = $('toggle-encryption');
+  if (toggleEncEl) toggleEncEl.disabled = true;
+  const clearBuffersEl = $('clear-buffers');
+  if (clearBuffersEl) clearBuffersEl.disabled = true;
+  const visibleRange = $('visible-range');
+  if (visibleRange) visibleRange.textContent = '';
 
   // Hide detail panel if open
   const detailPanel = $('record-detail-panel');
@@ -3582,8 +3587,8 @@ function setupMainAppHandlers() {
   });
 
   // Field Encryption Tab
-  $('generate-single').addEventListener('click', generateSingleRecord);
-  $('toggle-field-decrypt').addEventListener('click', toggleFieldDecrypt);
+  $('generate-single')?.addEventListener('click', generateSingleRecord);
+  $('toggle-field-decrypt')?.addEventListener('click', toggleFieldDecrypt);
 
   // Bulk Generation Tab - Download buttons (memory efficient)
   $('download-encrypted')?.addEventListener('click', () => generateAndDownload(true));
@@ -3593,13 +3598,14 @@ function setupMainAppHandlers() {
   $('upload-file')?.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) {
-      $('upload-filename').textContent = file.name;
+      const filenameEl = $('upload-filename');
+      if (filenameEl) filenameEl.textContent = file.name;
       uploadAndDecrypt(file);
     }
   });
 
   // In-memory generation (for smaller datasets)
-  $('generate-buffers').addEventListener('click', () => {
+  $('generate-buffers')?.addEventListener('click', () => {
     state.encryptionEnabled = true;
     generateBulkBuffers();
   });
@@ -3607,8 +3613,8 @@ function setupMainAppHandlers() {
     state.encryptionEnabled = false;
     generateBulkBuffers();
   });
-  $('toggle-encryption').addEventListener('click', toggleEncryption);
-  $('clear-buffers').addEventListener('click', clearBufferDisplay);
+  $('toggle-encryption')?.addEventListener('click', toggleEncryption);
+  $('clear-buffers')?.addEventListener('click', clearBufferDisplay);
 
   // Schema Viewer Tab
   $('schema-type-select')?.addEventListener('change', updateSchemaViewer);
@@ -3630,18 +3636,18 @@ function setupMainAppHandlers() {
   $('pki-wrong-key')?.addEventListener('click', pkiTryWrongKey);
 
   // Streaming Tab
-  $('start-streaming').addEventListener('click', startStreaming);
-  $('stop-streaming').addEventListener('click', stopStreaming);
-  $('clear-streaming').addEventListener('click', clearStreaming);
+  $('start-streaming')?.addEventListener('click', startStreaming);
+  $('stop-streaming')?.addEventListener('click', stopStreaming);
+  $('clear-streaming')?.addEventListener('click', clearStreaming);
 
   // vCard
-  $('generate-vcard').addEventListener('click', async () => {
+  $('generate-vcard')?.addEventListener('click', async () => {
     const info = {
-      name: $('vcard-name').value,
-      email: $('vcard-email').value,
-      org: $('vcard-org').value,
-      title: $('vcard-title').value,
-      includeKeys: $('include-keys').checked,
+      name: $('vcard-name')?.value || '',
+      email: $('vcard-email')?.value || '',
+      org: $('vcard-org')?.value || '',
+      title: $('vcard-title')?.value || '',
+      includeKeys: $('include-keys')?.checked || false,
     };
 
     if (!info.name) {
@@ -3650,22 +3656,27 @@ function setupMainAppHandlers() {
     }
 
     const vcard = generateVCard(info);
-    $('vcard-preview').textContent = vcard;
+    const vcardPreview = $('vcard-preview');
+    if (vcardPreview) vcardPreview.textContent = vcard;
 
     try {
-      await QRCode.toCanvas($('qr-code'), vcard, {
-        width: 256,
-        margin: 2,
-        color: { dark: '#1e293b', light: '#ffffff' },
-      });
-      $('vcard-result').style.display = 'block';
+      const qrCanvas = $('qr-code');
+      if (qrCanvas) {
+        await QRCode.toCanvas(qrCanvas, vcard, {
+          width: 256,
+          margin: 2,
+          color: { dark: '#1e293b', light: '#ffffff' },
+        });
+      }
+      const vcardResult = $('vcard-result');
+      if (vcardResult) vcardResult.style.display = 'block';
     } catch (err) {
       alert('Error generating QR code: ' + err.message);
     }
   });
 
-  $('download-vcard').addEventListener('click', () => {
-    const vcard = $('vcard-preview').textContent;
+  $('download-vcard')?.addEventListener('click', () => {
+    const vcard = $('vcard-preview')?.textContent || '';
     const blob = new Blob([vcard], { type: 'text/vcard' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -3675,8 +3686,8 @@ function setupMainAppHandlers() {
     URL.revokeObjectURL(url);
   });
 
-  $('copy-vcard').addEventListener('click', async () => {
-    const vcard = $('vcard-preview').textContent;
+  $('copy-vcard')?.addEventListener('click', async () => {
+    const vcard = $('vcard-preview')?.textContent || '';
     try {
       await navigator.clipboard.writeText(vcard);
       const btn = $('copy-vcard');

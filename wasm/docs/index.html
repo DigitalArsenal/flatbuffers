@@ -102,7 +102,7 @@
         <a href="javascript:void(0)" class="contact-link" data-u="tj" data-d="digitalarsenal.io"></a>
       </div>
 
-      <div class="hero-stats" id="hero-stats">
+      <div class="hero-stats hidden" id="hero-stats">
         <div class="stat-item">
           <span class="stat-value" id="hero-wallet-type">BTC</span>
           <span class="stat-label">Network</span>
@@ -1008,7 +1008,7 @@
     <section id="streaming-tab" class="content-section">
       <div class="section-header">
         <h2 class="section-title">Streaming Dispatcher</h2>
-        <p class="section-desc">Route mixed FlatBuffer messages to ring buffers by type</p>
+        <p class="section-desc">Route mixed FlatBuffer messages to queues by type</p>
       </div>
 
       <!-- Explanation Section -->
@@ -1023,14 +1023,14 @@
           <div class="explainer-columns">
             <div class="explainer-column">
               <h4>Message Flow</h4>
-              <p>FlatBuffers are self-describing binary messages with a 4-byte type identifier prefix. The streaming dispatcher reads this identifier and routes each message to the appropriate ring buffer based on its type.</p>
+              <p>FlatBuffers are self-describing binary messages with a 4-byte type identifier prefix. The streaming dispatcher reads this identifier and routes each message to the appropriate queue based on its type.</p>
               <div class="explainer-code">
                 <code>[TYPE_ID:4bytes][SIZE:4bytes][FLATBUFFER:N bytes]</code>
               </div>
             </div>
             <div class="explainer-column">
-              <h4>Ring Buffers</h4>
-              <p>Each message type has a dedicated ring buffer with a fixed capacity. When full, oldest messages are overwritten (FIFO). This enables constant-memory streaming for high-throughput scenarios without allocations.</p>
+              <h4>Message Queues</h4>
+              <p>Each message type has a dedicated queue with a fixed capacity. When full, oldest messages are overwritten (FIFO). This enables constant-memory streaming for high-throughput scenarios without allocations.</p>
               <ul class="explainer-list">
                 <li><strong>O(1)</strong> insertion and removal</li>
                 <li><strong>Zero allocation</strong> after initialization</li>
@@ -1066,18 +1066,18 @@
               <path d="M250 45 L300 25" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
               <path d="M250 60 L300 60" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
               <path d="M250 75 L300 95" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
-              <!-- Ring buffers -->
-              <g class="ring-buffer-viz monster">
+              <!-- Message queues -->
+              <g class="queue-viz monster">
                 <rect x="305" y="10" width="120" height="30" rx="4" fill="rgba(239, 68, 68, 0.2)" stroke="rgb(239, 68, 68)"/>
-                <text x="365" y="30" text-anchor="middle" fill="var(--white-80)" font-size="10">Monster Ring</text>
+                <text x="365" y="30" text-anchor="middle" fill="var(--white-80)" font-size="10">Monster Queue</text>
               </g>
-              <g class="ring-buffer-viz weapon">
+              <g class="queue-viz weapon">
                 <rect x="305" y="45" width="120" height="30" rx="4" fill="rgba(59, 130, 246, 0.2)" stroke="rgb(59, 130, 246)"/>
-                <text x="365" y="65" text-anchor="middle" fill="var(--white-80)" font-size="10">Weapon Ring</text>
+                <text x="365" y="65" text-anchor="middle" fill="var(--white-80)" font-size="10">Weapon Queue</text>
               </g>
-              <g class="ring-buffer-viz galaxy">
+              <g class="queue-viz galaxy">
                 <rect x="305" y="80" width="120" height="30" rx="4" fill="rgba(168, 85, 247, 0.2)" stroke="rgb(168, 85, 247)"/>
-                <text x="365" y="100" text-anchor="middle" fill="var(--white-80)" font-size="10">Galaxy Ring</text>
+                <text x="365" y="100" text-anchor="middle" fill="var(--white-80)" font-size="10">Galaxy Queue</text>
               </g>
               <!-- Arrows to consumers -->
               <path d="M430 25 L480 25" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
@@ -1142,45 +1142,45 @@
           </div>
         </div>
 
-        <!-- Ring Buffer Stats -->
-        <div class="ring-stats-grid" id="ring-buffer-stats">
-          <div class="ring-card monster" data-type="MONS">
-            <div class="ring-header">
-              <span class="ring-dot"></span>
-              <span class="ring-title">Monster (MONS)</span>
+        <!-- Queue Stats -->
+        <div class="queue-stats-grid" id="queue-stats">
+          <div class="queue-card monster" data-type="MONS">
+            <div class="queue-header">
+              <span class="queue-dot"></span>
+              <span class="queue-title">Monster (MONS)</span>
             </div>
-            <div class="ring-bar">
-              <div class="ring-fill" id="ring-fill-MONS"></div>
+            <div class="queue-bar">
+              <div class="queue-fill" id="queue-fill-MONS"></div>
             </div>
-            <div class="ring-numbers">
-              <span><span id="ring-count-MONS">0</span> / <span id="ring-capacity-MONS">1000</span></span>
-              <span class="ring-total">Total: <span id="ring-total-MONS">0</span></span>
-            </div>
-          </div>
-          <div class="ring-card weapon" data-type="WEAP">
-            <div class="ring-header">
-              <span class="ring-dot"></span>
-              <span class="ring-title">Weapon (WEAP)</span>
-            </div>
-            <div class="ring-bar">
-              <div class="ring-fill" id="ring-fill-WEAP"></div>
-            </div>
-            <div class="ring-numbers">
-              <span><span id="ring-count-WEAP">0</span> / <span id="ring-capacity-WEAP">500</span></span>
-              <span class="ring-total">Total: <span id="ring-total-WEAP">0</span></span>
+            <div class="queue-numbers">
+              <span><span id="queue-count-MONS">0</span> / <span id="queue-capacity-MONS">1000</span></span>
+              <span class="queue-total">Total: <span id="queue-total-MONS">0</span></span>
             </div>
           </div>
-          <div class="ring-card galaxy" data-type="GALX">
-            <div class="ring-header">
-              <span class="ring-dot"></span>
-              <span class="ring-title">Galaxy (GALX)</span>
+          <div class="queue-card weapon" data-type="WEAP">
+            <div class="queue-header">
+              <span class="queue-dot"></span>
+              <span class="queue-title">Weapon (WEAP)</span>
             </div>
-            <div class="ring-bar">
-              <div class="ring-fill" id="ring-fill-GALX"></div>
+            <div class="queue-bar">
+              <div class="queue-fill" id="queue-fill-WEAP"></div>
             </div>
-            <div class="ring-numbers">
-              <span><span id="ring-count-GALX">0</span> / <span id="ring-capacity-GALX">200</span></span>
-              <span class="ring-total">Total: <span id="ring-total-GALX">0</span></span>
+            <div class="queue-numbers">
+              <span><span id="queue-count-WEAP">0</span> / <span id="queue-capacity-WEAP">500</span></span>
+              <span class="queue-total">Total: <span id="queue-total-WEAP">0</span></span>
+            </div>
+          </div>
+          <div class="queue-card galaxy" data-type="GALX">
+            <div class="queue-header">
+              <span class="queue-dot"></span>
+              <span class="queue-title">Galaxy (GALX)</span>
+            </div>
+            <div class="queue-bar">
+              <div class="queue-fill" id="queue-fill-GALX"></div>
+            </div>
+            <div class="queue-numbers">
+              <span><span id="queue-count-GALX">0</span> / <span id="queue-capacity-GALX">200</span></span>
+              <span class="queue-total">Total: <span id="queue-total-GALX">0</span></span>
             </div>
           </div>
         </div>

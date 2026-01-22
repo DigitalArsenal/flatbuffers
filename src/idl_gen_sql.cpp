@@ -174,12 +174,15 @@ class SqlGenerator : public BaseGenerator {
       GenerateTable(struct_def);
     }
 
-    // Third pass: Generate foreign key constraints (if enabled)
+    // Third pass: Generate junction tables for relationships
+    GenerateJunctionTables();
+
+    // Fourth pass: Generate foreign key constraints (if enabled)
     if (generate_foreign_keys_) {
       GenerateForeignKeys();
     }
 
-    // Fourth pass: Generate indexes for key fields
+    // Fifth pass: Generate indexes for key fields
     if (generate_indexes_) {
       GenerateIndexes();
     }
@@ -196,7 +199,7 @@ class SqlGenerator : public BaseGenerator {
 
  private:
   void GenerateEnum(const EnumDef& enum_def) {
-    std::string name = GetTableName(enum_def.name);
+    std::string name = GetTableName(GenFullName(&enum_def, "_"));
 
     code_ += "-- Enum: " + enum_def.name + "\n";
 
@@ -242,7 +245,7 @@ class SqlGenerator : public BaseGenerator {
   }
 
   void GenerateTable(const StructDef& struct_def) {
-    std::string table_name = GetTableName(struct_def.name);
+    std::string table_name = GetTableName(GenFullName(&struct_def, "_"));
 
     code_ += "-- Table: " + struct_def.name;
     if (!struct_def.doc_comment.empty()) {
@@ -250,6 +253,17 @@ class SqlGenerator : public BaseGenerator {
     }
     code_ += "\n";
     code_ += "CREATE TABLE " + EscapeIdentifier(table_name, dialect_) + " (\n";
+
+    // First, collect all fields that will generate columns
+    // (excluding deprecated and junction-table fields)
+    auto& fields = struct_def.fields.vec;
+    std::vector<const FieldDef*> column_fields;
+    for (auto it = fields.begin(); it != fields.end(); ++it) {
+      auto& field = **it;
+      if (field.deprecated) continue;
+      if (SkipColumnForJunction(field)) continue;
+      column_fields.push_back(&field);
+    }
 
     // Add auto-increment primary key if no key field exists
     bool has_key = struct_def.has_key;
@@ -262,27 +276,48 @@ class SqlGenerator : public BaseGenerator {
       } else {
         code_ += "INTEGER PRIMARY KEY AUTO_INCREMENT";
       }
-      if (!struct_def.fields.vec.empty()) {
+      if (!column_fields.empty()) {
         code_ += ",";
       }
       code_ += "\n";
     }
 
     // Generate columns for each field
-    auto& fields = struct_def.fields.vec;
-    for (auto it = fields.begin(); it != fields.end(); ++it) {
-      auto& field = **it;
-      if (field.deprecated) continue;
-
+    for (size_t i = 0; i < column_fields.size(); ++i) {
+      auto& field = *column_fields[i];
       GenerateColumn(field, has_key);
-
-      if (std::next(it) != fields.end()) {
+      if (i < column_fields.size() - 1) {
         code_ += ",";
       }
       code_ += "\n";
     }
-
     code_ += ");\n\n";
+  }
+
+  // Returns true if this field should skip column generation (uses junction table)
+  bool SkipColumnForJunction(const FieldDef& field) {
+    const Type& type = field.value.type;
+
+    // Union type discriminator field (auto-generated _type field) - handled by junction table
+    if (type.base_type == BASE_TYPE_UTYPE) return true;
+
+    // Unions use junction tables
+    if (type.base_type == BASE_TYPE_UNION) return true;
+
+    // Vectors of tables use junction tables
+    if ((type.base_type == BASE_TYPE_VECTOR || type.base_type == BASE_TYPE_VECTOR64) &&
+        type.element == BASE_TYPE_STRUCT && type.struct_def != nullptr &&
+        !type.struct_def->fixed) {
+      return true;
+    }
+
+    // Vectors of unions use junction tables
+    if ((type.base_type == BASE_TYPE_VECTOR || type.base_type == BASE_TYPE_VECTOR64) &&
+        type.element == BASE_TYPE_UNION) {
+      return true;
+    }
+
+    return false;
   }
 
   void GenerateColumn(const FieldDef& field, bool parent_has_key) {
@@ -300,20 +335,13 @@ class SqlGenerator : public BaseGenerator {
         break;
 
       case BASE_TYPE_UNION:
-        // Unions need a type column and a data column
-        // Generate type column
-        code_ += "  " + EscapeIdentifier(col_name + "_type", dialect_);
-        code_ += " INTEGER";
-        if (field.IsRequired()) { code_ += " NOT NULL"; }
-        code_ += ",\n";
-        // The value column will be added below as BLOB
-        col_type = "BLOB";
-        break;
+        // Unions are handled via junction tables (should be skipped before calling)
+        return;
 
       case BASE_TYPE_VECTOR:
       case BASE_TYPE_VECTOR64:
-        // Vectors become separate tables (many-to-many or one-to-many)
-        // For now, store as JSON or BLOB
+        // Vectors of scalars/strings stored as JSON or array
+        // (vectors of tables/unions are skipped before calling)
         if (dialect_ == SqlDialect::kPostgres) {
           if (IsScalar(type.element)) {
             col_type = BaseTypeToSql(type.element, dialect_) + "[]";
@@ -343,7 +371,7 @@ class SqlGenerator : public BaseGenerator {
         // Handle enums - reference the enum lookup table
         if (type.enum_def != nullptr && !type.enum_def->is_union) {
           if (dialect_ == SqlDialect::kPostgres) {
-            col_type = GetTableName(type.enum_def->name);
+            col_type = GetTableName(GenFullName(type.enum_def, "_"));
           }
           // For other dialects, keep as INTEGER (FK to enum table)
         }
@@ -380,6 +408,130 @@ class SqlGenerator : public BaseGenerator {
     }
   }
 
+  void GenerateJunctionTables() {
+    code_ += "-- Junction Tables (for relationships)\n";
+    code_ += "-- These tables link parent tables to child tables for references and vectors.\n";
+    code_ += "--\n\n";
+
+    for (auto it = parser_.structs_.vec.begin();
+         it != parser_.structs_.vec.end(); ++it) {
+      auto& struct_def = **it;
+      if (struct_def.fixed) continue;
+
+      std::string parent_table = GetTableName(GenFullName(&struct_def, "_"));
+
+      for (auto fit = struct_def.fields.vec.begin();
+           fit != struct_def.fields.vec.end(); ++fit) {
+        auto& field = **fit;
+        if (field.deprecated) continue;
+
+        const Type& type = field.value.type;
+        std::string field_name = GetColumnName(field.name);
+
+        // Single table reference: Monster.weapon → Weapon
+        if (type.base_type == BASE_TYPE_STRUCT && type.struct_def != nullptr &&
+            !type.struct_def->fixed) {
+          std::string child_table = GetTableName(GenFullName(type.struct_def, "_"));
+          std::string junction_name = parent_table + "__" + field_name;
+
+          code_ += "-- Junction: " + struct_def.name + "." + field.name;
+          code_ += " → " + type.struct_def->name + " (0..1)\n";
+          code_ += "CREATE TABLE " + EscapeIdentifier(junction_name, dialect_) + " (\n";
+          code_ += "  id INTEGER PRIMARY KEY";
+          if (dialect_ == SqlDialect::kPostgres) {
+            code_ = code_.substr(0, code_.length() - 19);  // Remove "INTEGER PRIMARY KEY"
+            code_ += "SERIAL PRIMARY KEY";
+          }
+          code_ += ",\n";
+          code_ += "  parent_rowid INTEGER NOT NULL,\n";
+          code_ += "  child_rowid INTEGER NOT NULL,\n";
+          code_ += "  created_at INTEGER DEFAULT (strftime('%s', 'now')),\n";
+          code_ += "  UNIQUE(parent_rowid)\n";  // 0..1 relationship
+          code_ += ");\n\n";
+        }
+
+        // Vector of tables: Monster.weapons → [Weapon]
+        if ((type.base_type == BASE_TYPE_VECTOR || type.base_type == BASE_TYPE_VECTOR64) &&
+            type.element == BASE_TYPE_STRUCT && type.struct_def != nullptr &&
+            !type.struct_def->fixed) {
+          std::string child_table = GetTableName(GenFullName(type.struct_def, "_"));
+          std::string junction_name = parent_table + "__" + field_name;
+
+          code_ += "-- Junction: " + struct_def.name + "." + field.name;
+          code_ += " → [" + type.struct_def->name + "] (0..N)\n";
+          code_ += "CREATE TABLE " + EscapeIdentifier(junction_name, dialect_) + " (\n";
+          code_ += "  id INTEGER PRIMARY KEY";
+          if (dialect_ == SqlDialect::kPostgres) {
+            code_ = code_.substr(0, code_.length() - 19);
+            code_ += "SERIAL PRIMARY KEY";
+          }
+          code_ += ",\n";
+          code_ += "  parent_rowid INTEGER NOT NULL,\n";
+          code_ += "  vec_index INTEGER NOT NULL,\n";  // Preserves array order
+          code_ += "  child_rowid INTEGER NOT NULL,\n";
+          code_ += "  created_at INTEGER DEFAULT (strftime('%s', 'now')),\n";
+          code_ += "  UNIQUE(parent_rowid, vec_index)\n";
+          code_ += ");\n\n";
+        }
+
+        // Union type: Monster.equipment → Equipment (polymorphic)
+        if (type.base_type == BASE_TYPE_UNION && type.enum_def != nullptr) {
+          std::string junction_name = parent_table + "__" + field_name;
+
+          code_ += "-- Junction: " + struct_def.name + "." + field.name;
+          code_ += " → " + type.enum_def->name + " (union, 0..1)\n";
+          code_ += "CREATE TABLE " + EscapeIdentifier(junction_name, dialect_) + " (\n";
+          code_ += "  id INTEGER PRIMARY KEY";
+          if (dialect_ == SqlDialect::kPostgres) {
+            code_ = code_.substr(0, code_.length() - 19);
+            code_ += "SERIAL PRIMARY KEY";
+          }
+          code_ += ",\n";
+          code_ += "  parent_rowid INTEGER NOT NULL,\n";
+          code_ += "  union_type TEXT NOT NULL,\n";  // Discriminator
+          code_ += "  child_rowid INTEGER NOT NULL,\n";
+          code_ += "  created_at INTEGER DEFAULT (strftime('%s', 'now')),\n";
+          code_ += "  UNIQUE(parent_rowid)\n";
+          code_ += ");\n";
+
+          // Add comment with union types
+          code_ += "-- Union types: ";
+          auto& vals = type.enum_def->Vals();
+          for (auto vit = vals.begin(); vit != vals.end(); ++vit) {
+            if ((*vit)->union_type.base_type != BASE_TYPE_NONE) {
+              code_ += (*vit)->name;
+              if (std::next(vit) != vals.end()) code_ += ", ";
+            }
+          }
+          code_ += "\n\n";
+        }
+
+        // Vector of unions: Monster.items → [Equipment]
+        if ((type.base_type == BASE_TYPE_VECTOR || type.base_type == BASE_TYPE_VECTOR64) &&
+            type.element == BASE_TYPE_UNION && type.enum_def != nullptr) {
+          std::string junction_name = parent_table + "__" + field_name;
+
+          code_ += "-- Junction: " + struct_def.name + "." + field.name;
+          code_ += " → [" + type.enum_def->name + "] (union vector, 0..N)\n";
+          code_ += "CREATE TABLE " + EscapeIdentifier(junction_name, dialect_) + " (\n";
+          code_ += "  id INTEGER PRIMARY KEY";
+          if (dialect_ == SqlDialect::kPostgres) {
+            code_ = code_.substr(0, code_.length() - 19);
+            code_ += "SERIAL PRIMARY KEY";
+          }
+          code_ += ",\n";
+          code_ += "  parent_rowid INTEGER NOT NULL,\n";
+          code_ += "  vec_index INTEGER NOT NULL,\n";
+          code_ += "  union_type TEXT NOT NULL,\n";
+          code_ += "  child_rowid INTEGER NOT NULL,\n";
+          code_ += "  created_at INTEGER DEFAULT (strftime('%s', 'now')),\n";
+          code_ += "  UNIQUE(parent_rowid, vec_index)\n";
+          code_ += ");\n\n";
+        }
+      }
+    }
+  }
+
   void GenerateForeignKeys() {
     code_ += "-- Foreign Key Constraints\n";
     code_ += "-- (Uncomment to enable referential integrity)\n";
@@ -390,7 +542,7 @@ class SqlGenerator : public BaseGenerator {
       auto& struct_def = **it;
       if (struct_def.fixed) continue;
 
-      std::string table_name = GetTableName(struct_def.name);
+      std::string table_name = GetTableName(GenFullName(&struct_def, "_"));
 
       for (auto fit = struct_def.fields.vec.begin();
            fit != struct_def.fields.vec.end(); ++fit) {
@@ -401,7 +553,7 @@ class SqlGenerator : public BaseGenerator {
 
         if (type.base_type == BASE_TYPE_STRUCT && type.struct_def != nullptr) {
           std::string col_name = GetColumnName(field.name);
-          std::string ref_table = GetTableName(type.struct_def->name);
+          std::string ref_table = GetTableName(GenFullName(type.struct_def, "_"));
 
           code_ += "-- ALTER TABLE " + EscapeIdentifier(table_name, dialect_);
           code_ += " ADD CONSTRAINT fk_" + table_name + "_" + col_name;
@@ -413,7 +565,7 @@ class SqlGenerator : public BaseGenerator {
         if (type.enum_def != nullptr && !type.enum_def->is_union &&
             dialect_ != SqlDialect::kPostgres) {
           std::string col_name = GetColumnName(field.name);
-          std::string ref_table = GetTableName(type.enum_def->name);
+          std::string ref_table = GetTableName(GenFullName(type.enum_def, "_"));
 
           code_ += "-- ALTER TABLE " + EscapeIdentifier(table_name, dialect_);
           code_ += " ADD CONSTRAINT fk_" + table_name + "_" + col_name;
@@ -433,28 +585,57 @@ class SqlGenerator : public BaseGenerator {
       auto& struct_def = **it;
       if (struct_def.fixed) continue;
 
-      std::string table_name = GetTableName(struct_def.name);
+      std::string table_name = GetTableName(GenFullName(&struct_def, "_"));
 
       for (auto fit = struct_def.fields.vec.begin();
            fit != struct_def.fields.vec.end(); ++fit) {
         auto& field = **fit;
         if (field.deprecated) continue;
 
+        std::string col_name = GetColumnName(field.name);
+        const Type& type = field.value.type;
+
         // Create index for key fields (non-primary)
         if (field.key && !struct_def.has_key) {
-          std::string col_name = GetColumnName(field.name);
           code_ += "CREATE INDEX idx_" + table_name + "_" + col_name;
           code_ += " ON " + EscapeIdentifier(table_name, dialect_);
           code_ += " (" + EscapeIdentifier(col_name, dialect_) + ");\n";
         }
 
-        // Create index for struct references (foreign keys)
-        const Type& type = field.value.type;
+        // Create index for struct references (foreign keys) - on main table column
         if (type.base_type == BASE_TYPE_STRUCT && type.struct_def != nullptr) {
-          std::string col_name = GetColumnName(field.name);
           code_ += "CREATE INDEX idx_" + table_name + "_" + col_name;
           code_ += " ON " + EscapeIdentifier(table_name, dialect_);
           code_ += " (" + EscapeIdentifier(col_name, dialect_) + ");\n";
+        }
+
+        // Create indexes for junction tables
+        bool is_junction = false;
+        if (type.base_type == BASE_TYPE_STRUCT && type.struct_def != nullptr &&
+            !type.struct_def->fixed) {
+          is_junction = true;
+        }
+        if ((type.base_type == BASE_TYPE_VECTOR || type.base_type == BASE_TYPE_VECTOR64) &&
+            type.element == BASE_TYPE_STRUCT && type.struct_def != nullptr &&
+            !type.struct_def->fixed) {
+          is_junction = true;
+        }
+        if (type.base_type == BASE_TYPE_UNION && type.enum_def != nullptr) {
+          is_junction = true;
+        }
+        if ((type.base_type == BASE_TYPE_VECTOR || type.base_type == BASE_TYPE_VECTOR64) &&
+            type.element == BASE_TYPE_UNION) {
+          is_junction = true;
+        }
+
+        if (is_junction) {
+          std::string junction_name = table_name + "__" + col_name;
+          code_ += "CREATE INDEX idx_" + junction_name + "_parent";
+          code_ += " ON " + EscapeIdentifier(junction_name, dialect_);
+          code_ += " (parent_rowid);\n";
+          code_ += "CREATE INDEX idx_" + junction_name + "_child";
+          code_ += " ON " + EscapeIdentifier(junction_name, dialect_);
+          code_ += " (child_rowid);\n";
         }
       }
     }

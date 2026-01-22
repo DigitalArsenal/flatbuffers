@@ -1069,9 +1069,10 @@ function login(keys) {
       p256: 'P-256 (NIST)',
     };
     $('pki-algorithm-display').textContent = algorithmNames[state.pki.algorithm] || state.pki.algorithm;
+    $('pki-login-prompt').style.display = 'none';
     $('pki-controls').style.display = 'flex';
     $('pki-parties').style.display = 'grid';
-    $('encryption-explainer').style.display = 'block';
+    // encryption-explainer is always visible (educational content)
     $('pki-demo').style.display = 'block';
     $('pki-security').style.display = 'block';
     $('pki-clear-keys').style.display = 'inline-flex';
@@ -1309,9 +1310,8 @@ function decryptFieldBytesWithPKI(encrypted, headerJSON, fieldId = 0) {
   );
 
   // Create a buffer copy and decrypt in-place using the context's method
-  // Note: encryptScalar/decryptScalar are the same for CTR mode (symmetric)
   const decrypted = new Uint8Array(encrypted);
-  decryptCtx.encryptScalar(decrypted, 0, decrypted.length, fieldId);
+  decryptCtx.decryptScalar(decrypted, 0, decrypted.length, fieldId);
   return decrypted;
 }
 
@@ -2509,9 +2509,10 @@ function clearPKIKeys() {
   $('alice-private-key').textContent = '--';
   $('bob-public-key').textContent = '--';
   $('bob-private-key').textContent = '--';
+  $('pki-login-prompt').style.display = 'block';
   $('pki-controls').style.display = 'none';
   $('pki-parties').style.display = 'none';
-  $('encryption-explainer').style.display = 'none';
+  // Keep encryption-explainer visible - it's educational content
   $('pki-demo').style.display = 'none';
   $('pki-security').style.display = 'none';
   $('pki-clear-keys').style.display = 'none';
@@ -2679,9 +2680,10 @@ function generatePKIKeyPairs() {
   $('pki-algorithm-display').textContent = algorithmNames[state.pki.algorithm] || state.pki.algorithm;
 
   // Show UI sections
+  $('pki-login-prompt').style.display = 'none';
   $('pki-controls').style.display = 'flex';
   $('pki-parties').style.display = 'grid';
-  $('encryption-explainer').style.display = 'block';
+  // encryption-explainer is always visible (educational content)
   $('pki-demo').style.display = 'block';
   $('pki-security').style.display = 'block';
   $('pki-clear-keys').style.display = 'inline-flex';

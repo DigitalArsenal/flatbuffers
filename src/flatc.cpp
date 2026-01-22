@@ -732,6 +732,29 @@ FlatCOptions FlatCompiler::ParseFromCommandLineArguments(int argc,
       } else if (arg == "--no-python-gen-numpy" ||
                  arg == "--python-gen-numpy=false") {
         opts.python_gen_numpy = false;
+      } else if (arg.rfind("--sql-dialect=", 0) == 0) {
+        opts.sql_dialect = arg.substr(std::string("--sql-dialect=").size());
+      } else if (arg == "--sql-dialect") {
+        if (++argi >= argc) Error("missing value following: " + arg, true);
+        opts.sql_dialect = argv[argi];
+      } else if (arg == "--sql-snake-case" ||
+                 arg == "--sql-snake-case=true") {
+        opts.sql_snake_case = true;
+      } else if (arg == "--no-sql-snake-case" ||
+                 arg == "--sql-snake-case=false") {
+        opts.sql_snake_case = false;
+      } else if (arg == "--sql-foreign-keys" ||
+                 arg == "--sql-foreign-keys=true") {
+        opts.sql_foreign_keys = true;
+      } else if (arg == "--no-sql-foreign-keys" ||
+                 arg == "--sql-foreign-keys=false") {
+        opts.sql_foreign_keys = false;
+      } else if (arg == "--sql-indexes" ||
+                 arg == "--sql-indexes=true") {
+        opts.sql_indexes = true;
+      } else if (arg == "--no-sql-indexes" ||
+                 arg == "--sql-indexes=false") {
+        opts.sql_indexes = false;
       } else if (arg == "--ts-omit-entrypoint") {
         opts.ts_omit_entrypoint = true;
       } else if (arg == "--annotate-sparse-vectors") {

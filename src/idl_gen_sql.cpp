@@ -299,7 +299,7 @@ class SqlGenerator : public BaseGenerator {
     // Generate columns for each field
     for (size_t i = 0; i < column_fields.size(); ++i) {
       auto& field = *column_fields[i];
-      GenerateColumn(field, has_key);
+      GenerateColumn(field);
       if (i < column_fields.size() - 1) {
         code_ += ",";
       }
@@ -334,7 +334,7 @@ class SqlGenerator : public BaseGenerator {
     return false;
   }
 
-  void GenerateColumn(const FieldDef& field, bool parent_has_key) {
+  void GenerateColumn(const FieldDef& field) {
     std::string col_name = GetColumnName(field.name);
     std::string col_type;
     std::string constraints;

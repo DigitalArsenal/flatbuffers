@@ -109,7 +109,8 @@ static std::string EscapeIdentifier(const std::string& name, SqlDialect dialect)
   };
 
   std::string lower = name;
-  std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+  std::transform(lower.begin(), lower.end(), lower.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
   bool needs_escape = false;
   for (const char** r = reserved; *r != nullptr; ++r) {
@@ -407,7 +408,8 @@ class SqlGenerator : public BaseGenerator {
       bool is_special_float = false;
       if (IsFloat(type.base_type) && dialect_ == SqlDialect::kSQLite) {
         std::string lower_val = val;
-        std::transform(lower_val.begin(), lower_val.end(), lower_val.begin(), ::tolower);
+        std::transform(lower_val.begin(), lower_val.end(), lower_val.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         // Remove leading + sign for comparison
         if (!lower_val.empty() && lower_val[0] == '+') {
           lower_val = lower_val.substr(1);

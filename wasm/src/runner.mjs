@@ -656,6 +656,8 @@ export class FlatcRunner {
    * @param {Object} [options={}]
    * @param {boolean} [options.unknownJson=true] - Allow unknown fields in JSON.
    * @param {boolean} [options.strictJson=false] - Require strict JSON conformance.
+   * @param {boolean} [options.sizePrefix=true] - Include 4-byte size prefix before the buffer.
+   * @param {boolean} [options.fileIdentifier=true] - Include file identifier (from schema).
    * @returns {Uint8Array}
    */
   generateBinary(schemaInput, jsonInput, options = {}) {
@@ -721,9 +723,35 @@ export class FlatcRunner {
 
     // flatc names output after input JSON file with .bin extension
     const binFile = files[0];
-    const output = this.Module.FS.readFile(`${outDir}/${binFile}`);
+    let output = new Uint8Array(this.Module.FS.readFile(`${outDir}/${binFile}`));
     cleanup();
-    return new Uint8Array(output);
+
+    // Handle fileIdentifier option (default: true)
+    // File identifier is at bytes 4-7 (after the root table offset)
+    // If fileIdentifier is false and we have one, we need to zero it out
+    if (options.fileIdentifier === false && output.length >= 8) {
+      // Zero out the file identifier bytes (4-7)
+      output[4] = 0;
+      output[5] = 0;
+      output[6] = 0;
+      output[7] = 0;
+    }
+
+    // Handle sizePrefix option (default: true)
+    // Prepend 4-byte little-endian size prefix
+    if (options.sizePrefix !== false) {
+      const size = output.length;
+      const prefixed = new Uint8Array(4 + size);
+      // Write size as little-endian uint32
+      prefixed[0] = size & 0xFF;
+      prefixed[1] = (size >> 8) & 0xFF;
+      prefixed[2] = (size >> 16) & 0xFF;
+      prefixed[3] = (size >> 24) & 0xFF;
+      prefixed.set(output, 4);
+      return prefixed;
+    }
+
+    return output;
   }
 
   /**

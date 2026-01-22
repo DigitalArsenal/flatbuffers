@@ -43,6 +43,10 @@ export interface GenerateBinaryOptions {
   unknownJson?: boolean;
   /** Require strict JSON conformance (default: false) */
   strictJson?: boolean;
+  /** Include 4-byte size prefix before the buffer (default: true) */
+  sizePrefix?: boolean;
+  /** Include file identifier in the buffer (default: true, uses schema's file_identifier) */
+  fileIdentifier?: boolean;
 }
 
 /**

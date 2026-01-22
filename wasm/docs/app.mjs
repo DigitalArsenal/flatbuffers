@@ -1180,7 +1180,7 @@ function buildMonster(data) {
   builder.addFieldInt8(6, data.color, 2);
 
   const monster = builder.endObject();
-  builder.finish(monster, 'MONS');
+  builder.finishSizePrefixed(monster, 'MONS');
   return builder.asUint8Array();
 }
 
@@ -1197,7 +1197,7 @@ function buildWeapon(data) {
   builder.addFieldInt16(1, data.damage, 0);
 
   const weapon = builder.endObject();
-  builder.finish(weapon, 'WEAP');
+  builder.finishSizePrefixed(weapon, 'WEAP');
   return builder.asUint8Array();
 }
 
@@ -1212,21 +1212,38 @@ function buildGalaxy(data) {
   builder.addFieldInt64(0, data.num_stars, BigInt(0));
 
   const galaxy = builder.endObject();
-  builder.finish(galaxy, 'GALX');
+  builder.finishSizePrefixed(galaxy, 'GALX');
   return builder.asUint8Array();
 }
 
 /**
  * Build a FlatBuffer using the direct Builder API (fast path).
  * Use this instead of generateFlatBuffer for bulk operations.
+ *
+ * Returns a size-prefixed buffer with file identifier by default:
+ * [size:4][file_id:4][root_offset:4][...data...]
+ *
+ * @param {string} schemaType - The schema type ('monster', 'weapon', 'galaxy')
+ * @param {Object} data - The data to serialize
+ * @param {Object} [options] - Build options
+ * @param {boolean} [options.sizePrefix=true] - Include 4-byte size prefix
+ * @returns {Uint8Array} The serialized FlatBuffer
  */
-function buildFlatBuffer(schemaType, data) {
+function buildFlatBuffer(schemaType, data, options = {}) {
+  let buffer;
   switch (schemaType) {
-    case 'monster': return buildMonster(data);
-    case 'weapon': return buildWeapon(data);
-    case 'galaxy': return buildGalaxy(data);
+    case 'monster': buffer = buildMonster(data); break;
+    case 'weapon': buffer = buildWeapon(data); break;
+    case 'galaxy': buffer = buildGalaxy(data); break;
     default: throw new Error(`Unknown schema for builder: ${schemaType}`);
   }
+
+  // If sizePrefix is explicitly false, strip the 4-byte size prefix
+  if (options.sizePrefix === false && buffer.length > 4) {
+    return buffer.slice(4);
+  }
+
+  return buffer;
 }
 
 // =============================================================================

@@ -758,6 +758,17 @@ struct IDLOptions {
   // Whether to generate numpy helpers.
   bool python_gen_numpy;
 
+  /************************************ SQL ************************************/
+  // SQL dialect for type mapping and syntax
+  // Options: "generic", "postgres", "mysql", "sqlite"
+  std::string sql_dialect;
+  // Use snake_case naming convention for tables and columns
+  bool sql_snake_case;
+  // Generate foreign key constraints (uncommented)
+  bool sql_foreign_keys;
+  // Generate CREATE INDEX statements
+  bool sql_indexes;
+
   bool ts_omit_entrypoint;
   ProtoIdGapAction proto_id_gap_action;
 

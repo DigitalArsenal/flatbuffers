@@ -197,6 +197,7 @@ set(FlatBuffers_Compiler_SRCS
   src/idl_gen_fbs.cpp
   src/idl_gen_grpc.cpp
   src/idl_gen_json_schema.cpp
+  src/idl_gen_sql.cpp
   src/idl_gen_swift.cpp
   src/idl_namer.h
   src/namer.h

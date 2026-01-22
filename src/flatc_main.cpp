@@ -32,6 +32,7 @@
 #include "idl_gen_go.h"
 #include "idl_gen_java.h"
 #include "idl_gen_json_schema.h"
+#include "idl_gen_sql.h"
 #include "idl_gen_kotlin.h"
 #include "idl_gen_lobster.h"
 #include "idl_gen_php.h"
@@ -124,6 +125,11 @@ int main(int argc, const char* argv[]) {
   flatc.RegisterCodeGenerator(
       flatbuffers::FlatCOption{"", "jsonschema", "", "Generate Json schema"},
       flatbuffers::NewJsonSchemaCodeGenerator());
+
+  flatc.RegisterCodeGenerator(
+      flatbuffers::FlatCOption{"", "sql", "",
+                               "Generate SQL DDL (CREATE TABLE statements)"},
+      flatbuffers::NewSqlCodeGenerator());
 
   flatc.RegisterCodeGenerator(
       flatbuffers::FlatCOption{"", "kotlin", "",

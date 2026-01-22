@@ -142,8 +142,22 @@ class SqlGenerator : public BaseGenerator {
         use_snake_case_(true),
         generate_foreign_keys_(true),
         generate_indexes_(true) {
-    // Check for SQL dialect attribute
-    // TODO: Add support for --sql-dialect option
+    // Parse SQL dialect option
+    const auto& opts = parser.opts;
+    if (opts.sql_dialect == "postgres" || opts.sql_dialect == "postgresql") {
+      dialect_ = SqlDialect::kPostgres;
+    } else if (opts.sql_dialect == "mysql" || opts.sql_dialect == "mariadb") {
+      dialect_ = SqlDialect::kMySQL;
+    } else if (opts.sql_dialect == "sqlite" || opts.sql_dialect == "sqlite3") {
+      dialect_ = SqlDialect::kSQLite;
+    } else {
+      dialect_ = SqlDialect::kGeneric;
+    }
+
+    // Parse other SQL options (use defaults if not set in options)
+    use_snake_case_ = opts.sql_snake_case;
+    generate_foreign_keys_ = opts.sql_foreign_keys;
+    generate_indexes_ = opts.sql_indexes;
   }
 
   bool generate() {

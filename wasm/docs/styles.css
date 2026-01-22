@@ -2438,6 +2438,37 @@ details[open] .collapse-icon {
    PKI Section - Alice/Bob Public Key Encryption
    ============================================================================= */
 
+.pki-login-prompt {
+  text-align: center;
+  padding: 48px 24px;
+  margin: 24px 0;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+}
+
+.pki-login-prompt .login-prompt-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.pki-login-prompt svg {
+  color: var(--white-40);
+  opacity: 0.6;
+}
+
+.pki-login-prompt p {
+  color: var(--white-60);
+  font-size: 16px;
+  margin: 0;
+}
+
+.pki-login-prompt .glass-btn {
+  margin-top: 8px;
+}
+
 .pki-parties {
   display: grid;
   grid-template-columns: 1fr auto 1fr;

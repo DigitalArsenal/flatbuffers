@@ -1880,7 +1880,7 @@
                 </svg>
                 Download
               </button>
-              <a href="wasm-runtimes/go.html" class="glass-btn small">Docs</a>
+              <a href="docs-html/go.html" class="glass-btn small">Docs</a>
             </div>
             <code class="install-cmd">go get github.com/tetratelabs/wazero</code>
           </div>
@@ -1908,7 +1908,7 @@
                 </svg>
                 Download
               </button>
-              <a href="wasm-runtimes/python.html" class="glass-btn small">Docs</a>
+              <a href="docs-html/python.html" class="glass-btn small">Docs</a>
             </div>
             <code class="install-cmd">pip install wasmer wasmer-compiler-cranelift</code>
           </div>
@@ -1936,7 +1936,7 @@
                 </svg>
                 Download
               </button>
-              <a href="wasm-runtimes/rust.html" class="glass-btn small">Docs</a>
+              <a href="docs-html/rust.html" class="glass-btn small">Docs</a>
             </div>
             <code class="install-cmd">cargo add wasmer</code>
           </div>
@@ -1964,7 +1964,7 @@
                 </svg>
                 Download
               </button>
-              <a href="wasm-runtimes/java.html" class="glass-btn small">Docs</a>
+              <a href="docs-html/java.html" class="glass-btn small">Docs</a>
             </div>
             <code class="install-cmd">com.dylibso.chicory:runtime:1.5.3</code>
           </div>
@@ -1992,7 +1992,7 @@
                 </svg>
                 Download
               </button>
-              <a href="wasm-runtimes/csharp.html" class="glass-btn small">Docs</a>
+              <a href="docs-html/csharp.html" class="glass-btn small">Docs</a>
             </div>
             <code class="install-cmd">dotnet add package Wasmtime</code>
           </div>
@@ -2020,7 +2020,7 @@
                 </svg>
                 Download
               </button>
-              <a href="wasm-runtimes/swift.html" class="glass-btn small">Docs</a>
+              <a href="docs-html/swift.html" class="glass-btn small">Docs</a>
             </div>
             <code class="install-cmd">.package(url: "WasmKit.git")</code>
           </div>
@@ -2048,7 +2048,7 @@
                 </svg>
                 Download
               </button>
-              <a href="wasm-runtimes/nodejs.html" class="glass-btn small">Docs</a>
+              <a href="docs-html/nodejs.html" class="glass-btn small">Docs</a>
             </div>
             <code class="install-cmd">npm install flatc-wasm</code>
           </div>
@@ -2076,7 +2076,7 @@
                 </svg>
                 Download
               </button>
-              <a href="wasm-runtimes/browser.html" class="glass-btn small">Docs</a>
+              <a href="docs-html/browser.html" class="glass-btn small">Docs</a>
             </div>
             <code class="install-cmd">npm install flatc-wasm</code>
           </div>
@@ -2112,7 +2112,7 @@
       <div class="glass-card">
         <h3 class="card-subtitle">Documentation</h3>
         <div class="docs-grid">
-          <a href="wasm-runtimes/README.html" class="doc-link-card">
+          <a href="docs-html/README.html" class="doc-link-card">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
@@ -2122,7 +2122,7 @@
             <h4>Getting Started</h4>
             <p>Quick start guide for all languages</p>
           </a>
-          <a href="docs/README.md#api-reference" class="doc-link-card">
+          <a href="docs-html/README.html" class="doc-link-card">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="16 18 22 12 16 6"/>
               <polyline points="8 6 2 12 8 18"/>
@@ -2130,14 +2130,14 @@
             <h4>API Reference</h4>
             <p>Complete function documentation</p>
           </a>
-          <a href="docs/README.md#security-considerations" class="doc-link-card">
+          <a href="docs-html/README.html" class="doc-link-card">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
             <h4>Security Guide</h4>
             <p>Best practices and threat model</p>
           </a>
-          <a href="docs/README.md#performance-optimization" class="doc-link-card">
+          <a href="docs-html/README.html" class="doc-link-card">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
             </svg>
@@ -2438,7 +2438,7 @@
   </div>
 
   <!-- Floating Contact Footer -->
-  <footer class="floating-footer">
+  <footer class="floating-footer" id="floating-footer">
     <a href="javascript:void(0)" data-u="tj" data-d="digitalarsenal.io"></a>
   </footer>
 
@@ -2454,6 +2454,21 @@
         window.location.href = 'mailto:' + e;
       });
     });
+
+    // Show/hide floating footer based on hero contact visibility
+    const heroContact = document.querySelector('.contact-info');
+    const floatingFooter = document.getElementById('floating-footer');
+
+    if (heroContact && floatingFooter) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          // Hide footer when hero contact is visible, show when not visible
+          floatingFooter.classList.toggle('visible', !entry.isIntersecting);
+        });
+      }, { threshold: 0 });
+
+      observer.observe(heroContact);
+    }
   </script>
 </body>
 </html>

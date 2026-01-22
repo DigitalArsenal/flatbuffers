@@ -461,6 +461,94 @@ async function main() {
     encryptBytes(new TextEncoder().encode('msg4'), key2, iv2);
   });
 
+  // REGRESSION TEST: Ensure decryptScalar doesn't trigger IV tracking
+  // This test prevents bugs like using encryptScalar() for decryption
+  // which would cause "IV has already been used" errors
+  await test('decryptScalar does not trigger IV reuse error (regression)', async () => {
+    clearAllIVTracking();
+
+    const recipientKeys = x25519GenerateKeyPair();
+    const plaintext = new TextEncoder().encode('Test message for decrypt regression');
+
+    // Encrypt with Alice's context
+    const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      context: 'regression-test',
+    });
+
+    const data = new Uint8Array(plaintext);
+    encryptCtx.encryptScalar(data, 0, data.length, 0);
+
+    // Get the header to create decrypt context
+    const headerJSON = encryptCtx.getHeaderJSON();
+    const header = encryptionHeaderFromJSON(headerJSON);
+
+    // Create decrypt context - Bob decrypts
+    const decryptCtx = EncryptionContext.forDecryption(
+      recipientKeys.privateKey,
+      header,
+      'regression-test'
+    );
+
+    // decryptScalar should NOT throw IV reuse error
+    // This is the critical test - if we accidentally used encryptScalar
+    // it would throw because the IV was already tracked during encryption
+    try {
+      decryptCtx.decryptScalar(data, 0, data.length, 0);
+      // Success - no IV reuse error
+    } catch (err) {
+      if (err.message && err.message.includes('IV has already been used')) {
+        throw new Error(
+          'REGRESSION: decryptScalar triggered IV tracking! ' +
+          'This likely means encryptScalar was used instead of decryptScalar. ' +
+          'Original error: ' + err.message
+        );
+      }
+      throw err;
+    }
+
+    // Verify decryption worked correctly
+    const decrypted = new TextDecoder().decode(data);
+    assertEqual(decrypted, 'Test message for decrypt regression', 'decryption should produce original plaintext');
+  });
+
+  // Test that using encryptScalar for "decryption" WOULD cause IV reuse
+  await test('encryptScalar for decryption DOES trigger IV reuse error', async () => {
+    clearAllIVTracking();
+
+    const recipientKeys = x25519GenerateKeyPair();
+    const plaintext = new TextEncoder().encode('Test message');
+
+    // Encrypt
+    const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      context: 'iv-reuse-test',
+    });
+
+    const data = new Uint8Array(plaintext);
+    encryptCtx.encryptScalar(data, 0, data.length, 0);
+
+    // Create decrypt context using same derived key (simulates using same header)
+    const headerJSON = encryptCtx.getHeaderJSON();
+    const header = encryptionHeaderFromJSON(headerJSON);
+    const decryptCtx = EncryptionContext.forDecryption(
+      recipientKeys.privateKey,
+      header,
+      'iv-reuse-test'
+    );
+
+    // Using encryptScalar (wrong!) should throw IV reuse error
+    let threwError = false;
+    try {
+      decryptCtx.encryptScalar(data, 0, data.length, 0);
+    } catch (err) {
+      if (err.message && err.message.includes('IV has already been used')) {
+        threwError = true;
+      } else {
+        throw err;
+      }
+    }
+    assert(threwError, 'encryptScalar should throw IV reuse error when used for decryption');
+  });
+
   await test('generateIV produces valid random IVs', async () => {
     const iv1 = generateIV();
     const iv2 = generateIV();
@@ -1372,7 +1460,7 @@ async function main() {
       'context-B' // Wrong context!
     );
 
-    decryptCtx.encryptScalar(data, 0, data.length, 0);
+    decryptCtx.decryptScalar(data, 0, data.length, 0);
 
     // Data should NOT match original (different context = different derived key)
     let matches = true;

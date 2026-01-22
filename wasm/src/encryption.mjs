@@ -2285,8 +2285,11 @@ export class EncryptionContext {
    * @param {number} [fieldId=0] - Optional field ID (must match encryption)
    */
   decryptBuffer(buffer, recordCounter, fieldId = 0) {
-    // AES-CTR is symmetric - decryption is the same operation as encryption
-    this.encryptField(buffer, 0, buffer.length, fieldId, recordCounter);
+    // AES-CTR is symmetric, but we must NOT track IV for decryption
+    // (only encryption should track to prevent IV reuse)
+    const key = this.getFieldKey(fieldId);
+    const iv = this.computeFieldIV(fieldId, recordCounter);
+    _encryptBytesInternal(buffer, key, iv, false); // false = don't track IV
   }
 
   /**

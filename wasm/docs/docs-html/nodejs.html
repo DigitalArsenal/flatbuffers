@@ -4,68 +4,82 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Nodejs - DA FlatBuffers</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
     :root {
-      --bg-primary: #000000;
-      --bg-secondary: rgba(42, 42, 45, 0.72);
-      --bg-tertiary: rgba(66, 66, 69, 0.72);
-      --accent-primary: #3b82f6;
-      --accent-secondary: #60a5fa;
-      --text-primary: #F5F5F7;
-      --text-secondary: rgba(255, 255, 255, 0.6);
-      --border-color: rgba(59, 130, 246, 0.3);
-      --glow-color: rgba(59, 130, 246, 0.15);
+      --black: #000000;
+      --white: #F5F5F7;
+      --white-90: rgba(255, 255, 255, 0.9);
+      --white-80: rgba(255, 255, 255, 0.8);
+      --white-60: rgba(255, 255, 255, 0.6);
+      --white-40: rgba(255, 255, 255, 0.4);
+      --white-20: rgba(255, 255, 255, 0.2);
+      --white-10: rgba(255, 255, 255, 0.1);
+      --white-05: rgba(255, 255, 255, 0.05);
+      --muted: rgba(134, 134, 139, 1.0);
+      --glass-bg: rgba(42, 42, 45, 0.72);
+      --glass-hover: rgba(66, 66, 69, 0.72);
+      --glass-border: rgba(255, 255, 255, 0.1);
+      --glass-blur: blur(20px);
+      --radius: 28px;
+      --radius-sm: 14px;
     }
 
     * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
     }
 
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      margin: 0;
-      padding: 0;
+      background: var(--black);
+      color: var(--white);
+      line-height: 1.6;
       min-height: 100vh;
       position: relative;
       overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
-    /* Animated background */
-    body::before {
-      content: '';
+    /* Video Background */
+    .video-background {
       position: fixed;
       top: 0;
       left: 0;
-      right: 0;
-      bottom: 0;
-      background:
-        radial-gradient(ellipse at 20% 20%, rgba(59, 130, 246, 0.06) 0%, transparent 50%),
-        radial-gradient(ellipse at 80% 80%, rgba(59, 130, 246, 0.04) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 50%, rgba(59, 130, 246, 0.03) 0%, transparent 70%);
-      pointer-events: none;
+      width: 100vw;
+      height: 100vh;
       z-index: 0;
+      overflow: hidden;
     }
 
-    /* Grid pattern overlay */
-    body::after {
-      content: '';
-      position: fixed;
+    .video-background video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.3;
+    }
+
+    .video-overlay {
+      position: absolute;
       top: 0;
       left: 0;
-      right: 0;
-      bottom: 0;
-      background-image:
-        linear-gradient(rgba(59, 130, 246, 0.02) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(59, 130, 246, 0.02) 1px, transparent 1px);
-      background-size: 50px 50px;
-      pointer-events: none;
-      z-index: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.4) 0%,
+        rgba(0, 0, 0, 0.6) 50%,
+        rgba(0, 0, 0, 0.85) 100%
+      );
     }
 
     .page-container {
@@ -73,152 +87,275 @@
       z-index: 1;
       max-width: 900px;
       margin: 0 auto;
-      padding: 40px 20px;
+      padding: 60px 24px 80px;
     }
 
     .back-link {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 10px 20px;
-      margin-bottom: 30px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      color: var(--accent-secondary);
+      padding: 12px 24px;
+      margin-bottom: 40px;
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      color: var(--white);
       text-decoration: none;
       font-weight: 500;
       font-size: 14px;
-      transition: all 0.2s ease;
+      transition: all 0.3s ease;
     }
 
     .back-link:hover {
-      background: var(--bg-tertiary);
-      border-color: var(--accent-primary);
-      transform: translateY(-1px);
+      background: var(--glass-hover);
+      transform: translateY(-2px);
     }
 
     .markdown-body {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: 16px;
-      padding: 48px;
-    }
-
-    .markdown-body h1,
-    .markdown-body h2,
-    .markdown-body h3,
-    .markdown-body h4 {
-      color: var(--text-primary);
-      border-bottom-color: var(--border-color);
-      font-weight: 600;
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      padding: 64px;
     }
 
     .markdown-body h1 {
-      background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      font-size: 2.2em;
+      color: var(--white);
+      font-size: 56px;
+      font-weight: 600;
+      line-height: 1.1;
+      margin-bottom: 32px;
+      letter-spacing: -0.02em;
+    }
+
+    .markdown-body h2 {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--white);
+      font-size: 28px;
+      font-weight: 600;
+      line-height: 1.15;
+      margin-top: 56px;
       margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    .markdown-body h2::before {
+      content: '';
+      display: inline-flex;
+      width: 24px;
+      height: 24px;
+      background: var(--white);
+      -webkit-mask-size: contain;
+      mask-size: contain;
+      -webkit-mask-repeat: no-repeat;
+      mask-repeat: no-repeat;
+      -webkit-mask-position: center;
+      mask-position: center;
+      flex-shrink: 0;
+    }
+
+    /* Icon mappings for h2 headers based on content */
+    .markdown-body h2[id*="why"]::before,
+    .markdown-body h2:has(+ p:first-of-type)::before {
+      -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4M12 8h.01'/%3E%3C/svg%3E");
+      mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4M12 8h.01'/%3E%3C/svg%3E");
+    }
+
+    .markdown-body h3,
+    .markdown-body h4 {
+      color: var(--white);
+      font-weight: 600;
+      margin-top: 32px;
+      margin-bottom: 16px;
+    }
+
+    .markdown-body h3 {
+      font-size: 22px;
+    }
+
+    .markdown-body h4 {
+      font-size: 18px;
+      color: var(--white-90);
+    }
+
+    .markdown-body p {
+      color: var(--white-80);
+      font-size: 18px;
+      line-height: 1.7;
+      margin-bottom: 20px;
     }
 
     .markdown-body a {
-      color: var(--accent-secondary);
+      color: var(--white);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      transition: opacity 0.2s;
     }
 
     .markdown-body a:hover {
-      color: var(--accent-primary);
+      opacity: 0.7;
+    }
+
+    .markdown-body strong {
+      color: var(--white);
+      font-weight: 600;
     }
 
     .markdown-body code {
-      background: var(--bg-tertiary);
-      border: 1px solid var(--border-color);
-      border-radius: 4px;
-      padding: 2px 6px;
+      background: var(--glass-hover);
+      border: 1px solid var(--glass-border);
+      border-radius: 6px;
+      padding: 3px 8px;
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.9em;
+      color: var(--white);
     }
 
     .markdown-body pre {
-      background: var(--bg-primary) !important;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 16px;
+      background: var(--black) !important;
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      padding: 24px;
       overflow-x: auto;
+      margin: 24px 0;
     }
 
     .markdown-body pre code {
       background: transparent;
       border: none;
       padding: 0;
-      font-size: 0.85em;
-      line-height: 1.6;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--white-90);
+    }
+
+    .markdown-body ul, .markdown-body ol {
+      padding-left: 24px;
+      margin-bottom: 20px;
+    }
+
+    .markdown-body li {
+      margin: 12px 0;
+      color: var(--white-80);
+      font-size: 18px;
+    }
+
+    .markdown-body li strong {
+      color: var(--white);
     }
 
     .markdown-body table {
-      border-collapse: collapse;
       width: 100%;
-      margin: 20px 0;
+      border-collapse: collapse;
+      margin: 24px 0;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
     }
 
     .markdown-body table th,
     .markdown-body table td {
-      border: 1px solid var(--border-color);
-      padding: 12px 16px;
+      border: 1px solid var(--glass-border);
+      padding: 14px 18px;
       text-align: left;
     }
 
     .markdown-body table th {
-      background: var(--bg-tertiary);
+      background: var(--glass-hover);
       font-weight: 600;
-      color: var(--accent-secondary);
+      color: var(--white);
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
-    .markdown-body table tr:nth-child(even) {
-      background: rgba(59, 130, 246, 0.03);
+    .markdown-body table td {
+      background: var(--white-05);
+      color: var(--white-80);
+    }
+
+    .markdown-body table tr:nth-child(even) td {
+      background: var(--white-10);
     }
 
     .markdown-body blockquote {
-      border-left: 4px solid var(--accent-primary);
-      background: var(--bg-tertiary);
-      padding: 16px 20px;
-      margin: 20px 0;
-      border-radius: 0 8px 8px 0;
+      border-left: 4px solid var(--white-40);
+      background: var(--white-05);
+      padding: 20px 24px;
+      margin: 24px 0;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    }
+
+    .markdown-body blockquote p {
+      margin: 0;
+      color: var(--white-80);
     }
 
     .markdown-body hr {
       border: none;
       height: 1px;
-      background: var(--border-color);
-      margin: 32px 0;
+      background: var(--glass-border);
+      margin: 48px 0;
     }
 
-    .markdown-body ul, .markdown-body ol {
-      padding-left: 24px;
+    /* Section header icons */
+    .section-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      background: var(--white-10);
+      border-radius: 8px;
+      margin-right: 12px;
+      flex-shrink: 0;
     }
 
-    .markdown-body li {
-      margin: 8px 0;
+    .section-icon svg {
+      width: 18px;
+      height: 18px;
+      stroke: var(--white);
+      fill: none;
+      stroke-width: 2;
     }
 
     @media (max-width: 768px) {
       .page-container {
-        padding: 20px 16px;
+        padding: 40px 16px 60px;
       }
       .markdown-body {
-        padding: 24px;
-        border-radius: 12px;
+        padding: 32px 24px;
+        border-radius: 20px;
       }
       .markdown-body h1 {
-        font-size: 1.8em;
+        font-size: 36px;
+      }
+      .markdown-body h2 {
+        font-size: 24px;
+      }
+      .markdown-body p,
+      .markdown-body li {
+        font-size: 16px;
       }
     }
   </style>
 </head>
 <body>
+  <!-- Video Background -->
+  <div class="video-background">
+    <video autoplay loop muted playsinline id="bg-video">
+      <source src="" type="application/x-mpegURL">
+    </video>
+    <div class="video-overlay"></div>
+  </div>
+
   <div class="page-container">
-    <a href="https://digitalarsenal.github.io/flatbuffers/" class="back-link">
+    <a href="../index.html" class="back-link">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M19 12H5M12 19l-7-7 7-7"/>
       </svg>
@@ -226,22 +363,22 @@
     </a>
     <article class="markdown-body"><h1>Node.js Integration Guide</h1>
 <p>Integrate the FlatBuffers encryption module into Node.js applications using the native WebAssembly support built into V8.</p>
-<h2>Why Node.js Native WASM?</h2>
+<h2><span class="section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></span>Why Node.js Native WASM?</h2>
 <ul>
 <li><strong>Zero dependencies</strong> - Built into Node.js</li>
 <li><strong>Fastest option</strong> - V8&#39;s optimizing JIT compiler</li>
 <li><strong>npm ecosystem</strong> - Use the <code>flatc-wasm</code> package directly</li>
 <li><strong>TypeScript support</strong> - Full type definitions included</li>
 </ul>
-<h2>Prerequisites</h2>
+<h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>Prerequisites</h2>
 <ul>
 <li>Node.js 16 or later (18+ recommended)</li>
 <li>npm or yarn</li>
 </ul>
-<h2>Installation</h2>
+<h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>Installation</h2>
 <pre><code class="language-bash">npm install flatc-wasm
 </code></pre>
-<h2>Quick Start</h2>
+<h2><span class="section-icon"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>Quick Start</h2>
 <p>The <code>flatc-wasm</code> package provides a high-level API:</p>
 <pre><code class="language-javascript">import {
   encryptBytes,
@@ -273,7 +410,7 @@ console.log(&#39;Encrypted:&#39;, Buffer.from(data).toString(&#39;hex&#39;));
 decryptBytes(data, key, iv);
 console.log(&#39;Decrypted:&#39;, new TextDecoder().decode(data));
 </code></pre>
-<h2>API Reference</h2>
+<h2><span class="section-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>API Reference</h2>
 <h3>Symmetric Encryption</h3>
 <pre><code class="language-javascript">import { encryptBytes, decryptBytes, KEY_SIZE, IV_SIZE } from &#39;flatc-wasm/encryption&#39;;
 
@@ -385,7 +522,7 @@ const signature = ed25519Sign(keypair.privateKey, message);
 const isValid = ed25519Verify(keypair.publicKey, message, signature);
 // isValid: boolean
 </code></pre>
-<h2>Complete Example: End-to-End Encryption</h2>
+<h2><span class="section-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>Complete Example: End-to-End Encryption</h2>
 <pre><code class="language-javascript">import { FlatcRunner } from &#39;flatc-wasm&#39;;
 import {
   x25519GenerateKeyPair,
@@ -505,7 +642,7 @@ const content = JSON.parse(flatc.generateJSON({
 
 console.log(&#39;Decrypted message:&#39;, content.text);
 </code></pre>
-<h2>TypeScript Support</h2>
+<h2><span class="section-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>TypeScript Support</h2>
 <p>Full TypeScript definitions are included:</p>
 <pre><code class="language-typescript">import {
   encryptBytes,
@@ -525,13 +662,13 @@ function encrypt(plaintext: Uint8Array, key: Uint8Array, iv: Uint8Array): Uint8A
   return data;
 }
 </code></pre>
-<h2>CommonJS Support</h2>
+<h2><span class="section-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>CommonJS Support</h2>
 <pre><code class="language-javascript">const { encryptBytes, x25519GenerateKeyPair } = require(&#39;flatc-wasm/encryption&#39;);
 
 const keypair = x25519GenerateKeyPair();
 console.log(&#39;Public key:&#39;, Buffer.from(keypair.publicKey).toString(&#39;hex&#39;));
 </code></pre>
-<h2>Performance Tips</h2>
+<h2><span class="section-icon"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>Performance Tips</h2>
 <h3>1. Initialize Once</h3>
 <pre><code class="language-javascript">// Good: Initialize at startup
 import { initEncryption } from &#39;flatc-wasm/encryption&#39;;
@@ -565,7 +702,7 @@ parentPort.on(&#39;message&#39;, ({ data, key, iv }) =&gt; {
   parentPort.postMessage(buffer);
 });
 </code></pre>
-<h2>Error Handling</h2>
+<h2><span class="section-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>Error Handling</h2>
 <pre><code class="language-javascript">try {
   encryptBytes(data, key, iv);
 } catch (error) {
@@ -578,7 +715,7 @@ parentPort.on(&#39;message&#39;, ({ data, key, iv }) =&gt; {
   }
 }
 </code></pre>
-<h2>Security Notes</h2>
+<h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>Security Notes</h2>
 <ol>
 <li><strong>Use crypto.randomBytes for keys</strong> - Not Math.random()</li>
 <li><strong>Never reuse IVs</strong> - Generate fresh IV for each encryption</li>
@@ -596,8 +733,8 @@ for (let i = 0; i &lt; 32; i++) {
   badKey[i] = Math.floor(Math.random() * 256);  // NOT SECURE!
 }
 </code></pre>
-<h2>Troubleshooting</h2>
-<h3>&quot;Module not found&quot;</h3>
+<h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>Troubleshooting</h2>
+<h3>"Module not found"</h3>
 <p>Ensure you&#39;re importing from the correct path:</p>
 <pre><code class="language-javascript">// Correct
 import { encryptBytes } from &#39;flatc-wasm/encryption&#39;;
@@ -605,26 +742,54 @@ import { encryptBytes } from &#39;flatc-wasm/encryption&#39;;
 // Wrong
 import { encryptBytes } from &#39;flatc-wasm&#39;;  // Main module, not encryption
 </code></pre>
-<h3>&quot;Invalid key/IV size&quot;</h3>
+<h3>"Invalid key/IV size"</h3>
 <p>Check your buffer sizes:</p>
 <pre><code class="language-javascript">console.log(&#39;Key size:&#39;, key.length);  // Should be 32
 console.log(&#39;IV size:&#39;, iv.length);    // Should be 16
 </code></pre>
-<h3>&quot;WASM module not initialized&quot;</h3>
+<h3>"WASM module not initialized"</h3>
 <p>Call init before using:</p>
 <pre><code class="language-javascript">import { initEncryption, encryptBytes } from &#39;flatc-wasm/encryption&#39;;
 
 await initEncryption();  // Must call first!
 encryptBytes(data, key, iv);
 </code></pre>
-<h2>See Also</h2>
+<h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>See Also</h2>
 <ul>
 <li><a href="https://www.npmjs.com/package/flatc-wasm">npm package</a></li>
-<li><a href="README.md#api-reference">API Reference</a></li>
-<li><a href="README.md#security-considerations">Security Considerations</a></li>
+<li><a href="README.html#api-reference">API Reference</a></li>
+<li><a href="README.html#security-considerations">Security Considerations</a></li>
 <li><a href="browser.html">Browser Integration</a> - Similar API for browsers</li>
 </ul>
 </article>
   </div>
+
+  <script>
+    // Initialize HLS video with random selection
+    const videoUrls = [
+      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/90bb1b34646b81b3b63e5a854ea00da3/manifest/video.m3u8",
+      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/df176a2fb2ea2b64bd21ae1c10d3af6a/manifest/video.m3u8",
+      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/12a9780eeb1ea015801a5f55cf2e9d3d/manifest/video.m3u8",
+      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/964cb3eddff1a67e3772aac9a7aceea2/manifest/video.m3u8",
+      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/dd17599dfa77f41517133fa7a4967535/manifest/video.m3u8",
+      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/408ad52e3f15bc8f01ae69d194a8cf3a/manifest/video.m3u8",
+      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/e923e67d71fed3e0853ec57f0348451e/manifest/video.m3u8",
+      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/136a8a211c6c3b1cc1fd7b1c7d836c58/manifest/video.m3u8",
+      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/c9ddd33ac3d964e5d33b31ce849e8f95/manifest/video.m3u8",
+      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/257c7359efd4b4aaebcc03aa8fc78a36/manifest/video.m3u8",
+      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/697945ca6b876878dba3b23fbd2f1561/manifest/video.m3u8"
+    ];
+
+    const video = document.getElementById('bg-video');
+    const randomUrl = videoUrls[Math.floor(Math.random() * videoUrls.length)];
+
+    if (Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(randomUrl);
+      hls.attachMedia(video);
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = randomUrl;
+    }
+  </script>
 </body>
 </html>

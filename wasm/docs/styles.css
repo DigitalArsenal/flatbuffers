@@ -10,6 +10,13 @@
   padding: 0;
 }
 
+/* Prevent dragging on headings, headers, and links */
+h1, h2, h3, h4, h5, h6,
+a, button, nav, nav * {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
 :root {
   /* Core Colors - Pure Monochrome */
   --black: #000000;
@@ -157,6 +164,10 @@ body {
   transition: color 0.2s;
   padding: 8px 0;
   white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  user-drag: none;
 }
 
 .nav-link:hover,
@@ -823,6 +834,19 @@ body {
   margin-bottom: 64px;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+}
+
+.section-header * {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
 }
 
 .section-title {
@@ -1822,6 +1846,15 @@ body {
   padding: 20px 24px;
   border-bottom: 1px solid var(--glass-border);
   flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+.modal-header * {
+  -webkit-user-drag: none;
+  user-drag: none;
 }
 
 .modal-header h3 {
@@ -2300,27 +2333,30 @@ details[open] .collapse-icon {
 
 .floating-footer {
   position: fixed;
-  bottom: 16px;
-  right: 0;
-  transform: translateX(100%);
-  padding: 10px 16px;
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 2px solid var(--weapon);
-  border-right: none;
-  border-radius: 8px 0 0 8px;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--white-10);
+  border-radius: 20px;
   z-index: 1000;
-  font-size: 12px;
+  font-size: 11px;
   opacity: 0;
   pointer-events: none;
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition: opacity 0.4s ease, transform 0.4s ease;
 }
 
 .floating-footer.visible {
-  transform: translateX(0);
-  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  opacity: 0.7;
   pointer-events: auto;
+}
+
+.floating-footer:hover {
+  opacity: 1;
 }
 
 .floating-footer a {
@@ -2330,7 +2366,7 @@ details[open] .collapse-icon {
 }
 
 .floating-footer a:hover {
-  color: var(--accent);
+  color: var(--white-90);
 }
 
 /* =============================================================================
@@ -3711,6 +3747,15 @@ details[open] .collapse-icon {
   padding: 12px 16px;
   background: rgba(255, 255, 255, 0.03);
   border-bottom: 1px solid var(--glass-border);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+.pane-header * {
+  -webkit-user-drag: none;
+  user-drag: none;
 }
 
 .pane-header h4 {

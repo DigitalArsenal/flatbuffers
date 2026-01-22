@@ -3653,6 +3653,7 @@ function setupMainAppHandlers() {
 
   // Schema Viewer Tab
   $('schema-type-select')?.addEventListener('change', updateSchemaViewer);
+  updateSchemaViewer(); // Auto-populate with default schema on page load
   $('copy-fbs')?.addEventListener('click', () => copyToClipboard($('fbs-content')?.textContent || ''));
   $('copy-json-schema')?.addEventListener('click', () => copyToClipboard($('json-schema-content')?.textContent || ''));
 

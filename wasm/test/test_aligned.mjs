@@ -121,6 +121,33 @@ struct Transform {
 }
 `;
 
+const STRING_SCHEMA = `
+namespace Game;
+
+table Player {
+  id: uint32;
+  name: string;
+  guild: string;
+  health: ushort;
+}
+`;
+
+const MIXED_STRING_SCHEMA = `
+namespace App;
+
+struct Vec2 {
+  x: float;
+  y: float;
+}
+
+table Entity {
+  position: Vec2;
+  name: string;
+  tag: string;
+  active: bool;
+}
+`;
+
 // =============================================================================
 // Schema Parsing Tests
 // =============================================================================
@@ -400,6 +427,136 @@ async function runTypeScriptTests() {
 }
 
 // =============================================================================
+// String Support Tests
+// =============================================================================
+
+async function runStringTests() {
+  log('\n[Fixed-Length String Support]');
+
+  await test('parses string fields with defaultStringLength', async () => {
+    const schema = parseSchema(STRING_SCHEMA, { defaultStringLength: 255 });
+    const player = schema.tables[0];
+
+    const nameField = player.fields.find(f => f.name === 'name');
+    assert(nameField, 'should have name field');
+    assert(nameField.isString, 'name should be marked as string');
+    assertEqual(nameField.maxStringLength, 255, 'max length should be 255');
+    assertEqual(nameField.arraySize, 256, 'array size should be 256 (255 + null)');
+    assertEqual(nameField.size, 256, 'total size should be 256');
+  });
+
+  await test('rejects strings without defaultStringLength', async () => {
+    const schema = parseSchema(STRING_SCHEMA);
+    const player = schema.tables[0];
+
+    // Without defaultStringLength, string fields should be null (rejected)
+    const nameField = player.fields.find(f => f.name === 'name');
+    assertEqual(nameField, undefined, 'name field should be rejected');
+  });
+
+  await test('computes layout with string fields', async () => {
+    const schema = parseSchema(STRING_SCHEMA, { defaultStringLength: 31 });
+    const allStructs = { Player: schema.tables[0] };
+    const layout = computeLayout(schema.tables[0], allStructs);
+
+    // uint32 (4) + name (32) + guild (32) + ushort (2) + padding (2) = 72
+    assertEqual(layout.fields[0].offset, 0, 'id offset');
+    assertEqual(layout.fields[1].offset, 4, 'name offset');
+    assertEqual(layout.fields[1].size, 32, 'name size (31 + null)');
+    assertEqual(layout.fields[2].offset, 36, 'guild offset');
+    assertEqual(layout.fields[3].offset, 68, 'health offset');
+  });
+
+  await test('generates C++ char arrays for strings', async () => {
+    const { cpp } = generateAlignedCode(STRING_SCHEMA, { defaultStringLength: 63 });
+
+    assert(cpp.includes('char name[64]'), 'should have name char array');
+    assert(cpp.includes('char guild[64]'), 'should have guild char array');
+    assert(cpp.includes('max 63 chars + null'), 'should have comment about max length');
+  });
+
+  await test('generates C++ string helper methods', async () => {
+    const { cpp } = generateAlignedCode(STRING_SCHEMA, { defaultStringLength: 63 });
+
+    assert(cpp.includes('const char* get_name()'), 'should have name getter');
+    assert(cpp.includes('void set_name(const char* value)'), 'should have name setter');
+    assert(cpp.includes('std::strncpy'), 'should use strncpy for safety');
+    assert(cpp.includes('Ensure null termination'), 'should ensure null termination');
+  });
+
+  await test('generates TypeScript string accessors', async () => {
+    const { ts } = generateAlignedCode(STRING_SCHEMA, { defaultStringLength: 127 });
+
+    assert(ts.includes('get name(): string'), 'should have name getter returning string');
+    assert(ts.includes('set name(v: string)'), 'should have name setter accepting string');
+    assert(ts.includes('TextDecoder'), 'should use TextDecoder for reading');
+    assert(ts.includes('TextEncoder'), 'should use TextEncoder for writing');
+    assert(ts.includes('get nameBytes(): Uint8Array'), 'should have raw bytes accessor');
+  });
+
+  await test('generates JavaScript string accessors', async () => {
+    const { js } = generateAlignedCode(STRING_SCHEMA, { defaultStringLength: 127 });
+
+    assert(js.includes('get name()'), 'should have name getter');
+    assert(js.includes('set name(v)'), 'should have name setter');
+    assert(js.includes('TextDecoder'), 'should use TextDecoder');
+    assert(js.includes('TextEncoder'), 'should use TextEncoder');
+    assert(js.includes('get nameBytes()'), 'should have raw bytes accessor');
+  });
+
+  await test('string accessors handle null termination', async () => {
+    const { ts } = generateAlignedCode(STRING_SCHEMA, { defaultStringLength: 31 });
+
+    // Verify getter finds null terminator
+    assert(ts.includes('while (len < 31 && bytes[len] !== 0)'), 'getter should scan for null');
+
+    // Verify setter null-terminates
+    assert(ts.includes('for (let i = copyLen; i < 32; i++) bytes[i] = 0'), 'setter should null-terminate');
+  });
+
+  await test('mixed struct and string table generates correctly', async () => {
+    const { cpp, ts, layouts } = generateAlignedCode(MIXED_STRING_SCHEMA, { defaultStringLength: 63 });
+
+    // Verify C++ output
+    assert(cpp.includes('struct Vec2'), 'C++ should have Vec2 struct');
+    assert(cpp.includes('struct Entity'), 'C++ should have Entity struct');
+    assert(cpp.includes('char name[64]'), 'C++ should have name string');
+    assert(cpp.includes('float position_x'), 'C++ should flatten Vec2');
+
+    // Verify TypeScript output
+    assert(ts.includes('class Vec2View'), 'TS should have Vec2View');
+    assert(ts.includes('class EntityView'), 'TS should have EntityView');
+    assert(ts.includes('get name(): string'), 'TS should have string getter');
+    assert(ts.includes('get position_x(): number'), 'TS should flatten position');
+
+    // Verify layout
+    assert(layouts.Entity, 'should have Entity layout');
+    // Vec2 (8) + name (64) + tag (64) + bool (1) + padding (3) to align to 4 = 140
+    assertEqual(layouts.Entity.size, 140, 'Entity size with strings');
+  });
+
+  await test('string field appears in toObject output', async () => {
+    const { ts, js } = generateAlignedCode(STRING_SCHEMA, { defaultStringLength: 31 });
+
+    // TypeScript toObject should include string fields
+    assert(ts.includes('name: this.name,'), 'TS toObject should include name');
+
+    // JavaScript toObject should include string fields
+    assert(js.includes('name: this.name,'), 'JS toObject should include name');
+  });
+
+  await test('string field works with copyFrom', async () => {
+    const { ts, js } = generateAlignedCode(STRING_SCHEMA, { defaultStringLength: 31 });
+
+    // TypeScript copyFrom should handle strings
+    assert(ts.includes('if (obj.name !== undefined) this.name = obj.name as string'), 'TS copyFrom should handle name');
+
+    // JavaScript copyFrom should handle strings
+    assert(js.includes('if (obj.name !== undefined) this.name = obj.name'), 'JS copyFrom should handle name');
+  });
+}
+
+// =============================================================================
 // Integration Tests
 // =============================================================================
 
@@ -508,6 +665,7 @@ async function main() {
   await runLayoutTests();
   await runCppTests();
   await runTypeScriptTests();
+  await runStringTests();
   await runIntegrationTests();
 
   log('\n============================================================');

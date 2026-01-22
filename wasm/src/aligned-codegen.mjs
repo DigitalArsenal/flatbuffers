@@ -9,6 +9,12 @@
  * - You need zero-copy TypedArray views into WASM linear memory
  * - You don't need schema evolution (vtables add overhead)
  * - Your data is fixed-size (no variable-length strings/vectors)
+ *
+ * String Support:
+ * By default, strings are variable-length and not supported. However, you can
+ * enable fixed-length string support by setting the `defaultStringLength` option.
+ * Strings will be stored as null-terminated char arrays with the specified max length.
+ * Example: defaultStringLength: 255 means strings use 256 bytes (255 chars + null).
  */
 
 // =============================================================================
@@ -49,14 +55,19 @@ const SCALAR_TYPES = {
 /**
  * Parse a FlatBuffers schema and extract struct/table definitions
  * @param {string} schemaContent - The .fbs schema content
+ * @param {Object} options - Parsing options
+ * @param {number} options.defaultStringLength - Max length for string fields (default: 0 = disabled)
  * @returns {ParsedSchema} Parsed schema with structs and tables
  */
-export function parseSchema(schemaContent) {
+export function parseSchema(schemaContent, options = {}) {
+  const { defaultStringLength = 0 } = options;
+
   const result = {
     namespace: null,
     structs: [],
     tables: [],
     enums: [],
+    options: { defaultStringLength },
   };
 
   // Remove comments
@@ -90,7 +101,7 @@ export function parseSchema(schemaContent) {
   let structMatch;
   while ((structMatch = structRegex.exec(content)) !== null) {
     const [, name, body] = structMatch;
-    const fields = parseFields(body, result.enums);
+    const fields = parseFields(body, result.enums, { defaultStringLength });
     result.structs.push({ name, fields, isStruct: true });
   }
 
@@ -99,7 +110,7 @@ export function parseSchema(schemaContent) {
   let tableMatch;
   while ((tableMatch = tableRegex.exec(content)) !== null) {
     const [, name, body] = tableMatch;
-    const fields = parseFields(body, result.enums);
+    const fields = parseFields(body, result.enums, { defaultStringLength });
     result.tables.push({ name, fields, isStruct: false });
   }
 
@@ -110,9 +121,10 @@ export function parseSchema(schemaContent) {
  * Parse field definitions from a struct/table body
  * @param {string} body - The body content between braces
  * @param {Array} enums - Known enum definitions for type resolution
+ * @param {Object} options - Parsing options (defaultStringLength, etc.)
  * @returns {Array} Parsed field definitions
  */
-function parseFields(body, enums) {
+function parseFields(body, enums, options = {}) {
   const fields = [];
   const lines = body.split(';').map(l => l.trim()).filter(l => l.length > 0);
 
@@ -123,7 +135,7 @@ function parseFields(body, enums) {
     if (!match) continue;
 
     const [, name, typeStr] = match;
-    const field = parseFieldType(name, typeStr, enums);
+    const field = parseFieldType(name, typeStr, enums, options);
     if (field) {
       fields.push(field);
     }
@@ -135,11 +147,38 @@ function parseFields(body, enums) {
 /**
  * Parse a single field type
  * @param {string} name - Field name
- * @param {string} typeStr - Type string (e.g., "int", "[float:3]", "Vec3")
+ * @param {string} typeStr - Type string (e.g., "int", "[float:3]", "Vec3", "string")
  * @param {Array} enums - Known enum definitions
+ * @param {Object} options - Parsing options (defaultStringLength, etc.)
  * @returns {Object|null} Parsed field or null if unsupported
  */
-function parseFieldType(name, typeStr, enums) {
+function parseFieldType(name, typeStr, enums, options = {}) {
+  const { defaultStringLength = 0 } = options;
+
+  // Check for string type - convert to fixed-size char array if defaultStringLength is set
+  if (typeStr === 'string') {
+    if (defaultStringLength > 0) {
+      // String is stored as fixed-size char array with null terminator
+      // e.g., defaultStringLength=255 means 256 bytes (255 chars + null)
+      const totalSize = defaultStringLength + 1; // +1 for null terminator
+      return {
+        name,
+        type: 'string',
+        isArray: true,
+        arraySize: totalSize,
+        isString: true, // Mark as string for special handling in code generation
+        maxStringLength: defaultStringLength,
+        size: totalSize,
+        align: 1,
+        cppType: 'char',
+        tsGetter: 'getUint8',
+        tsSetter: 'setUint8',
+        tsType: 'string', // Generated accessors will return/accept string
+      };
+    }
+    return null; // Variable-length strings not supported without defaultStringLength
+  }
+
   // Check for fixed-size array: [type:N] or [type:0xN] (hex)
   const arrayMatch = typeStr.match(/^\[(\w+):(0x[0-9a-fA-F]+|\d+)\]$/);
   if (arrayMatch) {
@@ -478,13 +517,19 @@ function generateCppStruct(structDef, allStructs) {
       }
     }
 
-    const cppType = field.isEnum ? field.type : field.cppType;
-    if (field.isArray) {
-      code += `  ${cppType} ${name}[${field.arraySize}]; // offset ${offset}\n`;
+    if (field.isString) {
+      // Fixed-length string: stored as char array with null terminator
+      code += `  char ${name}[${field.arraySize}]; // offset ${offset}, max ${field.maxStringLength} chars + null\n`;
       lastOffset = offset + field.size;
     } else {
-      code += `  ${cppType} ${name}; // offset ${offset}\n`;
-      lastOffset = offset + field.size;
+      const cppType = field.isEnum ? field.type : field.cppType;
+      if (field.isArray) {
+        code += `  ${cppType} ${name}[${field.arraySize}]; // offset ${offset}\n`;
+        lastOffset = offset + field.size;
+      } else {
+        code += `  ${cppType} ${name}; // offset ${offset}\n`;
+        lastOffset = offset + field.size;
+      }
     }
   }
 
@@ -513,6 +558,22 @@ function generateCppStruct(structDef, allStructs) {
   code += `    std::memcpy(this, &src, ${layout.size});\n`;
   code += '  }\n';
 
+  // Generate string accessors for string fields
+  const stringFields = flattenedFields.filter(({ field }) => field.isString);
+  if (stringFields.length > 0) {
+    code += '\n';
+    code += '  // String accessors (null-terminated, fixed-size storage)\n';
+    for (const { name, field } of stringFields) {
+      // Getter returns const char*
+      code += `  const char* get_${name}() const { return ${name}; }\n`;
+      // Setter with safe copy (strncpy + ensure null terminator)
+      code += `  void set_${name}(const char* value) {\n`;
+      code += `    std::strncpy(${name}, value, ${field.maxStringLength});\n`;
+      code += `    ${name}[${field.maxStringLength}] = '\\0'; // Ensure null termination\n`;
+      code += '  }\n';
+    }
+  }
+
   code += '};\n';
   code += `static_assert(sizeof(${structDef.name}) == ${layout.size}, "${structDef.name} size mismatch");\n`;
   code += `static_assert(alignof(${structDef.name}) == ${layout.align}, "${structDef.name} alignment mismatch");\n\n`;
@@ -529,8 +590,8 @@ function generateCppStruct(structDef, allStructs) {
  */
 function isFixedSizeTable(tableDef, allStructs) {
   for (const field of tableDef.fields) {
-    // Variable-length types not supported
-    if (field.type === 'string') return false;
+    // Fixed-length strings are supported (isString flag means it was converted)
+    if (field.type === 'string' && !field.isString) return false;
     if (field.isArray && field.arraySize === undefined) return false;
 
     // Check nested structs
@@ -696,7 +757,10 @@ function generateTsViewClass(structDef, allStructs) {
 
   // Getters and setters for each flattened field
   for (const { name, field, offset } of flattenedFields) {
-    if (field.isArray) {
+    if (field.isString) {
+      // Generate string accessor (getter returns string, setter accepts string)
+      code += generateTsStringAccessor(name, field, offset);
+    } else if (field.isArray) {
       // Generate array accessor with custom name
       code += generateTsArrayAccessorWithName(name, field, offset);
     } else {
@@ -708,7 +772,10 @@ function generateTsViewClass(structDef, allStructs) {
   code += '  toObject(): Record<string, unknown> {\n';
   code += '    return {\n';
   for (const { name, field } of flattenedFields) {
-    if (field.isArray) {
+    if (field.isString) {
+      // String fields are already returned as string by getter
+      code += `      ${name}: this.${name},\n`;
+    } else if (field.isArray) {
       code += `      ${name}: Array.from(this.${name}),\n`;
     } else {
       code += `      ${name}: this.${name},\n`;
@@ -720,7 +787,10 @@ function generateTsViewClass(structDef, allStructs) {
   // copyFrom() method for populating from a plain object
   code += '  copyFrom(obj: Partial<Record<string, unknown>>): void {\n';
   for (const { name, field } of flattenedFields) {
-    if (field.isArray) {
+    if (field.isString) {
+      // String fields: setter handles the conversion
+      code += `    if (obj.${name} !== undefined) this.${name} = obj.${name} as string;\n`;
+    } else if (field.isArray) {
       code += `    if (obj.${name} !== undefined) {\n`;
       code += `      const arr = this.${name};\n`;
       code += `      const src = obj.${name} as ArrayLike<${field.tsType}>;\n`;
@@ -781,6 +851,42 @@ function generateTsAccessor(name, field, offset) {
     code += `    this.view.${field.tsSetter}(${offset}, v${leArg});\n`;
     code += '  }\n\n';
   }
+
+  return code;
+}
+
+/**
+ * Generate getter/setter for a fixed-length string field
+ * Strings are stored as null-terminated char arrays
+ */
+function generateTsStringAccessor(name, field, offset) {
+  let code = '';
+  const maxLen = field.maxStringLength;
+  const bufSize = field.arraySize;
+
+  // Getter: read bytes until null terminator, decode as UTF-8
+  code += `  get ${name}(): string {\n`;
+  code += `    const bytes = new Uint8Array(this.view.buffer, this.view.byteOffset + ${offset}, ${bufSize});\n`;
+  code += '    // Find null terminator\n';
+  code += '    let len = 0;\n';
+  code += `    while (len < ${maxLen} && bytes[len] !== 0) len++;\n`;
+  code += '    return new TextDecoder().decode(bytes.subarray(0, len));\n';
+  code += '  }\n';
+
+  // Setter: encode as UTF-8, copy to buffer, null-terminate
+  code += `  set ${name}(v: string) {\n`;
+  code += `    const bytes = new Uint8Array(this.view.buffer, this.view.byteOffset + ${offset}, ${bufSize});\n`;
+  code += '    const encoded = new TextEncoder().encode(v);\n';
+  code += `    const copyLen = Math.min(encoded.length, ${maxLen});\n`;
+  code += '    bytes.set(encoded.subarray(0, copyLen));\n';
+  code += '    // Null-terminate\n';
+  code += `    for (let i = copyLen; i < ${bufSize}; i++) bytes[i] = 0;\n`;
+  code += '  }\n\n';
+
+  // Also provide raw bytes accessor for advanced use
+  code += `  get ${name}Bytes(): Uint8Array {\n`;
+  code += `    return new Uint8Array(this.view.buffer, this.view.byteOffset + ${offset}, ${bufSize});\n`;
+  code += '  }\n\n';
 
   return code;
 }
@@ -963,7 +1069,10 @@ function generateJsViewClass(structDef, allStructs) {
 
   // Getters and setters for each flattened field
   for (const { name, field, offset } of flattenedFields) {
-    if (field.isArray) {
+    if (field.isString) {
+      // Generate string accessor (getter returns string, setter accepts string)
+      code += generateJsStringAccessor(name, field, offset);
+    } else if (field.isArray) {
       code += generateJsArrayAccessor(name, field, offset);
     } else {
       code += generateJsAccessor(name, field, offset);
@@ -974,7 +1083,10 @@ function generateJsViewClass(structDef, allStructs) {
   code += '  toObject() {\n';
   code += '    return {\n';
   for (const { name, field } of flattenedFields) {
-    if (field.isArray) {
+    if (field.isString) {
+      // String fields are already returned as string by getter
+      code += `      ${name}: this.${name},\n`;
+    } else if (field.isArray) {
       code += `      ${name}: Array.from(this.${name}),\n`;
     } else {
       code += `      ${name}: this.${name},\n`;
@@ -986,7 +1098,10 @@ function generateJsViewClass(structDef, allStructs) {
   // copyFrom() method for populating from a plain object
   code += '  copyFrom(obj) {\n';
   for (const { name, field } of flattenedFields) {
-    if (field.isArray) {
+    if (field.isString) {
+      // String fields: setter handles the conversion
+      code += `    if (obj.${name} !== undefined) this.${name} = obj.${name};\n`;
+    } else if (field.isArray) {
       code += `    if (obj.${name} !== undefined) {\n`;
       code += `      const arr = this.${name};\n`;
       code += `      const src = obj.${name};\n`;
@@ -1066,6 +1181,42 @@ function generateJsArrayAccessor(name, field, offset) {
 }
 
 /**
+ * Generate getter/setter for a fixed-length string field (plain JS)
+ * Strings are stored as null-terminated char arrays
+ */
+function generateJsStringAccessor(name, field, offset) {
+  let code = '';
+  const maxLen = field.maxStringLength;
+  const bufSize = field.arraySize;
+
+  // Getter: read bytes until null terminator, decode as UTF-8
+  code += `  get ${name}() {\n`;
+  code += `    const bytes = new Uint8Array(this.view.buffer, this.view.byteOffset + ${offset}, ${bufSize});\n`;
+  code += '    // Find null terminator\n';
+  code += '    let len = 0;\n';
+  code += `    while (len < ${maxLen} && bytes[len] !== 0) len++;\n`;
+  code += '    return new TextDecoder().decode(bytes.subarray(0, len));\n';
+  code += '  }\n';
+
+  // Setter: encode as UTF-8, copy to buffer, null-terminate
+  code += `  set ${name}(v) {\n`;
+  code += `    const bytes = new Uint8Array(this.view.buffer, this.view.byteOffset + ${offset}, ${bufSize});\n`;
+  code += '    const encoded = new TextEncoder().encode(v);\n';
+  code += `    const copyLen = Math.min(encoded.length, ${maxLen});\n`;
+  code += '    bytes.set(encoded.subarray(0, copyLen));\n';
+  code += '    // Null-terminate\n';
+  code += `    for (let i = copyLen; i < ${bufSize}; i++) bytes[i] = 0;\n`;
+  code += '  }\n\n';
+
+  // Also provide raw bytes accessor for advanced use
+  code += `  get ${name}Bytes() {\n`;
+  code += `    return new Uint8Array(this.view.buffer, this.view.byteOffset + ${offset}, ${bufSize});\n`;
+  code += '  }\n\n';
+
+  return code;
+}
+
+/**
  * Generate array view class for bulk access (plain JS)
  */
 function generateJsArrayViewClass(structName, structSize) {
@@ -1109,10 +1260,12 @@ function generateJsArrayViewClass(structName, structSize) {
  * Generate aligned code from a FlatBuffers schema
  * @param {string} schemaContent - The .fbs schema content
  * @param {Object} options - Generation options
+ * @param {number} options.defaultStringLength - Max length for string fields (default: 0 = disabled, 255 = recommended)
  * @returns {{ cpp: string, ts: string, js: string, schema: Object, layouts: Object }} Generated code and layout info
  */
 export function generateAlignedCode(schemaContent, options = {}) {
-  const schema = parseSchema(schemaContent);
+  const { defaultStringLength = 0 } = options;
+  const schema = parseSchema(schemaContent, { defaultStringLength });
   const cpp = generateCppHeader(schema, options);
   const ts = generateTypeScript(schema, options);
   const js = generateJavaScript(schema, options);

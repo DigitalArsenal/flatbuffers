@@ -42,6 +42,7 @@ import {
 } from '../src/encryption.mjs';
 
 import { FlatcRunner } from '../src/runner.mjs';
+import { generateAlignedCode, parseSchema } from '../src/aligned-codegen.mjs';
 import { FlatBufferParser, parseWithSchema, Schemas, toHex, toHexCompact } from './flatbuffer-parser.mjs';
 import { PaginatedTable } from './virtual-scroller.mjs';
 import { StreamingDemo, MessageTypes, formatBytes, formatThroughput } from './streaming-demo.mjs';
@@ -8431,6 +8432,231 @@ document.addEventListener('DOMContentLoaded', () => {
       updateAdversarialSecurity();
     });
   }
+});
+
+// =============================================================================
+// Aligned Binary Format Section
+// =============================================================================
+
+/**
+ * State for aligned code generator
+ */
+const alignedState = {
+  currentLang: 'cpp',
+  generatedCode: {
+    cpp: '',
+    ts: '',
+    js: '',
+  },
+};
+
+/**
+ * Generate aligned code from schema
+ */
+function generateAligned() {
+  const schemaInput = $('aligned-schema-input');
+  const outputEl = $('aligned-output');
+  const statusEl = $('aligned-status');
+  const stringLengthInput = $('aligned-string-length');
+
+  if (!schemaInput || !outputEl) return;
+
+  const schema = schemaInput.value.trim();
+  if (!schema) {
+    if (statusEl) statusEl.textContent = 'Please enter a schema';
+    return;
+  }
+
+  const defaultStringLength = parseInt(stringLengthInput?.value || '0', 10);
+
+  try {
+    // Generate code for all languages
+    const result = generateAlignedCode(schema, { defaultStringLength });
+
+    alignedState.generatedCode.cpp = result.cpp;
+    alignedState.generatedCode.ts = result.ts;
+    alignedState.generatedCode.js = result.js;
+
+    // Display current language
+    outputEl.textContent = alignedState.generatedCode[alignedState.currentLang];
+
+    // Update status
+    if (statusEl) {
+      const parsed = parseSchema(schema, { defaultStringLength });
+      const structCount = parsed.structs.length;
+      const tableCount = parsed.tables.length;
+      const enumCount = parsed.enums.length;
+      statusEl.textContent = `Generated: ${structCount} struct(s), ${tableCount} table(s), ${enumCount} enum(s)`;
+      statusEl.className = 'status-text success';
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.textContent = `Error: ${err.message}`;
+      statusEl.className = 'status-text error';
+    }
+    outputEl.textContent = `// Error generating code:\n// ${err.message}`;
+  }
+}
+
+/**
+ * Switch aligned output language
+ */
+function switchAlignedLang(lang) {
+  alignedState.currentLang = lang;
+
+  // Update toggle buttons
+  document.querySelectorAll('.aligned-lang-toggle .toggle-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.alignedLang === lang);
+  });
+
+  // Update output
+  const outputEl = $('aligned-output');
+  if (outputEl && alignedState.generatedCode[lang]) {
+    outputEl.textContent = alignedState.generatedCode[lang];
+  }
+}
+
+/**
+ * Copy aligned code to clipboard
+ */
+async function copyAlignedCode() {
+  const code = alignedState.generatedCode[alignedState.currentLang];
+  if (!code) return;
+
+  try {
+    await navigator.clipboard.writeText(code);
+    const statusEl = $('aligned-status');
+    if (statusEl) {
+      const prevText = statusEl.textContent;
+      statusEl.textContent = 'Copied to clipboard!';
+      setTimeout(() => {
+        statusEl.textContent = prevText;
+      }, 2000);
+    }
+  } catch (err) {
+    console.error('Failed to copy:', err);
+  }
+}
+
+/**
+ * Download aligned code
+ */
+function downloadAlignedCode() {
+  const code = alignedState.generatedCode[alignedState.currentLang];
+  if (!code) return;
+
+  const extensions = { cpp: 'h', ts: 'ts', js: 'mjs' };
+  const filename = `aligned_types.${extensions[alignedState.currentLang]}`;
+
+  const blob = new Blob([code], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Show example code for the selected language
+ */
+function showAlignedExample(lang) {
+  const exampleEl = $('aligned-example-code');
+  if (!exampleEl) return;
+
+  const examples = {
+    cpp: `// C++ - Direct struct access in WASM
+#include "aligned_types.h"
+
+void processEntities(Entity* entities, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+        Entity& e = entities[i];
+        e.health -= 10;
+        e.position.x += e.velocity.x * dt;
+        // Zero overhead - direct memory access
+    }
+}
+
+// Export for JS binding
+extern "C" void update_entities(Entity* ptr, int count) {
+    processEntities(ptr, count);
+}`,
+    ts: `// TypeScript - Zero-copy views into WASM memory
+import { EntityView, ENTITY_SIZE } from './aligned_types';
+
+function processEntities(memory: ArrayBuffer, offset: number, count: number) {
+  const view = new DataView(memory, offset);
+
+  for (let i = 0; i < count; i++) {
+    const entity = new EntityView(view, i * ENTITY_SIZE);
+
+    // Direct access - no deserialization
+    entity.health = entity.health - 10;
+
+    // Nested struct access
+    const pos = entity.position;
+    pos.x = pos.x + entity.velocity.x * dt;
+  }
+}`,
+    js: `// JavaScript - Works without TypeScript
+import { EntityView, ENTITY_SIZE } from './aligned_types.mjs';
+
+function processEntities(wasmMemory, offset, count) {
+  const view = new DataView(wasmMemory.buffer, offset);
+
+  for (let i = 0; i < count; i++) {
+    const entity = new EntityView(view, i * ENTITY_SIZE);
+
+    // Same API as TypeScript version
+    entity.health = entity.health - 10;
+
+    const pos = entity.position;
+    pos.x = pos.x + entity.velocity.x * dt;
+  }
+}`,
+  };
+
+  exampleEl.textContent = examples[lang] || examples.cpp;
+
+  // Update tabs
+  document.querySelectorAll('.example-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.example === lang);
+  });
+}
+
+// Initialize aligned section event handlers
+document.addEventListener('DOMContentLoaded', () => {
+  // Generate button
+  $('aligned-generate')?.addEventListener('click', generateAligned);
+
+  // Language toggle
+  document.querySelectorAll('.aligned-lang-toggle .toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      switchAlignedLang(btn.dataset.alignedLang);
+    });
+  });
+
+  // Copy button
+  $('aligned-copy')?.addEventListener('click', copyAlignedCode);
+
+  // Download button
+  $('aligned-download')?.addEventListener('click', downloadAlignedCode);
+
+  // Example tabs
+  document.querySelectorAll('.example-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      showAlignedExample(tab.dataset.example);
+    });
+  });
+
+  // Generate on Enter key in schema input
+  $('aligned-schema-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      generateAligned();
+    }
+  });
 });
 
 init();

@@ -71,6 +71,16 @@ npm install flatc-wasm
 - [Examples](#examples)
 - [Building from Source](#building-from-source)
 - [TypeScript Support](#typescript-support)
+- [Aligned Binary Format](#aligned-binary-format)
+  - [Why Use Aligned Format?](#why-use-aligned-format)
+  - [Basic Usage](#basic-usage)
+  - [Fixed-Length Strings](#fixed-length-strings)
+  - [Supported Types](#supported-types)
+  - [WASM Interop Example](#wasm-interop-example)
+- [Plugin Architecture](#plugin-architecture)
+  - [Code Generator Plugins](#code-generator-plugins)
+  - [Schema Transformation Plugins](#schema-transformation-plugins)
+  - [Custom Language Generator Example](#custom-language-generator-example)
 - [License](#license)
 
 ---
@@ -2342,6 +2352,295 @@ const flatc: FlatcWasm = await createFlatcWasm();
 const version: string = flatc.getVersion();
 const handle = flatc.createSchema('test.fbs', schema);
 const isValid: boolean = handle.valid();
+```
+
+---
+
+## Aligned Binary Format
+
+The aligned binary format provides zero-overhead, fixed-size structs from FlatBuffers schemas, optimized for WASM/native interop and shared memory scenarios.
+
+### Why Use Aligned Format?
+
+| Standard FlatBuffers | Aligned Format |
+|---------------------|----------------|
+| Variable-size with vtables | Fixed-size structs |
+| Requires deserialization | Zero-copy TypedArray views |
+| Schema evolution support | No schema evolution |
+| Strings and vectors | Fixed-size arrays and strings |
+
+Use aligned format when you need:
+- Direct TypedArray views into WASM linear memory
+- Zero deserialization overhead
+- Predictable memory layout for arrays of structs
+- C++/WASM and JavaScript/TypeScript interop
+
+### Basic Usage
+
+```javascript
+import { generateAlignedCode, parseSchema } from 'flatc-wasm/aligned-codegen';
+
+const schema = `
+namespace MyGame;
+
+struct Vec3 {
+  x:float;
+  y:float;
+  z:float;
+}
+
+table Entity {
+  position:Vec3;
+  health:int;
+  mana:int;
+}
+`;
+
+// Generate code for all languages
+const result = generateAlignedCode(schema);
+console.log(result.cpp);  // C++ header
+console.log(result.ts);   // TypeScript module
+console.log(result.js);   // JavaScript module
+```
+
+### Fixed-Length Strings
+
+By default, strings are variable-length and not supported. Enable fixed-length strings by setting `defaultStringLength`:
+
+```javascript
+const schema = `
+table Player {
+  name:string;
+  guild:string;
+  health:int;
+}
+`;
+
+// Strings become fixed-size char arrays (255 chars + null = 256 bytes)
+const result = generateAlignedCode(schema, { defaultStringLength: 255 });
+```
+
+### Supported Types
+
+| Type | Size | Notes |
+|------|------|-------|
+| `bool` | 1 byte | |
+| `byte`, `ubyte`, `int8`, `uint8` | 1 byte | |
+| `short`, `ushort`, `int16`, `uint16` | 2 bytes | |
+| `int`, `uint`, `int32`, `uint32`, `float` | 4 bytes | |
+| `long`, `ulong`, `int64`, `uint64`, `double` | 8 bytes | |
+| `[type:N]` | N × size | Fixed-size arrays |
+| `[ubyte:0x100]` | 256 bytes | Hex array sizes |
+| `string` | configurable | Requires `defaultStringLength` |
+
+### Generated Code Example
+
+**C++ Header:**
+```cpp
+#pragma once
+#include <cstdint>
+#include <cstring>
+
+namespace MyGame {
+
+struct Vec3 {
+  float x;
+  float y;
+  float z;
+};
+static_assert(sizeof(Vec3) == 12, "Vec3 size mismatch");
+
+struct Entity {
+  Vec3 position;
+  int32_t health;
+  int32_t mana;
+};
+static_assert(sizeof(Entity) == 20, "Entity size mismatch");
+
+} // namespace MyGame
+```
+
+**TypeScript:**
+```typescript
+export const ENTITY_SIZE = 20;
+export const ENTITY_ALIGN = 4;
+
+export class EntityView {
+  private _view: DataView;
+  private _offset: number;
+
+  constructor(view: DataView, offset: number = 0) {
+    this._view = view;
+    this._offset = offset;
+  }
+
+  get position(): Vec3View {
+    return new Vec3View(this._view, this._offset + 0);
+  }
+
+  get health(): number {
+    return this._view.getInt32(this._offset + 12, true);
+  }
+  set health(value: number) {
+    this._view.setInt32(this._offset + 12, value, true);
+  }
+
+  get mana(): number {
+    return this._view.getInt32(this._offset + 16, true);
+  }
+  set mana(value: number) {
+    this._view.setInt32(this._offset + 16, value, true);
+  }
+}
+```
+
+### WASM Interop Example
+
+```javascript
+// JavaScript side
+import { EntityView, ENTITY_SIZE } from './aligned_types.mjs';
+
+// Get WASM memory buffer
+const memory = wasmInstance.exports.memory;
+const entityPtr = wasmInstance.exports.get_entity_array();
+const count = wasmInstance.exports.get_entity_count();
+
+// Create views directly into WASM memory
+const view = new DataView(memory.buffer, entityPtr);
+for (let i = 0; i < count; i++) {
+  const entity = new EntityView(view, i * ENTITY_SIZE);
+  console.log(`Entity ${i}: health=${entity.health}, mana=${entity.mana}`);
+}
+```
+
+```cpp
+// C++ WASM side
+#include "aligned_types.h"
+
+static Entity entities[1000];
+
+extern "C" {
+  Entity* get_entity_array() { return entities; }
+  int get_entity_count() { return 1000; }
+
+  void update_entities(float dt) {
+    for (auto& e : entities) {
+      e.position.x += e.velocity.x * dt;
+      e.health = std::max(0, e.health - 1);
+    }
+  }
+}
+```
+
+---
+
+## Plugin Architecture
+
+The flatc-wasm package supports an extensible plugin architecture for custom code generators and transformations.
+
+### Code Generator Plugins
+
+Create custom code generators that extend the standard flatc output:
+
+```javascript
+import { FlatcRunner } from 'flatc-wasm';
+import { parseSchema, generateCppHeader, generateTypeScript } from 'flatc-wasm/aligned-codegen';
+
+// Custom plugin that adds encryption metadata
+class EncryptionPlugin {
+  constructor(options = {}) {
+    this.encryptedFields = options.encryptedFields || [];
+  }
+
+  transform(schema, generatedCode) {
+    // Add encryption annotations to generated code
+    const parsed = parseSchema(schema);
+    // ... custom transformation logic
+    return generatedCode;
+  }
+}
+
+// Register and use plugin
+const flatc = await FlatcRunner.init();
+const plugin = new EncryptionPlugin({
+  encryptedFields: ['ssn', 'credit_card']
+});
+
+const code = flatc.generateCode(schema, 'ts');
+const transformedCode = plugin.transform(schema, code);
+```
+
+### Schema Transformation Plugins
+
+Transform schemas before code generation:
+
+```javascript
+// Plugin that converts tables to aligned structs
+function tableToStructPlugin(schema, options = {}) {
+  const parsed = parseSchema(schema, options);
+
+  // Filter tables that can be converted to aligned structs
+  const alignableTypes = parsed.tables.filter(table => {
+    return table.fields.every(field => {
+      // Check if field type is fixed-size
+      return field.size !== undefined && field.size > 0;
+    });
+  });
+
+  return {
+    ...parsed,
+    alignableTypes,
+    canAlign: alignableTypes.length > 0,
+  };
+}
+```
+
+### Available Extension Points
+
+| Extension Point | Description |
+|-----------------|-------------|
+| `parseSchema()` | Parse FlatBuffers schema to AST |
+| `computeLayout()` | Calculate memory layout for types |
+| `generateCppHeader()` | Generate C++ header from parsed schema |
+| `generateTypeScript()` | Generate TypeScript module from parsed schema |
+| `generateJavaScript()` | Generate JavaScript module from parsed schema |
+| `generateAlignedCode()` | Generate all languages at once |
+
+### Custom Language Generator Example
+
+```javascript
+import { parseSchema, computeLayout } from 'flatc-wasm/aligned-codegen';
+
+function generateRustAligned(schemaContent, options = {}) {
+  const schema = parseSchema(schemaContent, options);
+  let code = '// Auto-generated Rust aligned types\n\n';
+
+  for (const structDef of schema.structs) {
+    const layout = computeLayout(structDef);
+    code += `#[repr(C)]\n`;
+    code += `pub struct ${structDef.name} {\n`;
+
+    for (const field of layout.fields) {
+      const rustType = toRustType(field);
+      code += `    pub ${field.name}: ${rustType},\n`;
+    }
+
+    code += `}\n\n`;
+  }
+
+  return code;
+}
+
+function toRustType(field) {
+  const typeMap = {
+    'int32': 'i32',
+    'uint32': 'u32',
+    'float': 'f32',
+    'double': 'f64',
+    // ... add more mappings
+  };
+  return typeMap[field.type] || field.type;
+}
 ```
 
 ---

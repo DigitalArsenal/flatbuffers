@@ -401,15 +401,35 @@ class SqlGenerator : public BaseGenerator {
     }
     if (field.value.constant != "0" && !field.value.constant.empty()) {
       // Has default value
-      if (IsString(type)) {
-        constraints += " DEFAULT '" + field.value.constant + "'";
-      } else if (type.base_type == BASE_TYPE_BOOL) {
-        constraints += " DEFAULT ";
-        constraints += (field.value.constant == "true" || field.value.constant == "1")
-            ? "TRUE" : "FALSE";
-      } else {
-        constraints += " DEFAULT " + field.value.constant;
+      const std::string& val = field.value.constant;
+
+      // Check for special float values (nan, inf) - SQLite doesn't support these
+      bool is_special_float = false;
+      if (IsFloat(type.base_type) && dialect_ == SqlDialect::kSQLite) {
+        std::string lower_val = val;
+        std::transform(lower_val.begin(), lower_val.end(), lower_val.begin(), ::tolower);
+        // Remove leading + sign for comparison
+        if (!lower_val.empty() && lower_val[0] == '+') {
+          lower_val = lower_val.substr(1);
+        }
+        if (lower_val == "nan" || lower_val == "inf" || lower_val == "-inf" ||
+            lower_val == "infinity" || lower_val == "-infinity") {
+          is_special_float = true;
+        }
       }
+
+      if (!is_special_float) {
+        if (IsString(type)) {
+          constraints += " DEFAULT '" + val + "'";
+        } else if (type.base_type == BASE_TYPE_BOOL) {
+          constraints += " DEFAULT ";
+          constraints += (val == "true" || val == "1") ? "TRUE" : "FALSE";
+        } else {
+          constraints += " DEFAULT " + val;
+        }
+      }
+      // For SQLite: special float values (nan, inf) are omitted as SQLite
+      // doesn't support these literal values
     }
 
     code_ += "  " + EscapeIdentifier(col_name, dialect_) + " " + col_type + constraints;

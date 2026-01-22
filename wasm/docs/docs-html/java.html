@@ -10,15 +10,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-primary: #0a0a0f;
-      --bg-secondary: #12121a;
-      --bg-tertiary: #1a1a24;
-      --accent-primary: #6366f1;
-      --accent-secondary: #818cf8;
-      --text-primary: #e2e8f0;
-      --text-secondary: #94a3b8;
-      --border-color: rgba(99, 102, 241, 0.2);
-      --glow-color: rgba(99, 102, 241, 0.15);
+      --bg-primary: #000000;
+      --bg-secondary: rgba(42, 42, 45, 0.72);
+      --bg-tertiary: rgba(66, 66, 69, 0.72);
+      --accent-primary: #3b82f6;
+      --accent-secondary: #60a5fa;
+      --text-primary: #F5F5F7;
+      --text-secondary: rgba(255, 255, 255, 0.6);
+      --border-color: rgba(59, 130, 246, 0.3);
+      --glow-color: rgba(59, 130, 246, 0.15);
     }
 
     * {
@@ -45,9 +45,9 @@
       right: 0;
       bottom: 0;
       background:
-        radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
-        radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 50%, rgba(59, 130, 246, 0.04) 0%, transparent 70%);
+        radial-gradient(ellipse at 20% 20%, rgba(59, 130, 246, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(59, 130, 246, 0.04) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(59, 130, 246, 0.03) 0%, transparent 70%);
       pointer-events: none;
       z-index: 0;
     }
@@ -61,8 +61,8 @@
       right: 0;
       bottom: 0;
       background-image:
-        linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+        linear-gradient(rgba(59, 130, 246, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59, 130, 246, 0.02) 1px, transparent 1px);
       background-size: 50px 50px;
       pointer-events: none;
       z-index: 0;
@@ -95,7 +95,6 @@
     .back-link:hover {
       background: var(--bg-tertiary);
       border-color: var(--accent-primary);
-      box-shadow: 0 0 20px var(--glow-color);
       transform: translateY(-1px);
     }
 
@@ -104,9 +103,6 @@
       border: 1px solid var(--border-color);
       border-radius: 16px;
       padding: 48px;
-      box-shadow:
-        0 4px 6px rgba(0, 0, 0, 0.3),
-        0 0 40px var(--glow-color);
     }
 
     .markdown-body h1,
@@ -180,7 +176,7 @@
     }
 
     .markdown-body table tr:nth-child(even) {
-      background: rgba(99, 102, 241, 0.03);
+      background: rgba(59, 130, 246, 0.03);
     }
 
     .markdown-body blockquote {

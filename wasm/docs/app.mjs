@@ -3236,7 +3236,8 @@ function setupStreamingDemo() {
   // In production, this would use the actual streaming-dispatcher WASM
   const typeRegistry = new Map(); // typeIndex -> { fileId, count, totalReceived, capacity, messageSize }
   let nextTypeIndex = 0;
-  const heapMemory = new Uint8Array(4 * 1024 * 1024); // 4MB heap
+  const HEAP_SIZE = 128 * 1024 * 1024; // 128MB heap for large demos
+  const heapMemory = new Uint8Array(HEAP_SIZE);
 
   const mockWasm = {
     _dispatcher_init: () => {
@@ -3313,10 +3314,14 @@ function setupStreamingDemo() {
       }
     },
     _malloc: (size) => {
-      // Simple bump allocator - find first free spot
-      // For demo purposes, just return incrementing addresses
+      // Simple bump allocator
       const addr = mockWasm._nextAlloc || 1024;
-      mockWasm._nextAlloc = addr + size + 16; // 16-byte align
+      const newAlloc = addr + size + 16; // 16-byte align
+      if (newAlloc > HEAP_SIZE) {
+        console.error(`Mock WASM: allocation of ${size} bytes would exceed heap (${HEAP_SIZE} bytes)`);
+        return 0; // Return null pointer
+      }
+      mockWasm._nextAlloc = newAlloc;
       return addr;
     },
     _free: () => {},

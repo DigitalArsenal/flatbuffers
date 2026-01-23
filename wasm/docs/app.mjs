@@ -3237,161 +3237,18 @@ function setupStreamingApiDocs() {
 // Streaming Demo
 // =============================================================================
 
-// Streaming dispatcher WASM module loader
+// Streaming dispatcher WASM module (no fallback - WASM only)
 let streamingWasmModule = null;
-let streamingWasmLoading = false;
-let streamingWasmError = null;
 
 async function loadStreamingWasm() {
   if (streamingWasmModule) return streamingWasmModule;
-  if (streamingWasmLoading) {
-    // Wait for existing load to complete
-    while (streamingWasmLoading) {
-      await new Promise(r => setTimeout(r, 50));
-    }
-    if (streamingWasmModule) return streamingWasmModule;
-    throw streamingWasmError || new Error('WASM load failed');
-  }
 
-  streamingWasmLoading = true;
-  try {
-    // Try to load the real streaming-dispatcher WASM
-    const wasmPath = './streaming-dispatcher.js';
-    const module = await import(/* @vite-ignore */ wasmPath);
-    const createModule = module.default || module.createStreamingDispatcher;
-    streamingWasmModule = await createModule();
-    console.log('Loaded real streaming-dispatcher WASM');
-    return streamingWasmModule;
-  } catch (err) {
-    console.warn('Could not load streaming-dispatcher.wasm, using fallback:', err.message);
-    // Fallback to in-memory implementation
-    streamingWasmModule = createFallbackStreamingWasm();
-    return streamingWasmModule;
-  } finally {
-    streamingWasmLoading = false;
-  }
-}
-
-function createFallbackStreamingWasm() {
-  // Fallback in-memory implementation when WASM not available
-  const typeRegistry = new Map();
-  let nextTypeIndex = 0;
-
-  const INITIAL_HEAP_SIZE = 4 * 1024 * 1024;
-  const MAX_HEAP_SIZE = 512 * 1024 * 1024;
-  let heapSize = INITIAL_HEAP_SIZE;
-  let heapMemory = new Uint8Array(heapSize);
-
-  function ensureHeapSize(needed) {
-    if (needed <= heapSize) return true;
-    let newSize = heapSize;
-    while (newSize < needed && newSize < MAX_HEAP_SIZE) {
-      newSize *= 2;
-    }
-    if (needed > newSize) return false;
-    const newHeap = new Uint8Array(newSize);
-    newHeap.set(heapMemory);
-    heapMemory = newHeap;
-    heapSize = newSize;
-    wasmModule.HEAPU8 = heapMemory;
-    return true;
-  }
-
-  const wasmModule = {
-    _dispatcher_init: () => {
-      wasmModule._nextAlloc = 1024;
-      typeRegistry.clear();
-      nextTypeIndex = 0;
-    },
-    _dispatcher_reset: () => {
-      for (const info of typeRegistry.values()) {
-        info.count = 0;
-        info.totalReceived = 0;
-        info.head = 0;
-      }
-    },
-    _dispatcher_register_type: (fileIdPtr, bufferPtr, bufferSize, messageSize) => {
-      const fileId = new TextDecoder().decode(heapMemory.slice(fileIdPtr, fileIdPtr + 4));
-      const typeIndex = nextTypeIndex++;
-      typeRegistry.set(typeIndex, {
-        fileId,
-        count: 0,
-        totalReceived: 0,
-        capacity: Math.floor(bufferSize / messageSize),
-        messageSize,
-        bufferPtr,
-        head: 0,
-      });
-      return typeIndex;
-    },
-    _dispatcher_push_bytes: (ptr, size) => {
-      let offset = 0;
-      let messagesProcessed = 0;
-      while (offset + 4 <= size) {
-        const msgSize = heapMemory[ptr + offset] |
-          (heapMemory[ptr + offset + 1] << 8) |
-          (heapMemory[ptr + offset + 2] << 16) |
-          (heapMemory[ptr + offset + 3] << 24);
-        if (offset + 4 + msgSize > size) break;
-        const fileId = new TextDecoder().decode(heapMemory.slice(ptr + offset + 4, ptr + offset + 8));
-        for (const [, info] of typeRegistry.entries()) {
-          if (info.fileId === fileId) {
-            const msgData = heapMemory.slice(ptr + offset + 4, ptr + offset + 4 + msgSize);
-            const storeSize = Math.min(msgSize, info.messageSize);
-            const destOffset = info.bufferPtr + (info.head * info.messageSize);
-            heapMemory.fill(0, destOffset, destOffset + info.messageSize);
-            heapMemory.set(msgData.slice(0, storeSize), destOffset);
-            info.head = (info.head + 1) % info.capacity;
-            info.totalReceived++;
-            if (info.count < info.capacity) info.count++;
-            break;
-          }
-        }
-        offset += 4 + msgSize;
-        messagesProcessed++;
-      }
-      return messagesProcessed;
-    },
-    _dispatcher_get_message: (typeIndex, index) => {
-      const info = typeRegistry.get(typeIndex);
-      if (!info || index >= info.count) return 0;
-      const ringIndex = info.count < info.capacity ? index : (info.head + index) % info.capacity;
-      return info.bufferPtr + (ringIndex * info.messageSize);
-    },
-    _dispatcher_get_latest_message: (typeIndex) => {
-      const info = typeRegistry.get(typeIndex);
-      if (!info || info.count === 0) return 0;
-      const latestIndex = (info.head + info.capacity - 1) % info.capacity;
-      return info.bufferPtr + (latestIndex * info.messageSize);
-    },
-    _dispatcher_get_message_count: (typeIndex) => {
-      const info = typeRegistry.get(typeIndex);
-      return info ? info.count : 0;
-    },
-    _dispatcher_get_total_received: (typeIndex) => {
-      const info = typeRegistry.get(typeIndex);
-      return info ? info.totalReceived : 0;
-    },
-    _dispatcher_clear_messages: (typeIndex) => {
-      const info = typeRegistry.get(typeIndex);
-      if (info) {
-        info.count = 0;
-        info.totalReceived = 0;
-        info.head = 0;
-      }
-    },
-    _malloc: (size) => {
-      const addr = wasmModule._nextAlloc || 1024;
-      const newAlloc = addr + size + 16;
-      if (!ensureHeapSize(newAlloc)) return 0;
-      wasmModule._nextAlloc = newAlloc;
-      return addr;
-    },
-    _free: () => {},
-    HEAPU8: heapMemory,
-  };
-
-  return wasmModule;
+  const wasmPath = './streaming-dispatcher.js';
+  const module = await import(/* @vite-ignore */ wasmPath);
+  const createModule = module.default || module.createStreamingDispatcher;
+  streamingWasmModule = await createModule();
+  console.log('Loaded streaming-dispatcher WASM');
+  return streamingWasmModule;
 }
 
 async function setupStreamingDemo() {
@@ -3399,7 +3256,7 @@ async function setupStreamingDemo() {
     const wasmModule = await loadStreamingWasm();
     state.streamingDemo = new StreamingDemo(wasmModule);
   } catch (err) {
-    console.error('Failed to setup streaming demo:', err);
+    console.error('Failed to load streaming-dispatcher WASM:', err);
   }
 }
 

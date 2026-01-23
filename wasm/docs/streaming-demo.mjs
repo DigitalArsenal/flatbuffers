@@ -94,6 +94,12 @@ export class StreamingDemo {
       throw new Error('WASM module not available');
     }
 
+    // Reuse existing dispatcher if already initialized, just reset it
+    if (this.dispatcher) {
+      this.dispatcher.reset();
+      return;
+    }
+
     this.dispatcher = new StreamingDispatcher(this.wasm);
 
     // Register message types

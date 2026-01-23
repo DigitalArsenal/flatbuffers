@@ -3236,8 +3236,38 @@ function setupStreamingDemo() {
   // In production, this would use the actual streaming-dispatcher WASM
   const typeRegistry = new Map(); // typeIndex -> { fileId, count, totalReceived, capacity, messageSize }
   let nextTypeIndex = 0;
-  const HEAP_SIZE = 128 * 1024 * 1024; // 128MB heap for large demos
-  const heapMemory = new Uint8Array(HEAP_SIZE);
+
+  // Dynamic heap - starts small, grows as needed
+  const INITIAL_HEAP_SIZE = 4 * 1024 * 1024; // 4MB initial
+  const MAX_HEAP_SIZE = 512 * 1024 * 1024; // 512MB max
+  let heapSize = INITIAL_HEAP_SIZE;
+  let heapMemory = new Uint8Array(heapSize);
+
+  // Helper to grow heap if needed
+  function ensureHeapSize(needed) {
+    if (needed <= heapSize) return true;
+
+    // Calculate new size (double until we have enough, cap at max)
+    let newSize = heapSize;
+    while (newSize < needed && newSize < MAX_HEAP_SIZE) {
+      newSize *= 2;
+    }
+    newSize = Math.min(newSize, MAX_HEAP_SIZE);
+
+    if (needed > newSize) {
+      console.error(`Mock WASM: cannot allocate ${needed} bytes (max heap: ${MAX_HEAP_SIZE})`);
+      return false;
+    }
+
+    // Grow the heap
+    const newHeap = new Uint8Array(newSize);
+    newHeap.set(heapMemory); // Copy existing data
+    heapMemory = newHeap;
+    heapSize = newSize;
+    mockWasm.HEAPU8 = heapMemory; // Update reference
+    console.log(`Mock WASM: heap grown to ${(newSize / 1024 / 1024).toFixed(1)}MB`);
+    return true;
+  }
 
   const mockWasm = {
     _dispatcher_init: () => {
@@ -3314,13 +3344,15 @@ function setupStreamingDemo() {
       }
     },
     _malloc: (size) => {
-      // Simple bump allocator
+      // Simple bump allocator with dynamic growth
       const addr = mockWasm._nextAlloc || 1024;
       const newAlloc = addr + size + 16; // 16-byte align
-      if (newAlloc > HEAP_SIZE) {
-        console.error(`Mock WASM: allocation of ${size} bytes would exceed heap (${HEAP_SIZE} bytes)`);
-        return 0; // Return null pointer
+
+      // Grow heap if needed
+      if (!ensureHeapSize(newAlloc)) {
+        return 0; // Allocation failed
       }
+
       mockWasm._nextAlloc = newAlloc;
       return addr;
     },

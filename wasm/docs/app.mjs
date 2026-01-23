@@ -3237,48 +3237,69 @@ function setupStreamingApiDocs() {
 // Streaming Demo
 // =============================================================================
 
-function setupStreamingDemo() {
-  // Create a mock WASM module that actually tracks statistics
-  // In production, this would use the actual streaming-dispatcher WASM
-  const typeRegistry = new Map(); // typeIndex -> { fileId, count, totalReceived, capacity, messageSize }
+// Streaming dispatcher WASM module loader
+let streamingWasmModule = null;
+let streamingWasmLoading = false;
+let streamingWasmError = null;
+
+async function loadStreamingWasm() {
+  if (streamingWasmModule) return streamingWasmModule;
+  if (streamingWasmLoading) {
+    // Wait for existing load to complete
+    while (streamingWasmLoading) {
+      await new Promise(r => setTimeout(r, 50));
+    }
+    if (streamingWasmModule) return streamingWasmModule;
+    throw streamingWasmError || new Error('WASM load failed');
+  }
+
+  streamingWasmLoading = true;
+  try {
+    // Try to load the real streaming-dispatcher WASM
+    const wasmPath = './streaming-dispatcher.js';
+    const module = await import(/* @vite-ignore */ wasmPath);
+    const createModule = module.default || module.createStreamingDispatcher;
+    streamingWasmModule = await createModule();
+    console.log('Loaded real streaming-dispatcher WASM');
+    return streamingWasmModule;
+  } catch (err) {
+    console.warn('Could not load streaming-dispatcher.wasm, using fallback:', err.message);
+    // Fallback to in-memory implementation
+    streamingWasmModule = createFallbackStreamingWasm();
+    return streamingWasmModule;
+  } finally {
+    streamingWasmLoading = false;
+  }
+}
+
+function createFallbackStreamingWasm() {
+  // Fallback in-memory implementation when WASM not available
+  const typeRegistry = new Map();
   let nextTypeIndex = 0;
 
-  // Dynamic heap - starts small, grows as needed
-  const INITIAL_HEAP_SIZE = 4 * 1024 * 1024; // 4MB initial
-  const MAX_HEAP_SIZE = 512 * 1024 * 1024; // 512MB max
+  const INITIAL_HEAP_SIZE = 4 * 1024 * 1024;
+  const MAX_HEAP_SIZE = 512 * 1024 * 1024;
   let heapSize = INITIAL_HEAP_SIZE;
   let heapMemory = new Uint8Array(heapSize);
 
-  // Helper to grow heap if needed
   function ensureHeapSize(needed) {
     if (needed <= heapSize) return true;
-
-    // Calculate new size (double until we have enough, cap at max)
     let newSize = heapSize;
     while (newSize < needed && newSize < MAX_HEAP_SIZE) {
       newSize *= 2;
     }
-    newSize = Math.min(newSize, MAX_HEAP_SIZE);
-
-    if (needed > newSize) {
-      console.error(`Mock WASM: cannot allocate ${needed} bytes (max heap: ${MAX_HEAP_SIZE})`);
-      return false;
-    }
-
-    // Grow the heap
+    if (needed > newSize) return false;
     const newHeap = new Uint8Array(newSize);
-    newHeap.set(heapMemory); // Copy existing data
+    newHeap.set(heapMemory);
     heapMemory = newHeap;
     heapSize = newSize;
-    mockWasm.HEAPU8 = heapMemory; // Update reference
-    console.log(`Mock WASM: heap grown to ${(newSize / 1024 / 1024).toFixed(1)}MB`);
+    wasmModule.HEAPU8 = heapMemory;
     return true;
   }
 
-  const mockWasm = {
+  const wasmModule = {
     _dispatcher_init: () => {
-      // Reset allocator and type registry for fresh start
-      mockWasm._nextAlloc = 1024;
+      wasmModule._nextAlloc = 1024;
       typeRegistry.clear();
       nextTypeIndex = 0;
     },
@@ -3286,53 +3307,62 @@ function setupStreamingDemo() {
       for (const info of typeRegistry.values()) {
         info.count = 0;
         info.totalReceived = 0;
+        info.head = 0;
       }
     },
     _dispatcher_register_type: (fileIdPtr, bufferPtr, bufferSize, messageSize) => {
       const fileId = new TextDecoder().decode(heapMemory.slice(fileIdPtr, fileIdPtr + 4));
       const typeIndex = nextTypeIndex++;
-      const capacity = Math.floor(bufferSize / messageSize);
       typeRegistry.set(typeIndex, {
         fileId,
         count: 0,
         totalReceived: 0,
-        capacity,
+        capacity: Math.floor(bufferSize / messageSize),
         messageSize,
         bufferPtr,
+        head: 0,
       });
       return typeIndex;
     },
     _dispatcher_push_bytes: (ptr, size) => {
-      // Parse size-prefixed messages from the buffer
       let offset = 0;
       let messagesProcessed = 0;
-
       while (offset + 4 <= size) {
-        // Read message size (little-endian)
         const msgSize = heapMemory[ptr + offset] |
-                       (heapMemory[ptr + offset + 1] << 8) |
-                       (heapMemory[ptr + offset + 2] << 16) |
-                       (heapMemory[ptr + offset + 3] << 24);
-
-        if (offset + 4 + msgSize > size) break; // Incomplete message
-
-        // Read file ID (4 bytes after size)
+          (heapMemory[ptr + offset + 1] << 8) |
+          (heapMemory[ptr + offset + 2] << 16) |
+          (heapMemory[ptr + offset + 3] << 24);
+        if (offset + 4 + msgSize > size) break;
         const fileId = new TextDecoder().decode(heapMemory.slice(ptr + offset + 4, ptr + offset + 8));
-
-        // Find matching type and increment counters
         for (const [, info] of typeRegistry.entries()) {
           if (info.fileId === fileId) {
+            const msgData = heapMemory.slice(ptr + offset + 4, ptr + offset + 4 + msgSize);
+            const storeSize = Math.min(msgSize, info.messageSize);
+            const destOffset = info.bufferPtr + (info.head * info.messageSize);
+            heapMemory.fill(0, destOffset, destOffset + info.messageSize);
+            heapMemory.set(msgData.slice(0, storeSize), destOffset);
+            info.head = (info.head + 1) % info.capacity;
             info.totalReceived++;
-            info.count = Math.min(info.count + 1, info.capacity);
+            if (info.count < info.capacity) info.count++;
             break;
           }
         }
-
         offset += 4 + msgSize;
         messagesProcessed++;
       }
-
       return messagesProcessed;
+    },
+    _dispatcher_get_message: (typeIndex, index) => {
+      const info = typeRegistry.get(typeIndex);
+      if (!info || index >= info.count) return 0;
+      const ringIndex = info.count < info.capacity ? index : (info.head + index) % info.capacity;
+      return info.bufferPtr + (ringIndex * info.messageSize);
+    },
+    _dispatcher_get_latest_message: (typeIndex) => {
+      const info = typeRegistry.get(typeIndex);
+      if (!info || info.count === 0) return 0;
+      const latestIndex = (info.head + info.capacity - 1) % info.capacity;
+      return info.bufferPtr + (latestIndex * info.messageSize);
     },
     _dispatcher_get_message_count: (typeIndex) => {
       const info = typeRegistry.get(typeIndex);
@@ -3347,26 +3377,30 @@ function setupStreamingDemo() {
       if (info) {
         info.count = 0;
         info.totalReceived = 0;
+        info.head = 0;
       }
     },
     _malloc: (size) => {
-      // Simple bump allocator with dynamic growth
-      const addr = mockWasm._nextAlloc || 1024;
-      const newAlloc = addr + size + 16; // 16-byte align
-
-      // Grow heap if needed
-      if (!ensureHeapSize(newAlloc)) {
-        return 0; // Allocation failed
-      }
-
-      mockWasm._nextAlloc = newAlloc;
+      const addr = wasmModule._nextAlloc || 1024;
+      const newAlloc = addr + size + 16;
+      if (!ensureHeapSize(newAlloc)) return 0;
+      wasmModule._nextAlloc = newAlloc;
       return addr;
     },
     _free: () => {},
     HEAPU8: heapMemory,
   };
 
-  state.streamingDemo = new StreamingDemo(mockWasm);
+  return wasmModule;
+}
+
+async function setupStreamingDemo() {
+  try {
+    const wasmModule = await loadStreamingWasm();
+    state.streamingDemo = new StreamingDemo(wasmModule);
+  } catch (err) {
+    console.error('Failed to setup streaming demo:', err);
+  }
 }
 
 async function startStreaming() {
@@ -4379,7 +4413,7 @@ async function init() {
     }
 
     // Setup streaming demo
-    setupStreamingDemo();
+    await setupStreamingDemo();
     setupStreamingApiDocs();
     setupHexExplorerListeners();
 

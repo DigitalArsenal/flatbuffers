@@ -686,6 +686,42 @@ if(NPM_EXECUTABLE AND NODE_EXECUTABLE)
     COMMENT "Starting browser examples"
   )
 
+  # Streaming Dispatcher WASM module (lightweight, for browser demos)
+  set(STREAMING_DISPATCHER_SRC "${CMAKE_SOURCE_DIR}/wasm/src/streaming-dispatcher.cpp")
+  set(STREAMING_DISPATCHER_OUT "${BROWSER_WALLET_DIR}/public/streaming-dispatcher.js")
+  set(STREAMING_DISPATCHER_SCRIPT "${CMAKE_BINARY_DIR}/build_streaming_dispatcher.sh")
+
+  # Create build script for streaming dispatcher
+  file(WRITE "${STREAMING_DISPATCHER_SCRIPT}"
+"#!/bin/bash
+set -e
+source \"${EMSDK_ROOT}/emsdk_env.sh\" 2>/dev/null
+emcc \"${STREAMING_DISPATCHER_SRC}\" \\
+  -o \"${STREAMING_DISPATCHER_OUT}\" \\
+  -std=c++17 -O2 \\
+  -I\"${CMAKE_SOURCE_DIR}/wasm/src\" \\
+  -sEXPORTED_FUNCTIONS=\"['_dispatcher_init','_dispatcher_reset','_dispatcher_get_type_count','_dispatcher_register_type','_dispatcher_find_type','_dispatcher_get_input_buffer','_dispatcher_get_input_buffer_size','_dispatcher_push_bytes','_dispatcher_get_message_count','_dispatcher_get_total_received','_dispatcher_get_message','_dispatcher_get_latest_message','_dispatcher_clear_messages','_dispatcher_get_type_file_id','_dispatcher_get_type_buffer','_dispatcher_get_type_message_size','_dispatcher_get_type_capacity','_malloc','_free']\" \\
+  -sEXPORTED_RUNTIME_METHODS=\"['HEAPU8','getValue','setValue','UTF8ToString']\" \\
+  -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME='createStreamingDispatcher' \\
+  -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=4194304 -sMAXIMUM_MEMORY=536870912 \\
+  -sNO_EXIT_RUNTIME=1 --no-entry
+echo \"Streaming dispatcher WASM built: ${STREAMING_DISPATCHER_OUT}\"
+")
+  file(CHMOD "${STREAMING_DISPATCHER_SCRIPT}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE)
+
+  add_custom_command(
+    OUTPUT "${STREAMING_DISPATCHER_OUT}"
+    COMMAND bash "${STREAMING_DISPATCHER_SCRIPT}"
+    DEPENDS "${STREAMING_DISPATCHER_SRC}"
+    COMMENT "Building streaming-dispatcher WASM module"
+    VERBATIM
+  )
+
+  add_custom_target(streaming_dispatcher_wasm
+    DEPENDS "${STREAMING_DISPATCHER_OUT}"
+    COMMENT "Streaming dispatcher WASM built"
+  )
+
   # Convenience targets for building WASM and serving
   # wasm_build - Build all WASM modules
   add_custom_target(wasm_build

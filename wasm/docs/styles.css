@@ -1678,15 +1678,29 @@ body {
 .completion-card {
   margin-top: 24px;
   padding: 24px;
-  background: rgba(16, 185, 129, 0.1);
-  border: 1px solid var(--success);
+  background: var(--glass-bg);
+  border: 1px solid var(--white-10);
   border-radius: var(--radius-sm);
 }
 
 .completion-card h4 {
   font-size: 16px;
-  color: var(--success);
+  color: var(--white-80);
   margin-bottom: 16px;
+}
+
+/* Green styling only for stats side */
+.completion-stats-side {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid var(--success);
+  border-radius: var(--radius-xs);
+}
+
+.completion-stats-side h4 {
+  color: var(--success);
 }
 
 .completion-grid {
@@ -1716,11 +1730,6 @@ body {
   .completion-split {
     grid-template-columns: 1fr;
   }
-}
-
-.completion-stats-side {
-  display: flex;
-  flex-direction: column;
 }
 
 .wire-format-note {

@@ -7,8 +7,33 @@
 
 import { StreamingDispatcher, createSizePrefixedMessage, concatMessages } from '../src/streaming-dispatcher.mjs';
 
+// =============================================================================
+// Lord of the Rings themed data
+// =============================================================================
+
+const LOTR_MONSTERS = [
+  'Balrog', 'Shelob', 'Smaug', 'Nazgul', 'Warg', 'Cave Troll', 'Uruk-hai',
+  'Morgul Lord', 'Fell Beast', 'Watcher', 'Barrow-wight', 'Great Goblin',
+  'Mumakil', 'Werewolf', 'Vampire', 'Dragon', 'Giant Spider', 'Orc Captain',
+  'Ringwraith', 'Witch-king', 'Gothmog', 'Lurtz', 'Grishnakh', 'Ugluk',
+];
+
+const LOTR_WEAPONS = [
+  'Anduril', 'Sting', 'Glamdring', 'Orcrist', 'Morgul Blade', 'Grond',
+  'Aiglos', 'Narsil', 'Gurthang', 'Anglachel', 'Ringil', 'Herugrim',
+  'Guthwine', 'Hadhafang', 'Aeglos', 'Black Arrow', 'Belthronding',
+  'Dramborleg', 'Aranruth', 'Bow of Galadriel', 'Mithril Coat', 'Axe of Gimli',
+];
+
+const LOTR_GALAXIES = [
+  'Valinor', 'Arda', 'Aman', 'Numenor', 'Beleriand', 'Gondolin',
+  'Doriath', 'Lothlorien', 'Rivendell', 'Mirkwood', 'Mordor', 'Isengard',
+  'Rohan', 'Gondor', 'Shire', 'Bree', 'Erebor', 'Moria', 'Angband', 'Utumno',
+];
+
 /**
  * Message type configuration for the demo
+ * Each type has a fixed-size binary layout with typed fields
  */
 export const MessageTypes = {
   MONS: {
@@ -17,6 +42,8 @@ export const MessageTypes = {
     color: '#ef4444', // red
     messageSize: 64,
     defaultCapacity: 1000,
+    // Layout: [root:4][vtable:4][name:16][hp:2][mana:2][level:1][pad:3][x:4][y:4][z:4][id:4][pad:16]
+    fields: ['name', 'hp', 'mana', 'level', 'x', 'y', 'z', 'id'],
   },
   WEAP: {
     fileId: 'WEAP',
@@ -24,6 +51,8 @@ export const MessageTypes = {
     color: '#3b82f6', // blue
     messageSize: 32,
     defaultCapacity: 500,
+    // Layout: [root:4][vtable:4][name:12][damage:2][weight:4][durability:2][enchant:4]
+    fields: ['name', 'damage', 'weight', 'durability', 'enchantment'],
   },
   GALX: {
     fileId: 'GALX',
@@ -31,6 +60,8 @@ export const MessageTypes = {
     color: '#8b5cf6', // purple
     messageSize: 16,
     defaultCapacity: 200,
+    // Layout: [root:4][stars:4][age:4][type:4]
+    fields: ['stars', 'age', 'type'],
   },
 };
 
@@ -73,6 +104,23 @@ export class StreamingDemo {
   }
 
   /**
+   * Write a fixed-length string to a buffer
+   * @param {Uint8Array} data - Target buffer
+   * @param {number} offset - Start offset
+   * @param {string} str - String to write
+   * @param {number} maxLen - Maximum length
+   */
+  writeFixedString(data, offset, str, maxLen) {
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(str.slice(0, maxLen));
+    data.set(bytes, offset);
+    // Zero-fill remainder
+    for (let i = bytes.length; i < maxLen; i++) {
+      data[offset + i] = 0;
+    }
+  }
+
+  /**
    * Generate a mock FlatBuffer message for a type
    * @param {string} fileId - Message type identifier
    * @param {number} index - Message index (for varying content)
@@ -84,22 +132,46 @@ export class StreamingDemo {
       throw new Error(`Unknown message type: ${fileId}`);
     }
 
-    // Create a mock FlatBuffer-like structure
-    // [4 bytes: root offset][data...]
     const data = new Uint8Array(config.messageSize);
     const view = new DataView(data.buffer);
 
-    // Root offset (points to start of table data)
+    // Root offset (points to table data at offset 4)
     view.setUint32(0, 4, true);
 
-    // Fill with identifiable pattern based on type and index
-    const typeCode = fileId.charCodeAt(0);
-    for (let i = 4; i < config.messageSize; i++) {
-      data[i] = (typeCode + index + i) % 256;
+    switch (fileId) {
+      case 'MONS': {
+        // Monster: name(16), hp(2), mana(2), level(1), pad(3), x(4), y(4), z(4), id(4)
+        const name = LOTR_MONSTERS[index % LOTR_MONSTERS.length];
+        this.writeFixedString(data, 4, name, 16);
+        view.setInt16(20, 100 + (index % 900), true);           // hp: 100-999
+        view.setInt16(22, 50 + (index % 450), true);            // mana: 50-499
+        view.setUint8(24, 1 + (index % 99));                    // level: 1-99
+        // padding at 25-27
+        view.setFloat32(28, (index * 1.5) % 1000, true);        // x position
+        view.setFloat32(32, (index * 2.3) % 1000, true);        // y position
+        view.setFloat32(36, (index * 0.7) % 100, true);         // z position
+        view.setUint32(40, index, true);                        // id
+        break;
+      }
+      case 'WEAP': {
+        // Weapon: name(12), damage(2), weight(4), durability(2), enchant(4)
+        const name = LOTR_WEAPONS[index % LOTR_WEAPONS.length];
+        this.writeFixedString(data, 4, name, 12);
+        view.setInt16(16, 10 + (index % 490), true);            // damage: 10-499
+        view.setFloat32(18, 0.5 + (index % 50) * 0.2, true);    // weight: 0.5-10.5
+        view.setUint16(22, 100 - (index % 100), true);          // durability: 1-100
+        view.setUint32(24, (index * 7) % 0xFFFFFF, true);       // enchantment id
+        view.setUint32(28, index, true);                        // id
+        break;
+      }
+      case 'GALX': {
+        // Galaxy: stars(4), age(4), type(4), id(4)
+        view.setUint32(4, 1000000 + (index * 12345) % 999000000, true);  // stars: 1M-1B
+        view.setFloat32(8, (index * 0.13) % 14.0, true);                 // age in billions
+        view.setUint32(12, index % 4, true);                             // type: 0-3 (spiral, elliptical, etc)
+        break;
+      }
     }
-
-    // Store index in first field area for verification
-    view.setUint32(8, index, true);
 
     return data;
   }

@@ -6507,6 +6507,7 @@ details[open] .collapse-icon {
 }
 
 .code-example .code-display {
+  position: static;
   margin: 0;
   border-radius: 0;
   font-size: 13px;

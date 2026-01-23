@@ -2893,7 +2893,12 @@ function setupStreamingDemo() {
   const heapMemory = new Uint8Array(4 * 1024 * 1024); // 4MB heap
 
   const mockWasm = {
-    _dispatcher_init: () => {},
+    _dispatcher_init: () => {
+      // Reset allocator and type registry for fresh start
+      mockWasm._nextAlloc = 1024;
+      typeRegistry.clear();
+      nextTypeIndex = 0;
+    },
     _dispatcher_reset: () => {
       for (const info of typeRegistry.values()) {
         info.count = 0;
@@ -3069,14 +3074,21 @@ function clearStreaming() {
     state.streamingDemo.clearAll();
   }
 
-  $('stream-progress').style.display = 'none';
-  $('completion-stats').style.display = 'none';
-  $('stream-progress-fill').style.width = '0%';
+  const progressEl = $('stream-progress');
+  const completionEl = $('completion-stats');
+  const progressFillEl = $('stream-progress-fill');
+
+  if (progressEl) progressEl.style.display = 'none';
+  if (completionEl) completionEl.style.display = 'none';
+  if (progressFillEl) progressFillEl.style.width = '0%';
 
   for (const fileId of Object.keys(MessageTypes)) {
-    $(`ring-fill-${fileId}`).style.width = '0%';
-    $(`ring-count-${fileId}`).textContent = '0';
-    $(`ring-total-${fileId}`).textContent = '0';
+    const fillEl = $(`ring-fill-${fileId}`);
+    const countEl = $(`ring-count-${fileId}`);
+    const totalEl = $(`ring-total-${fileId}`);
+    if (fillEl) fillEl.style.width = '0%';
+    if (countEl) countEl.textContent = '0';
+    if (totalEl) totalEl.textContent = '0';
   }
 }
 

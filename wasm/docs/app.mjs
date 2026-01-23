@@ -3429,9 +3429,9 @@ function clearStreaming() {
   if (progressFillEl) progressFillEl.style.width = '0%';
 
   for (const fileId of Object.keys(MessageTypes)) {
-    const fillEl = $(`ring-fill-${fileId}`);
-    const countEl = $(`ring-count-${fileId}`);
-    const totalEl = $(`ring-total-${fileId}`);
+    const fillEl = $(`queue-fill-${fileId}`);
+    const countEl = $(`queue-count-${fileId}`);
+    const totalEl = $(`queue-total-${fileId}`);
     if (fillEl) fillEl.style.width = '0%';
     if (countEl) countEl.textContent = '0';
     if (totalEl) totalEl.textContent = '0';

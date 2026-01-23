@@ -6619,6 +6619,71 @@ details[open] .collapse-icon {
   text-align: center;
 }
 
+/* Memory Layout */
+.memory-layout {
+  background: var(--white-05);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.memory-desc {
+  color: var(--white-70);
+  font-size: 13px;
+  margin-bottom: 1rem;
+}
+
+.memory-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 1rem;
+}
+
+.memory-table th,
+.memory-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--white-10);
+}
+
+.memory-table th {
+  color: var(--white-60);
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.memory-table td {
+  color: var(--white-80);
+}
+
+.memory-table code {
+  background: var(--white-10);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--primary);
+}
+
+.memory-table tr:last-child td {
+  border-bottom: none;
+}
+
+.memory-note {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  color: var(--white-70);
+}
+
+.memory-note strong {
+  color: #60a5fa;
+}
+
 /* Example Categories */
 .example-category {
   margin-bottom: 1.5rem;

@@ -1150,6 +1150,56 @@
           </div>
         </div>
 
+        <!-- Memory Layout -->
+        <div class="api-section">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <line x1="3" y1="9" x2="21" y2="9"/>
+              <line x1="9" y1="21" x2="9" y2="9"/>
+            </svg>
+            Memory Layout
+          </h4>
+          <div class="memory-layout">
+            <p class="memory-desc">Messages are stored in contiguous ring buffers in WASM linear memory. Each registered type gets its own buffer:</p>
+            <table class="memory-table">
+              <thead>
+                <tr>
+                  <th>Component</th>
+                  <th>Location</th>
+                  <th>Access Method</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Ring Buffer Base</td>
+                  <td><code>bufferPtr</code> from registration</td>
+                  <td><code>getTypeInfo(fileId).bufferPtr</code></td>
+                </tr>
+                <tr>
+                  <td>Message N</td>
+                  <td><code>bufferPtr + (N * messageSize)</code></td>
+                  <td><code>getMessage(fileId, N)</code></td>
+                </tr>
+                <tr>
+                  <td>Latest Message</td>
+                  <td><code>bufferPtr + (head * messageSize)</code></td>
+                  <td><code>getLatestMessage(fileId)</code></td>
+                </tr>
+                <tr>
+                  <td>Raw Memory View</td>
+                  <td><code>HEAPU8.subarray(ptr, ptr + size)</code></td>
+                  <td><code>new Uint8Array(wasm.HEAPU8.buffer, ptr, size)</code></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="memory-note">
+              <strong>Zero-Copy Access:</strong> <code>getMessage()</code> returns a <code>Uint8Array</code> view directly into WASM memory - no data is copied.
+              This view is valid until the next <code>pushBytes()</code> call that overwrites the ring buffer slot.
+            </div>
+          </div>
+        </div>
+
         <!-- Initialization Example -->
         <div class="api-section">
           <h4>

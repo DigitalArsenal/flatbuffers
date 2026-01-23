@@ -1354,14 +1354,52 @@
           </div>
         </div>
 
-        <!-- Completion -->
+        <!-- Completion with Hex Explorer -->
         <div class="completion-card" id="completion-stats" style="display: none;">
-          <h4>Stream Complete</h4>
-          <div class="completion-grid">
-            <span>Messages</span><span id="complete-messages">--</span>
-            <span>Bytes</span><span id="complete-bytes">--</span>
-            <span>Time</span><span id="complete-time">--</span>
-            <span>Throughput</span><span id="complete-throughput">--</span>
+          <div class="completion-split">
+            <!-- Stats Side -->
+            <div class="completion-stats-side">
+              <h4>Stream Complete</h4>
+              <div class="completion-grid">
+                <span>Messages</span><span id="complete-messages">--</span>
+                <span>Bytes</span><span id="complete-bytes">--</span>
+                <span>Time</span><span id="complete-time">--</span>
+                <span>Throughput</span><span id="complete-throughput">--</span>
+              </div>
+              <div class="wire-format-note">
+                <strong>Wire Format:</strong> Not encrypted - raw binary
+              </div>
+            </div>
+            <!-- Hex Explorer Side -->
+            <div class="hex-explorer-side">
+              <div class="hex-explorer-header">
+                <h4>Message Hex Explorer</h4>
+                <div class="hex-type-selector">
+                  <button class="hex-type-btn active" data-type="MONS">MONS</button>
+                  <button class="hex-type-btn" data-type="WEAP">WEAP</button>
+                  <button class="hex-type-btn" data-type="GALX">GALX</button>
+                </div>
+              </div>
+              <div class="hex-table-container">
+                <table class="hex-table" id="hex-table">
+                  <thead>
+                    <tr>
+                      <th class="hex-offset">Offset</th>
+                      <th class="hex-bytes">Hex Data</th>
+                      <th class="hex-ascii">ASCII</th>
+                    </tr>
+                  </thead>
+                  <tbody id="hex-table-body">
+                    <tr><td colspan="3" class="hex-empty">Run stream to view message data</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="hex-pagination">
+                <button class="glass-btn small" id="hex-prev" disabled>&lt; Prev</button>
+                <span class="hex-page-info">Msg <span id="hex-current-msg">0</span> / <span id="hex-total-msgs">0</span></span>
+                <button class="glass-btn small" id="hex-next" disabled>Next &gt;</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

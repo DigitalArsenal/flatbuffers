@@ -1705,6 +1705,199 @@ body {
   color: var(--success);
 }
 
+/* Completion Split Layout */
+.completion-split {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .completion-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.completion-stats-side {
+  display: flex;
+  flex-direction: column;
+}
+
+.wire-format-note {
+  margin-top: 16px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.wire-format-note strong {
+  color: var(--white-60);
+}
+
+/* Hex Explorer */
+.hex-explorer-side {
+  border-left: 1px solid var(--white-10);
+  padding-left: 24px;
+}
+
+@media (max-width: 900px) {
+  .hex-explorer-side {
+    border-left: none;
+    border-top: 1px solid var(--white-10);
+    padding-left: 0;
+    padding-top: 24px;
+  }
+}
+
+.hex-explorer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.hex-explorer-header h4 {
+  font-size: 14px;
+  color: var(--white-80);
+  margin: 0;
+}
+
+.hex-type-selector {
+  display: flex;
+  gap: 4px;
+}
+
+.hex-type-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--white-10);
+  border-radius: var(--radius-xs);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hex-type-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--white-80);
+}
+
+.hex-type-btn.active {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.hex-type-btn[data-type="MONS"].active {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.hex-type-btn[data-type="WEAP"].active {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.hex-type-btn[data-type="GALX"].active {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: #8b5cf6;
+  color: #8b5cf6;
+}
+
+.hex-table-container {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--white-10);
+  border-radius: var(--radius-xs);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.hex-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.hex-table th {
+  position: sticky;
+  top: 0;
+  background: rgba(30, 30, 40, 0.95);
+  padding: 6px 8px;
+  text-align: left;
+  color: var(--muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--white-10);
+}
+
+.hex-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--white-05);
+}
+
+.hex-table tr:last-child td {
+  border-bottom: none;
+}
+
+.hex-offset {
+  width: 50px;
+  color: var(--muted);
+}
+
+.hex-table td.hex-offset {
+  color: var(--white-40);
+}
+
+.hex-bytes {
+  color: var(--cyan);
+  letter-spacing: 0.5px;
+}
+
+.hex-table td.hex-bytes {
+  color: var(--cyan);
+}
+
+.hex-ascii {
+  width: 80px;
+  color: var(--white-60);
+}
+
+.hex-table td.hex-ascii {
+  color: var(--white-40);
+}
+
+.hex-empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px !important;
+  font-style: italic;
+}
+
+.hex-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.hex-page-info {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.glass-btn.small {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
 /* =============================================================================
    Identity Form
    ============================================================================= */

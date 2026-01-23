@@ -95,6 +95,12 @@ const state = {
   selectedRecord: null, // Currently selected record for detail view
   // Streaming demo
   streamingDemo: null,
+  // Hex explorer state
+  hexExplorer: {
+    selectedType: 'MONS',
+    currentIndex: 0,
+    messages: {}, // { MONS: [...], WEAP: [...], GALX: [...] }
+  },
   // PKI Demo state
   pki: {
     alice: null,  // { privateKey, publicKey }
@@ -3421,6 +3427,9 @@ async function startStreaming() {
     $('complete-bytes').textContent = formatBytes(result.totalBytes);
     $('complete-time').textContent = `${result.elapsed.toFixed(0)} ms`;
     $('complete-throughput').textContent = formatThroughput(result.throughput);
+
+    // Populate hex explorer with message data
+    populateHexExplorer();
   };
 
   state.streamingDemo.onError = (err) => {
@@ -3473,6 +3482,155 @@ function clearStreaming() {
     if (countEl) countEl.textContent = '0';
     if (totalEl) totalEl.textContent = '0';
   }
+
+  // Clear hex explorer
+  clearHexExplorer();
+}
+
+// =============================================================================
+// Hex Explorer
+// =============================================================================
+
+/**
+ * Populate hex explorer with messages from the streaming demo
+ */
+function populateHexExplorer() {
+  if (!state.streamingDemo?.dispatcher) return;
+
+  // Capture messages from each type
+  state.hexExplorer.messages = {};
+  for (const fileId of Object.keys(MessageTypes)) {
+    const count = state.streamingDemo.dispatcher.getMessageCount(fileId);
+    const msgs = [];
+    // Limit to first 100 messages to avoid memory issues
+    const limit = Math.min(count, 100);
+    for (let i = 0; i < limit; i++) {
+      const msg = state.streamingDemo.dispatcher.getMessage(fileId, i);
+      if (msg) {
+        // Copy the data (views become invalid after push)
+        msgs.push(new Uint8Array(msg));
+      }
+    }
+    state.hexExplorer.messages[fileId] = msgs;
+  }
+
+  // Reset to first message of selected type
+  state.hexExplorer.currentIndex = 0;
+  updateHexExplorer();
+}
+
+/**
+ * Clear hex explorer state and UI
+ */
+function clearHexExplorer() {
+  state.hexExplorer.messages = {};
+  state.hexExplorer.currentIndex = 0;
+
+  const tbody = $('hex-table-body');
+  if (tbody) {
+    tbody.innerHTML = '<tr><td colspan="3" class="hex-empty">Run stream to view message data</td></tr>';
+  }
+
+  $('hex-current-msg').textContent = '0';
+  $('hex-total-msgs').textContent = '0';
+  $('hex-prev').disabled = true;
+  $('hex-next').disabled = true;
+}
+
+/**
+ * Update hex explorer display for current selection
+ */
+function updateHexExplorer() {
+  const { selectedType, currentIndex, messages } = state.hexExplorer;
+  const typeMessages = messages[selectedType] || [];
+  const total = typeMessages.length;
+
+  // Update pagination info
+  $('hex-current-msg').textContent = total > 0 ? currentIndex + 1 : 0;
+  $('hex-total-msgs').textContent = total;
+
+  // Update pagination buttons
+  $('hex-prev').disabled = currentIndex <= 0;
+  $('hex-next').disabled = currentIndex >= total - 1;
+
+  // Render hex table
+  const tbody = $('hex-table-body');
+  if (!tbody) return;
+
+  if (total === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="hex-empty">No messages of this type</td></tr>';
+    return;
+  }
+
+  const data = typeMessages[currentIndex];
+  if (!data) {
+    tbody.innerHTML = '<tr><td colspan="3" class="hex-empty">Message not found</td></tr>';
+    return;
+  }
+
+  // Generate hex rows (16 bytes per row)
+  const rows = [];
+  for (let offset = 0; offset < data.length; offset += 16) {
+    const chunk = data.slice(offset, offset + 16);
+    const hexParts = [];
+    const asciiParts = [];
+
+    for (let i = 0; i < 16; i++) {
+      if (i < chunk.length) {
+        hexParts.push(chunk[i].toString(16).padStart(2, '0'));
+        // ASCII: printable chars (32-126), else show dot
+        const byte = chunk[i];
+        asciiParts.push(byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : '.');
+      } else {
+        hexParts.push('  ');
+        asciiParts.push(' ');
+      }
+    }
+
+    // Group hex bytes in pairs for readability
+    const hexStr = hexParts.join(' ');
+    const asciiStr = asciiParts.join('');
+
+    rows.push(`<tr>
+      <td class="hex-offset">${offset.toString(16).padStart(4, '0')}</td>
+      <td class="hex-bytes">${hexStr}</td>
+      <td class="hex-ascii">${asciiStr}</td>
+    </tr>`);
+  }
+
+  tbody.innerHTML = rows.join('');
+}
+
+/**
+ * Setup hex explorer event listeners
+ */
+function setupHexExplorerListeners() {
+  // Type selector buttons
+  document.querySelectorAll('.hex-type-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.hex-type-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.hexExplorer.selectedType = btn.dataset.type;
+      state.hexExplorer.currentIndex = 0;
+      updateHexExplorer();
+    };
+  });
+
+  // Pagination
+  $('hex-prev').onclick = () => {
+    if (state.hexExplorer.currentIndex > 0) {
+      state.hexExplorer.currentIndex--;
+      updateHexExplorer();
+    }
+  };
+
+  $('hex-next').onclick = () => {
+    const typeMessages = state.hexExplorer.messages[state.hexExplorer.selectedType] || [];
+    if (state.hexExplorer.currentIndex < typeMessages.length - 1) {
+      state.hexExplorer.currentIndex++;
+      updateHexExplorer();
+    }
+  };
 }
 
 // =============================================================================
@@ -4223,6 +4381,7 @@ async function init() {
     // Setup streaming demo
     setupStreamingDemo();
     setupStreamingApiDocs();
+    setupHexExplorerListeners();
 
     // Load saved PKI keys if available
     const hasSavedKeys = loadPKIKeys();

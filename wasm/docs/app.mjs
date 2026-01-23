@@ -2882,6 +2882,352 @@ function pkiTryWrongKey() {
 }
 
 // =============================================================================
+// Streaming API Documentation
+// =============================================================================
+
+const STREAMING_EXAMPLES = {
+  init: {
+    cpp: `// C++ (WASM) - Initialize dispatcher in your WASM module
+#include "streaming-dispatcher.h"
+
+flatbuffers::streaming::MessageDispatcher dispatcher;
+uint8_t monster_buffer[64 * 1000];  // 1000 monsters @ 64 bytes
+uint8_t weapon_buffer[32 * 500];    // 500 weapons @ 32 bytes
+
+void init() {
+    dispatcher.register_type("MONS", monster_buffer, sizeof(monster_buffer), 64);
+    dispatcher.register_type("WEAP", weapon_buffer, sizeof(weapon_buffer), 32);
+}`,
+    ts: `// TypeScript - Initialize with the WASM module
+import { StreamingDispatcher } from 'flatbuffers/streaming';
+
+const dispatcher = new StreamingDispatcher(wasmModule);
+
+// Register message types: fileId, messageSize, capacity
+dispatcher.registerType('MONS', 64, 1000);  // Monster messages
+dispatcher.registerType('WEAP', 32, 500);   // Weapon messages
+dispatcher.registerType('GALX', 16, 200);   // Galaxy messages
+
+console.log('Registered types:', dispatcher.getRegisteredTypes());`,
+    js: `// JavaScript - Same API as TypeScript
+import { StreamingDispatcher } from './streaming-dispatcher.mjs';
+
+const dispatcher = new StreamingDispatcher(wasmModule);
+
+// Register message types with their sizes and capacities
+dispatcher.registerType('MONS', 64, 1000);
+dispatcher.registerType('WEAP', 32, 500);
+dispatcher.registerType('GALX', 16, 200);
+
+// Check registration
+if (dispatcher.isTypeRegistered('MONS')) {
+    console.log('Monster type ready');
+}`,
+    rust: `// Rust - Using wasmtime runtime
+use wasmtime::*;
+
+fn setup_dispatcher(store: &mut Store<()>, instance: &Instance) -> Result<()> {
+    // Get exported functions
+    let init = instance.get_typed_func::<(), ()>(&mut *store, "dispatcher_init")?;
+    let register = instance.get_typed_func::<(i32, i32, i32, i32), i32>(
+        &mut *store, "dispatcher_register_type"
+    )?;
+
+    init.call(&mut *store, ())?;
+
+    // Allocate buffers and register types
+    let mons_buffer = allocate_buffer(&mut *store, instance, 64 * 1000)?;
+    register.call(&mut *store, (mons_id_ptr, mons_buffer, 64000, 64))?;
+
+    Ok(())
+}`,
+    go: `// Go - Using wazero runtime
+import "github.com/tetratelabs/wazero/api"
+
+func setupDispatcher(mod api.Module) error {
+    init := mod.ExportedFunction("dispatcher_init")
+    register := mod.ExportedFunction("dispatcher_register_type")
+
+    // Initialize dispatcher
+    _, err := init.Call(ctx)
+    if err != nil {
+        return err
+    }
+
+    // Register Monster type: fileId, buffer, bufferSize, messageSize
+    monsBuffer, _ := allocateBuffer(mod, 64*1000)
+    _, err = register.Call(ctx, monsIdPtr, monsBuffer, 64000, 64)
+
+    return err
+}`,
+    python: `# Python - Using wasmtime-py
+from wasmtime import Store, Module, Instance
+
+store = Store()
+module = Module.from_file(store.engine, "dispatcher.wasm")
+instance = Instance(store, module, [])
+
+# Get exported functions
+init = instance.exports(store)["dispatcher_init"]
+register = instance.exports(store)["dispatcher_register_type"]
+
+init(store)
+
+# Register Monster type (returns type index)
+mons_idx = register(store, mons_id_ptr, buffer_ptr, 64000, 64)
+print(f"Registered MONS with index {mons_idx}")`,
+  },
+  push: {
+    cpp: `// C++ - Push incoming bytes to dispatcher
+void on_data_received(const uint8_t* data, size_t len) {
+    int messages_parsed = dispatcher.push_bytes(data, len);
+
+    // Messages are now sorted into their respective buffers
+    printf("Parsed %d messages\\n", messages_parsed);
+}
+
+// For streaming from network socket:
+void stream_loop(int socket_fd) {
+    uint8_t chunk[4096];
+    while (true) {
+        ssize_t n = read(socket_fd, chunk, sizeof(chunk));
+        if (n <= 0) break;
+        dispatcher.push_bytes(chunk, n);
+    }
+}`,
+    ts: `// TypeScript - Push bytes from various sources
+// From WebSocket
+ws.onmessage = (event: MessageEvent) => {
+    const data = new Uint8Array(event.data);
+    const parsed = dispatcher.pushBytes(data);
+    console.log(\`Parsed \${parsed} messages\`);
+};
+
+// From fetch stream
+const response = await fetch('/stream');
+const reader = response.body!.getReader();
+
+while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    dispatcher.pushBytes(value);
+}`,
+    js: `// JavaScript - Push bytes from WebSocket or fetch
+// WebSocket streaming
+const ws = new WebSocket('wss://server/stream');
+ws.binaryType = 'arraybuffer';
+
+ws.onmessage = (event) => {
+    const data = new Uint8Array(event.data);
+    const count = dispatcher.pushBytes(data);
+    updateStats(dispatcher.getAllStats());
+};
+
+// Zero-copy mode for large streams
+const { view } = dispatcher.getInputBuffer();
+// Write directly to view, then:
+dispatcher.pushBytesFromInputBuffer(bytesWritten);`,
+    rust: `// Rust - Push bytes through WASM
+fn push_stream_data(
+    store: &mut Store<()>,
+    instance: &Instance,
+    data: &[u8]
+) -> Result<i32> {
+    let memory = instance.get_memory(&mut *store, "memory")
+        .expect("memory export");
+    let push_bytes = instance.get_typed_func::<(i32, i32), i32>(
+        &mut *store, "dispatcher_push_bytes"
+    )?;
+
+    // Copy data to WASM memory
+    let ptr = allocate(&mut *store, instance, data.len())?;
+    memory.write(&mut *store, ptr as usize, data)?;
+
+    // Parse messages
+    let parsed = push_bytes.call(&mut *store, (ptr, data.len() as i32))?;
+    Ok(parsed)
+}`,
+    go: `// Go - Stream processing with wazero
+func pushBytes(mod api.Module, data []byte) (int32, error) {
+    memory := mod.Memory()
+    pushFn := mod.ExportedFunction("dispatcher_push_bytes")
+
+    // Allocate and copy data to WASM memory
+    ptr, _ := allocate(mod, uint32(len(data)))
+    memory.Write(ptr, data)
+
+    // Parse messages (returns count)
+    results, err := pushFn.Call(ctx, uint64(ptr), uint64(len(data)))
+    if err != nil {
+        return 0, err
+    }
+
+    return int32(results[0]), nil
+}`,
+    python: `# Python - Push bytes from file or network
+push_bytes = instance.exports(store)["dispatcher_push_bytes"]
+memory = instance.exports(store)["memory"]
+
+def stream_file(filepath: str):
+    with open(filepath, 'rb') as f:
+        while chunk := f.read(4096):
+            # Copy to WASM memory
+            ptr = allocate(store, len(chunk))
+            memory.write(store, chunk, ptr)
+
+            # Parse messages
+            parsed = push_bytes(store, ptr, len(chunk))
+            print(f"Parsed {parsed} messages")`,
+  },
+  access: {
+    cpp: `// C++ - Access stored messages
+void process_monsters() {
+    int type_idx = dispatcher.find_type("MONS");
+    size_t count = dispatcher.get_message_count(type_idx);
+
+    for (size_t i = 0; i < count; i++) {
+        const uint8_t* msg = dispatcher.get_message(type_idx, i);
+        // Cast to your FlatBuffer type and process
+        auto monster = GetMonster(msg);
+        printf("Monster HP: %d\\n", monster->hp());
+    }
+
+    // Get most recent message
+    const uint8_t* latest = dispatcher.get_latest_message(type_idx);
+}`,
+    ts: `// TypeScript - Rich access patterns
+// Iterate all messages
+for (const msg of dispatcher.iterMessages('MONS')) {
+    const monster = Monster.getRootAsMonster(new ByteBuffer(msg));
+    console.log(monster.name(), monster.hp());
+}
+
+// Get last N messages (most recent activity)
+const recent = dispatcher.getLastN('MONS', 10);
+
+// Statistics
+const stats = dispatcher.getAllStats();
+console.log('Buffer utilization:', dispatcher.getBufferUtilization('MONS'));
+console.log('Dropped messages:', dispatcher.getDroppedCount('MONS'));`,
+    js: `// JavaScript - Access and statistics
+// Get all messages as array
+const monsters = dispatcher.getAllMessages('MONS');
+
+// Callback-based iteration
+dispatcher.forEachMessage('WEAP', (data, index) => {
+    const weapon = Weapon.getRootAsWeapon(new ByteBuffer(data));
+    console.log(\`Weapon \${index}: \${weapon.name()}\`);
+});
+
+// Check stats
+const { used, capacity, percent } = dispatcher.getBufferUtilization('MONS');
+console.log(\`Buffer \${percent.toFixed(1)}% full (\${used}/\${capacity})\`);
+
+// Get range of messages
+const batch = dispatcher.getMessageRange('GALX', 0, 50);`,
+    rust: `// Rust - Read messages from WASM memory
+fn read_monsters(store: &mut Store<()>, instance: &Instance) -> Result<()> {
+    let memory = instance.get_memory(&mut *store, "memory")?;
+    let get_count = instance.get_typed_func::<i32, i32>(
+        &mut *store, "dispatcher_get_message_count"
+    )?;
+    let get_msg = instance.get_typed_func::<(i32, i32), i32>(
+        &mut *store, "dispatcher_get_message"
+    )?;
+
+    let mons_idx = 0; // Type index from registration
+    let count = get_count.call(&mut *store, mons_idx)?;
+
+    for i in 0..count {
+        let ptr = get_msg.call(&mut *store, (mons_idx, i))?;
+        let data = memory.data(&store)[ptr as usize..][..64].to_vec();
+        // Parse FlatBuffer from data
+    }
+    Ok(())
+}`,
+    go: `// Go - Access messages from WASM
+func readMonsters(mod api.Module, typeIdx uint32) ([][]byte, error) {
+    memory := mod.Memory()
+    getCount := mod.ExportedFunction("dispatcher_get_message_count")
+    getMsg := mod.ExportedFunction("dispatcher_get_message")
+
+    results, _ := getCount.Call(ctx, uint64(typeIdx))
+    count := int(results[0])
+
+    messages := make([][]byte, count)
+    for i := 0; i < count; i++ {
+        results, _ := getMsg.Call(ctx, uint64(typeIdx), uint64(i))
+        ptr := uint32(results[0])
+
+        // Read 64-byte message from memory
+        data, _ := memory.Read(ptr, 64)
+        messages[i] = data
+    }
+    return messages, nil
+}`,
+    python: `# Python - Access and iterate messages
+get_count = instance.exports(store)["dispatcher_get_message_count"]
+get_msg = instance.exports(store)["dispatcher_get_message"]
+memory = instance.exports(store)["memory"]
+
+def read_all_monsters(type_idx: int, msg_size: int = 64):
+    count = get_count(store, type_idx)
+    messages = []
+
+    for i in range(count):
+        ptr = get_msg(store, type_idx, i)
+        data = memory.read(store, ptr, ptr + msg_size)
+        messages.append(bytes(data))
+
+    return messages
+
+# Usage
+monsters = read_all_monsters(mons_type_idx)
+print(f"Read {len(monsters)} monster messages")`,
+  },
+};
+
+/**
+ * Show streaming example code for selected language and category
+ */
+function showStreamingExample(category, lang) {
+  const codeEl = $(`streaming-${category}-code`);
+  if (!codeEl) return;
+
+  const examples = STREAMING_EXAMPLES[category];
+  if (!examples) return;
+
+  codeEl.textContent = examples[lang] || examples.cpp;
+
+  // Update tabs for this category
+  const tabGroup = document.querySelector(`[data-example-group="streaming-${category}"]`);
+  if (tabGroup) {
+    tabGroup.querySelectorAll('.example-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.lang === lang);
+    });
+  }
+}
+
+/**
+ * Initialize streaming API documentation tabs
+ */
+function setupStreamingApiDocs() {
+  // Set up tab click handlers for each category
+  ['init', 'push', 'access'].forEach(category => {
+    const tabGroup = document.querySelector(`[data-example-group="streaming-${category}"]`);
+    if (tabGroup) {
+      tabGroup.querySelectorAll('.example-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          showStreamingExample(category, tab.dataset.lang);
+        });
+      });
+      // Show initial example
+      showStreamingExample(category, 'cpp');
+    }
+  });
+}
+
+// =============================================================================
 // Streaming Demo
 // =============================================================================
 
@@ -3839,6 +4185,7 @@ async function init() {
 
     // Setup streaming demo
     setupStreamingDemo();
+    setupStreamingApiDocs();
 
     // Load saved PKI keys if available
     const hasSavedKeys = loadPKIKeys();

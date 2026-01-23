@@ -265,6 +265,143 @@ export class StreamingDispatcher {
       yield this.getMessage(fileId, i);
     }
   }
+
+  // =========================================================================
+  // Batch Operations
+  // =========================================================================
+
+  /**
+   * Get a range of messages
+   *
+   * @param {string} fileId - File identifier
+   * @param {number} startIndex - Start index (inclusive)
+   * @param {number} endIndex - End index (exclusive)
+   * @returns {Uint8Array[]} Array of message views
+   */
+  getMessageRange(fileId, startIndex, endIndex) {
+    const count = this.getMessageCount(fileId);
+    const start = Math.max(0, startIndex);
+    const end = Math.min(count, endIndex);
+    const result = [];
+    for (let i = start; i < end; i++) {
+      const msg = this.getMessage(fileId, i);
+      if (msg) result.push(msg);
+    }
+    return result;
+  }
+
+  /**
+   * Get the N most recent messages
+   *
+   * @param {string} fileId - File identifier
+   * @param {number} n - Number of messages to retrieve
+   * @returns {Uint8Array[]} Array of message views (newest last)
+   */
+  getLastN(fileId, n) {
+    const count = this.getMessageCount(fileId);
+    const start = Math.max(0, count - n);
+    return this.getMessageRange(fileId, start, count);
+  }
+
+  /**
+   * Get all stored messages as an array
+   *
+   * @param {string} fileId - File identifier
+   * @returns {Uint8Array[]} Array of all message views
+   */
+  getAllMessages(fileId) {
+    return Array.from(this.iterMessages(fileId));
+  }
+
+  // =========================================================================
+  // Statistics
+  // =========================================================================
+
+  /**
+   * Get statistics for all registered types
+   *
+   * @returns {Object.<string, DispatcherStats>} Stats keyed by fileId
+   */
+  getAllStats() {
+    const stats = {};
+    for (const [fileId] of this._types) {
+      stats[fileId] = this.getStats(fileId);
+    }
+    return stats;
+  }
+
+  /**
+   * Get the number of messages dropped due to ring buffer overflow
+   *
+   * @param {string} fileId - File identifier
+   * @returns {number} Number of dropped messages
+   */
+  getDroppedCount(fileId) {
+    const info = this._types.get(fileId);
+    if (!info) return 0;
+
+    const stats = this.getStats(fileId);
+    if (!stats) return 0;
+
+    // Dropped = total received - capacity (if overflowed)
+    return Math.max(0, stats.totalReceived - info.capacity);
+  }
+
+  /**
+   * Get buffer utilization for a type
+   *
+   * @param {string} fileId - File identifier
+   * @returns {{ used: number, capacity: number, percent: number }|null}
+   */
+  getBufferUtilization(fileId) {
+    const info = this._types.get(fileId);
+    if (!info) return null;
+
+    const count = this.getMessageCount(fileId);
+    return {
+      used: count,
+      capacity: info.capacity,
+      percent: info.capacity > 0 ? (count / info.capacity) * 100 : 0,
+    };
+  }
+
+  // =========================================================================
+  // Convenience Methods
+  // =========================================================================
+
+  /**
+   * Check if a type is registered
+   *
+   * @param {string} fileId - File identifier
+   * @returns {boolean}
+   */
+  isTypeRegistered(fileId) {
+    return this._types.has(fileId);
+  }
+
+  /**
+   * Get full type information
+   *
+   * @param {string} fileId - File identifier
+   * @returns {MessageTypeInfo|null}
+   */
+  getTypeInfo(fileId) {
+    return this._types.get(fileId) || null;
+  }
+
+  /**
+   * Iterate over messages with a callback
+   *
+   * @param {string} fileId - File identifier
+   * @param {function(Uint8Array, number): void} callback - Called for each message with (data, index)
+   */
+  forEachMessage(fileId, callback) {
+    const count = this.getMessageCount(fileId);
+    for (let i = 0; i < count; i++) {
+      const msg = this.getMessage(fileId, i);
+      if (msg) callback(msg, i);
+    }
+  }
 }
 
 /**

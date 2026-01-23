@@ -1115,7 +1115,112 @@
         </div>
       </div>
 
+      <!-- API Documentation -->
+      <div class="glass-card streaming-api-docs">
+        <h3 class="card-subtitle">API Reference</h3>
+
+        <!-- Wire Format -->
+        <div class="api-section">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+            Wire Format
+          </h4>
+          <div class="wire-format">
+            <div class="wire-format-diagram">
+              <div class="wire-segment size">
+                <div class="wire-segment-box">SIZE</div>
+                <div class="wire-segment-label">4 bytes (LE)</div>
+              </div>
+              <div class="wire-segment fileid">
+                <div class="wire-segment-box">FILE_ID</div>
+                <div class="wire-segment-label">4 bytes</div>
+              </div>
+              <div class="wire-segment data">
+                <div class="wire-segment-box">FLATBUFFER DATA</div>
+                <div class="wire-segment-label">SIZE - 4 bytes</div>
+              </div>
+            </div>
+            <p class="wire-format-desc">
+              Each message is size-prefixed (little-endian) followed by a 4-byte file identifier for routing, then the FlatBuffer payload.
+            </p>
+          </div>
+        </div>
+
+        <!-- Initialization Example -->
+        <div class="api-section">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="4 17 10 11 4 5"/>
+              <line x1="12" y1="19" x2="20" y2="19"/>
+            </svg>
+            Initialization
+          </h4>
+          <div class="code-example">
+            <div class="example-tabs extended" data-example-group="streaming-init">
+              <button class="example-tab active" data-lang="cpp">C++</button>
+              <button class="example-tab" data-lang="ts">TypeScript</button>
+              <button class="example-tab" data-lang="js">JavaScript</button>
+              <button class="example-tab" data-lang="rust">Rust</button>
+              <button class="example-tab" data-lang="go">Go</button>
+              <button class="example-tab" data-lang="python">Python</button>
+            </div>
+            <pre id="streaming-init-code" class="code-display"></pre>
+          </div>
+        </div>
+
+        <!-- Streaming Example -->
+        <div class="api-section">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+            Streaming Data
+          </h4>
+          <div class="code-example">
+            <div class="example-tabs extended" data-example-group="streaming-push">
+              <button class="example-tab active" data-lang="cpp">C++</button>
+              <button class="example-tab" data-lang="ts">TypeScript</button>
+              <button class="example-tab" data-lang="js">JavaScript</button>
+              <button class="example-tab" data-lang="rust">Rust</button>
+              <button class="example-tab" data-lang="go">Go</button>
+              <button class="example-tab" data-lang="python">Python</button>
+            </div>
+            <pre id="streaming-push-code" class="code-display"></pre>
+          </div>
+        </div>
+
+        <!-- Access Patterns Example -->
+        <div class="api-section">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            Access Patterns
+          </h4>
+          <div class="code-example">
+            <div class="example-tabs extended" data-example-group="streaming-access">
+              <button class="example-tab active" data-lang="cpp">C++</button>
+              <button class="example-tab" data-lang="ts">TypeScript</button>
+              <button class="example-tab" data-lang="js">JavaScript</button>
+              <button class="example-tab" data-lang="rust">Rust</button>
+              <button class="example-tab" data-lang="go">Go</button>
+              <button class="example-tab" data-lang="python">Python</button>
+            </div>
+            <pre id="streaming-access-code" class="code-display"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Demo -->
       <div class="glass-card">
+        <h3 class="card-subtitle">Interactive Demo</h3>
         <div class="streaming-grid">
           <div class="stream-config">
             <label>Monster (MONS)</label>

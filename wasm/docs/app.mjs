@@ -8425,6 +8425,10 @@ function deriveMonadAddress(publicKey) {
  * @returns {Promise<{balance: string, error?: string}>}
  */
 async function fetchSuiBalance(address) {
+  // Skip API calls on GitHub Pages (CORS blocked)
+  if (window.location.hostname.includes('github.io')) {
+    return { balance: '--', error: 'CORS restricted' };
+  }
   try {
     const response = await fetch('https://fullnode.mainnet.sui.io:443', {
       method: 'POST',
@@ -8445,8 +8449,8 @@ async function fetchSuiBalance(address) {
     const balanceSui = Number(balanceMist) / 1e9;
     return { balance: balanceSui.toFixed(4) };
   } catch (e) {
-    console.error('SUI balance fetch error:', e);
-    return { balance: '0', error: e.message };
+    console.debug('SUI balance fetch unavailable:', e.message);
+    return { balance: '--', error: e.message };
   }
 }
 
@@ -8456,6 +8460,10 @@ async function fetchSuiBalance(address) {
  * @returns {Promise<{balance: string, error?: string}>}
  */
 async function fetchMonadBalance(address) {
+  // Skip API calls on GitHub Pages (CORS blocked)
+  if (window.location.hostname.includes('github.io')) {
+    return { balance: '--', error: 'CORS restricted' };
+  }
   try {
     // Using public RPC endpoint - may need to update this
     const response = await fetch('https://testnet-rpc.monad.xyz', {
@@ -8477,8 +8485,8 @@ async function fetchMonadBalance(address) {
     const balanceMon = Number(balanceWei) / 1e18;
     return { balance: balanceMon.toFixed(4) };
   } catch (e) {
-    console.error('Monad balance fetch error:', e);
-    return { balance: '0', error: e.message };
+    console.debug('Monad balance fetch unavailable:', e.message);
+    return { balance: '--', error: e.message };
   }
 }
 
@@ -8488,6 +8496,10 @@ async function fetchMonadBalance(address) {
  * @returns {Promise<{balance: string, error?: string}>}
  */
 async function fetchBtcBalance(address) {
+  // Skip API calls on GitHub Pages (CORS blocked)
+  if (window.location.hostname.includes('github.io')) {
+    return { balance: '--', error: 'CORS restricted' };
+  }
   try {
     // Using blockchain.info API (free, no key required)
     const response = await fetch(`https://blockchain.info/q/addressbalance/${address}`);
@@ -8498,8 +8510,8 @@ async function fetchBtcBalance(address) {
     const btc = parseInt(satoshis, 10) / 1e8;
     return { balance: btc.toFixed(8) };
   } catch (e) {
-    console.error('BTC balance fetch error:', e);
-    return { balance: '0', error: e.message };
+    console.debug('BTC balance fetch unavailable:', e.message);
+    return { balance: '--', error: e.message };
   }
 }
 
@@ -8509,6 +8521,10 @@ async function fetchBtcBalance(address) {
  * @returns {Promise<{balance: string, error?: string}>}
  */
 async function fetchEthBalance(address) {
+  // Skip API calls on GitHub Pages (CORS blocked)
+  if (window.location.hostname.includes('github.io')) {
+    return { balance: '--', error: 'CORS restricted' };
+  }
   try {
     // Using Cloudflare's Ethereum gateway
     const response = await fetch('https://cloudflare-eth.com', {
@@ -8529,8 +8545,8 @@ async function fetchEthBalance(address) {
     const balanceEth = Number(balanceWei) / 1e18;
     return { balance: balanceEth.toFixed(6) };
   } catch (e) {
-    console.error('ETH balance fetch error:', e);
-    return { balance: '0', error: e.message };
+    console.debug('ETH balance fetch unavailable:', e.message);
+    return { balance: '--', error: e.message };
   }
 }
 
@@ -8540,6 +8556,10 @@ async function fetchEthBalance(address) {
  * @returns {Promise<{balance: string, error?: string}>}
  */
 async function fetchSolBalance(address) {
+  // Skip API calls on GitHub Pages (CORS blocked)
+  if (window.location.hostname.includes('github.io')) {
+    return { balance: '--', error: 'CORS restricted' };
+  }
   try {
     const response = await fetch('https://api.mainnet-beta.solana.com', {
       method: 'POST',
@@ -8560,8 +8580,9 @@ async function fetchSolBalance(address) {
     const sol = lamports / 1e9;
     return { balance: sol.toFixed(6) };
   } catch (e) {
-    console.error('SOL balance fetch error:', e);
-    return { balance: '0', error: e.message };
+    // Expected to fail on cross-origin deployments
+    console.debug('SOL balance fetch unavailable:', e.message);
+    return { balance: '--', error: e.message };
   }
 }
 
@@ -8571,6 +8592,10 @@ async function fetchSolBalance(address) {
  * @returns {Promise<{balance: string, error?: string}>}
  */
 async function fetchAdaBalance(address) {
+  // Skip API calls on GitHub Pages (CORS blocked)
+  if (window.location.hostname.includes('github.io')) {
+    return { balance: '--', error: 'CORS restricted' };
+  }
   try {
     // Using Koios free API (no key required for basic queries)
     const response = await fetch(`https://api.koios.rest/api/v1/address_info?_address=${address}`);
@@ -8586,8 +8611,9 @@ async function fetchAdaBalance(address) {
     }
     return { balance: '0' };
   } catch (e) {
-    console.error('ADA balance fetch error:', e);
-    return { balance: '0', error: e.message };
+    // Expected to fail on cross-origin deployments
+    console.debug('ADA balance fetch unavailable:', e.message);
+    return { balance: '--', error: e.message };
   }
 }
 

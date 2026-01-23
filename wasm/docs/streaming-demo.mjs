@@ -103,9 +103,11 @@ export class StreamingDemo {
     this.dispatcher = new StreamingDispatcher(this.wasm);
 
     // Register message types
+    // Full wire format: [SIZE:4][FILE_ID:4][DATA:messageSize] = messageSize + 8
     for (const [fileId, config] of Object.entries(MessageTypes)) {
       const capacity = capacities[fileId] || config.defaultCapacity;
-      this.dispatcher.registerType(fileId, config.messageSize, capacity);
+      const wireSize = config.messageSize + 8; // +4 size prefix +4 file_id
+      this.dispatcher.registerType(fileId, wireSize, capacity);
     }
   }
 
@@ -352,8 +354,10 @@ export class StreamingDemo {
     for (const [fileId, config] of Object.entries(MessageTypes)) {
       const typeStats = this.dispatcher.getStats(fileId);
       if (typeStats) {
+        const wireSize = config.messageSize + 8; // Full wire format size
         stats[fileId] = {
           ...config,
+          messageSize: wireSize, // Report wire size, not just data size
           ...typeStats,
           capacity: this.dispatcher._types.get(fileId)?.capacity || config.defaultCapacity,
         };

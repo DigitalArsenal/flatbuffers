@@ -152,8 +152,8 @@ public:
       // Find registered type
       int type_index = find_type(file_id);
       if (type_index >= 0) {
-        // Store the message (including file_id and data, excluding size prefix)
-        store_message(type_index, input_buffer_ + offset + 4, msg_size);
+        // Store the FULL message (size prefix + file_id + data) - preserve wire format
+        store_message(type_index, input_buffer_ + offset, 4 + msg_size);
         messages_parsed++;
       }
 

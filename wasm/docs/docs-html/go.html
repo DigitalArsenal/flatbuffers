@@ -26,17 +26,14 @@
       --glass-blur: blur(20px);
       --radius: 28px;
       --radius-sm: 14px;
-    }
 
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-    }
 
     html {
       scroll-behavior: smooth;
-    }
 
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -48,7 +45,6 @@
       overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
-    }
 
     /* Video Background */
     .video-background {
@@ -59,14 +55,12 @@
       height: 100vh;
       z-index: 0;
       overflow: hidden;
-    }
 
     .video-background video {
       width: 100%;
       height: 100%;
       object-fit: cover;
       opacity: 0.3;
-    }
 
     .video-overlay {
       position: absolute;
@@ -80,7 +74,6 @@
         rgba(0, 0, 0, 0.6) 50%,
         rgba(0, 0, 0, 0.85) 100%
       );
-    }
 
     .page-container {
       position: relative;
@@ -88,7 +81,6 @@
       max-width: 900px;
       margin: 0 auto;
       padding: 60px 24px 80px;
-    }
 
     .back-link {
       display: inline-flex;
@@ -106,12 +98,10 @@
       font-weight: 500;
       font-size: 14px;
       transition: all 0.3s ease;
-    }
 
     .back-link:hover {
       background: var(--glass-hover);
       transform: translateY(-2px);
-    }
 
     .markdown-body {
       background: var(--glass-bg);
@@ -120,7 +110,6 @@
       border: 1px solid var(--glass-border);
       border-radius: var(--radius);
       padding: 64px;
-    }
 
     .markdown-body h1 {
       color: var(--white);
@@ -129,7 +118,6 @@
       line-height: 1.1;
       margin-bottom: 32px;
       letter-spacing: -0.02em;
-    }
 
     .markdown-body h2 {
       display: flex;
@@ -143,7 +131,6 @@
       margin-bottom: 24px;
       padding-bottom: 16px;
       border-bottom: 1px solid var(--glass-border);
-    }
 
     .markdown-body h2::before {
       content: '';
@@ -158,14 +145,12 @@
       -webkit-mask-position: center;
       mask-position: center;
       flex-shrink: 0;
-    }
 
     /* Icon mappings for h2 headers based on content */
     .markdown-body h2[id*="why"]::before,
     .markdown-body h2:has(+ p:first-of-type)::before {
       -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4M12 8h.01'/%3E%3C/svg%3E");
       mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4M12 8h.01'/%3E%3C/svg%3E");
-    }
 
     .markdown-body h3,
     .markdown-body h4 {
@@ -173,39 +158,32 @@
       font-weight: 600;
       margin-top: 32px;
       margin-bottom: 16px;
-    }
 
     .markdown-body h3 {
       font-size: 22px;
-    }
 
     .markdown-body h4 {
       font-size: 18px;
       color: var(--white-90);
-    }
 
     .markdown-body p {
       color: var(--white-80);
       font-size: 18px;
       line-height: 1.7;
       margin-bottom: 20px;
-    }
 
     .markdown-body a {
       color: var(--white);
       text-decoration: underline;
       text-underline-offset: 3px;
       transition: opacity 0.2s;
-    }
 
     .markdown-body a:hover {
       opacity: 0.7;
-    }
 
     .markdown-body strong {
       color: var(--white);
       font-weight: 600;
-    }
 
     .markdown-body code {
       background: var(--glass-hover);
@@ -215,7 +193,6 @@
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.9em;
       color: var(--white);
-    }
 
     .markdown-body pre {
       background: var(--black) !important;
@@ -224,7 +201,6 @@
       padding: 24px;
       overflow-x: auto;
       margin: 24px 0;
-    }
 
     .markdown-body pre code {
       background: transparent;
@@ -233,22 +209,18 @@
       font-size: 14px;
       line-height: 1.7;
       color: var(--white-90);
-    }
 
     .markdown-body ul, .markdown-body ol {
       padding-left: 24px;
       margin-bottom: 20px;
-    }
 
     .markdown-body li {
       margin: 12px 0;
       color: var(--white-80);
       font-size: 18px;
-    }
 
     .markdown-body li strong {
       color: var(--white);
-    }
 
     .markdown-body table {
       width: 100%;
@@ -256,14 +228,12 @@
       margin: 24px 0;
       border-radius: var(--radius-sm);
       overflow: hidden;
-    }
 
     .markdown-body table th,
     .markdown-body table td {
       border: 1px solid var(--glass-border);
       padding: 14px 18px;
       text-align: left;
-    }
 
     .markdown-body table th {
       background: var(--glass-hover);
@@ -272,16 +242,13 @@
       font-size: 14px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-    }
 
     .markdown-body table td {
       background: var(--white-05);
       color: var(--white-80);
-    }
 
     .markdown-body table tr:nth-child(even) td {
       background: var(--white-10);
-    }
 
     .markdown-body blockquote {
       border-left: 4px solid var(--white-40);
@@ -289,19 +256,16 @@
       padding: 20px 24px;
       margin: 24px 0;
       border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    }
 
     .markdown-body blockquote p {
       margin: 0;
       color: var(--white-80);
-    }
 
     .markdown-body hr {
       border: none;
       height: 1px;
       background: var(--glass-border);
       margin: 48px 0;
-    }
 
     /* Section header icons */
     .section-icon {
@@ -314,7 +278,6 @@
       border-radius: 8px;
       margin-right: 12px;
       flex-shrink: 0;
-    }
 
     .section-icon svg {
       width: 18px;
@@ -322,27 +285,20 @@
       stroke: var(--white);
       fill: none;
       stroke-width: 2;
-    }
 
     @media (max-width: 768px) {
       .page-container {
         padding: 40px 16px 60px;
-      }
       .markdown-body {
         padding: 32px 24px;
         border-radius: 20px;
-      }
       .markdown-body h1 {
         font-size: 36px;
-      }
       .markdown-body h2 {
         font-size: 24px;
-      }
       .markdown-body p,
       .markdown-body li {
         font-size: 16px;
-      }
-    }
   </style>
 </head>
 <body>
@@ -407,13 +363,11 @@ func main() {
     wasmBytes, err := os.ReadFile(&quot;flatc-encryption.wasm&quot;)
     if err != nil {
         panic(err)
-    }
 
     // Instantiate module
     module, err := r.Instantiate(ctx, wasmBytes)
     if err != nil {
         panic(err)
-    }
 
     // Get exported functions
     malloc := module.ExportedFunction(&quot;malloc&quot;)
@@ -458,7 +412,6 @@ func main() {
     // Read decrypted data
     decrypted, _ := mem.Read(uint32(dataPtr[0]), uint32(len(plaintext)))
     fmt.Printf(&quot;Decrypted: %s\n&quot;, decrypted)
-}
 </code></pre>
 <h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></span>Complete Module Wrapper</h2>
 <p>For production use, wrap the WASM module in a Go struct:</p>
@@ -526,14 +479,12 @@ type Module struct {
     ed25519Generate api.Function
     ed25519Sign     api.Function
     ed25519Verify   api.Function
-}
 
 // New creates a new encryption module
 func New(ctx context.Context, wasmPath string) (*Module, error) {
     wasmBytes, err := os.ReadFile(wasmPath)
     if err != nil {
         return nil, err
-    }
 
     r := wazero.NewRuntime(ctx)
 
@@ -544,14 +495,12 @@ func New(ctx context.Context, wasmPath string) (*Module, error) {
     if err := defineEnvModule(ctx, r); err != nil {
         r.Close(ctx)
         return nil, err
-    }
 
     // Instantiate the encryption module
     module, err := r.Instantiate(ctx, wasmBytes)
     if err != nil {
         r.Close(ctx)
         return nil, err
-    }
 
     m := &amp;Module{
         ctx:     ctx,
@@ -577,61 +526,49 @@ func New(ctx context.Context, wasmPath string) (*Module, error) {
         ed25519Generate: module.ExportedFunction(&quot;wasi_ed25519_generate_keypair&quot;),
         ed25519Sign:     module.ExportedFunction(&quot;wasi_ed25519_sign&quot;),
         ed25519Verify:   module.ExportedFunction(&quot;wasi_ed25519_verify&quot;),
-    }
 
     return m, nil
-}
 
 // Close releases all resources
 func (m *Module) Close() error {
     return m.runtime.Close(m.ctx)
-}
 
 // Encrypt encrypts data in-place using AES-256-CTR
 func (m *Module) Encrypt(key, iv, data []byte) error {
     if len(key) != AESKeySize {
         return errors.New(&quot;key must be 32 bytes&quot;)
-    }
     if len(iv) != AESIVSize {
         return errors.New(&quot;iv must be 16 bytes&quot;)
-    }
 
     keyPtr, ivPtr, dataPtr, err := m.allocateAndWrite(key, iv, data)
     if err != nil {
         return err
-    }
     defer m.freeAll(keyPtr, ivPtr, dataPtr)
 
     result, err := m.encrypt.Call(m.ctx, keyPtr, ivPtr, dataPtr, uint64(len(data)))
     if err != nil {
         return err
-    }
     if result[0] != 0 {
         return errors.New(&quot;encryption failed&quot;)
-    }
 
     // Read encrypted data back
     encrypted, _ := m.memory.Read(uint32(dataPtr), uint32(len(data)))
     copy(data, encrypted)
     return nil
-}
 
 // Decrypt decrypts data in-place using AES-256-CTR
 func (m *Module) Decrypt(key, iv, data []byte) error {
     return m.Encrypt(key, iv, data) // CTR mode is symmetric
-}
 
 // SHA256 computes SHA-256 hash
 func (m *Module) SHA256(data []byte) ([]byte, error) {
     dataPtr, err := m.allocate(uint64(len(data)))
     if err != nil {
         return nil, err
-    }
     outPtr, err := m.allocate(SHA256Size)
     if err != nil {
         m.free.Call(m.ctx, dataPtr)
         return nil, err
-    }
     defer m.freeAll(dataPtr, outPtr)
 
     m.memory.Write(uint32(dataPtr), data)
@@ -639,18 +576,15 @@ func (m *Module) SHA256(data []byte) ([]byte, error) {
     _, err = m.sha256.Call(m.ctx, dataPtr, uint64(len(data)), outPtr)
     if err != nil {
         return nil, err
-    }
 
     hash, _ := m.memory.Read(uint32(outPtr), SHA256Size)
     return hash, nil
-}
 
 // HKDF derives a key using HKDF-SHA256
 func (m *Module) HKDF(ikm, salt, info []byte, length int) ([]byte, error) {
     ikmPtr, err := m.allocate(uint64(len(ikm)))
     if err != nil {
         return nil, err
-    }
     m.memory.Write(uint32(ikmPtr), ikm)
     defer m.free.Call(m.ctx, ikmPtr)
 
@@ -661,7 +595,6 @@ func (m *Module) HKDF(ikm, salt, info []byte, length int) ([]byte, error) {
         m.memory.Write(uint32(saltPtr), salt)
         saltLen = len(salt)
         defer m.free.Call(m.ctx, saltPtr)
-    }
 
     var infoPtr uint64 = 0
     infoLen := 0
@@ -670,7 +603,6 @@ func (m *Module) HKDF(ikm, salt, info []byte, length int) ([]byte, error) {
         m.memory.Write(uint32(infoPtr), info)
         infoLen = len(info)
         defer m.free.Call(m.ctx, infoPtr)
-    }
 
     outPtr, _ := m.allocate(uint64(length))
     defer m.free.Call(m.ctx, outPtr)
@@ -682,17 +614,14 @@ func (m *Module) HKDF(ikm, salt, info []byte, length int) ([]byte, error) {
         outPtr, uint64(length))
     if err != nil {
         return nil, err
-    }
 
     result, _ := m.memory.Read(uint32(outPtr), uint32(length))
     return result, nil
-}
 
 // X25519KeyPair represents an X25519 key pair
 type X25519KeyPair struct {
     PrivateKey []byte // 32 bytes
     PublicKey  []byte // 32 bytes
-}
 
 // X25519GenerateKeyPair generates a new X25519 key pair
 func (m *Module) X25519GenerateKeyPair() (*X25519KeyPair, error) {
@@ -703,10 +632,8 @@ func (m *Module) X25519GenerateKeyPair() (*X25519KeyPair, error) {
     result, err := m.x25519Generate.Call(m.ctx, privPtr, pubPtr)
     if err != nil {
         return nil, err
-    }
     if result[0] != 0 {
         return nil, errors.New(&quot;key generation failed&quot;)
-    }
 
     priv, _ := m.memory.Read(uint32(privPtr), X25519PrivateKeySize)
     pub, _ := m.memory.Read(uint32(pubPtr), X25519PublicKeySize)
@@ -715,7 +642,6 @@ func (m *Module) X25519GenerateKeyPair() (*X25519KeyPair, error) {
         PrivateKey: priv,
         PublicKey:  pub,
     }, nil
-}
 
 // X25519SharedSecret computes shared secret
 func (m *Module) X25519SharedSecret(privateKey, publicKey []byte) ([]byte, error) {
@@ -730,20 +656,16 @@ func (m *Module) X25519SharedSecret(privateKey, publicKey []byte) ([]byte, error
     result, err := m.x25519Shared.Call(m.ctx, privPtr, pubPtr, outPtr)
     if err != nil {
         return nil, err
-    }
     if result[0] != 0 {
         return nil, errors.New(&quot;shared secret computation failed&quot;)
-    }
 
     secret, _ := m.memory.Read(uint32(outPtr), 32)
     return secret, nil
-}
 
 // Ed25519KeyPair represents an Ed25519 key pair
 type Ed25519KeyPair struct {
     PrivateKey []byte // 64 bytes (seed + public key)
     PublicKey  []byte // 32 bytes
-}
 
 // Ed25519GenerateKeyPair generates a new Ed25519 key pair
 func (m *Module) Ed25519GenerateKeyPair() (*Ed25519KeyPair, error) {
@@ -754,10 +676,8 @@ func (m *Module) Ed25519GenerateKeyPair() (*Ed25519KeyPair, error) {
     result, err := m.ed25519Generate.Call(m.ctx, privPtr, pubPtr)
     if err != nil {
         return nil, err
-    }
     if result[0] != 0 {
         return nil, errors.New(&quot;key generation failed&quot;)
-    }
 
     priv, _ := m.memory.Read(uint32(privPtr), Ed25519PrivateKeySize)
     pub, _ := m.memory.Read(uint32(pubPtr), Ed25519PublicKeySize)
@@ -766,7 +686,6 @@ func (m *Module) Ed25519GenerateKeyPair() (*Ed25519KeyPair, error) {
         PrivateKey: priv,
         PublicKey:  pub,
     }, nil
-}
 
 // Ed25519Sign signs a message
 func (m *Module) Ed25519Sign(privateKey, message []byte) ([]byte, error) {
@@ -781,14 +700,11 @@ func (m *Module) Ed25519Sign(privateKey, message []byte) ([]byte, error) {
     result, err := m.ed25519Sign.Call(m.ctx, privPtr, msgPtr, uint64(len(message)), sigPtr)
     if err != nil {
         return nil, err
-    }
     if result[0] != 0 {
         return nil, errors.New(&quot;signing failed&quot;)
-    }
 
     sig, _ := m.memory.Read(uint32(sigPtr), Ed25519SignatureSize)
     return sig, nil
-}
 
 // Ed25519Verify verifies a signature
 func (m *Module) Ed25519Verify(publicKey, message, signature []byte) (bool, error) {
@@ -804,10 +720,8 @@ func (m *Module) Ed25519Verify(publicKey, message, signature []byte) (bool, erro
     result, err := m.ed25519Verify.Call(m.ctx, pubPtr, msgPtr, uint64(len(message)), sigPtr)
     if err != nil {
         return false, err
-    }
 
     return result[0] == 0, nil
-}
 
 // Helper functions
 
@@ -815,9 +729,7 @@ func (m *Module) allocate(size uint64) (uint64, error) {
     result, err := m.malloc.Call(m.ctx, size)
     if err != nil {
         return 0, err
-    }
     return result[0], nil
-}
 
 func (m *Module) allocateAndWrite(buffers ...[]byte) ([]uint64, error) {
     ptrs := make([]uint64, len(buffers))
@@ -827,20 +739,14 @@ func (m *Module) allocateAndWrite(buffers ...[]byte) ([]uint64, error) {
             // Free already allocated
             for j := 0; j &lt; i; j++ {
                 m.free.Call(m.ctx, ptrs[j])
-            }
             return nil, err
-        }
         ptrs[i] = ptr
         m.memory.Write(uint32(ptr), buf)
-    }
     return ptrs, nil
-}
 
 func (m *Module) freeAll(ptrs ...uint64) {
     for _, ptr := range ptrs {
         m.free.Call(m.ctx, ptr)
-    }
-}
 </code></pre>
 <h3>Emscripten Trampolines</h3>
 <p>The WASM module requires Emscripten&#39;s exception handling trampolines:</p>
@@ -852,9 +758,6 @@ func (m *Module) freeAll(ptrs ...uint64) {
         if wasmModule != nil {
             if f := wasmModule.ExportedFunction(&quot;setThrew&quot;); f != nil {
                 f.Call(ctx, 1, 0)
-            }
-        }
-    }
 
     _, err := r.NewHostModuleBuilder(&quot;env&quot;).
         NewFunctionBuilder().WithFunc(func(ctx context.Context, m api.Module, idx uint32) {
@@ -876,7 +779,6 @@ func (m *Module) freeAll(ptrs ...uint64) {
         Instantiate(ctx)
 
     return err
-}
 </code></pre>
 <h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>Template Project Structure</h2>
 <pre><code>myproject/
@@ -906,9 +808,7 @@ module, err := New(ctx, &quot;flatc-encryption.wasm&quot;)
 if err != nil {
     if errors.Is(err, context.DeadlineExceeded) {
         log.Fatal(&quot;WASM loading timed out&quot;)
-    }
     log.Fatal(err)
-}
 </code></pre>
 <h3>Module Caching</h3>
 <p>Cache compiled modules for faster subsequent instantiation:</p>
@@ -916,7 +816,6 @@ if err != nil {
 compiled, err := r.CompileModule(ctx, wasmBytes)
 if err != nil {
     return nil, err
-}
 
 // Instantiate multiple times (fast)
 instance1, _ := r.InstantiateModule(ctx, compiled, config)
@@ -929,7 +828,6 @@ pool := make(chan *Module, 10)
 for i := 0; i &lt; 10; i++ {
     m, _ := New(ctx, &quot;flatc-encryption.wasm&quot;)
     pool &lt;- m
-}
 
 // Use from pool
 func encryptConcurrent(data []byte) []byte {
@@ -938,7 +836,6 @@ func encryptConcurrent(data []byte) []byte {
 
     m.Encrypt(key, iv, data)
     return data
-}
 </code></pre>
 <h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>Performance Tips</h2>
 <ol>
@@ -952,7 +849,6 @@ func encryptConcurrent(data []byte) []byte {
 cache, err := wazero.NewCompilationCacheWithDir(&quot;/tmp/wazero-cache&quot;)
 if err != nil {
     log.Fatal(err)
-}
 
 config := wazero.NewRuntimeConfig().WithCompilationCache(cache)
 r := wazero.NewRuntimeWithConfig(ctx, config)
@@ -962,17 +858,14 @@ r := wazero.NewRuntimeWithConfig(ctx, config)
 <p>The function name may differ. Check exports:</p>
 <pre><code class="language-go">for name := range module.ExportedFunctionDefinitions() {
     fmt.Println(&quot;Exported:&quot;, name)
-}
 </code></pre>
 <h3>"memory access out of bounds"</h3>
 <p>Check that pointers from <code>malloc</code> are valid:</p>
 <pre><code class="language-go">result, err := malloc.Call(ctx, size)
 if err != nil {
     return err
-}
 if result[0] == 0 {
     return errors.New(&quot;malloc returned null&quot;)
-}
 </code></pre>
 <h3>"import not found: env.invoke_*"</h3>
 <p>Add Emscripten trampolines (see above). The exact <code>invoke_*</code> variants needed depend on the WASM module.</p>
@@ -986,31 +879,23 @@ if result[0] == 0 {
   </div>
 
   <script>
-    // Initialize HLS video with random selection
+    // Initialize video with random selection
     const videoUrls = [
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/90bb1b34646b81b3b63e5a854ea00da3/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/df176a2fb2ea2b64bd21ae1c10d3af6a/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/12a9780eeb1ea015801a5f55cf2e9d3d/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/964cb3eddff1a67e3772aac9a7aceea2/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/dd17599dfa77f41517133fa7a4967535/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/408ad52e3f15bc8f01ae69d194a8cf3a/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/e923e67d71fed3e0853ec57f0348451e/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/136a8a211c6c3b1cc1fd7b1c7d836c58/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/c9ddd33ac3d964e5d33b31ce849e8f95/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/257c7359efd4b4aaebcc03aa8fc78a36/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/697945ca6b876878dba3b23fbd2f1561/manifest/video.m3u8"
+      "../videos/bg-1.mp4",
+      "../videos/bg-2.mp4",
+      "../videos/bg-3.mp4",
+      "../videos/bg-4.mp4",
+      "../videos/bg-5.mp4",
+      "../videos/bg-6.mp4",
+      "../videos/bg-7.mp4",
+      "../videos/bg-8.mp4",
+      "../videos/bg-9.mp4",
+      "../videos/bg-10.mp4",
+      "../videos/bg-11.mp4"
     ];
 
     const video = document.getElementById('bg-video');
-    const randomUrl = videoUrls[Math.floor(Math.random() * videoUrls.length)];
-
-    if (Hls.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(randomUrl);
-      hls.attachMedia(video);
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = randomUrl;
-    }
+    video.src = videoUrls[Math.floor(Math.random() * videoUrls.length)];
   </script>
 </body>
 </html>

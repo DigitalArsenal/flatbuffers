@@ -4208,34 +4208,38 @@ function setupHelpModals() {
 // HLS Video Background
 // =============================================================================
 
+// Local background videos
+const LOCAL_VIDEOS = [
+  './videos/bg-1.mp4',
+  './videos/bg-2.mp4',
+  './videos/bg-3.mp4',
+  './videos/bg-4.mp4',
+  './videos/bg-5.mp4',
+  './videos/bg-6.mp4',
+  './videos/bg-7.mp4',
+  './videos/bg-8.mp4',
+  './videos/bg-9.mp4',
+  './videos/bg-10.mp4',
+  './videos/bg-11.mp4',
+];
+
 function initVideoBackground() {
   const video = $('bg-video');
   if (!video) return;
 
-  const videoSrc = video.querySelector('source')?.src;
-  if (!videoSrc) return;
+  // Pick a random video on load
+  const randomVideo = LOCAL_VIDEOS[Math.floor(Math.random() * LOCAL_VIDEOS.length)];
+  video.src = randomVideo;
+  video.load();
+  video.play().catch(() => {}); // Ignore autoplay errors
 
-  // Check if HLS.js is available and needed
-  if (videoSrc.includes('.m3u8')) {
-    if (window.Hls && Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: false,
-        backBufferLength: 90,
-      });
-      hls.loadSource(videoSrc);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        video.play().catch(() => {}); // Ignore autoplay errors
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native HLS support (Safari)
-      video.src = videoSrc;
-      video.addEventListener('loadedmetadata', () => {
-        video.play().catch(() => {});
-      });
-    }
-  }
+  // Cycle to next video when current one ends (if not looping)
+  video.addEventListener('ended', () => {
+    const nextVideo = LOCAL_VIDEOS[Math.floor(Math.random() * LOCAL_VIDEOS.length)];
+    video.src = nextVideo;
+    video.load();
+    video.play().catch(() => {});
+  });
 }
 
 // =============================================================================

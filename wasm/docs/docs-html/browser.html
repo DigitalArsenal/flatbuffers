@@ -26,17 +26,14 @@
       --glass-blur: blur(20px);
       --radius: 28px;
       --radius-sm: 14px;
-    }
 
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-    }
 
     html {
       scroll-behavior: smooth;
-    }
 
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -48,7 +45,6 @@
       overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
-    }
 
     /* Video Background */
     .video-background {
@@ -59,14 +55,12 @@
       height: 100vh;
       z-index: 0;
       overflow: hidden;
-    }
 
     .video-background video {
       width: 100%;
       height: 100%;
       object-fit: cover;
       opacity: 0.3;
-    }
 
     .video-overlay {
       position: absolute;
@@ -80,7 +74,6 @@
         rgba(0, 0, 0, 0.6) 50%,
         rgba(0, 0, 0, 0.85) 100%
       );
-    }
 
     .page-container {
       position: relative;
@@ -88,7 +81,6 @@
       max-width: 900px;
       margin: 0 auto;
       padding: 60px 24px 80px;
-    }
 
     .back-link {
       display: inline-flex;
@@ -106,12 +98,10 @@
       font-weight: 500;
       font-size: 14px;
       transition: all 0.3s ease;
-    }
 
     .back-link:hover {
       background: var(--glass-hover);
       transform: translateY(-2px);
-    }
 
     .markdown-body {
       background: var(--glass-bg);
@@ -120,7 +110,6 @@
       border: 1px solid var(--glass-border);
       border-radius: var(--radius);
       padding: 64px;
-    }
 
     .markdown-body h1 {
       color: var(--white);
@@ -129,7 +118,6 @@
       line-height: 1.1;
       margin-bottom: 32px;
       letter-spacing: -0.02em;
-    }
 
     .markdown-body h2 {
       display: flex;
@@ -143,7 +131,6 @@
       margin-bottom: 24px;
       padding-bottom: 16px;
       border-bottom: 1px solid var(--glass-border);
-    }
 
     .markdown-body h2::before {
       content: '';
@@ -158,14 +145,12 @@
       -webkit-mask-position: center;
       mask-position: center;
       flex-shrink: 0;
-    }
 
     /* Icon mappings for h2 headers based on content */
     .markdown-body h2[id*="why"]::before,
     .markdown-body h2:has(+ p:first-of-type)::before {
       -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4M12 8h.01'/%3E%3C/svg%3E");
       mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4M12 8h.01'/%3E%3C/svg%3E");
-    }
 
     .markdown-body h3,
     .markdown-body h4 {
@@ -173,39 +158,32 @@
       font-weight: 600;
       margin-top: 32px;
       margin-bottom: 16px;
-    }
 
     .markdown-body h3 {
       font-size: 22px;
-    }
 
     .markdown-body h4 {
       font-size: 18px;
       color: var(--white-90);
-    }
 
     .markdown-body p {
       color: var(--white-80);
       font-size: 18px;
       line-height: 1.7;
       margin-bottom: 20px;
-    }
 
     .markdown-body a {
       color: var(--white);
       text-decoration: underline;
       text-underline-offset: 3px;
       transition: opacity 0.2s;
-    }
 
     .markdown-body a:hover {
       opacity: 0.7;
-    }
 
     .markdown-body strong {
       color: var(--white);
       font-weight: 600;
-    }
 
     .markdown-body code {
       background: var(--glass-hover);
@@ -215,7 +193,6 @@
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.9em;
       color: var(--white);
-    }
 
     .markdown-body pre {
       background: var(--black) !important;
@@ -224,7 +201,6 @@
       padding: 24px;
       overflow-x: auto;
       margin: 24px 0;
-    }
 
     .markdown-body pre code {
       background: transparent;
@@ -233,22 +209,18 @@
       font-size: 14px;
       line-height: 1.7;
       color: var(--white-90);
-    }
 
     .markdown-body ul, .markdown-body ol {
       padding-left: 24px;
       margin-bottom: 20px;
-    }
 
     .markdown-body li {
       margin: 12px 0;
       color: var(--white-80);
       font-size: 18px;
-    }
 
     .markdown-body li strong {
       color: var(--white);
-    }
 
     .markdown-body table {
       width: 100%;
@@ -256,14 +228,12 @@
       margin: 24px 0;
       border-radius: var(--radius-sm);
       overflow: hidden;
-    }
 
     .markdown-body table th,
     .markdown-body table td {
       border: 1px solid var(--glass-border);
       padding: 14px 18px;
       text-align: left;
-    }
 
     .markdown-body table th {
       background: var(--glass-hover);
@@ -272,16 +242,13 @@
       font-size: 14px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-    }
 
     .markdown-body table td {
       background: var(--white-05);
       color: var(--white-80);
-    }
 
     .markdown-body table tr:nth-child(even) td {
       background: var(--white-10);
-    }
 
     .markdown-body blockquote {
       border-left: 4px solid var(--white-40);
@@ -289,19 +256,16 @@
       padding: 20px 24px;
       margin: 24px 0;
       border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    }
 
     .markdown-body blockquote p {
       margin: 0;
       color: var(--white-80);
-    }
 
     .markdown-body hr {
       border: none;
       height: 1px;
       background: var(--glass-border);
       margin: 48px 0;
-    }
 
     /* Section header icons */
     .section-icon {
@@ -314,7 +278,6 @@
       border-radius: 8px;
       margin-right: 12px;
       flex-shrink: 0;
-    }
 
     .section-icon svg {
       width: 18px;
@@ -322,27 +285,20 @@
       stroke: var(--white);
       fill: none;
       stroke-width: 2;
-    }
 
     @media (max-width: 768px) {
       .page-container {
         padding: 40px 16px 60px;
-      }
       .markdown-body {
         padding: 32px 24px;
         border-radius: 20px;
-      }
       .markdown-body h1 {
         font-size: 36px;
-      }
       .markdown-body h2 {
         font-size: 24px;
-      }
       .markdown-body p,
       .markdown-body li {
         font-size: 16px;
-      }
-    }
   </style>
 </head>
 <body>
@@ -452,7 +408,6 @@
 
     function toHex(bytes) {
       return Array.from(bytes).map(b =&gt; b.toString(16).padStart(2, &#39;0&#39;)).join(&#39;&#39;);
-    }
   &lt;/script&gt;
 &lt;/body&gt;
 &lt;/html&gt;
@@ -463,7 +418,6 @@
 export default {
   optimizeDeps: {
     exclude: [&#39;flatc-wasm&#39;]
-  }
 };
 </code></pre>
 <pre><code class="language-javascript">// main.js
@@ -477,7 +431,6 @@ await initEncryption();
 module.exports = {
   experiments: {
     asyncWebAssembly: true
-  }
 };
 </code></pre>
 <h2><span class="section-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>API Reference</h2>
@@ -608,7 +561,6 @@ const isValid = ed25519Verify(keypair.publicKey, message, signature);
 
       // Store private key in sessionStorage (demo only - use better storage in production!)
       sessionStorage.setItem(&#39;privateKey&#39;, toHex(myKeypair.privateKey));
-    }
 
     init();
 
@@ -620,7 +572,6 @@ const isValid = ed25519Verify(keypair.publicKey, message, signature);
       if (!recipientKeyHex || !plaintext) {
         alert(&#39;Please enter recipient key and message&#39;);
         return;
-      }
 
       try {
         const recipientKey = fromHex(recipientKeyHex);
@@ -654,7 +605,6 @@ const isValid = ed25519Verify(keypair.publicKey, message, signature);
         document.getElementById(&#39;encrypted&#39;).value = JSON.stringify(package);
       } catch (e) {
         alert(&#39;Encryption failed: &#39; + e.message);
-      }
     };
 
     window.decryptMessage = async function() {
@@ -663,7 +613,6 @@ const isValid = ed25519Verify(keypair.publicKey, message, signature);
       if (!receivedJson) {
         alert(&#39;Please paste encrypted message&#39;);
         return;
-      }
 
       try {
         const package = JSON.parse(receivedJson);
@@ -694,20 +643,16 @@ const isValid = ed25519Verify(keypair.publicKey, message, signature);
         document.getElementById(&#39;decrypted&#39;).value = plaintext;
       } catch (e) {
         alert(&#39;Decryption failed: &#39; + e.message);
-      }
     };
 
     function toHex(bytes) {
       return Array.from(bytes).map(b =&gt; b.toString(16).padStart(2, &#39;0&#39;)).join(&#39;&#39;);
-    }
 
     function fromHex(hex) {
       const bytes = new Uint8Array(hex.length / 2);
       for (let i = 0; i &lt; bytes.length; i++) {
         bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-      }
       return bytes;
-    }
   &lt;/script&gt;
 &lt;/body&gt;
 &lt;/html&gt;
@@ -723,7 +668,6 @@ self.onmessage = async (e) =&gt; {
   if (!initialized) {
     await initEncryption();
     initialized = true;
-  }
 
   const { data, key, iv } = e.data;
   const buffer = new Uint8Array(data);
@@ -772,10 +716,8 @@ worker.postMessage({
     chunks.push(encrypted);
 
     counter++;
-  }
 
   return new Blob(chunks);
-}
 </code></pre>
 <h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>Security Considerations</h2>
 <h3>1. Use crypto.getRandomValues()</h3>
@@ -786,12 +728,10 @@ const key = crypto.getRandomValues(new Uint8Array(32));
 const badKey = new Uint8Array(32);
 for (let i = 0; i &lt; 32; i++) {
   badKey[i] = Math.floor(Math.random() * 256);
-}
 </code></pre>
 <h3>2. Clear Sensitive Data</h3>
 <pre><code class="language-javascript">function clearKey(key) {
   key.fill(0);
-}
 
 // Use key...
 encryptBytes(data, key, iv);
@@ -822,7 +762,6 @@ let encryptionReady = initEncryption();
 async function encrypt(data, key, iv) {
   await encryptionReady;  // Wait if not ready
   // ...
-}
 </code></pre>
 <h3>2. Use Transferable Objects</h3>
 <pre><code class="language-javascript">// Transfer buffer ownership (zero-copy)
@@ -859,31 +798,23 @@ Content-Type: application/wasm
   </div>
 
   <script>
-    // Initialize HLS video with random selection
+    // Initialize video with random selection
     const videoUrls = [
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/90bb1b34646b81b3b63e5a854ea00da3/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/df176a2fb2ea2b64bd21ae1c10d3af6a/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/12a9780eeb1ea015801a5f55cf2e9d3d/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/964cb3eddff1a67e3772aac9a7aceea2/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/dd17599dfa77f41517133fa7a4967535/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/408ad52e3f15bc8f01ae69d194a8cf3a/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/e923e67d71fed3e0853ec57f0348451e/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/136a8a211c6c3b1cc1fd7b1c7d836c58/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/c9ddd33ac3d964e5d33b31ce849e8f95/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/257c7359efd4b4aaebcc03aa8fc78a36/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/697945ca6b876878dba3b23fbd2f1561/manifest/video.m3u8"
+      "../videos/bg-1.mp4",
+      "../videos/bg-2.mp4",
+      "../videos/bg-3.mp4",
+      "../videos/bg-4.mp4",
+      "../videos/bg-5.mp4",
+      "../videos/bg-6.mp4",
+      "../videos/bg-7.mp4",
+      "../videos/bg-8.mp4",
+      "../videos/bg-9.mp4",
+      "../videos/bg-10.mp4",
+      "../videos/bg-11.mp4"
     ];
 
     const video = document.getElementById('bg-video');
-    const randomUrl = videoUrls[Math.floor(Math.random() * videoUrls.length)];
-
-    if (Hls.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(randomUrl);
-      hls.attachMedia(video);
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = randomUrl;
-    }
+    video.src = videoUrls[Math.floor(Math.random() * videoUrls.length)];
   </script>
 </body>
 </html>

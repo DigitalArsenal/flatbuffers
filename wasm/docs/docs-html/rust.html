@@ -26,17 +26,14 @@
       --glass-blur: blur(20px);
       --radius: 28px;
       --radius-sm: 14px;
-    }
 
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-    }
 
     html {
       scroll-behavior: smooth;
-    }
 
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -48,7 +45,6 @@
       overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
-    }
 
     /* Video Background */
     .video-background {
@@ -59,14 +55,12 @@
       height: 100vh;
       z-index: 0;
       overflow: hidden;
-    }
 
     .video-background video {
       width: 100%;
       height: 100%;
       object-fit: cover;
       opacity: 0.3;
-    }
 
     .video-overlay {
       position: absolute;
@@ -80,7 +74,6 @@
         rgba(0, 0, 0, 0.6) 50%,
         rgba(0, 0, 0, 0.85) 100%
       );
-    }
 
     .page-container {
       position: relative;
@@ -88,7 +81,6 @@
       max-width: 900px;
       margin: 0 auto;
       padding: 60px 24px 80px;
-    }
 
     .back-link {
       display: inline-flex;
@@ -106,12 +98,10 @@
       font-weight: 500;
       font-size: 14px;
       transition: all 0.3s ease;
-    }
 
     .back-link:hover {
       background: var(--glass-hover);
       transform: translateY(-2px);
-    }
 
     .markdown-body {
       background: var(--glass-bg);
@@ -120,7 +110,6 @@
       border: 1px solid var(--glass-border);
       border-radius: var(--radius);
       padding: 64px;
-    }
 
     .markdown-body h1 {
       color: var(--white);
@@ -129,7 +118,6 @@
       line-height: 1.1;
       margin-bottom: 32px;
       letter-spacing: -0.02em;
-    }
 
     .markdown-body h2 {
       display: flex;
@@ -143,7 +131,6 @@
       margin-bottom: 24px;
       padding-bottom: 16px;
       border-bottom: 1px solid var(--glass-border);
-    }
 
     .markdown-body h2::before {
       content: '';
@@ -158,14 +145,12 @@
       -webkit-mask-position: center;
       mask-position: center;
       flex-shrink: 0;
-    }
 
     /* Icon mappings for h2 headers based on content */
     .markdown-body h2[id*="why"]::before,
     .markdown-body h2:has(+ p:first-of-type)::before {
       -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4M12 8h.01'/%3E%3C/svg%3E");
       mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4M12 8h.01'/%3E%3C/svg%3E");
-    }
 
     .markdown-body h3,
     .markdown-body h4 {
@@ -173,39 +158,32 @@
       font-weight: 600;
       margin-top: 32px;
       margin-bottom: 16px;
-    }
 
     .markdown-body h3 {
       font-size: 22px;
-    }
 
     .markdown-body h4 {
       font-size: 18px;
       color: var(--white-90);
-    }
 
     .markdown-body p {
       color: var(--white-80);
       font-size: 18px;
       line-height: 1.7;
       margin-bottom: 20px;
-    }
 
     .markdown-body a {
       color: var(--white);
       text-decoration: underline;
       text-underline-offset: 3px;
       transition: opacity 0.2s;
-    }
 
     .markdown-body a:hover {
       opacity: 0.7;
-    }
 
     .markdown-body strong {
       color: var(--white);
       font-weight: 600;
-    }
 
     .markdown-body code {
       background: var(--glass-hover);
@@ -215,7 +193,6 @@
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.9em;
       color: var(--white);
-    }
 
     .markdown-body pre {
       background: var(--black) !important;
@@ -224,7 +201,6 @@
       padding: 24px;
       overflow-x: auto;
       margin: 24px 0;
-    }
 
     .markdown-body pre code {
       background: transparent;
@@ -233,22 +209,18 @@
       font-size: 14px;
       line-height: 1.7;
       color: var(--white-90);
-    }
 
     .markdown-body ul, .markdown-body ol {
       padding-left: 24px;
       margin-bottom: 20px;
-    }
 
     .markdown-body li {
       margin: 12px 0;
       color: var(--white-80);
       font-size: 18px;
-    }
 
     .markdown-body li strong {
       color: var(--white);
-    }
 
     .markdown-body table {
       width: 100%;
@@ -256,14 +228,12 @@
       margin: 24px 0;
       border-radius: var(--radius-sm);
       overflow: hidden;
-    }
 
     .markdown-body table th,
     .markdown-body table td {
       border: 1px solid var(--glass-border);
       padding: 14px 18px;
       text-align: left;
-    }
 
     .markdown-body table th {
       background: var(--glass-hover);
@@ -272,16 +242,13 @@
       font-size: 14px;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-    }
 
     .markdown-body table td {
       background: var(--white-05);
       color: var(--white-80);
-    }
 
     .markdown-body table tr:nth-child(even) td {
       background: var(--white-10);
-    }
 
     .markdown-body blockquote {
       border-left: 4px solid var(--white-40);
@@ -289,19 +256,16 @@
       padding: 20px 24px;
       margin: 24px 0;
       border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    }
 
     .markdown-body blockquote p {
       margin: 0;
       color: var(--white-80);
-    }
 
     .markdown-body hr {
       border: none;
       height: 1px;
       background: var(--glass-border);
       margin: 48px 0;
-    }
 
     /* Section header icons */
     .section-icon {
@@ -314,7 +278,6 @@
       border-radius: 8px;
       margin-right: 12px;
       flex-shrink: 0;
-    }
 
     .section-icon svg {
       width: 18px;
@@ -322,27 +285,20 @@
       stroke: var(--white);
       fill: none;
       stroke-width: 2;
-    }
 
     @media (max-width: 768px) {
       .page-container {
         padding: 40px 16px 60px;
-      }
       .markdown-body {
         padding: 32px 24px;
         border-radius: 20px;
-      }
       .markdown-body h1 {
         font-size: 36px;
-      }
       .markdown-body h2 {
         font-size: 24px;
-      }
       .markdown-body p,
       .markdown-body li {
         font-size: 16px;
-      }
-    }
   </style>
 </head>
 <body>
@@ -446,7 +402,6 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
     free.call(&amp;mut store, &amp;[Value::I32(data_ptr as i32)])?;
 
     Ok(())
-}
 </code></pre>
 <h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></span>Complete Module Wrapper</h2>
 <pre><code class="language-rust">//! FlatBuffers Encryption Module for Rust
@@ -487,7 +442,6 @@ pub enum EncryptionError {
     OperationFailed,
     #[error(&quot;IO error: {0}&quot;)]
     Io(#[from] std::io::Error),
-}
 
 pub type Result&lt;T&gt; = std::result::Result&lt;T, EncryptionError&gt;;
 
@@ -496,27 +450,23 @@ pub type Result&lt;T&gt; = std::result::Result&lt;T, EncryptionError&gt;;
 pub struct X25519KeyPair {
     pub private_key: [u8; X25519_PRIVATE_KEY_SIZE],
     pub public_key: [u8; X25519_PUBLIC_KEY_SIZE],
-}
 
 /// Ed25519 key pair
 #[derive(Clone)]
 pub struct Ed25519KeyPair {
     pub private_key: [u8; ED25519_PRIVATE_KEY_SIZE],
     pub public_key: [u8; ED25519_PUBLIC_KEY_SIZE],
-}
 
 /// secp256k1 key pair
 #[derive(Clone)]
 pub struct Secp256k1KeyPair {
     pub private_key: [u8; SECP256K1_PRIVATE_KEY_SIZE],
     pub public_key: [u8; SECP256K1_PUBLIC_KEY_SIZE],
-}
 
 /// Encryption module wrapper
 pub struct EncryptionModule {
     store: Store,
     instance: Instance,
-}
 
 impl EncryptionModule {
     /// Create a new encryption module from WASM bytes
@@ -551,36 +501,30 @@ impl EncryptionModule {
         let instance = Instance::new(&amp;mut store, &amp;module, &amp;import_object)?;
 
         Ok(Self { store, instance })
-    }
 
     /// Load from file
     pub fn from_file(path: &amp;str) -&gt; Result&lt;Self&gt; {
         let wasm_bytes = std::fs::read(path)?;
         Self::new(&amp;wasm_bytes)
-    }
 
     fn memory(&amp;self) -&gt; Result&lt;&amp;Memory&gt; {
         Ok(self.instance.exports.get_memory(&quot;memory&quot;)?)
-    }
 
     fn malloc(&amp;mut self, size: usize) -&gt; Result&lt;u32&gt; {
         let malloc = self.instance.exports.get_function(&quot;malloc&quot;)?;
         let result = malloc.call(&amp;mut self.store, &amp;[Value::I32(size as i32)])?;
         Ok(result[0].unwrap_i32() as u32)
-    }
 
     fn free(&amp;mut self, ptr: u32) -&gt; Result&lt;()&gt; {
         let free = self.instance.exports.get_function(&quot;free&quot;)?;
         free.call(&amp;mut self.store, &amp;[Value::I32(ptr as i32)])?;
         Ok(())
-    }
 
     fn write_bytes(&amp;self, ptr: u32, data: &amp;[u8]) -&gt; Result&lt;()&gt; {
         let memory = self.memory()?;
         let view = memory.view(&amp;self.store);
         view.write(ptr as u64, data)?;
         Ok(())
-    }
 
     fn read_bytes(&amp;self, ptr: u32, len: usize) -&gt; Result&lt;Vec&lt;u8&gt;&gt; {
         let memory = self.memory()?;
@@ -588,7 +532,6 @@ impl EncryptionModule {
         let mut buf = vec![0u8; len];
         view.read(ptr as u64, &amp;mut buf)?;
         Ok(buf)
-    }
 
     /// Encrypt data using AES-256-CTR
     pub fn encrypt(&amp;mut self, key: &amp;[u8], iv: &amp;[u8], data: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;&gt; {
@@ -597,13 +540,11 @@ impl EncryptionModule {
                 expected: AES_KEY_SIZE,
                 actual: key.len(),
             });
-        }
         if iv.len() != AES_IV_SIZE {
             return Err(EncryptionError::InvalidKeySize {
                 expected: AES_IV_SIZE,
                 actual: iv.len(),
             });
-        }
 
         let key_ptr = self.malloc(key.len())?;
         let iv_ptr = self.malloc(iv.len())?;
@@ -626,7 +567,6 @@ impl EncryptionModule {
             self.free(iv_ptr)?;
             self.free(data_ptr)?;
             return Err(EncryptionError::OperationFailed);
-        }
 
         let encrypted = self.read_bytes(data_ptr, data.len())?;
 
@@ -635,13 +575,11 @@ impl EncryptionModule {
         self.free(data_ptr)?;
 
         Ok(encrypted)
-    }
 
     /// Decrypt data using AES-256-CTR
     pub fn decrypt(&amp;mut self, key: &amp;[u8], iv: &amp;[u8], data: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;&gt; {
         // CTR mode is symmetric
         self.encrypt(key, iv, data)
-    }
 
     /// Compute SHA-256 hash
     pub fn sha256(&amp;mut self, data: &amp;[u8]) -&gt; Result&lt;[u8; SHA256_SIZE]&gt; {
@@ -665,7 +603,6 @@ impl EncryptionModule {
         let mut result = [0u8; SHA256_SIZE];
         result.copy_from_slice(&amp;hash);
         Ok(result)
-    }
 
     /// Derive key using HKDF-SHA256
     pub fn hkdf(&amp;mut self, ikm: &amp;[u8], salt: Option&lt;&amp;[u8]&gt;, info: &amp;[u8], length: usize) -&gt; Result&lt;Vec&lt;u8&gt;&gt; {
@@ -702,12 +639,10 @@ impl EncryptionModule {
         self.free(ikm_ptr)?;
         if salt_ptr != 0 {
             self.free(salt_ptr)?;
-        }
         self.free(info_ptr)?;
         self.free(out_ptr)?;
 
         Ok(result)
-    }
 
     /// Generate X25519 key pair
     pub fn x25519_generate_keypair(&amp;mut self) -&gt; Result&lt;X25519KeyPair&gt; {
@@ -724,7 +659,6 @@ impl EncryptionModule {
             self.free(priv_ptr)?;
             self.free(pub_ptr)?;
             return Err(EncryptionError::OperationFailed);
-        }
 
         let priv_bytes = self.read_bytes(priv_ptr, X25519_PRIVATE_KEY_SIZE)?;
         let pub_bytes = self.read_bytes(pub_ptr, X25519_PUBLIC_KEY_SIZE)?;
@@ -738,7 +672,6 @@ impl EncryptionModule {
         public_key.copy_from_slice(&amp;pub_bytes);
 
         Ok(X25519KeyPair { private_key, public_key })
-    }
 
     /// Compute X25519 shared secret
     pub fn x25519_shared_secret(&amp;mut self, private_key: &amp;[u8], public_key: &amp;[u8]) -&gt; Result&lt;[u8; 32]&gt; {
@@ -761,7 +694,6 @@ impl EncryptionModule {
             self.free(pub_ptr)?;
             self.free(out_ptr)?;
             return Err(EncryptionError::OperationFailed);
-        }
 
         let secret_bytes = self.read_bytes(out_ptr, 32)?;
 
@@ -772,7 +704,6 @@ impl EncryptionModule {
         let mut secret = [0u8; 32];
         secret.copy_from_slice(&amp;secret_bytes);
         Ok(secret)
-    }
 
     /// Generate Ed25519 key pair
     pub fn ed25519_generate_keypair(&amp;mut self) -&gt; Result&lt;Ed25519KeyPair&gt; {
@@ -789,7 +720,6 @@ impl EncryptionModule {
             self.free(priv_ptr)?;
             self.free(pub_ptr)?;
             return Err(EncryptionError::OperationFailed);
-        }
 
         let priv_bytes = self.read_bytes(priv_ptr, ED25519_PRIVATE_KEY_SIZE)?;
         let pub_bytes = self.read_bytes(pub_ptr, ED25519_PUBLIC_KEY_SIZE)?;
@@ -803,7 +733,6 @@ impl EncryptionModule {
         public_key.copy_from_slice(&amp;pub_bytes);
 
         Ok(Ed25519KeyPair { private_key, public_key })
-    }
 
     /// Sign with Ed25519
     pub fn ed25519_sign(&amp;mut self, private_key: &amp;[u8], message: &amp;[u8]) -&gt; Result&lt;[u8; ED25519_SIGNATURE_SIZE]&gt; {
@@ -827,7 +756,6 @@ impl EncryptionModule {
             self.free(msg_ptr)?;
             self.free(sig_ptr)?;
             return Err(EncryptionError::OperationFailed);
-        }
 
         let sig_bytes = self.read_bytes(sig_ptr, ED25519_SIGNATURE_SIZE)?;
 
@@ -838,7 +766,6 @@ impl EncryptionModule {
         let mut signature = [0u8; ED25519_SIGNATURE_SIZE];
         signature.copy_from_slice(&amp;sig_bytes);
         Ok(signature)
-    }
 
     /// Verify Ed25519 signature
     pub fn ed25519_verify(&amp;mut self, public_key: &amp;[u8], message: &amp;[u8], signature: &amp;[u8]) -&gt; Result&lt;bool&gt; {
@@ -863,8 +790,6 @@ impl EncryptionModule {
         self.free(sig_ptr)?;
 
         Ok(result[0].unwrap_i32() == 0)
-    }
-}
 </code></pre>
 <h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>Template Project Structure</h2>
 <pre><code>myproject/
@@ -905,7 +830,6 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
 
     assert_eq!(plaintext.to_vec(), decrypted);
     Ok(())
-}
 </code></pre>
 <h3>End-to-End Encryption</h3>
 <pre><code class="language-rust">use crate::encryption::EncryptionModule;
@@ -936,7 +860,6 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
     println!(&quot;Decrypted: {}&quot;, String::from_utf8_lossy(&amp;decrypted));
 
     Ok(())
-}
 </code></pre>
 <h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>Performance Tips</h2>
 <ol>
@@ -948,13 +871,11 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
 let mut module = EncryptionModule::from_file(&quot;wasm&quot;)?;
 for item in items {
     module.encrypt(&amp;key, &amp;iv, item)?;
-}
 
 // Bad: Create new instance each time
 for item in items {
     let mut module = EncryptionModule::from_file(&quot;wasm&quot;)?; // Slow!
     module.encrypt(&amp;key, &amp;iv, item)?;
-}
 </code></pre>
 <h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>Troubleshooting</h2>
 <h3>"Import not found"</h3>
@@ -964,7 +885,6 @@ for item in items {
 <pre><code class="language-rust">let ptr = self.malloc(size)?;
 if ptr == 0 {
     return Err(EncryptionError::OperationFailed);
-}
 </code></pre>
 <h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>See Also</h2>
 <ul>
@@ -976,31 +896,23 @@ if ptr == 0 {
   </div>
 
   <script>
-    // Initialize HLS video with random selection
+    // Initialize video with random selection
     const videoUrls = [
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/90bb1b34646b81b3b63e5a854ea00da3/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/df176a2fb2ea2b64bd21ae1c10d3af6a/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/12a9780eeb1ea015801a5f55cf2e9d3d/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/964cb3eddff1a67e3772aac9a7aceea2/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/dd17599dfa77f41517133fa7a4967535/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/408ad52e3f15bc8f01ae69d194a8cf3a/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/e923e67d71fed3e0853ec57f0348451e/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/136a8a211c6c3b1cc1fd7b1c7d836c58/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/c9ddd33ac3d964e5d33b31ce849e8f95/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/257c7359efd4b4aaebcc03aa8fc78a36/manifest/video.m3u8",
-      "https://customer-cbeadsgr09pnsezs.cloudflarestream.com/697945ca6b876878dba3b23fbd2f1561/manifest/video.m3u8"
+      "../videos/bg-1.mp4",
+      "../videos/bg-2.mp4",
+      "../videos/bg-3.mp4",
+      "../videos/bg-4.mp4",
+      "../videos/bg-5.mp4",
+      "../videos/bg-6.mp4",
+      "../videos/bg-7.mp4",
+      "../videos/bg-8.mp4",
+      "../videos/bg-9.mp4",
+      "../videos/bg-10.mp4",
+      "../videos/bg-11.mp4"
     ];
 
     const video = document.getElementById('bg-video');
-    const randomUrl = videoUrls[Math.floor(Math.random() * videoUrls.length)];
-
-    if (Hls.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(randomUrl);
-      hls.attachMedia(video);
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = randomUrl;
-    }
+    video.src = videoUrls[Math.floor(Math.random() * videoUrls.length)];
   </script>
 </body>
 </html>

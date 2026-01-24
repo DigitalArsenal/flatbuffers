@@ -222,54 +222,64 @@ function validateFlatBufferBinary(buffer, options = {}) {
     throw new Error(`Binary input too small: must be at least ${MIN_FLATBUFFER_SIZE} bytes`);
   }
 
-  // Read root table offset (little-endian u32 at offset 0)
   const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-  const rootOffset = view.getUint32(0, true);
+
+  // Detect size-prefixed buffer: first 4 bytes == buffer.length - 4
+  let dataOffset = 0;
+  const firstU32 = view.getUint32(0, true);
+  if (firstU32 === buffer.length - 4) {
+    // This is a size-prefixed buffer, skip the 4-byte prefix
+    dataOffset = 4;
+    if (buffer.length < MIN_FLATBUFFER_SIZE + 4) {
+      throw new Error(`Binary input too small for size-prefixed buffer`);
+    }
+  }
+
+  // Read root table offset (little-endian u32)
+  const rootOffset = view.getUint32(dataOffset, true);
+  const dataLength = buffer.length - dataOffset;
 
   // Validate root offset points within the buffer
-  // The root offset is the offset from the start of the buffer to the root table
-  if (rootOffset >= buffer.length) {
-    throw new Error(`Invalid FlatBuffer: root offset (${rootOffset}) points outside buffer (size: ${buffer.length})`);
+  if (rootOffset >= dataLength) {
+    throw new Error(`Invalid FlatBuffer: root offset (${rootOffset}) points outside buffer (size: ${dataLength})`);
   }
 
   // Minimum required size for a valid table (vtable offset + some data)
-  if (rootOffset + 4 > buffer.length) {
+  if (rootOffset + 4 > dataLength) {
     throw new Error(`Invalid FlatBuffer: buffer too small for root table at offset ${rootOffset}`);
   }
 
-  // If buffer has a file identifier (bytes 4-7), it should be printable ASCII or null
-  // File identifiers are optional but if present should be valid
-  if (buffer.length >= 8) {
+  // If buffer has a file identifier (bytes 4-7 of data), it should be printable ASCII or null
+  if (dataLength >= 8) {
     const hasFileId = rootOffset >= 8; // File ID is stored at offset 4-7 if root is at 8+
     if (hasFileId) {
-      for (let i = 4; i < 8; i++) {
+      for (let i = dataOffset + 4; i < dataOffset + 8; i++) {
         const byte = buffer[i];
         // Allow printable ASCII (32-126) or null (0)
         if (byte !== 0 && (byte < 32 || byte > 126)) {
-          // Not a valid file identifier - this might be a size-prefixed buffer
-          // or just data at this location, so we don't fail, just skip validation
+          // Not a valid file identifier, just skip validation
           break;
         }
       }
     }
   }
 
-  // Validate root table structure
-  const vtableOffsetSigned = view.getInt32(rootOffset, true);
+  // Validate root table structure (all offsets relative to data start)
+  const vtableOffsetSigned = view.getInt32(dataOffset + rootOffset, true);
   const vtablePos = rootOffset - vtableOffsetSigned;
 
   // vtable should be within buffer
-  if (vtablePos < 0 || vtablePos >= buffer.length) {
+  if (vtablePos < 0 || vtablePos >= dataLength) {
     throw new Error(`Invalid FlatBuffer: vtable position (${vtablePos}) is out of bounds`);
   }
 
   // Need at least 4 bytes for vtable header (vtable size + table size)
-  if (vtablePos + 4 > buffer.length) {
+  if (vtablePos + 4 > dataLength) {
     throw new Error(`Invalid FlatBuffer: vtable header extends past buffer end`);
   }
 
-  // Read vtable size (first 2 bytes of vtable)
-  const vtableSize = view.getUint16(vtablePos, true);
+  // Read vtable size (first 2 bytes of vtable, accounting for dataOffset)
+  const vtableSize = view.getUint16(dataOffset + vtablePos, true);
 
   // vtable size should be reasonable (at least 4 bytes for size + table size fields)
   if (vtableSize < 4) {
@@ -282,12 +292,12 @@ function validateFlatBufferBinary(buffer, options = {}) {
   }
 
   // vtable shouldn't extend past buffer
-  if (vtablePos + vtableSize > buffer.length) {
+  if (vtablePos + vtableSize > dataLength) {
     throw new Error(`Invalid FlatBuffer: vtable extends past buffer end`);
   }
 
   // Read table size from vtable (second 2 bytes)
-  const tableSize = view.getUint16(vtablePos + 2, true);
+  const tableSize = view.getUint16(dataOffset + vtablePos + 2, true);
 
   // Table size should be at least 4 (for the vtable offset itself)
   if (tableSize < 4) {
@@ -295,7 +305,7 @@ function validateFlatBufferBinary(buffer, options = {}) {
   }
 
   // Table should fit in buffer
-  if (rootOffset + tableSize > buffer.length) {
+  if (rootOffset + tableSize > dataLength) {
     throw new Error(`Invalid FlatBuffer: root table extends past buffer end`);
   }
 
@@ -309,7 +319,7 @@ function validateFlatBufferBinary(buffer, options = {}) {
 
   // Validate each field offset in the vtable
   for (let i = 0; i < numFields; i++) {
-    const fieldOffset = view.getUint16(vtablePos + 4 + i * 2, true);
+    const fieldOffset = view.getUint16(dataOffset + vtablePos + 4 + i * 2, true);
 
     // Field offset 0 means field is not present, which is valid
     if (fieldOffset === 0) continue;
@@ -319,11 +329,11 @@ function validateFlatBufferBinary(buffer, options = {}) {
       throw new Error(`Invalid FlatBuffer: field ${i} offset (${fieldOffset}) exceeds table size (${tableSize})`);
     }
 
-    // Absolute position of field data
+    // Absolute position of field data (relative to data start)
     const fieldPos = rootOffset + fieldOffset;
 
     // Field should be within buffer
-    if (fieldPos >= buffer.length) {
+    if (fieldPos >= dataLength) {
       throw new Error(`Invalid FlatBuffer: field ${i} position (${fieldPos}) is outside buffer`);
     }
   }
@@ -777,9 +787,20 @@ export class FlatcRunner {
       : binaryInput.path + ".bin";
     const outDir = `/out_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
+    // Strip size prefix if present (flatc --json doesn't expect it)
+    let binaryData = binaryInput.data;
+    if (binaryData.length >= 8) {
+      const view = new DataView(binaryData.buffer, binaryData.byteOffset, binaryData.byteLength);
+      const firstU32 = view.getUint32(0, true);
+      if (firstU32 === binaryData.length - 4) {
+        // Size-prefixed buffer, strip the prefix for flatc
+        binaryData = binaryData.subarray(4);
+      }
+    }
+
     this.Module.FS.mkdirTree(outDir);
     this._mountSchemaIfNeeded(schemaInput);
-    this.mountFile(binaryPath, binaryInput.data);
+    this.mountFile(binaryPath, binaryData);
 
     const args = [
       "--json",

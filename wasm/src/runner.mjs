@@ -656,7 +656,7 @@ export class FlatcRunner {
    * @param {Object} [options={}]
    * @param {boolean} [options.unknownJson=true] - Allow unknown fields in JSON.
    * @param {boolean} [options.strictJson=false] - Require strict JSON conformance.
-   * @param {boolean} [options.sizePrefix=false] - Include 4-byte size prefix before the buffer.
+   * @param {boolean} [options.sizePrefix=true] - Include 4-byte size prefix before the buffer.
    * @param {boolean} [options.fileIdentifier=true] - Include file identifier (from schema).
    * @returns {Uint8Array}
    */
@@ -737,9 +737,9 @@ export class FlatcRunner {
       output[7] = 0;
     }
 
-    // Handle sizePrefix option (default: false to match native flatc)
-    // Prepend 4-byte little-endian size prefix if requested
-    if (options.sizePrefix === true) {
+    // Handle sizePrefix option (default: true for streaming use cases)
+    // Prepend 4-byte little-endian size prefix
+    if (options.sizePrefix !== false) {
       const size = output.length;
       const prefixed = new Uint8Array(4 + size);
       // Write size as little-endian uint32

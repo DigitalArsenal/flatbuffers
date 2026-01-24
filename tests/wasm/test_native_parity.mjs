@@ -382,12 +382,12 @@ for (const tc of binaryTestCases) {
     }
     const nativeBinary = readFileSync(join(nativeBinDir, nativeBinFile));
 
-    // WASM: JSON → Binary (sizePrefix: false to match native flatc output)
+    // WASM: JSON → Binary (default sizePrefix: false matches native flatc)
     const schemaInput = {
       entry: `/${schemaFile}`,
       files: { [`/${schemaFile}`]: tc.schema },
     };
-    const wasmBinary = runner.generateBinary(schemaInput, tc.json, { sizePrefix: false });
+    const wasmBinary = runner.generateBinary(schemaInput, tc.json);
 
     // Compare binaries
     if (nativeBinary.length !== wasmBinary.length) {

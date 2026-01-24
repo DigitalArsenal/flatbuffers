@@ -62,12 +62,17 @@ html {
   scroll-behavior: smooth;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   font-family: var(--font-sans);
   background: var(--black);
   color: var(--white);
   line-height: 1.5;
   overflow-x: hidden;
+  max-width: 100vw;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -6826,6 +6831,8 @@ details[open] .collapse-icon {
   background: var(--white-05);
   border-radius: 8px;
   padding: 1.5rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .memory-desc {
@@ -6867,6 +6874,25 @@ details[open] .collapse-icon {
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--primary);
+  word-break: break-all;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .memory-table {
+    font-size: 11px;
+    min-width: 500px;
+  }
+
+  .memory-table th,
+  .memory-table td {
+    padding: 8px 6px;
+  }
+
+  .memory-table code {
+    font-size: 10px;
+    padding: 1px 4px;
+  }
 }
 
 .memory-table tr:last-child td {

@@ -42,8 +42,9 @@
   ],
   "scripts": {
     "build": "cmake --build ../build/wasm --target flatc_wasm_npm -j",
-    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_encryption.mjs",
+    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_encryption.mjs && node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
     "test:encryption": "node test/test_encryption.mjs",
+    "test:aligned": "node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
     "prepublishOnly": "npm run build && npm test"
   },
   "repository": {

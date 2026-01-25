@@ -6713,6 +6713,71 @@ details[open] .collapse-icon {
   border-bottom-color: var(--primary);
 }
 
+/* WASM Interop Pattern Tabs */
+.interop-patterns {
+  margin-top: 1rem;
+}
+
+.pattern-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.pattern-tab {
+  padding: 8px 16px;
+  font-size: 13px;
+  background: var(--white-05);
+  border: 1px solid var(--white-10);
+  border-radius: 6px;
+  color: var(--white-60);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pattern-tab:hover {
+  background: var(--white-10);
+  color: var(--white-80);
+}
+
+.pattern-tab.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.pattern-content {
+  display: none;
+}
+
+.pattern-content.active {
+  display: block;
+}
+
+.pattern-desc {
+  padding: 12px 16px;
+  background: var(--white-05);
+  border-radius: 8px 8px 0 0;
+  border-bottom: 1px solid var(--white-10);
+  font-size: 13px;
+  color: var(--white-70);
+}
+
+.pattern-desc strong {
+  color: var(--primary);
+}
+
+.pattern-content .code-display {
+  margin: 0;
+  border-radius: 0 0 8px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 16px;
+  max-height: 350px;
+  overflow: auto;
+}
+
 .code-example .code-display {
   position: static;
   margin: 0;

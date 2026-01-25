@@ -2532,6 +2532,421 @@ extern "C" {
 }
 ```
 
+### Sharing Arrays Between WASM Modules
+
+Since aligned binary structs have no embedded length metadata (unlike FlatBuffers vectors), you need to communicate array bounds **out-of-band**. This section covers patterns for sharing arrays of aligned structs between WASM modules or across the JS/WASM boundary.
+
+#### Pattern 1: Pointer + Count (Recommended)
+
+The simplest pattern - pass the pointer and count as separate values:
+
+```cpp
+// C++ WASM module
+static Cartesian3 positions[10000];
+static uint32_t position_count = 0;
+
+extern "C" {
+  Cartesian3* get_positions() { return positions; }
+  uint32_t get_position_count() { return position_count; }
+}
+```
+
+```typescript
+// TypeScript consumer
+const ptr = wasm.exports.get_positions();
+const count = wasm.exports.get_position_count();
+const positions = Cartesian3ArrayView.fromMemory(wasm.exports.memory, ptr, count);
+
+for (const pos of positions) {
+  console.log(`(${pos.x}, ${pos.y}, ${pos.z})`);
+}
+```
+
+#### Pattern 2: Index-Based Lookup (Fixed Offset Known)
+
+When struct size is known at compile time, store **indices** separately and compute offsets on access. This is ideal for sparse access, cross-references between arrays, or when indices are embedded in other structures.
+
+```fbs
+// Schema with cross-references via indices
+namespace Space;
+
+struct Cartesian3 {
+  x: double;
+  y: double;
+  z: double;
+}
+
+// Satellite references positions by index, not pointer
+table Satellite {
+  norad_id: uint32;
+  name: string;
+  position_index: uint32;    // Index into positions array
+  velocity_index: uint32;    // Index into velocities array
+}
+
+// Observation references multiple satellites by index
+table Observation {
+  timestamp: double;
+  satellite_indices: [uint32:64];  // Up to 64 satellite indices
+  satellite_count: uint32;
+}
+```
+
+```cpp
+// C++ - Dense arrays with index-based access
+#include "space_aligned.h"
+
+// Dense arrays in linear memory
+static Cartesian3 positions[10000];
+static Cartesian3 velocities[10000];
+static Satellite satellites[1000];
+
+extern "C" {
+  // Export base pointers
+  Cartesian3* get_positions_base() { return positions; }
+  Cartesian3* get_velocities_base() { return velocities; }
+  Satellite* get_satellites_base() { return satellites; }
+
+  // Get position for a satellite (by satellite index)
+  Cartesian3* get_satellite_position(uint32_t sat_idx) {
+    uint32_t pos_idx = satellites[sat_idx].position_index;
+    return &positions[pos_idx];
+  }
+}
+```
+
+```typescript
+// TypeScript - Index-based random access
+import { Cartesian3View, SatelliteView, CARTESIAN3_SIZE, SATELLITE_SIZE } from './space_aligned.mjs';
+
+class SpaceDataManager {
+  private memory: WebAssembly.Memory;
+  private positionsBase: number;
+  private velocitiesBase: number;
+  private satellitesBase: number;
+
+  constructor(wasm: WasmExports) {
+    this.memory = wasm.memory;
+    this.positionsBase = wasm.get_positions_base();
+    this.velocitiesBase = wasm.get_velocities_base();
+    this.satellitesBase = wasm.get_satellites_base();
+  }
+
+  // Direct index lookup - O(1) access
+  getPositionByIndex(index: number): Cartesian3View {
+    const offset = this.positionsBase + index * CARTESIAN3_SIZE;
+    return Cartesian3View.fromMemory(this.memory, offset);
+  }
+
+  getVelocityByIndex(index: number): Cartesian3View {
+    const offset = this.velocitiesBase + index * CARTESIAN3_SIZE;
+    return Cartesian3View.fromMemory(this.memory, offset);
+  }
+
+  getSatelliteByIndex(index: number): SatelliteView {
+    const offset = this.satellitesBase + index * SATELLITE_SIZE;
+    return SatelliteView.fromMemory(this.memory, offset);
+  }
+
+  // Follow index reference from satellite to its position
+  getSatellitePosition(satIndex: number): Cartesian3View {
+    const sat = this.getSatelliteByIndex(satIndex);
+    const posIndex = sat.position_index;
+    return this.getPositionByIndex(posIndex);
+  }
+
+  // Batch lookup - get positions for multiple satellites
+  getPositionsForSatellites(satIndices: number[]): Cartesian3View[] {
+    return satIndices.map(satIdx => {
+      const sat = this.getSatelliteByIndex(satIdx);
+      return this.getPositionByIndex(sat.position_index);
+    });
+  }
+}
+
+// Usage
+const manager = new SpaceDataManager(wasmExports);
+
+// Direct access by known index
+const pos = manager.getPositionByIndex(42);
+console.log(`Position 42: (${pos.x}, ${pos.y}, ${pos.z})`);
+
+// Follow cross-reference
+const satPos = manager.getSatellitePosition(0);
+console.log(`Satellite 0 position: (${satPos.x}, ${satPos.y}, ${satPos.z})`);
+```
+
+#### Pattern 3: Indices Embedded in Header Struct
+
+Store indices in a metadata structure that references into data arrays:
+
+```fbs
+// Manifest with indices into data arrays
+table EphemerisManifest {
+  // Metadata
+  epoch_start: double;
+  epoch_end: double;
+  step_seconds: double;
+
+  // Indices into the points array (one range per satellite)
+  satellite_start_indices: [uint32:100];  // Start index for each satellite
+  satellite_point_counts: [uint32:100];   // Point count for each satellite
+  satellite_count: uint32;
+}
+
+struct EphemerisPoint {
+  jd: double;
+  x: double;
+  y: double;
+  z: double;
+  vx: double;
+  vy: double;
+  vz: double;
+}
+```
+
+```typescript
+// TypeScript - Navigate using manifest indices
+import {
+  EphemerisManifestView,
+  EphemerisPointView,
+  EphemerisPointArrayView,
+  EPHEMERISPOINT_SIZE
+} from './ephemeris_aligned.mjs';
+
+class EphemerisReader {
+  private manifest: EphemerisManifestView;
+  private pointsBase: number;
+  private memory: WebAssembly.Memory;
+
+  constructor(memory: WebAssembly.Memory, manifestPtr: number, pointsPtr: number) {
+    this.memory = memory;
+    this.manifest = EphemerisManifestView.fromMemory(memory, manifestPtr);
+    this.pointsBase = pointsPtr;
+  }
+
+  // Get all points for a specific satellite
+  getSatellitePoints(satIndex: number): EphemerisPointArrayView {
+    // Read start index and count from manifest
+    const startIdx = this.manifest.satellite_start_indices[satIndex];
+    const count = this.manifest.satellite_point_counts[satIndex];
+
+    // Calculate byte offset: base + startIdx * structSize
+    const offset = this.pointsBase + startIdx * EPHEMERISPOINT_SIZE;
+
+    return new EphemerisPointArrayView(this.memory.buffer, offset, count);
+  }
+
+  // Get specific point by satellite and time index
+  getPoint(satIndex: number, timeIndex: number): EphemerisPointView {
+    const startIdx = this.manifest.satellite_start_indices[satIndex];
+    const globalIdx = startIdx + timeIndex;
+    const offset = this.pointsBase + globalIdx * EPHEMERISPOINT_SIZE;
+    return EphemerisPointView.fromMemory(this.memory, offset);
+  }
+
+  // Iterate all satellites
+  *iterateSatellites(): Generator<{index: number, points: EphemerisPointArrayView}> {
+    const count = this.manifest.satellite_count;
+    for (let i = 0; i < count; i++) {
+      yield { index: i, points: this.getSatellitePoints(i) };
+    }
+  }
+}
+
+// Usage
+const reader = new EphemerisReader(memory, manifestPtr, pointsPtr);
+
+// Get ISS ephemeris (satellite 0)
+const issPoints = reader.getSatellitePoints(0);
+console.log(`ISS has ${issPoints.length} ephemeris points`);
+
+// Get specific point
+const point = reader.getPoint(0, 100);  // Satellite 0, time index 100
+console.log(`Position at t=100: (${point.x}, ${point.y}, ${point.z})`);
+```
+
+#### Pattern 4: Pre-computed Offset Table
+
+For variable-sized records or complex layouts, pre-compute byte offsets:
+
+```fbs
+// Offset table for complex data
+table DataDirectory {
+  record_count: uint32;
+  byte_offsets: [uint32:10000];  // Byte offset of each record
+  byte_sizes: [uint32:10000];    // Size of each record (if variable)
+}
+```
+
+```typescript
+// TypeScript - Use pre-computed offsets
+class OffsetTableReader<T> {
+  constructor(
+    private memory: WebAssembly.Memory,
+    private directory: DataDirectoryView,
+    private dataBase: number,
+    private viewFactory: (buffer: ArrayBuffer, offset: number) => T
+  ) {}
+
+  get(index: number): T {
+    const byteOffset = this.directory.byte_offsets[index];
+    return this.viewFactory(this.memory.buffer, this.dataBase + byteOffset);
+  }
+
+  getSize(index: number): number {
+    return this.directory.byte_sizes[index];
+  }
+
+  get length(): number {
+    return this.directory.record_count;
+  }
+}
+```
+
+### Real-World Example: Satellite Ephemeris
+
+Complete example for sharing orbital data between WASM propagation and JS visualization:
+
+```fbs
+// satellite_ephemeris.fbs
+namespace Astrodynamics;
+
+struct StateVector {
+  x: double;   // km (ECI)
+  y: double;
+  z: double;
+  vx: double;  // km/s
+  vy: double;
+  vz: double;
+}
+
+struct EphemerisPoint {
+  julian_date: double;
+  state: StateVector;
+}
+
+// Manifest stores indices, data is in separate dense array
+table EphemerisManifest {
+  satellite_ids: [uint32:100];
+  start_indices: [uint32:100];    // Index into points array
+  point_counts: [uint32:100];     // How many points per satellite
+  total_satellites: uint32;
+  total_points: uint32;
+}
+```
+
+```cpp
+// propagator.cpp
+#include "ephemeris_aligned.h"
+
+static EphemerisManifest manifest;
+static EphemerisPoint points[1000000];  // 1M points max
+
+extern "C" {
+  EphemerisManifest* get_manifest() { return &manifest; }
+  EphemerisPoint* get_points_base() { return points; }
+
+  // Add satellite ephemeris
+  void add_satellite_ephemeris(uint32_t norad_id, EphemerisPoint* pts, uint32_t count) {
+    uint32_t sat_idx = manifest.total_satellites++;
+    uint32_t start_idx = manifest.total_points;
+
+    manifest.satellite_ids[sat_idx] = norad_id;
+    manifest.start_indices[sat_idx] = start_idx;
+    manifest.point_counts[sat_idx] = count;
+
+    // Copy points to dense array
+    memcpy(&points[start_idx], pts, count * sizeof(EphemerisPoint));
+    manifest.total_points += count;
+  }
+}
+```
+
+```typescript
+// visualizer.ts
+import {
+  EphemerisManifestView,
+  EphemerisPointView,
+  StateVectorView,
+  EPHEMERISPOINT_SIZE
+} from './ephemeris_aligned.mjs';
+
+class EphemerisVisualizer {
+  private manifest: EphemerisManifestView;
+  private pointsBase: number;
+  private memory: WebAssembly.Memory;
+
+  constructor(wasm: WasmExports) {
+    this.memory = wasm.memory;
+    this.manifest = EphemerisManifestView.fromMemory(
+      this.memory,
+      wasm.get_manifest()
+    );
+    this.pointsBase = wasm.get_points_base();
+  }
+
+  // Get position at specific time for satellite
+  getPositionAtIndex(satIndex: number, timeIndex: number): StateVectorView {
+    const startIdx = this.manifest.start_indices[satIndex];
+    const pointOffset = this.pointsBase + (startIdx + timeIndex) * EPHEMERISPOINT_SIZE;
+
+    // StateVector is at offset 8 within EphemerisPoint (after julian_date)
+    const pt = EphemerisPointView.fromMemory(this.memory, pointOffset);
+    return pt.state;  // Returns view into the state field
+  }
+
+  // Render all satellites at current time
+  render(ctx: CanvasRenderingContext2D, timeIndex: number) {
+    const satCount = this.manifest.total_satellites;
+
+    for (let i = 0; i < satCount; i++) {
+      const pointCount = this.manifest.point_counts[i];
+      if (timeIndex >= pointCount) continue;
+
+      const state = this.getPositionAtIndex(i, timeIndex);
+
+      // Simple orthographic projection
+      const screenX = ctx.canvas.width/2 + state.x / 100;
+      const screenY = ctx.canvas.height/2 - state.y / 100;
+
+      ctx.fillStyle = '#0f0';
+      ctx.fillRect(screenX - 2, screenY - 2, 4, 4);
+    }
+  }
+}
+```
+
+#### Memory Layout Summary
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ EphemerisManifest (at manifest_ptr)                         │
+│ ├─ satellite_ids[100]    - NORAD catalog numbers            │
+│ ├─ start_indices[100]    - Index into points array          │
+│ ├─ point_counts[100]     - Points per satellite             │
+│ ├─ total_satellites      - Active satellite count           │
+│ └─ total_points          - Total points in array            │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│ EphemerisPoint[] (at points_base)                           │
+│                                                             │
+│ Satellite 0: indices [0, point_counts[0])                   │
+│ ├─ points[0]: {jd, x, y, z, vx, vy, vz}                     │
+│ ├─ points[1]: ...                                           │
+│ └─ points[point_counts[0]-1]                                │
+│                                                             │
+│ Satellite 1: indices [start_indices[1], ...)                │
+│ ├─ points[start_indices[1]]: ...                            │
+│ └─ ...                                                      │
+│                                                             │
+│ Access formula:                                             │
+│   offset = points_base + (start_indices[sat] + time) * 56   │
+│   where 56 = EPHEMERISPOINT_SIZE                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## Plugin Architecture

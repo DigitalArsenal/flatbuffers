@@ -2203,6 +2203,137 @@ extern "C" void update_entities(Entity* ptr, int count) {
 }</pre>
         </div>
       </div>
+
+      <!-- WASM Interop Patterns -->
+      <div class="glass-card">
+        <h3 class="card-subtitle">WASM Interop Patterns</h3>
+        <p class="card-desc">Since aligned structs have no embedded length metadata, array bounds must be communicated out-of-band. Here are common patterns for sharing data between WASM modules:</p>
+
+        <div class="interop-patterns">
+          <!-- Pattern Tabs -->
+          <div class="pattern-tabs">
+            <button class="pattern-tab active" data-pattern="pointer-count">Pointer + Count</button>
+            <button class="pattern-tab" data-pattern="index-lookup">Index Lookup</button>
+            <button class="pattern-tab" data-pattern="manifest">Manifest + Data</button>
+          </div>
+
+          <!-- Pattern 1: Pointer + Count -->
+          <div id="pattern-pointer-count" class="pattern-content active">
+            <div class="pattern-desc">
+              <strong>Best for:</strong> Simple arrays where producer owns the data
+            </div>
+            <pre class="code-display">// C++ WASM - Export pointer and count separately
+static Cartesian3 positions[10000];
+static uint32_t count = 0;
+
+extern "C" {
+  Cartesian3* get_positions() { return positions; }
+  uint32_t get_count() { return count; }
+}
+
+// TypeScript - Read using exported functions
+const ptr = wasm.exports.get_positions();
+const count = wasm.exports.get_count();
+const positions = Cartesian3ArrayView.fromMemory(wasm.memory, ptr, count);
+
+for (const pos of positions) {
+  console.log(`(${pos.x}, ${pos.y}, ${pos.z})`);
+}</pre>
+          </div>
+
+          <!-- Pattern 2: Index Lookup -->
+          <div id="pattern-index-lookup" class="pattern-content">
+            <div class="pattern-desc">
+              <strong>Best for:</strong> Cross-references between structs, sparse access patterns
+            </div>
+            <pre class="code-display">// Schema - Store indices instead of pointers
+struct Cartesian3 { x: double; y: double; z: double; }
+
+table Satellite {
+  norad_id: uint32;
+  position_index: uint32;  // Index into positions array
+  velocity_index: uint32;  // Index into velocities array
+}
+
+// TypeScript - Compute offset from index
+const CARTESIAN3_SIZE = 24;  // 3 doubles × 8 bytes
+
+class SpaceData {
+  constructor(memory, positionsBase, satellitesBase) {
+    this.memory = memory;
+    this.positionsBase = positionsBase;
+    this.satellitesBase = satellitesBase;
+  }
+
+  // O(1) lookup by index
+  getPositionByIndex(index) {
+    const offset = this.positionsBase + index * CARTESIAN3_SIZE;
+    return Cartesian3View.fromMemory(this.memory, offset);
+  }
+
+  // Follow cross-reference from satellite to position
+  getSatellitePosition(satIndex) {
+    const sat = this.getSatelliteByIndex(satIndex);
+    return this.getPositionByIndex(sat.position_index);
+  }
+}</pre>
+          </div>
+
+          <!-- Pattern 3: Manifest + Data -->
+          <div id="pattern-manifest" class="pattern-content">
+            <div class="pattern-desc">
+              <strong>Best for:</strong> Multiple arrays with shared indexing, ephemeris data
+            </div>
+            <pre class="code-display">// Schema - Manifest with indices into data array
+table EphemerisManifest {
+  satellite_ids: [uint32:100];
+  start_indices: [uint32:100];   // Where each satellite's data starts
+  point_counts: [uint32:100];    // How many points per satellite
+  total_satellites: uint32;
+}
+
+struct EphemerisPoint {
+  julian_date: double;
+  x: double; y: double; z: double;
+  vx: double; vy: double; vz: double;
+}
+
+// TypeScript - Navigate using manifest
+const POINT_SIZE = 56;  // 7 doubles × 8 bytes
+
+class EphemerisReader {
+  constructor(memory, manifestPtr, pointsPtr) {
+    this.manifest = EphemerisManifestView.fromMemory(memory, manifestPtr);
+    this.pointsBase = pointsPtr;
+    this.memory = memory;
+  }
+
+  // Get all points for a satellite
+  getSatellitePoints(satIndex) {
+    const startIdx = this.manifest.start_indices[satIndex];
+    const count = this.manifest.point_counts[satIndex];
+    const offset = this.pointsBase + startIdx * POINT_SIZE;
+    return new EphemerisPointArrayView(this.memory.buffer, offset, count);
+  }
+
+  // Get specific point: base + (startIndex + timeIndex) * size
+  getPoint(satIndex, timeIndex) {
+    const startIdx = this.manifest.start_indices[satIndex];
+    const offset = this.pointsBase + (startIdx + timeIndex) * POINT_SIZE;
+    return EphemerisPointView.fromMemory(this.memory, offset);
+  }
+}</pre>
+          </div>
+        </div>
+
+        <div class="compliance-note" style="margin-top: 1rem;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+          <span><strong>Key Formula:</strong> <code>byte_offset = base_ptr + index × STRUCT_SIZE</code> — Since struct sizes are fixed and known at compile time, any index can be converted to a byte offset with a single multiplication.</span>
+        </div>
+      </div>
     </section>
 
     <!-- WASM Runtimes Section -->

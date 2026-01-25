@@ -9117,6 +9117,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // Pattern tabs for WASM interop section
+  document.querySelectorAll('.pattern-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const patternId = tab.dataset.pattern;
+
+      // Update active tab
+      document.querySelectorAll('.pattern-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.pattern === patternId);
+      });
+
+      // Update active content
+      document.querySelectorAll('.pattern-content').forEach(content => {
+        content.classList.toggle('active', content.id === `pattern-${patternId}`);
+      });
+    });
+  });
+
   // Generate on Enter key in schema input
   $('aligned-schema-input')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.ctrlKey) {

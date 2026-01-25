@@ -80,8 +80,10 @@ int32_t wasi_inject_entropy(const uint8_t* seed, uint32_t size) {
 // =============================================================================
 
 // Allocate memory (for languages that need to allocate in WASM memory)
+// SECURITY FIX (VULN-NEW-006): Use calloc to zero memory before returning
+// This prevents potential information leakage from previous allocations
 void* wasi_alloc(uint32_t size) {
-  return malloc(size);
+  return calloc(1, size);  // Zero-initialized allocation
 }
 
 // Free memory

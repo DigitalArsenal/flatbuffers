@@ -86,19 +86,33 @@ function bytesToHex(bytes) {
 }
 
 /**
- * Get a short hash of the key for IV tracking (we don't store the full key)
+ * Get a hash of the key for IV tracking (we don't store the full key)
+ * SECURITY FIX (VULN-NEW-005): Use 64-bit hash instead of 32-bit to reduce
+ * collision probability from ~1/2^16 (birthday bound) to ~1/2^32
  * @param {Uint8Array} key
  * @returns {string}
  */
 function getKeyId(key) {
-  // Use first 8 bytes of SHA-256 hash as key identifier
-  // We compute this without WASM to avoid circular dependency during init
-  let hash = 0x811c9dc5; // FNV-1a offset basis
+  // Use two independent FNV-1a hashes to create a 64-bit key identifier
+  // This significantly reduces collision probability vs. single 32-bit hash
+  let hashLow = 0x811c9dc5;  // FNV-1a offset basis
+  let hashHigh = 0xcbf29ce4; // Different offset for second hash
+
   for (let i = 0; i < key.length; i++) {
-    hash ^= key[i];
-    hash = Math.imul(hash, 0x01000193); // FNV-1a prime
+    // First hash (low 32 bits)
+    hashLow ^= key[i];
+    hashLow = Math.imul(hashLow, 0x01000193); // FNV-1a prime
+
+    // Second hash (high 32 bits) with different initial state
+    hashHigh ^= key[i];
+    hashHigh = Math.imul(hashHigh, 0x01000193);
+    hashHigh ^= (i & 0xff); // Mix in position for additional entropy
   }
-  return hash.toString(16);
+
+  // Combine into 64-bit hex string
+  const lowHex = (hashLow >>> 0).toString(16).padStart(8, '0');
+  const highHex = (hashHigh >>> 0).toString(16).padStart(8, '0');
+  return highHex + lowHex;
 }
 
 /**
@@ -2380,6 +2394,21 @@ export class EncryptionContext {
    * @returns {Uint8Array} 16-byte IV unique to this (fieldId, recordCounter) pair
    */
   computeFieldIV(fieldId, recordCounter) {
+    // SECURITY FIX (VULN-NEW-008): Validate counter is within safe integer range
+    if (!Number.isInteger(recordCounter) || recordCounter < 0) {
+      throw new CryptoError(
+        CryptoErrorCode.INVALID_INPUT,
+        'recordCounter must be a non-negative integer'
+      );
+    }
+    if (recordCounter > Number.MAX_SAFE_INTEGER) {
+      throw new CryptoError(
+        CryptoErrorCode.INVALID_INPUT,
+        `recordCounter exceeds MAX_SAFE_INTEGER (${Number.MAX_SAFE_INTEGER}). ` +
+        'Counter overflow would cause IV collisions. Use a new encryption context.'
+      );
+    }
+
     // Copy base nonce to avoid mutating the original
     const iv = new Uint8Array(this.#nonce);
 
@@ -2388,7 +2417,7 @@ export class EncryptionContext {
     iv[1] ^= fieldId & 0xff;
 
     // XOR in recordCounter (bytes 2-9, big-endian)
-    // JavaScript safely handles integers up to 2^53-1
+    // JavaScript safely handles integers up to 2^53-1 (validated above)
     // For counters larger than 32 bits, we need to handle high/low parts
     const counterHigh = Math.floor(recordCounter / 0x100000000);
     const counterLow = recordCounter >>> 0;

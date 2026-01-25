@@ -306,8 +306,16 @@
 
       <div class="glass-card">
         <div class="card-controls" id="pki-controls" style="display: none;">
+          <div class="algorithm-selector">
+            <label for="pki-algorithm" class="algorithm-label">Curve:</label>
+            <select id="pki-algorithm" class="glass-select">
+              <option value="x25519">X25519 (Curve25519)</option>
+              <option value="secp256k1">secp256k1 (Bitcoin/Ethereum)</option>
+              <option value="p256">P-256 / secp256r1 (NIST)</option>
+            </select>
+          </div>
           <div class="algorithm-display">
-            <span class="algorithm-label">Algorithm:</span>
+            <span class="algorithm-label">Active:</span>
             <span id="pki-algorithm-display" class="algorithm-value">X25519</span>
           </div>
           <button id="pki-clear-keys" class="glass-btn" style="display: none;">Clear Saved Keys</button>
@@ -419,6 +427,46 @@
               <path d="M12 16v-4M12 8h.01"/>
             </svg>
             <span><strong>Why CTR mode?</strong> FlatBuffers uses fixed-size fields with known offsets. CTR mode encrypts each field to the same length as the plaintext, preserving the binary structure. Block cipher modes like CBC would add padding and break the schema.</span>
+          </div>
+
+          <h4 class="curve-table-title">Supported Elliptic Curves</h4>
+          <div class="curve-comparison-table">
+            <table class="glass-table">
+              <thead>
+                <tr>
+                  <th>Curve</th>
+                  <th>Public Key Size</th>
+                  <th>Use Cases</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>X25519</code></td>
+                  <td>32 bytes</td>
+                  <td>General purpose, modern apps</td>
+                  <td>Fastest, constant-time, recommended for new projects</td>
+                </tr>
+                <tr>
+                  <td><code>secp256k1</code></td>
+                  <td>33 bytes (compressed)</td>
+                  <td>Bitcoin, Ethereum, blockchain</td>
+                  <td>Same keys can derive blockchain addresses</td>
+                </tr>
+                <tr>
+                  <td><code>P-256</code> / <code>secp256r1</code></td>
+                  <td>33 bytes (compressed)</td>
+                  <td>TLS, NIST compliance, enterprise</td>
+                  <td>Required for government/regulated industries</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="explainer-note">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <span><strong>Key derivation:</strong> The symmetric AES key is <em>never transmitted</em>. Both parties compute it independently via ECDH + HKDF. Only the ephemeral public key travels over the wire.</span>
           </div>
         </div>
 

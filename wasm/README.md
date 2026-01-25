@@ -620,6 +620,238 @@ The complete flow for secure FlatBuffer transmission:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+#### ECIES Hybrid Encryption: What's Sent vs What's Derived
+
+The encryption uses an ECIES-like (Elliptic Curve Integrated Encryption Scheme) approach where **the symmetric key is never transmitted** — both parties derive it independently:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                     ECIES HYBRID ENCRYPTION SCHEME                              │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ALICE (Sender)                              BOB (Recipient)                    │
+│  ═════════════                               ══════════════                     │
+│                                                                                 │
+│  Bob's Public Key (known) ◄───────────────── Long-term Key Pair                 │
+│         │                                    (publicKey, privateKey)            │
+│         │                                                                       │
+│         ▼                                                                       │
+│  ┌─────────────────────────┐                                                    │
+│  │ 1. Generate EPHEMERAL   │                                                    │
+│  │    key pair (one-time)  │                                                    │
+│  │    ephemeralPriv        │                                                    │
+│  │    ephemeralPub  ───────────────────────────────────────┐                    │
+│  └─────────────────────────┘                               │                    │
+│         │                                                  │                    │
+│         ▼                                                  │                    │
+│  ┌─────────────────────────┐                               │                    │
+│  │ 2. ECDH Shared Secret   │                               │                    │
+│  │    X25519(ephemeralPriv,│                               │                    │
+│  │           bobPublic)    │                               │                    │
+│  │         ║               │                               │                    │
+│  │         ▼               │                               │                    │
+│  │    sharedSecret (32B)   │◄─── SAME VALUE ──────────────►│ sharedSecret       │
+│  └─────────────────────────┘                               │      ▲             │
+│         │                                                  │      │             │
+│         ▼                                                  │      │             │
+│  ┌─────────────────────────┐                 ┌─────────────┴──────┴───────────┐ │
+│  │ 3. HKDF Key Derivation  │                 │ 2. ECDH Shared Secret          │ │
+│  │    HKDF(sharedSecret,   │                 │    X25519(bobPrivate,          │ │
+│  │         context)        │                 │           ephemeralPub)        │ │
+│  │         ║               │                 └────────────────────────────────┘ │
+│  │         ▼               │                               │                    │
+│  │    aesKey (32 bytes)    │◄─── SAME VALUE ──────────────►│ aesKey             │
+│  │    nonce (12 bytes)     │                               │ nonce              │
+│  └─────────────────────────┘                               │      ▲             │
+│         │                                                  │      │             │
+│         ▼                                                  │      │             │
+│  ┌─────────────────────────┐                 ┌─────────────┴──────┴───────────┐ │
+│  │ 4. AES-256-CTR Encrypt  │                 │ 3. HKDF Key Derivation         │ │
+│  │    Encrypt(data, aesKey,│                 │    HKDF(sharedSecret, context) │ │
+│  │            nonce)       │                 └────────────────────────────────┘ │
+│  └─────────────────────────┘                                                    │
+│         │                                                                       │
+│         │                                                                       │
+│  ═══════╪═══════════════════════════════════════════════════════════════════    │
+│         │              WHAT GETS TRANSMITTED                                    │
+│  ═══════╪═══════════════════════════════════════════════════════════════════    │
+│         │                                                                       │
+│         ▼                                                                       │
+│  ┌─────────────────────────────────────────────────────────────────────────┐    │
+│  │  HEADER (EncryptionHeader FlatBuffer)                                   │    │
+│  │  ├─ ephemeralPublicKey: [32 bytes]  ◄── Only public key sent!          │    │
+│  │  ├─ nonce: [12 bytes]               ◄── Random IV for AES-CTR          │    │
+│  │  ├─ algorithm: "x25519"             ◄── Key exchange algorithm         │    │
+│  │  └─ context: "app-v1"               ◄── Application context string     │    │
+│  ├─────────────────────────────────────────────────────────────────────────┤    │
+│  │  CIPHERTEXT                                                             │    │
+│  │  └─ encryptedData: [N bytes]        ◄── AES-256-CTR encrypted payload  │    │
+│  └─────────────────────────────────────────────────────────────────────────┘    │
+│                                                  │                              │
+│                                                  ▼                              │
+│                                    ┌─────────────────────────┐                  │
+│                                    │ 4. AES-256-CTR Decrypt  │                  │
+│                                    │    Decrypt(ciphertext,  │                  │
+│                                    │            aesKey,nonce)│                  │
+│                                    └─────────────────────────┘                  │
+│                                                  │                              │
+│                                                  ▼                              │
+│                                           Original Data                         │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+CRITICAL SECURITY PROPERTIES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✓ Symmetric key (aesKey) is NEVER transmitted — derived independently by both parties
+✓ Ephemeral private key is discarded after encryption — provides forward secrecy
+✓ Only ephemeral PUBLIC key is sent — safe to transmit in plaintext
+✓ Shared secret computed via ECDH is identical on both sides (math property of ECC)
+✓ Compromising Bob's long-term key doesn't reveal past messages (forward secrecy)
+```
+
+#### Multi-Recipient Encryption
+
+When sending the same message to multiple recipients, generate a unique shared secret for each:
+
+```typescript
+import {
+  x25519GenerateKeyPair, x25519SharedSecret, hkdf, encryptBytes, IV_SIZE, KEY_SIZE
+} from 'flatc-wasm/encryption';
+import { randomBytes } from 'crypto';
+
+interface RecipientHeader {
+  recipientId: string;
+  ephemeralPublicKey: Uint8Array;
+  nonce: Uint8Array;
+}
+
+interface MultiRecipientMessage {
+  headers: RecipientHeader[];  // One header per recipient
+  ciphertext: Uint8Array;      // Single encrypted payload
+}
+
+// Encrypt for multiple recipients
+function encryptForMultipleRecipients(
+  plaintext: Uint8Array,
+  recipients: Array<{ id: string; publicKey: Uint8Array }>
+): MultiRecipientMessage {
+  // Generate ONE ephemeral keypair for this message
+  const ephemeral = x25519GenerateKeyPair();
+  const nonce = randomBytes(IV_SIZE);
+
+  // For each recipient, derive their unique shared secret
+  // But use the SAME ephemeral keypair (standard ECIES multi-recipient pattern)
+  const headers: RecipientHeader[] = [];
+
+  // Use first recipient to encrypt the actual data
+  // All recipients will derive the same symmetric key from:
+  // HKDF(ECDH(ephemeral_priv, recipient_pub), context)
+
+  let ciphertext: Uint8Array | null = null;
+
+  for (const recipient of recipients) {
+    // Compute shared secret with this recipient
+    const shared = x25519SharedSecret(ephemeral.privateKey, recipient.publicKey);
+
+    // Derive symmetric key
+    const key = hkdf(
+      shared,
+      null,
+      new TextEncoder().encode('multi-recipient-v1'),
+      KEY_SIZE
+    );
+
+    // Encrypt data (only need to do this once since all recipients
+    // will derive the same key if we use the same ephemeral keypair)
+    if (!ciphertext) {
+      ciphertext = encryptBytes(plaintext, key, nonce);
+    }
+
+    headers.push({
+      recipientId: recipient.id,
+      ephemeralPublicKey: ephemeral.publicKey,
+      nonce: nonce,
+    });
+  }
+
+  return { headers, ciphertext: ciphertext! };
+}
+
+// Recipient decrypts using their header
+function decryptAsRecipient(
+  message: MultiRecipientMessage,
+  myId: string,
+  myPrivateKey: Uint8Array
+): Uint8Array {
+  // Find my header
+  const myHeader = message.headers.find(h => h.recipientId === myId);
+  if (!myHeader) throw new Error('Not a recipient of this message');
+
+  // Derive shared secret using my private key + sender's ephemeral public key
+  const shared = x25519SharedSecret(myPrivateKey, myHeader.ephemeralPublicKey);
+
+  // Derive same symmetric key
+  const key = hkdf(
+    shared,
+    null,
+    new TextEncoder().encode('multi-recipient-v1'),
+    KEY_SIZE
+  );
+
+  // Decrypt
+  return decryptBytes(message.ciphertext, key, myHeader.nonce);
+}
+```
+
+**Note:** For true multi-recipient where each recipient gets a *unique* key (for revocation), encrypt a random data encryption key (DEK) separately for each recipient, then encrypt the payload with the DEK:
+
+```typescript
+// Alternative: Key-wrapping approach for per-recipient revocation
+interface WrappedKeyMessage {
+  wrappedKeys: Array<{
+    recipientId: string;
+    ephemeralPublicKey: Uint8Array;
+    encryptedDEK: Uint8Array;  // DEK encrypted with recipient's derived key
+    nonce: Uint8Array;
+  }>;
+  encryptedPayload: Uint8Array;  // Payload encrypted with DEK
+  payloadNonce: Uint8Array;
+}
+
+function encryptWithKeyWrapping(
+  plaintext: Uint8Array,
+  recipients: Array<{ id: string; publicKey: Uint8Array }>
+): WrappedKeyMessage {
+  // Generate random Data Encryption Key (DEK)
+  const dek = randomBytes(KEY_SIZE);
+  const payloadNonce = randomBytes(IV_SIZE);
+
+  // Encrypt payload with DEK
+  const encryptedPayload = encryptBytes(plaintext, dek, payloadNonce);
+
+  // Wrap DEK for each recipient
+  const wrappedKeys = recipients.map(recipient => {
+    const ephemeral = x25519GenerateKeyPair();
+    const nonce = randomBytes(IV_SIZE);
+
+    const shared = x25519SharedSecret(ephemeral.privateKey, recipient.publicKey);
+    const kek = hkdf(shared, null, new TextEncoder().encode('key-wrap-v1'), KEY_SIZE);
+
+    // Encrypt the DEK with recipient's key-encryption-key
+    const encryptedDEK = encryptBytes(dek, kek, nonce);
+
+    return {
+      recipientId: recipient.id,
+      ephemeralPublicKey: ephemeral.publicKey,
+      encryptedDEK,
+      nonce,
+    };
+  });
+
+  return { wrappedKeys, encryptedPayload, payloadNonce };
+}
+```
+
 #### Complete E2E Example
 
 ```typescript

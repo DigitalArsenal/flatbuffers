@@ -2768,6 +2768,25 @@ details[open] .collapse-icon {
   color: var(--white-90);
 }
 
+.algorithm-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: var(--white-05);
+  border-radius: var(--radius-sm);
+}
+
+.algorithm-selector .algorithm-label {
+  white-space: nowrap;
+}
+
+.algorithm-selector .glass-select {
+  min-width: 180px;
+  font-size: 13px;
+  padding: 6px 10px;
+}
+
 .algorithm-display {
   display: flex;
   align-items: center;
@@ -2789,6 +2808,57 @@ details[open] .collapse-icon {
   font-size: 13px;
   color: var(--white);
   font-weight: 500;
+}
+
+/* Curve Comparison Table */
+.curve-table-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--white-90);
+  margin: 1.5rem 0 1rem;
+}
+
+.curve-comparison-table {
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.curve-comparison-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.curve-comparison-table th,
+.curve-comparison-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--white-10);
+}
+
+.curve-comparison-table th {
+  background: var(--white-05);
+  color: var(--white-70);
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.curve-comparison-table td {
+  color: var(--white-80);
+}
+
+.curve-comparison-table td code {
+  background: var(--white-10);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: var(--primary);
+}
+
+.curve-comparison-table tr:hover {
+  background: var(--white-05);
 }
 
 .derivation-path {

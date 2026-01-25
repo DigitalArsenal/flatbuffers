@@ -2698,10 +2698,14 @@ function generatePKIKeyPairs() {
   // Display algorithm
   const algorithmNames = {
     x25519: 'X25519 (Curve25519)',
-    secp256k1: 'secp256k1 (Bitcoin)',
-    p256: 'P-256 (NIST)',
+    secp256k1: 'secp256k1 (Bitcoin/Ethereum)',
+    p256: 'P-256 / secp256r1 (NIST)',
   };
   $('pki-algorithm-display').textContent = algorithmNames[state.pki.algorithm] || state.pki.algorithm;
+
+  // Sync the dropdown selector with current algorithm
+  const selector = $('pki-algorithm');
+  if (selector) selector.value = state.pki.algorithm;
 
   // Show UI sections
   $('pki-login-prompt').style.display = 'none';
@@ -4114,6 +4118,74 @@ function setupMainAppHandlers() {
   $('pki-encrypt')?.addEventListener('click', pkiEncrypt);
   $('pki-decrypt')?.addEventListener('click', pkiDecrypt);
   $('pki-wrong-key')?.addEventListener('click', pkiTryWrongKey);
+
+  // Algorithm selector - regenerate keys when curve changes
+  $('pki-algorithm')?.addEventListener('change', (e) => {
+    const newAlgorithm = e.target.value;
+    state.pki.algorithm = newAlgorithm;
+
+    // Reset demo UI first
+    resetPKIDemo();
+
+    // Regenerate keys for the new algorithm if logged in with HD wallet
+    if (state.loggedIn && state.hdRoot) {
+      // Derive new keys using the selected algorithm
+      if (derivePKIKeysFromHD()) {
+        // Save the new keys
+        savePKIKeys();
+
+        // Update key display
+        $('alice-public-key').textContent = toHexCompact(state.pki.alice.publicKey);
+        $('alice-private-key').textContent = toHexCompact(state.pki.alice.privateKey);
+        $('bob-public-key').textContent = toHexCompact(state.pki.bob.publicKey);
+        $('bob-private-key').textContent = toHexCompact(state.pki.bob.privateKey);
+
+        // Update algorithm display
+        const algorithmNames = {
+          x25519: 'X25519 (Curve25519)',
+          secp256k1: 'secp256k1 (Bitcoin/Ethereum)',
+          p256: 'P-256 / secp256r1 (NIST)',
+        };
+        $('pki-algorithm-display').textContent = algorithmNames[newAlgorithm] || newAlgorithm;
+      }
+    } else if (state.loggedIn) {
+      // Fallback: generate random keys if no HD wallet
+      let generateFn;
+      switch (newAlgorithm) {
+        case 'x25519':
+          generateFn = x25519GenerateKeyPair;
+          break;
+        case 'secp256k1':
+          generateFn = secp256k1GenerateKeyPair;
+          break;
+        case 'p256':
+          generateFn = p256GenerateKeyPair;
+          break;
+        default:
+          generateFn = x25519GenerateKeyPair;
+      }
+
+      try {
+        state.pki.alice = generateFn();
+        state.pki.bob = generateFn();
+        savePKIKeys();
+
+        $('alice-public-key').textContent = toHexCompact(state.pki.alice.publicKey);
+        $('alice-private-key').textContent = toHexCompact(state.pki.alice.privateKey);
+        $('bob-public-key').textContent = toHexCompact(state.pki.bob.publicKey);
+        $('bob-private-key').textContent = toHexCompact(state.pki.bob.privateKey);
+
+        const algorithmNames = {
+          x25519: 'X25519 (Curve25519)',
+          secp256k1: 'secp256k1 (Bitcoin/Ethereum)',
+          p256: 'P-256 / secp256r1 (NIST)',
+        };
+        $('pki-algorithm-display').textContent = algorithmNames[newAlgorithm] || newAlgorithm;
+      } catch (err) {
+        console.error('Failed to generate keys for', newAlgorithm, err);
+      }
+    }
+  });
 
   // Streaming Tab
   $('start-streaming')?.addEventListener('click', startStreaming);

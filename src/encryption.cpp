@@ -35,6 +35,8 @@
 
 namespace flatbuffers {
 
+#ifdef FLATBUFFERS_USE_CRYPTOPP
+
 // =============================================================================
 // Secure Memory Clearing (VULN-NEW-002 fix)
 // =============================================================================
@@ -81,8 +83,6 @@ class SecureVector {
     return *this;
   }
 };
-
-#ifdef FLATBUFFERS_USE_CRYPTOPP
 
 // =============================================================================
 // Crypto++ Implementation

@@ -57,6 +57,10 @@ constexpr size_t kP256PrivateKeySize = 32;
 constexpr size_t kP256PublicKeySize = 33;        // compressed
 constexpr size_t kP256SignatureSize = 64;        // r + s
 
+constexpr size_t kP384PrivateKeySize = 48;
+constexpr size_t kP384PublicKeySize = 49;        // compressed
+constexpr size_t kP384SignatureSize = 96;        // r + s
+
 // =============================================================================
 // Error handling
 // =============================================================================
@@ -105,6 +109,7 @@ enum class KeyExchangeAlgorithm {
   X25519 = 0,      // Curve25519 ECDH (RFC 7748)
   Secp256k1 = 1,   // Bitcoin/Ethereum curve ECDH
   P256 = 2,        // NIST P-256/secp256r1 ECDH
+  P384 = 3,        // NIST P-384/secp384r1 ECDH
 };
 
 /**
@@ -114,6 +119,7 @@ enum class SignatureAlgorithm {
   Ed25519 = 0,         // EdDSA with Curve25519
   Secp256k1_ECDSA = 1, // ECDSA with secp256k1 (Bitcoin/Ethereum)
   P256_ECDSA = 2,      // ECDSA with P-256 (NIST)
+  P384_ECDSA = 3,      // ECDSA with P-384 (NIST)
 };
 
 /**
@@ -304,6 +310,11 @@ KeyPair Secp256k1GenerateKeyPair();
 KeyPair P256GenerateKeyPair();
 
 /**
+ * Generate P-384 key pair
+ */
+KeyPair P384GenerateKeyPair();
+
+/**
  * Compute shared secret using ECDH
  *
  * @param algorithm The key exchange algorithm
@@ -338,6 +349,14 @@ bool Secp256k1SharedSecret(
  * P-256 ECDH key exchange
  */
 bool P256SharedSecret(
+    const uint8_t* private_key,
+    const uint8_t* public_key, size_t public_key_size,
+    uint8_t* shared_secret);
+
+/**
+ * P-384 ECDH key exchange
+ */
+bool P384SharedSecret(
     const uint8_t* private_key,
     const uint8_t* public_key, size_t public_key_size,
     uint8_t* shared_secret);
@@ -425,6 +444,21 @@ Signature P256Sign(
  * P-256 ECDSA verify
  */
 bool P256Verify(
+    const uint8_t* public_key, size_t public_key_size,
+    const uint8_t* data, size_t data_size,
+    const uint8_t* signature, size_t signature_size);
+
+/**
+ * P-384 ECDSA sign
+ */
+Signature P384Sign(
+    const uint8_t* private_key,
+    const uint8_t* data, size_t data_size);
+
+/**
+ * P-384 ECDSA verify
+ */
+bool P384Verify(
     const uint8_t* public_key, size_t public_key_size,
     const uint8_t* data, size_t data_size,
     const uint8_t* signature, size_t signature_size);

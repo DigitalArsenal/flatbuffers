@@ -10,6 +10,7 @@
  * - X25519 ECDH key exchange
  * - secp256k1 ECDH and ECDSA (Bitcoin/Ethereum compatible)
  * - P-256 ECDH and ECDSA (NIST)
+ * - P-384 ECDH and ECDSA (NIST, higher security)
  * - Ed25519 signatures
  * - HKDF-SHA256 key derivation
  *
@@ -241,6 +242,8 @@ export const SECP256K1_PRIVATE_KEY_SIZE = 32;
 export const SECP256K1_PUBLIC_KEY_SIZE = 33;
 export const P256_PRIVATE_KEY_SIZE = 32;
 export const P256_PUBLIC_KEY_SIZE = 33;
+export const P384_PRIVATE_KEY_SIZE = 48;
+export const P384_PUBLIC_KEY_SIZE = 49;
 export const ED25519_PRIVATE_KEY_SIZE = 64;
 export const ED25519_PUBLIC_KEY_SIZE = 32;
 export const ED25519_SIGNATURE_SIZE = 64;
@@ -1565,6 +1568,159 @@ export function p256Verify(publicKey, data, signature) {
 }
 
 // =============================================================================
+// P-384 Key Exchange and Signatures (NIST)
+// =============================================================================
+
+/**
+ * Generate P-384 key pair
+ * @param {Uint8Array} [privateKey] - Optional 48-byte private key
+ * @returns {{privateKey: Uint8Array, publicKey: Uint8Array}}
+ */
+export function p384GenerateKeyPair(privateKey) {
+  if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (privateKey && privateKey.length !== P384_PRIVATE_KEY_SIZE) {
+    throw new Error(`Private key must be ${P384_PRIVATE_KEY_SIZE} bytes`);
+  }
+
+  // Inject entropy before key generation to ensure high-quality randomness
+  injectEntropy();
+
+  const privPtr = allocate(P384_PRIVATE_KEY_SIZE);
+  const pubPtr = allocate(P384_PUBLIC_KEY_SIZE);
+
+  try {
+    if (privateKey) {
+      writeBytes(privPtr, privateKey);
+    }
+
+    const result = wasmModule.wasi_p384_generate_keypair(privPtr, pubPtr);
+    if (result !== 0) throw new Error('P-384 key generation failed');
+
+    return {
+      privateKey: readBytes(privPtr, P384_PRIVATE_KEY_SIZE),
+      publicKey: readBytes(pubPtr, P384_PUBLIC_KEY_SIZE),
+    };
+  } finally {
+    secureDeallocate(privPtr, P384_PRIVATE_KEY_SIZE);
+    deallocate(pubPtr);
+  }
+}
+
+/**
+ * Compute P-384 ECDH shared secret
+ * @param {Uint8Array} privateKey - Our private key (48 bytes)
+ * @param {Uint8Array} publicKey - Their public key (49 bytes compressed)
+ * @returns {Uint8Array} - 32-byte shared secret (hashed from 48-byte raw secret)
+ */
+export function p384SharedSecret(privateKey, publicKey) {
+  if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (privateKey.length !== P384_PRIVATE_KEY_SIZE) {
+    throw new Error(`Private key must be ${P384_PRIVATE_KEY_SIZE} bytes`);
+  }
+  if (publicKey.length !== P384_PUBLIC_KEY_SIZE) {
+    throw new Error(`Public key must be ${P384_PUBLIC_KEY_SIZE} bytes (compressed)`);
+  }
+
+  const privPtr = allocate(P384_PRIVATE_KEY_SIZE);
+  const pubPtr = allocate(publicKey.length);
+  const secretPtr = allocate(KEY_SIZE);
+
+  try {
+    writeBytes(privPtr, privateKey);
+    writeBytes(pubPtr, publicKey);
+
+    const result = wasmModule.wasi_p384_shared_secret(
+      privPtr, pubPtr, publicKey.length, secretPtr
+    );
+    if (result !== 0) throw new Error('P-384 ECDH failed');
+
+    return readBytes(secretPtr, KEY_SIZE);
+  } finally {
+    secureDeallocate(privPtr, P384_PRIVATE_KEY_SIZE);
+    deallocate(pubPtr);
+    secureDeallocate(secretPtr, KEY_SIZE);
+  }
+}
+
+/**
+ * Derive symmetric key from P-384 shared secret
+ */
+export function p384DeriveKey(sharedSecret, context) {
+  const info = typeof context === 'string'
+    ? textEncoder.encode(context)
+    : context;
+  return hkdf(sharedSecret, null, info, KEY_SIZE);
+}
+
+/**
+ * Sign data with P-384 ECDSA
+ * @param {Uint8Array} privateKey - Signing private key (48 bytes)
+ * @param {Uint8Array} data - Data to sign
+ * @returns {Uint8Array} - Signature (DER encoded)
+ */
+export function p384Sign(privateKey, data) {
+  if (!wasmModule) throw new Error('Encryption module not initialized');
+  if (privateKey.length !== P384_PRIVATE_KEY_SIZE) {
+    throw new Error(`Private key must be ${P384_PRIVATE_KEY_SIZE} bytes`);
+  }
+
+  const privPtr = allocate(P384_PRIVATE_KEY_SIZE);
+  const dataPtr = allocate(data.length);
+  const sigPtr = allocate(MAX_DER_SIGNATURE_SIZE + 32); // P-384 signatures can be larger
+  const sigSizePtr = allocate(4);
+
+  try {
+    writeBytes(privPtr, privateKey);
+    writeBytes(dataPtr, data);
+
+    const result = wasmModule.wasi_p384_sign(
+      privPtr, dataPtr, data.length, sigPtr, sigSizePtr
+    );
+    if (result !== 0) throw new Error('P-384 signing failed');
+
+    const sigSize = new DataView(wasmMemory.buffer).getUint32(sigSizePtr, true);
+    return readBytes(sigPtr, sigSize);
+  } finally {
+    secureDeallocate(privPtr, P384_PRIVATE_KEY_SIZE);
+    deallocate(dataPtr);
+    deallocate(sigPtr);
+    deallocate(sigSizePtr);
+  }
+}
+
+/**
+ * Verify P-384 ECDSA signature
+ * @param {Uint8Array} publicKey - Verification public key (49 bytes)
+ * @param {Uint8Array} data - Original data
+ * @param {Uint8Array} signature - Signature to verify
+ * @returns {boolean} - True if valid
+ */
+export function p384Verify(publicKey, data, signature) {
+  if (!wasmModule) throw new Error('Encryption module not initialized');
+
+  const pubPtr = allocate(publicKey.length);
+  const dataPtr = allocate(data.length);
+  const sigPtr = allocate(signature.length);
+
+  try {
+    writeBytes(pubPtr, publicKey);
+    writeBytes(dataPtr, data);
+    writeBytes(sigPtr, signature);
+
+    const result = wasmModule.wasi_p384_verify(
+      pubPtr, publicKey.length,
+      dataPtr, data.length,
+      sigPtr, signature.length
+    );
+    return result === 0;
+  } finally {
+    deallocate(pubPtr);
+    deallocate(dataPtr);
+    deallocate(sigPtr);
+  }
+}
+
+// =============================================================================
 // Ed25519 Signatures
 // =============================================================================
 
@@ -1693,12 +1849,14 @@ export const KeyExchangeAlgorithm = {
   X25519: 'x25519',
   SECP256K1: 'secp256k1',
   P256: 'p256',
+  P384: 'p384',
 };
 
 export const SignatureAlgorithm = {
   ED25519: 'ed25519',
   SECP256K1_ECDSA: 'secp256k1-ecdsa',
   P256_ECDSA: 'p256-ecdsa',
+  P384_ECDSA: 'p384-ecdsa',
 };
 
 export const SymmetricAlgorithm = {
@@ -1841,6 +1999,11 @@ export class EncryptionContext {
         ephemeralKeys = p256GenerateKeyPair();
         sharedSecret = p256SharedSecret(ephemeralKeys.privateKey, recipientPublicKey);
         break;
+      case KeyExchangeAlgorithm.P384:
+      case 'p384':
+        ephemeralKeys = p384GenerateKeyPair();
+        sharedSecret = p384SharedSecret(ephemeralKeys.privateKey, recipientPublicKey);
+        break;
       default:
         throw new CryptoError(
           CryptoErrorCode.INVALID_INPUT,
@@ -1918,6 +2081,10 @@ export class EncryptionContext {
       case KeyExchangeAlgorithm.P256:
       case 'p256':
         sharedSecret = p256SharedSecret(privateKey, ephemeralPublicKey);
+        break;
+      case KeyExchangeAlgorithm.P384:
+      case 'p384':
+        sharedSecret = p384SharedSecret(privateKey, ephemeralPublicKey);
         break;
       default:
         throw new CryptoError(
@@ -3124,6 +3291,13 @@ export default {
   p256DeriveKey,
   p256Sign,
   p256Verify,
+
+  // P-384
+  p384GenerateKeyPair,
+  p384SharedSecret,
+  p384DeriveKey,
+  p384Sign,
+  p384Verify,
 
   // Ed25519
   ed25519GenerateKeyPair,

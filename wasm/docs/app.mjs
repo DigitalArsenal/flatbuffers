@@ -35,6 +35,7 @@ import {
   ed25519GenerateKeyPair,
   secp256k1GenerateKeyPair,
   p256GenerateKeyPair,
+  p384GenerateKeyPair,
   EncryptionContext,
   encryptionHeaderFromJSON,
   encryptBuffer,
@@ -448,6 +449,7 @@ async function deriveKeysFromPassword(username, password) {
     ed25519: ed25519GenerateKeyPair(),
     secp256k1: secp256k1GenerateKeyPair(),
     p256: p256GenerateKeyPair(),
+    p384: p384GenerateKeyPair(),
   };
 
   return keys;
@@ -477,6 +479,7 @@ async function deriveKeysFromSeed(seedPhrase) {
     ed25519: ed25519GenerateKeyPair(),
     secp256k1: secp256k1GenerateKeyPair(),
     p256: p256GenerateKeyPair(),
+    p384: p384GenerateKeyPair(),
   };
 
   return keys;
@@ -1074,6 +1077,7 @@ function login(keys) {
       x25519: 'X25519 (Curve25519)',
       secp256k1: 'secp256k1 (Bitcoin)',
       p256: 'P-256 (NIST)',
+      p384: 'P-384 (NIST)',
     };
     $('pki-algorithm-display').textContent = algorithmNames[state.pki.algorithm] || state.pki.algorithm;
     $('pki-login-prompt').style.display = 'none';
@@ -2672,6 +2676,9 @@ function generatePKIKeyPairs() {
       case 'p256':
         generateFn = p256GenerateKeyPair;
         break;
+      case 'p384':
+        generateFn = p384GenerateKeyPair;
+        break;
       default:
         generateFn = x25519GenerateKeyPair;
     }
@@ -2700,6 +2707,7 @@ function generatePKIKeyPairs() {
     x25519: 'X25519 (Curve25519)',
     secp256k1: 'secp256k1 (Bitcoin/Ethereum)',
     p256: 'P-256 / secp256r1 (NIST)',
+    p384: 'P-384 / secp384r1 (NIST)',
   };
   $('pki-algorithm-display').textContent = algorithmNames[state.pki.algorithm] || state.pki.algorithm;
 
@@ -4145,6 +4153,7 @@ function setupMainAppHandlers() {
           x25519: 'X25519 (Curve25519)',
           secp256k1: 'secp256k1 (Bitcoin/Ethereum)',
           p256: 'P-256 / secp256r1 (NIST)',
+          p384: 'P-384 / secp384r1 (NIST)',
         };
         $('pki-algorithm-display').textContent = algorithmNames[newAlgorithm] || newAlgorithm;
       }
@@ -4160,6 +4169,9 @@ function setupMainAppHandlers() {
           break;
         case 'p256':
           generateFn = p256GenerateKeyPair;
+          break;
+        case 'p384':
+          generateFn = p384GenerateKeyPair;
           break;
         default:
           generateFn = x25519GenerateKeyPair;
@@ -4179,6 +4191,7 @@ function setupMainAppHandlers() {
           x25519: 'X25519 (Curve25519)',
           secp256k1: 'secp256k1 (Bitcoin/Ethereum)',
           p256: 'P-256 / secp256r1 (NIST)',
+          p384: 'P-384 / secp384r1 (NIST)',
         };
         $('pki-algorithm-display').textContent = algorithmNames[newAlgorithm] || newAlgorithm;
       } catch (err) {
@@ -4379,6 +4392,7 @@ async function init() {
         ed25519: ed25519GenerateKeyPair(),
         secp256k1: secp256k1GenerateKeyPair(),
         p256: p256GenerateKeyPair(),
+        p384: p384GenerateKeyPair(),
       };
 
       // Generate encryption key and IV if not loaded from storage

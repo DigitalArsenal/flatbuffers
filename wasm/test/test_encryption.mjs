@@ -8,6 +8,7 @@
  * - X25519 key exchange
  * - secp256k1 ECDH and ECDSA
  * - P-256 ECDH and ECDSA
+ * - P-384 ECDH and ECDSA (192-bit security)
  * - Ed25519 signatures
  * - EncryptionContext field-level encryption
  * - Buffer encryption/decryption
@@ -47,6 +48,11 @@ import {
   p256DeriveKey,
   p256Sign,
   p256Verify,
+  p384GenerateKeyPair,
+  p384SharedSecret,
+  p384DeriveKey,
+  p384Sign,
+  p384Verify,
   ed25519GenerateKeyPair,
   ed25519Sign,
   ed25519Verify,
@@ -67,6 +73,8 @@ import {
   X25519_PUBLIC_KEY_SIZE,
   SECP256K1_PRIVATE_KEY_SIZE,
   SECP256K1_PUBLIC_KEY_SIZE,
+  P384_PRIVATE_KEY_SIZE,
+  P384_PUBLIC_KEY_SIZE,
   ED25519_PRIVATE_KEY_SIZE,
   ED25519_PUBLIC_KEY_SIZE,
   ED25519_SIGNATURE_SIZE,
@@ -926,6 +934,72 @@ async function main() {
   });
 
   // ==========================================================================
+  // P-384 Tests
+  // ==========================================================================
+  log('\n[P-384 Key Exchange & Signatures]');
+
+  await test('p384GenerateKeyPair produces valid key sizes', async () => {
+    const { privateKey, publicKey } = p384GenerateKeyPair();
+    assertEqual(privateKey.length, P384_PRIVATE_KEY_SIZE, 'private key should be 48 bytes');
+    assertEqual(publicKey.length, P384_PUBLIC_KEY_SIZE, 'public key should be 49 bytes (compressed)');
+  });
+
+  await test('p384SharedSecret is symmetric', async () => {
+    const alice = p384GenerateKeyPair();
+    const bob = p384GenerateKeyPair();
+
+    const aliceSecret = p384SharedSecret(alice.privateKey, bob.publicKey);
+    const bobSecret = p384SharedSecret(bob.privateKey, alice.publicKey);
+
+    assertArrayEqual(aliceSecret, bobSecret, 'shared secrets should match');
+  });
+
+  await test('p384DeriveKey derives consistent keys', async () => {
+    const alice = p384GenerateKeyPair();
+    const bob = p384GenerateKeyPair();
+
+    const aliceSecret = p384SharedSecret(alice.privateKey, bob.publicKey);
+    const bobSecret = p384SharedSecret(bob.privateKey, alice.publicKey);
+
+    const aliceKey = p384DeriveKey(aliceSecret, 'test-context');
+    const bobKey = p384DeriveKey(bobSecret, 'test-context');
+
+    assertArrayEqual(aliceKey, bobKey, 'derived keys should match');
+  });
+
+  await test('p384Sign and p384Verify work correctly', async () => {
+    const { privateKey, publicKey } = p384GenerateKeyPair();
+    const message = new TextEncoder().encode('NIST P-384 approved message');
+
+    const signature = p384Sign(privateKey, message);
+    const valid = p384Verify(publicKey, message, signature);
+
+    assert(valid, 'signature should be valid');
+  });
+
+  await test('p384Verify rejects invalid signature', async () => {
+    const { privateKey, publicKey } = p384GenerateKeyPair();
+    const message = new TextEncoder().encode('Original message');
+
+    const signature = p384Sign(privateKey, message);
+    const tamperedMessage = new TextEncoder().encode('Tampered message');
+    const valid = p384Verify(publicKey, tamperedMessage, signature);
+
+    assert(!valid, 'signature should be invalid');
+  });
+
+  await test('p384Verify rejects wrong public key', async () => {
+    const sender = p384GenerateKeyPair();
+    const wrongKey = p384GenerateKeyPair();
+    const message = new TextEncoder().encode('Test message for P-384');
+
+    const signature = p384Sign(sender.privateKey, message);
+    const valid = p384Verify(wrongKey.publicKey, message, signature);
+
+    assert(!valid, 'signature should be invalid for wrong public key');
+  });
+
+  // ==========================================================================
   // Ed25519 Tests
   // ==========================================================================
   log('\n[Ed25519 Signatures]');
@@ -1379,6 +1453,47 @@ async function main() {
 
     decryptCtx.decryptScalar(data, 0, data.length, 0);
     assertArrayEqual(data, originalData, 'P-256 decrypted data should match');
+  });
+
+  await test('ECIES encrypt/decrypt roundtrip with P-384', async () => {
+    const recipientKeys = p384GenerateKeyPair();
+    const appContext = 'p384-nist-test';
+
+    // Sender encrypts
+    const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'p384',
+      context: appContext,
+    });
+
+    const plaintext = new TextEncoder().encode('NIST P-384 high-security encryption test!');
+    const data = new Uint8Array(plaintext);
+    const originalData = new Uint8Array(plaintext);
+
+    encryptCtx.encryptScalar(data, 0, data.length, 0);
+
+    // Get header and decrypt
+    const headerJSON = encryptCtx.getHeaderJSON();
+    const receivedHeader = encryptionHeaderFromJSON(headerJSON);
+    const decryptCtx = EncryptionContext.forDecryption(
+      recipientKeys.privateKey,
+      receivedHeader,
+      appContext
+    );
+
+    decryptCtx.decryptScalar(data, 0, data.length, 0);
+    assertArrayEqual(data, originalData, 'P-384 decrypted data should match');
+  });
+
+  await test('EncryptionContext.forEncryption creates valid context with P-384', async () => {
+    const recipientKeys = p384GenerateKeyPair();
+    const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'p384',
+      context: 'test-app-v1',
+    });
+
+    assert(ctx.getEphemeralPublicKey() !== null, 'should have ephemeral public key');
+    assertEqual(ctx.getEphemeralPublicKey().length, P384_PUBLIC_KEY_SIZE, 'ephemeral key should be 49 bytes (compressed)');
+    assertEqual(ctx.getAlgorithm(), 'p384', 'algorithm should be p384');
   });
 
   await test('ECIES fails with wrong private key', async () => {

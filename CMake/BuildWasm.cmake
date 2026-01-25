@@ -349,6 +349,11 @@ module.exports.default = createModule;
     "_wasi_p256_shared_secret"
     "_wasi_p256_sign"
     "_wasi_p256_verify"
+    # P-384 (NIST, higher security)
+    "_wasi_p384_generate_keypair"
+    "_wasi_p384_shared_secret"
+    "_wasi_p384_sign"
+    "_wasi_p384_verify"
     # Ed25519 signatures
     "_wasi_ed25519_generate_keypair"
     "_wasi_ed25519_sign"

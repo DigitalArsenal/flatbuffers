@@ -24,9 +24,11 @@
 // - X25519 ECDH key exchange
 // - secp256k1 ECDH key exchange (Bitcoin/Ethereum compatible)
 // - P-256 ECDH key exchange (NIST)
+// - P-384 ECDH key exchange (NIST, higher security)
 // - Ed25519 signatures
 // - ECDSA secp256k1 signatures (Bitcoin/Ethereum compatible)
 // - ECDSA P-256 signatures (NIST)
+// - ECDSA P-384 signatures (NIST, higher security)
 
 #include "flatbuffers/encryption.h"
 #include <cstdlib>
@@ -409,6 +411,95 @@ int32_t wasi_p256_verify(const uint8_t* public_key, uint32_t public_key_size,
   }
 
   if (flatbuffers::P256Verify(public_key, public_key_size,
+                              data, data_size,
+                              signature, signature_size)) {
+    return 0;
+  }
+  return -1;
+}
+
+// =============================================================================
+// P-384 Key Exchange and Signatures (NIST)
+// =============================================================================
+
+// Generate P-384 key pair
+// private_key: output buffer for private key (48 bytes)
+// public_key: output buffer for compressed public key (49 bytes)
+// Returns 0 on success, -1 on error
+int32_t wasi_p384_generate_keypair(uint8_t* private_key, uint8_t* public_key) {
+  if (!private_key || !public_key) {
+    return -1;
+  }
+
+  auto kp = flatbuffers::P384GenerateKeyPair();
+  if (!kp.valid()) {
+    return -1;
+  }
+
+  memcpy(private_key, kp.private_key.data(), flatbuffers::kP384PrivateKeySize);
+  memcpy(public_key, kp.public_key.data(), flatbuffers::kP384PublicKeySize);
+  return 0;
+}
+
+// P-384 ECDH key exchange
+// private_key: our private key (48 bytes)
+// public_key: their compressed public key (49 bytes)
+// shared_secret: output buffer (32 bytes)
+// Returns 0 on success, -1 on error
+int32_t wasi_p384_shared_secret(const uint8_t* private_key,
+                                const uint8_t* public_key,
+                                uint32_t public_key_size,
+                                uint8_t* shared_secret) {
+  if (!private_key || !public_key || !shared_secret) {
+    return -1;
+  }
+
+  if (flatbuffers::P384SharedSecret(private_key, public_key, public_key_size, shared_secret)) {
+    return 0;
+  }
+  return -1;
+}
+
+// P-384 ECDSA sign
+// private_key: signing private key (48 bytes)
+// data: data to sign
+// data_size: size of data
+// signature: output buffer for signature (96 bytes for r||s)
+// signature_size: pointer to receive actual signature size
+// Returns 0 on success, -1 on error
+int32_t wasi_p384_sign(const uint8_t* private_key,
+                       const uint8_t* data, uint32_t data_size,
+                       uint8_t* signature, uint32_t* signature_size) {
+  if (!private_key || !data || !signature || !signature_size) {
+    return -1;
+  }
+
+  auto sig = flatbuffers::P384Sign(private_key, data, data_size);
+  if (!sig.valid()) {
+    return -1;
+  }
+
+  *signature_size = static_cast<uint32_t>(sig.data.size());
+  memcpy(signature, sig.data.data(), sig.data.size());
+  return 0;
+}
+
+// P-384 ECDSA verify
+// public_key: verification public key (49 bytes compressed)
+// public_key_size: size of public key
+// data: original data
+// data_size: size of data
+// signature: signature to verify
+// signature_size: size of signature
+// Returns 0 if valid, -1 if invalid or error
+int32_t wasi_p384_verify(const uint8_t* public_key, uint32_t public_key_size,
+                         const uint8_t* data, uint32_t data_size,
+                         const uint8_t* signature, uint32_t signature_size) {
+  if (!public_key || !data || !signature) {
+    return -1;
+  }
+
+  if (flatbuffers::P384Verify(public_key, public_key_size,
                               data, data_size,
                               signature, signature_size)) {
     return 0;

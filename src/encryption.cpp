@@ -427,6 +427,152 @@ bool P256Verify(
 }
 
 // =============================================================================
+// P-384 Key Exchange and Signatures
+// =============================================================================
+
+KeyPair P384GenerateKeyPair() {
+  KeyPair kp;
+
+  try {
+    CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA384>::PrivateKey privateKey;
+    privateKey.Initialize(GetGlobalRNG(), CryptoPP::ASN1::secp384r1());
+
+    CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA384>::PublicKey publicKey;
+    privateKey.MakePublicKey(publicKey);
+
+    // Export private key (48 bytes)
+    kp.private_key.resize(kP384PrivateKeySize);
+    privateKey.GetPrivateExponent().Encode(kp.private_key.data(), kP384PrivateKeySize);
+
+    // Export compressed public key (49 bytes)
+    const CryptoPP::ECP::Point& q = publicKey.GetPublicElement();
+    kp.public_key.resize(kP384PublicKeySize);
+    kp.public_key[0] = q.y.IsOdd() ? 0x03 : 0x02;
+    q.x.Encode(kp.public_key.data() + 1, 48);
+
+  } catch (...) {
+    kp.private_key.clear();
+    kp.public_key.clear();
+  }
+
+  return kp;
+}
+
+bool P384SharedSecret(
+    const uint8_t* private_key,
+    const uint8_t* public_key, size_t public_key_size,
+    uint8_t* shared_secret) {
+  if (!private_key || !public_key || !shared_secret) return false;
+
+  try {
+    CryptoPP::ECDH<CryptoPP::ECP>::Domain ecdh(CryptoPP::ASN1::secp384r1());
+
+    // Decompress public key if needed
+    // y^2 = x^3 - 3x + b
+    std::vector<uint8_t> uncompressed;
+    const uint8_t* pub_ptr = public_key;
+    size_t pub_len = public_key_size;
+
+    if (public_key_size == 49 && (public_key[0] == 0x02 || public_key[0] == 0x03)) {
+      CryptoPP::Integer x(public_key + 1, 48);
+      const CryptoPP::ECP& curve = ecdh.GetGroupParameters().GetCurve();
+      const CryptoPP::Integer& p = curve.GetField().GetModulus();
+      const CryptoPP::Integer& b = curve.GetB();
+
+      // y^2 = x^3 - 3x + b (mod p)
+      CryptoPP::Integer y2 = (x * x * x - 3 * x + b) % p;
+      CryptoPP::Integer y = CryptoPP::ModularSquareRoot(y2, p);
+
+      if ((public_key[0] == 0x03) != y.IsOdd()) {
+        y = p - y;
+      }
+
+      uncompressed.resize(97);
+      uncompressed[0] = 0x04;
+      x.Encode(uncompressed.data() + 1, 48);
+      y.Encode(uncompressed.data() + 49, 48);
+      pub_ptr = uncompressed.data();
+      pub_len = 97;
+    }
+
+    std::vector<uint8_t> priv_full(ecdh.PrivateKeyLength());
+    std::vector<uint8_t> pub_full(ecdh.PublicKeyLength());
+
+    memset(priv_full.data(), 0, priv_full.size());
+    memcpy(priv_full.data() + priv_full.size() - 48, private_key, 48);
+
+    if (pub_len == 97) {
+      memcpy(pub_full.data(), pub_ptr, pub_len);
+    } else {
+      return false;
+    }
+
+    // P-384 shared secret is 48 bytes, but we hash to 32 for consistency
+    std::vector<uint8_t> raw_secret(48);
+    if (!ecdh.Agree(raw_secret.data(), priv_full.data(), pub_full.data())) {
+      return false;
+    }
+    // Hash the 48-byte secret down to 32 bytes for symmetric key use
+    SHA256(raw_secret.data(), raw_secret.size(), shared_secret);
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+Signature P384Sign(
+    const uint8_t* private_key,
+    const uint8_t* data, size_t data_size) {
+  Signature sig;
+  sig.algorithm = SignatureAlgorithm::P384_ECDSA;
+
+  try {
+    CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA384>::PrivateKey key;
+    key.Initialize(CryptoPP::ASN1::secp384r1(),
+                   CryptoPP::Integer(private_key, kP384PrivateKeySize));
+
+    CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA384>::Signer signer(key);
+    sig.data.resize(signer.MaxSignatureLength());
+    size_t sigLen = signer.SignMessage(GetGlobalRNG(), data, data_size, sig.data.data());
+    sig.data.resize(sigLen);
+  } catch (...) {
+    sig.data.clear();
+  }
+
+  return sig;
+}
+
+bool P384Verify(
+    const uint8_t* public_key, size_t public_key_size,
+    const uint8_t* data, size_t data_size,
+    const uint8_t* signature, size_t signature_size) {
+  try {
+    CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA384>::PublicKey key;
+
+    CryptoPP::Integer x(public_key + 1, 48);
+    const CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>& params =
+        CryptoPP::DL_GroupParameters_EC<CryptoPP::ECP>(CryptoPP::ASN1::secp384r1());
+    const CryptoPP::ECP& curve = params.GetCurve();
+    const CryptoPP::Integer& p = curve.GetField().GetModulus();
+    const CryptoPP::Integer& b = curve.GetB();
+
+    CryptoPP::Integer y2 = (x * x * x - 3 * x + b) % p;
+    CryptoPP::Integer y = CryptoPP::ModularSquareRoot(y2, p);
+
+    if ((public_key[0] == 0x03) != y.IsOdd()) {
+      y = p - y;
+    }
+
+    key.Initialize(CryptoPP::ASN1::secp384r1(), CryptoPP::ECP::Point(x, y));
+
+    CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA384>::Verifier verifier(key);
+    return verifier.VerifyMessage(data, data_size, signature, signature_size);
+  } catch (...) {
+    return false;
+  }
+}
+
+// =============================================================================
 // Ed25519 Signatures
 // =============================================================================
 
@@ -453,6 +599,8 @@ KeyPair GenerateSigningKeyPair(SignatureAlgorithm algorithm) {
       return Secp256k1GenerateKeyPair();
     case SignatureAlgorithm::P256_ECDSA:
       return P256GenerateKeyPair();
+    case SignatureAlgorithm::P384_ECDSA:
+      return P384GenerateKeyPair();
     default:
       return KeyPair{};
   }
@@ -693,6 +841,10 @@ KeyPair P256GenerateKeyPair() { return KeyPair{}; }
 bool P256SharedSecret(const uint8_t*, const uint8_t*, size_t, uint8_t*) { return false; }
 Signature P256Sign(const uint8_t*, const uint8_t*, size_t) { return Signature{}; }
 bool P256Verify(const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*, size_t) { return false; }
+KeyPair P384GenerateKeyPair() { return KeyPair{}; }
+bool P384SharedSecret(const uint8_t*, const uint8_t*, size_t, uint8_t*) { return false; }
+Signature P384Sign(const uint8_t*, const uint8_t*, size_t) { return Signature{}; }
+bool P384Verify(const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*, size_t) { return false; }
 KeyPair GenerateSigningKeyPair(SignatureAlgorithm) { return KeyPair{}; }
 Signature Ed25519Sign(const uint8_t*, const uint8_t*, size_t) { return Signature{}; }
 bool Ed25519Verify(const uint8_t*, const uint8_t*, size_t, const uint8_t*) { return false; }
@@ -711,6 +863,8 @@ KeyPair GenerateKeyPair(KeyExchangeAlgorithm algorithm) {
       return Secp256k1GenerateKeyPair();
     case KeyExchangeAlgorithm::P256:
       return P256GenerateKeyPair();
+    case KeyExchangeAlgorithm::P384:
+      return P384GenerateKeyPair();
     default:
       return KeyPair{};
   }
@@ -728,6 +882,8 @@ bool ComputeSharedSecret(
       return Secp256k1SharedSecret(private_key, public_key, public_key_size, shared_secret);
     case KeyExchangeAlgorithm::P256:
       return P256SharedSecret(private_key, public_key, public_key_size, shared_secret);
+    case KeyExchangeAlgorithm::P384:
+      return P384SharedSecret(private_key, public_key, public_key_size, shared_secret);
     default:
       return false;
   }
@@ -744,6 +900,8 @@ Signature Sign(
       return Secp256k1Sign(private_key, data, data_size);
     case SignatureAlgorithm::P256_ECDSA:
       return P256Sign(private_key, data, data_size);
+    case SignatureAlgorithm::P384_ECDSA:
+      return P384Sign(private_key, data, data_size);
     default:
       return Signature{};
   }
@@ -761,6 +919,8 @@ bool Verify(
       return Secp256k1Verify(public_key, public_key_size, data, data_size, signature, signature_size);
     case SignatureAlgorithm::P256_ECDSA:
       return P256Verify(public_key, public_key_size, data, data_size, signature, signature_size);
+    case SignatureAlgorithm::P384_ECDSA:
+      return P384Verify(public_key, public_key_size, data, data_size, signature, signature_size);
     default:
       return false;
   }

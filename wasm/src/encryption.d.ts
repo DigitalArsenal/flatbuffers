@@ -59,6 +59,8 @@ export declare const SECP256K1_PRIVATE_KEY_SIZE: 32;
 export declare const SECP256K1_PUBLIC_KEY_SIZE: 33;
 export declare const P256_PRIVATE_KEY_SIZE: 32;
 export declare const P256_PUBLIC_KEY_SIZE: 33;
+export declare const P384_PRIVATE_KEY_SIZE: 48;
+export declare const P384_PUBLIC_KEY_SIZE: 49;
 export declare const ED25519_PRIVATE_KEY_SIZE: 64;
 export declare const ED25519_PUBLIC_KEY_SIZE: 32;
 export declare const ED25519_SIGNATURE_SIZE: 64;
@@ -68,12 +70,14 @@ export declare const KeyExchangeAlgorithm: {
   X25519: 'x25519';
   SECP256K1: 'secp256k1';
   P256: 'p256';
+  P384: 'p384';
 };
 
 export declare const SignatureAlgorithm: {
   ED25519: 'ed25519';
   SECP256K1_ECDSA: 'secp256k1-ecdsa';
   P256_ECDSA: 'p256-ecdsa';
+  P384_ECDSA: 'p384-ecdsa';
 };
 
 export declare const SymmetricAlgorithm: {
@@ -456,6 +460,49 @@ export declare function p256Verify(
 ): boolean;
 
 // =============================================================================
+// P-384 Key Exchange and Signatures (NIST, higher security)
+// =============================================================================
+
+/**
+ * Generate P-384 key pair
+ * @param privateKey - Optional 48-byte private key
+ */
+export declare function p384GenerateKeyPair(privateKey?: Uint8Array): KeyPair;
+
+/**
+ * Compute P-384 ECDH shared secret
+ */
+export declare function p384SharedSecret(
+  privateKey: Uint8Array,
+  publicKey: Uint8Array
+): Uint8Array;
+
+/**
+ * Derive symmetric key from P-384 shared secret
+ */
+export declare function p384DeriveKey(
+  sharedSecret: Uint8Array,
+  context: Uint8Array | string
+): Uint8Array;
+
+/**
+ * Sign data with P-384 ECDSA
+ */
+export declare function p384Sign(
+  privateKey: Uint8Array,
+  data: Uint8Array
+): Uint8Array;
+
+/**
+ * Verify P-384 ECDSA signature
+ */
+export declare function p384Verify(
+  publicKey: Uint8Array,
+  data: Uint8Array,
+  signature: Uint8Array
+): boolean;
+
+// =============================================================================
 // Ed25519 Signatures
 // =============================================================================
 
@@ -496,8 +543,8 @@ export declare function ed25519Verify(
  * Options for ECIES encryption
  */
 export interface ECIESEncryptionOptions {
-  /** Key exchange algorithm ('x25519', 'secp256k1', 'p256'). Default: 'x25519' */
-  algorithm?: 'x25519' | 'secp256k1' | 'p256';
+  /** Key exchange algorithm ('x25519', 'secp256k1', 'p256', 'p384'). Default: 'x25519' */
+  algorithm?: 'x25519' | 'secp256k1' | 'p256' | 'p384';
   /** Application context for key derivation */
   context?: string;
   /** Root type name (for documentation/debugging) */
@@ -972,6 +1019,13 @@ declare const encryption: {
   p256DeriveKey: typeof p256DeriveKey;
   p256Sign: typeof p256Sign;
   p256Verify: typeof p256Verify;
+
+  // P-384
+  p384GenerateKeyPair: typeof p384GenerateKeyPair;
+  p384SharedSecret: typeof p384SharedSecret;
+  p384DeriveKey: typeof p384DeriveKey;
+  p384Sign: typeof p384Sign;
+  p384Verify: typeof p384Verify;
 
   // Ed25519
   ed25519GenerateKeyPair: typeof ed25519GenerateKeyPair;

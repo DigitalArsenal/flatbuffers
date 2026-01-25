@@ -312,6 +312,7 @@
               <option value="x25519">X25519 (Curve25519)</option>
               <option value="secp256k1">secp256k1 (Bitcoin/Ethereum)</option>
               <option value="p256">P-256 / secp256r1 (NIST)</option>
+              <option value="p384">P-384 / secp384r1 (NIST, 192-bit security)</option>
             </select>
           </div>
           <div class="algorithm-display">
@@ -458,6 +459,12 @@
                   <td>33 bytes (compressed)</td>
                   <td>TLS, NIST compliance, enterprise</td>
                   <td>Required for government/regulated industries</td>
+                </tr>
+                <tr>
+                  <td><code>P-384</code> / <code>secp384r1</code></td>
+                  <td>49 bytes (compressed)</td>
+                  <td>High-security, government Top Secret</td>
+                  <td>192-bit security level, NSA Suite B approved</td>
                 </tr>
               </tbody>
             </table>

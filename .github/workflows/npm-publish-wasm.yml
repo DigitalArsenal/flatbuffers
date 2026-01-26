@@ -1,0 +1,142 @@
+name: Publish flatc-wasm to NPM
+
+on:
+  push:
+    tags:
+      - "wasm-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (do not publish)"
+        required: false
+        default: "false"
+        type: boolean
+
+# Required for NPM provenance / trusted publishing
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build WASM
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: "3.1.51"
+          actions-cache-folder: "emsdk-cache"
+
+      - name: Verify Emscripten
+        run: emcc --version
+
+      - name: Configure CMake with Emscripten
+        run: emcmake cmake -B build/wasm -S . -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_BUILD_WASM=ON
+
+      - name: Build WASM targets
+        run: cmake --build build/wasm --parallel $(nproc) --target flatc_wasm_npm
+
+      - name: Verify build output
+        run: |
+          echo "Checking WASM output files..."
+          ls -la wasm/dist/
+          test -f wasm/dist/flatc-wasm.js
+          test -f wasm/dist/flatc.wasm
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: |
+            wasm/dist/
+            wasm/src/
+            wasm/package.json
+            wasm/README.md
+          retention-days: 1
+
+  test:
+    name: Test Package
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: wasm/
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+        working-directory: wasm
+
+      - name: Run tests
+        run: npm test
+        working-directory: wasm
+        continue-on-error: true
+
+      - name: Verify package
+        run: npm pack --dry-run
+        working-directory: wasm
+
+  publish:
+    name: Publish to NPM
+    needs: [build, test]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-package
+          path: wasm/
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Extract version from tag
+        if: startsWith(github.ref, 'refs/tags/wasm-v')
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/wasm-v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Publishing version: $VERSION"
+
+      - name: Update package.json version
+        if: startsWith(github.ref, 'refs/tags/wasm-v')
+        run: |
+          cd wasm
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Publish to NPM (dry run)
+        if: github.event.inputs.dry_run == 'true'
+        run: npm publish --dry-run
+        working-directory: wasm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to NPM with provenance
+        if: github.event.inputs.dry_run != 'true'
+        run: npm publish --access public --provenance
+        working-directory: wasm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

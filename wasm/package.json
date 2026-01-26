@@ -21,6 +21,10 @@
       "types": "./src/encryption.d.ts",
       "import": "./src/encryption.mjs"
     },
+    "./hd-keys": {
+      "types": "./src/hd-keys.d.ts",
+      "import": "./src/hd-keys.mjs"
+    },
     "./module": {
       "types": "./dist/flatc-wasm.d.ts",
       "import": "./dist/flatc-wasm.js",
@@ -34,6 +38,8 @@
     "src/runner.d.ts",
     "src/encryption.mjs",
     "src/encryption.d.ts",
+    "src/hd-keys.mjs",
+    "src/hd-keys.d.ts",
     "dist/flatc-wasm.js",
     "dist/flatc-wasm.cjs",
     "dist/flatc-wasm.d.ts",
@@ -49,7 +55,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/google/flatbuffers.git",
+    "url": "git+https://github.com/DigitalArsenal/flatbuffers.git",
     "directory": "wasm"
   },
   "keywords": [
@@ -65,10 +71,18 @@
   "author": "The FlatBuffers project",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/google/flatbuffers/issues"
+    "url": "https://github.com/DigitalArsenal/flatbuffers/issues"
   },
   "homepage": "https://flatbuffers.dev/",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "peerDependencies": {
+    "@scure/bip32": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@scure/bip32": {
+      "optional": true
+    }
   }
 }

@@ -1975,14 +1975,14 @@ export class EncryptionContext {
    *
    * @param {Uint8Array} recipientPublicKey - Recipient's public key
    * @param {Object} [options] - Encryption options
-   * @param {string} [options.algorithm='x25519'] - Key exchange algorithm ('x25519', 'secp256k1', 'p256')
+   * @param {string} [options.algorithm='secp256k1'] - Key exchange algorithm ('x25519', 'secp256k1', 'p256', 'p384')
    * @param {string} [options.context=''] - Application context for key derivation
    * @param {string} [options.rootType] - Root type name (for documentation/debugging)
    * @returns {EncryptionContext} Configured encryption context
    *
    * @example
    * const ctx = EncryptionContext.forEncryption(recipientPublicKey, {
-   *   algorithm: 'x25519',
+   *   algorithm: 'secp256k1',
    *   context: 'my-app-v1',
    * });
    * const header = ctx.getHeaderJSON();
@@ -1990,7 +1990,7 @@ export class EncryptionContext {
    * // Send header + encrypted buffer to recipient
    */
   static forEncryption(recipientPublicKey, options = {}) {
-    const algorithm = options.algorithm || KeyExchangeAlgorithm.X25519;
+    const algorithm = options.algorithm || KeyExchangeAlgorithm.SECP256K1;
     const contextStr = options.context || '';
 
     let ephemeralKeys;
@@ -2061,7 +2061,7 @@ export class EncryptionContext {
    * decryptBuffer(buffer, schema, ctx, 'MyTable');
    */
   static forDecryption(privateKey, header, context = '') {
-    const algorithm = header.algorithm || KeyExchangeAlgorithm.X25519;
+    const algorithm = header.algorithm || KeyExchangeAlgorithm.SECP256K1;
     const ephemeralPublicKey = header.senderPublicKey;
     const nonce = header.iv;
 
@@ -2143,7 +2143,7 @@ export class EncryptionContext {
     }
     return {
       version: 1,
-      algorithm: this.#algorithm || KeyExchangeAlgorithm.X25519,
+      algorithm: this.#algorithm || KeyExchangeAlgorithm.SECP256K1,
       senderPublicKey: new Uint8Array(this.#ephemeralPublicKey),
       recipientKeyId: this.#recipientKeyId ? new Uint8Array(this.#recipientKeyId) : new Uint8Array(8),
       iv: this.getNonce(),

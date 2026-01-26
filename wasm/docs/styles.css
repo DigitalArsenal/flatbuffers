@@ -601,8 +601,25 @@ body {
 .entropy-fill {
   height: 100%;
   width: 0%;
-  background: var(--success);
+  background: #ef4444; /* Start red */
   transition: width 0.3s, background 0.3s;
+}
+
+/* Entropy strength states - controlled by JS via data attribute */
+.entropy-fill[data-strength="weak"] {
+  background: #ef4444; /* Red */
+}
+
+.entropy-fill[data-strength="fair"] {
+  background: #f97316; /* Orange */
+}
+
+.entropy-fill[data-strength="good"] {
+  background: #eab308; /* Yellow-Orange */
+}
+
+.entropy-fill[data-strength="strong"] {
+  background: #22c55e; /* Green */
 }
 
 .entropy-label {
@@ -2044,6 +2061,23 @@ body {
 
 .modal-glass.login-modal-content .method-tabs {
   margin-bottom: 20px;
+}
+
+.login-explanation {
+  padding: 12px 24px;
+  background: rgba(59, 130, 246, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.login-explanation p {
+  margin: 0;
+}
+
+.login-explanation strong {
+  color: #60a5fa;
 }
 
 .modal-header {

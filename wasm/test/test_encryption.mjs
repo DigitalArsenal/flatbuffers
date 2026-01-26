@@ -480,6 +480,7 @@ async function main() {
 
     // Encrypt with Alice's context
     const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'x25519',
       context: 'regression-test',
     });
 
@@ -528,6 +529,7 @@ async function main() {
 
     // Encrypt
     const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'x25519',
       context: 'iv-reuse-test',
     });
 
@@ -1340,6 +1342,7 @@ async function main() {
   await test('EncryptionContext.getHeaderJSON returns valid JSON string', async () => {
     const recipientKeys = x25519GenerateKeyPair();
     const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'x25519',
       context: 'json-test',
     });
 
@@ -1521,6 +1524,7 @@ async function main() {
 
     // Sender encrypts to recipient
     const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'x25519',
       context: appContext,
     });
 
@@ -1557,6 +1561,7 @@ async function main() {
 
     // Sender encrypts with context A
     const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'x25519',
       context: 'context-A',
     });
 
@@ -1591,6 +1596,7 @@ async function main() {
   await test('encryptionHeaderFromJSON accepts string input', async () => {
     const recipientKeys = x25519GenerateKeyPair();
     const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      algorithm: 'x25519',
       context: 'string-test',
     });
 

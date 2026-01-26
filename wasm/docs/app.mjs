@@ -45,6 +45,7 @@ import {
 import { FlatcRunner } from '../src/runner.mjs';
 import { generateAlignedCode, parseSchema } from '../src/aligned-codegen.mjs';
 import { FlatBufferParser, parseWithSchema, Schemas, toHex, toHexCompact } from './flatbuffer-parser.mjs';
+import WalletStorage, { StorageMethod } from './wallet-storage.mjs';
 import { PaginatedTable } from './virtual-scroller.mjs';
 import { StreamingDemo, MessageTypes, formatBytes, formatThroughput } from './streaming-demo.mjs';
 import { Builder } from 'flatbuffers';
@@ -396,26 +397,29 @@ function updatePasswordStrength(password) {
   const btn = $('derive-from-password');
 
   if (bits) bits.textContent = `${entropy}`;
-  if (fill) fill.className = 'entropy-fill';
+
+  // Minimum recommended entropy: 128 bits for cryptographic security
+  // But we require 24 chars minimum which is ~112-157 bits depending on charset
+  const MIN_SAFE_ENTROPY = 112;
 
   let strength, percentage;
 
-  if (entropy < 28) {
+  if (entropy < 40) {
     strength = 'weak';
-    percentage = Math.min(25, (entropy / 28) * 25);
-  } else if (entropy < 60) {
+    percentage = Math.min(25, (entropy / 40) * 25);
+  } else if (entropy < 80) {
     strength = 'fair';
-    percentage = 25 + ((entropy - 28) / 32) * 25;
-  } else if (entropy < 128) {
+    percentage = 25 + ((entropy - 40) / 40) * 25;
+  } else if (entropy < MIN_SAFE_ENTROPY) {
     strength = 'good';
-    percentage = 50 + ((entropy - 60) / 68) * 25;
+    percentage = 50 + ((entropy - 80) / (MIN_SAFE_ENTROPY - 80)) * 25;
   } else {
     strength = 'strong';
-    percentage = 75 + Math.min(25, ((entropy - 128) / 128) * 25);
+    percentage = 75 + Math.min(25, ((entropy - MIN_SAFE_ENTROPY) / 50) * 25);
   }
 
   if (fill) {
-    fill.classList.add(strength);
+    fill.dataset.strength = strength;
     fill.style.width = `${percentage}%`;
   }
 
@@ -699,9 +703,11 @@ async function registerPasskeyAndStoreWallet(walletData) {
   };
 
   try {
+    console.log('Starting passkey registration...');
     const credential = await navigator.credentials.create({
       publicKey: publicKeyCredentialCreationOptions
     });
+    console.log('Passkey registration successful, processing credential...');
 
     // Get PRF result if available, otherwise use credential ID
     const prfResult = credential.getClientExtensionResults()?.prf?.results?.first;
@@ -3625,34 +3631,36 @@ const rememberMethod = {
 };
 
 function setupLoginHandlers() {
-  // Check for stored wallet on init
-  const storedWallet = hasStoredWallet();
-  const storedPasskey = hasPasskey();
+  // Migrate from old storage format if needed
+  WalletStorage.migrateStorage();
 
-  if (storedWallet || storedPasskey) {
+  // Check for stored wallet using new module
+  const storageMetadata = WalletStorage.getStorageMetadata();
+  const storageMethod = storageMetadata?.method || StorageMethod.NONE;
+
+  if (storageMethod !== StorageMethod.NONE) {
     const storedTab = $('stored-tab');
     if (storedTab) storedTab.style.display = '';
 
-    const date = storedWallet?.date || new Date(JSON.parse(localStorage.getItem(PASSKEY_CREDENTIAL_KEY))?.timestamp).toLocaleDateString();
     const dateEl = $('stored-wallet-date');
-    if (dateEl) dateEl.textContent = `Saved on ${date}`;
+    if (dateEl && storageMetadata?.date) {
+      dateEl.textContent = `Saved on ${storageMetadata.date}`;
+    }
 
-    // Show appropriate unlock sections
+    // Show ONLY the appropriate unlock section based on storage method
     const pinSection = $('stored-pin-section');
     const passkeySection = $('stored-passkey-section');
     const divider = $('stored-divider');
 
-    if (storedWallet && pinSection) {
-      pinSection.style.display = 'block';
-    } else if (pinSection) {
-      pinSection.style.display = 'none';
-    }
+    // Hide divider - we only show one method now
+    if (divider) divider.style.display = 'none';
 
-    if (storedPasskey && passkeySection) {
-      passkeySection.style.display = 'block';
-      if (storedWallet && divider) {
-        divider.style.display = 'flex';
-      }
+    if (storageMethod === StorageMethod.PIN) {
+      if (pinSection) pinSection.style.display = 'block';
+      if (passkeySection) passkeySection.style.display = 'none';
+    } else if (storageMethod === StorageMethod.PASSKEY) {
+      if (pinSection) pinSection.style.display = 'none';
+      if (passkeySection) passkeySection.style.display = 'block';
     }
 
     // Auto-switch to stored tab and open modal when a saved wallet exists
@@ -3770,14 +3778,31 @@ function setupLoginHandlers() {
         };
 
         if (usePasskey) {
-          await registerPasskeyAndStoreWallet(walletData);
-          $('stored-passkey-section').style.display = 'block';
+          // Temporarily lower modal z-index to allow passkey dialog to receive focus
+          const modal = $('login-modal');
+          const originalZIndex = modal.style.zIndex;
+          modal.style.zIndex = '1';
+          try {
+            await WalletStorage.storeWithPasskey(walletData, {
+              rpName: 'FlatBuffers Wallet Demo',
+              userName: username,
+              userDisplayName: username
+            });
+            // Show only passkey unlock for next time
+            $('stored-pin-section').style.display = 'none';
+            $('stored-passkey-section').style.display = 'block';
+          } finally {
+            modal.style.zIndex = originalZIndex;
+          }
         } else {
-          await storeWalletWithPIN(pin, walletData);
+          await WalletStorage.storeWithPIN(pin, walletData);
+          // Show only PIN unlock for next time
           $('stored-pin-section').style.display = 'block';
+          $('stored-passkey-section').style.display = 'none';
         }
         // Show stored tab for next time
         $('stored-tab').style.display = '';
+        $('stored-divider').style.display = 'none';
         $('stored-wallet-date').textContent = `Saved on ${new Date().toLocaleDateString()}`;
       }
 
@@ -3788,7 +3813,7 @@ function setupLoginHandlers() {
       alert('Error: ' + err.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Enter Demo';
+      btn.textContent = 'Login';
     }
   });
 
@@ -3846,14 +3871,31 @@ function setupLoginHandlers() {
         };
 
         if (usePasskey) {
-          await registerPasskeyAndStoreWallet(walletData);
-          $('stored-passkey-section').style.display = 'block';
+          // Temporarily lower modal z-index to allow passkey dialog to receive focus
+          const modal = $('login-modal');
+          const originalZIndex = modal.style.zIndex;
+          modal.style.zIndex = '1';
+          try {
+            await WalletStorage.storeWithPasskey(walletData, {
+              rpName: 'FlatBuffers Wallet Demo',
+              userName: 'seed-wallet',
+              userDisplayName: 'Seed Phrase Wallet'
+            });
+            // Show only passkey unlock for next time
+            $('stored-pin-section').style.display = 'none';
+            $('stored-passkey-section').style.display = 'block';
+          } finally {
+            modal.style.zIndex = originalZIndex;
+          }
         } else {
-          await storeWalletWithPIN(pin, walletData);
+          await WalletStorage.storeWithPIN(pin, walletData);
+          // Show only PIN unlock for next time
           $('stored-pin-section').style.display = 'block';
+          $('stored-passkey-section').style.display = 'none';
         }
         // Show stored tab for next time
         $('stored-tab').style.display = '';
+        $('stored-divider').style.display = 'none';
         $('stored-wallet-date').textContent = `Saved on ${new Date().toLocaleDateString()}`;
       }
 
@@ -3862,7 +3904,7 @@ function setupLoginHandlers() {
       alert('Error: ' + err.message);
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Enter Demo';
+      btn.textContent = 'Login';
     }
   });
 
@@ -3879,7 +3921,7 @@ function setupLoginHandlers() {
     btn.textContent = 'Unlocking...';
 
     try {
-      const walletData = await retrieveWalletWithPIN(pin);
+      const walletData = await WalletStorage.retrieveWithPIN(pin);
 
       // Restore wallet based on type
       let keys;
@@ -3907,8 +3949,13 @@ function setupLoginHandlers() {
     btn.disabled = true;
     btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v3H7V7a5 5 0 0 1 5-5z"/><rect x="3" y="10" width="18" height="12" rx="2"/><circle cx="12" cy="16" r="1"/></svg> Authenticating...';
 
+    // Temporarily lower modal z-index to allow passkey dialog to receive focus
+    const modal = $('login-modal');
+    const originalZIndex = modal.style.zIndex;
+    modal.style.zIndex = '1';
+
     try {
-      const walletData = await authenticatePasskeyAndRetrieveWallet();
+      const walletData = await WalletStorage.retrieveWithPasskey();
 
       // Restore wallet based on type
       let keys;
@@ -3924,6 +3971,7 @@ function setupLoginHandlers() {
     } catch (err) {
       alert('Error: ' + err.message);
     } finally {
+      modal.style.zIndex = originalZIndex;
       btn.disabled = false;
       btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v3H7V7a5 5 0 0 1 5-5z"/><rect x="3" y="10" width="18" height="12" rx="2"/><circle cx="12" cy="16" r="1"/></svg> Unlock with Passkey';
     }
@@ -3932,9 +3980,7 @@ function setupLoginHandlers() {
   // Forget stored wallet handler
   $('forget-stored-wallet')?.addEventListener('click', () => {
     if (confirm('Are you sure you want to forget your stored wallet? You will need to enter your password or seed phrase again.')) {
-      forgetStoredWallet();
-      // Also clear passkey data
-      localStorage.removeItem(PASSKEY_WALLET_KEY);
+      WalletStorage.clearStorage();
       $('stored-tab').style.display = 'none';
       $('stored-pin-section').style.display = 'block';
       $('stored-passkey-section').style.display = 'none';

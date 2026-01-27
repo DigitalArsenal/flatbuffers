@@ -300,8 +300,8 @@ export async function loadEncryptionWasm(wasmSource) {
     } else if (urlStr.startsWith('file://')) {
       // File URL - Node.js only
       if (typeof process !== 'undefined' && process.versions?.node) {
-        const { readFileSync } = await import('fs');
-        const { fileURLToPath } = await import('url');
+        const { readFileSync } = await import(/* @vite-ignore */ 'fs');
+        const { fileURLToPath } = await import(/* @vite-ignore */ 'url');
         const path = fileURLToPath(urlStr);
         wasmBytes = readFileSync(path);
       } else {
@@ -309,7 +309,7 @@ export async function loadEncryptionWasm(wasmSource) {
       }
     } else if (typeof process !== 'undefined' && process.versions?.node) {
       // Local file path - Node.js only
-      const { readFileSync } = await import('fs');
+      const { readFileSync } = await import(/* @vite-ignore */ 'fs');
       wasmBytes = readFileSync(urlStr);
     } else {
       // In browser, use fetch for relative/absolute paths

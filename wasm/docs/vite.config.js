@@ -292,6 +292,17 @@ export default defineConfig({
       output: {
         inlineDynamicImports: true,
       },
+      // Node.js built-ins are externalized for browser builds (expected for Emscripten code)
+      external: ['fs', 'url', 'path', 'module', 'crypto'],
+      onwarn(warning, warn) {
+        // Suppress warnings about Node.js modules being externalized for browser
+        // These are expected for WASM/Emscripten files that have Node.js detection
+        if (warning.code === 'MODULE_LEVEL_DIRECTIVE' ||
+            (warning.message && warning.message.includes('has been externalized for browser compatibility'))) {
+          return;
+        }
+        warn(warning);
+      },
     },
   },
   server: {

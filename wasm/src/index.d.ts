@@ -62,6 +62,12 @@ export {
   p256DeriveKey,
   p256Sign,
   p256Verify,
+  // P-384
+  p384GenerateKeyPair,
+  p384SharedSecret,
+  p384DeriveKey,
+  p384Sign,
+  p384Verify,
   // Ed25519
   ed25519GenerateKeyPair,
   ed25519Sign,
@@ -108,6 +114,40 @@ export {
   InputBufferInfo,
   DispatcherWasmModule,
 } from "./streaming-dispatcher.js";
+
+// HD Key derivation exports (BIP-32/BIP-44)
+export {
+  // Constants
+  BIP44_PURPOSE,
+  Chain,
+  CoinType,
+  Curve,
+  CoinTypeToCurve,
+  DefaultCoinType,
+  CoinTypeName,
+  KeyPurpose,
+  // Path utilities
+  buildPath,
+  buildSigningPath,
+  buildEncryptionPath,
+  parsePath,
+  // Manager class
+  HDKeyManager,
+  // Factory functions
+  createFromMnemonic,
+  createFromSeed,
+  // Validation
+  validateSigningKey,
+  validateEncryptionKey,
+  // Types
+  PathOptions,
+  DeriveOptions,
+  DeriveForPurposeOptions,
+  DerivedKey,
+  DerivedKeyPair,
+  ParsedPath,
+  CoinTypeInfo,
+} from "./hd-keys.js";
 
 /**
  * Options for creating the WASM module.

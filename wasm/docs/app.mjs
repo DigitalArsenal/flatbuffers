@@ -1088,10 +1088,30 @@ function login(keys) {
   if (mobileLogin) mobileLogin.style.display = 'none';
   if (mobileLogout) mobileLogout.style.display = 'block';
 
-  // Update keys modal display
-  $('wallet-x25519-pub').textContent = toHexCompact(keys.x25519.publicKey);
-  $('wallet-ed25519-pub').textContent = toHexCompact(keys.ed25519.publicKey);
-  $('wallet-secp256k1-pub').textContent = toHexCompact(keys.secp256k1.publicKey);
+  // Update HD wallet root keys display
+  if (state.hdRoot) {
+    const xpubEl = $('wallet-xpub');
+    const xprvEl = $('wallet-xprv');
+    const seedEl = $('wallet-seed-phrase');
+
+    if (xpubEl) {
+      // Get xpub from HD root
+      const xpub = state.hdRoot.publicExtendedKey || 'N/A';
+      xpubEl.textContent = xpub;
+    }
+    if (xprvEl) {
+      // Get xprv from HD root (keep blurred by default)
+      const xprv = state.hdRoot.privateExtendedKey || 'N/A';
+      xprvEl.textContent = xprv;
+      xprvEl.dataset.revealed = 'false';
+    }
+    if (seedEl && state.mnemonic) {
+      seedEl.textContent = state.mnemonic;
+      seedEl.dataset.revealed = 'false';
+    } else if (seedEl) {
+      seedEl.textContent = 'Not available (derived from password)';
+    }
+  }
 
   // Always derive PKI keys from HD wallet if available
   // This ensures Alice/Bob keys are deterministically derived from the user's seed
@@ -1176,6 +1196,256 @@ function logout() {
   // Clear HD wallet UI
   const derivedResult = $('derived-result');
   if (derivedResult) derivedResult.style.display = 'none';
+}
+
+/**
+ * Export wallet in various formats
+ * @param {string} format - Export format: mnemonic, xpub, xprv, keystore, wif, hex
+ */
+async function exportWallet(format) {
+  if (!state.loggedIn) {
+    alert('Please log in first to export wallet data.');
+    return;
+  }
+
+  let data, filename, mimeType;
+
+  switch (format) {
+    case 'mnemonic':
+      if (!state.mnemonic) {
+        alert('Seed phrase not available. This wallet was derived from a password.');
+        return;
+      }
+      data = state.mnemonic;
+      filename = 'wallet-seed-phrase.txt';
+      mimeType = 'text/plain';
+      break;
+
+    case 'xpub':
+      if (!state.hdRoot?.publicExtendedKey) {
+        alert('Extended public key not available.');
+        return;
+      }
+      data = state.hdRoot.publicExtendedKey;
+      filename = 'wallet-xpub.txt';
+      mimeType = 'text/plain';
+      break;
+
+    case 'xprv':
+      if (!state.hdRoot?.privateExtendedKey) {
+        alert('Extended private key not available.');
+        return;
+      }
+      // Confirm before exporting private key
+      if (!confirm('Warning: You are about to export your master private key. Anyone with this key can access all your funds. Continue?')) {
+        return;
+      }
+      data = state.hdRoot.privateExtendedKey;
+      filename = 'wallet-xprv.txt';
+      mimeType = 'text/plain';
+      break;
+
+    case 'keystore':
+      if (!state.masterSeed) {
+        alert('Master seed not available.');
+        return;
+      }
+      // Prompt for encryption password
+      const password = prompt('Enter a strong password to encrypt your keystore file:');
+      if (!password || password.length < 8) {
+        alert('Password must be at least 8 characters.');
+        return;
+      }
+      try {
+        data = await createKeystoreJSON(state.masterSeed, password);
+        filename = 'wallet-keystore.json';
+        mimeType = 'application/json';
+      } catch (err) {
+        alert('Failed to create keystore: ' + err.message);
+        return;
+      }
+      break;
+
+    case 'wif':
+      if (!state.hdRoot) {
+        alert('HD wallet not available.');
+        return;
+      }
+      // Confirm before exporting private key
+      if (!confirm('Warning: You are about to export a private key in WIF format. Anyone with this key can access funds at this address. Continue?')) {
+        return;
+      }
+      // Derive Bitcoin key at m/44'/0'/0'/0/0
+      try {
+        const btcPath = "m/44'/0'/0'/0/0";
+        const derived = state.hdRoot.derivePath(btcPath);
+        const privateKeyBytes = derived.privateKey;
+        data = privateKeyToWIF(privateKeyBytes, true); // mainnet, compressed
+        filename = 'wallet-private-key.wif';
+        mimeType = 'text/plain';
+      } catch (err) {
+        alert('Failed to derive WIF: ' + err.message);
+        return;
+      }
+      break;
+
+    case 'hex':
+      if (!state.masterSeed) {
+        alert('Master seed not available.');
+        return;
+      }
+      // Confirm before exporting raw seed
+      if (!confirm('Warning: You are about to export your raw master seed in hex format. This is extremely sensitive data. Continue?')) {
+        return;
+      }
+      data = toHexCompact(state.masterSeed);
+      filename = 'wallet-seed-hex.txt';
+      mimeType = 'text/plain';
+      break;
+
+    default:
+      alert('Unknown export format: ' + format);
+      return;
+  }
+
+  // Download the file
+  downloadData(data, filename, mimeType);
+}
+
+/**
+ * Convert private key bytes to WIF (Wallet Import Format)
+ * @param {Uint8Array} privateKey - 32-byte private key
+ * @param {boolean} compressed - Whether to use compressed format
+ * @returns {string} WIF-encoded private key
+ */
+function privateKeyToWIF(privateKey, compressed = true) {
+  // WIF format: version byte + private key + (optional compression flag) + checksum
+  const version = 0x80; // Mainnet
+  const payload = new Uint8Array(compressed ? 34 : 33);
+  payload[0] = version;
+  payload.set(privateKey, 1);
+  if (compressed) {
+    payload[33] = 0x01;
+  }
+
+  // Double SHA256 for checksum
+  const hash1 = sha256(payload);
+  const hash2 = sha256(hash1);
+  const checksum = hash2.slice(0, 4);
+
+  // Combine and encode as Base58
+  const result = new Uint8Array(payload.length + 4);
+  result.set(payload);
+  result.set(checksum, payload.length);
+
+  return base58Encode(result);
+}
+
+/**
+ * Base58 encoding (Bitcoin-style)
+ */
+function base58Encode(bytes) {
+  const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  const BASE = 58n;
+
+  // Convert bytes to big integer
+  let num = 0n;
+  for (const byte of bytes) {
+    num = num * 256n + BigInt(byte);
+  }
+
+  // Convert to base58
+  let encoded = '';
+  while (num > 0n) {
+    const remainder = num % BASE;
+    num = num / BASE;
+    encoded = ALPHABET[Number(remainder)] + encoded;
+  }
+
+  // Add leading '1's for leading zero bytes
+  for (const byte of bytes) {
+    if (byte === 0) {
+      encoded = '1' + encoded;
+    } else {
+      break;
+    }
+  }
+
+  return encoded;
+}
+
+/**
+ * Create encrypted keystore JSON (similar to Ethereum Keystore V3 format)
+ * @param {Uint8Array} seed - The seed to encrypt
+ * @param {string} password - Encryption password
+ * @returns {string} JSON string
+ */
+async function createKeystoreJSON(seed, password) {
+  const encoder = new TextEncoder();
+
+  // Generate random salt and IV
+  const salt = new Uint8Array(32);
+  crypto.getRandomValues(salt);
+  const iv = new Uint8Array(16);
+  crypto.getRandomValues(iv);
+
+  // Derive key from password using PBKDF2-like HKDF (simplified)
+  const iterations = 100000;
+  let key = encoder.encode(password);
+  for (let i = 0; i < Math.min(iterations / 1000, 100); i++) {
+    key = sha256(new Uint8Array([...key, ...salt]));
+  }
+  const derivedKey = key.slice(0, 32);
+
+  // Encrypt with AES-256-GCM
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    derivedKey,
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt']
+  );
+
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    seed
+  );
+
+  // Create keystore object
+  const keystore = {
+    version: 3,
+    id: crypto.randomUUID(),
+    crypto: {
+      cipher: 'aes-256-gcm',
+      ciphertext: toHexCompact(new Uint8Array(ciphertext)),
+      cipherparams: {
+        iv: toHexCompact(iv)
+      },
+      kdf: 'hkdf-sha256',
+      kdfparams: {
+        salt: toHexCompact(salt),
+        iterations: 100
+      }
+    }
+  };
+
+  return JSON.stringify(keystore, null, 2);
+}
+
+/**
+ * Download data as a file
+ */
+function downloadData(data, filename, mimeType) {
+  const blob = new Blob([data], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // =============================================================================
@@ -4059,6 +4329,64 @@ function setupMainAppHandlers() {
     }
   });
 
+  // Reveal sensitive key buttons
+  document.querySelectorAll('.reveal-key-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.dataset.target;
+      const targetEl = $(targetId);
+      if (targetEl) {
+        const isRevealed = targetEl.dataset.revealed === 'true';
+        targetEl.dataset.revealed = isRevealed ? 'false' : 'true';
+        // Update button icon
+        btn.innerHTML = isRevealed
+          ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+          : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+      }
+    });
+  });
+
+  // Copy key buttons
+  document.querySelectorAll('.copy-key-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const targetId = btn.dataset.copy;
+      const targetEl = $(targetId);
+      if (targetEl) {
+        try {
+          await navigator.clipboard.writeText(targetEl.textContent);
+          btn.classList.add('copied');
+          setTimeout(() => btn.classList.remove('copied'), 1500);
+        } catch (err) {
+          console.error('Copy failed:', err);
+        }
+      }
+    });
+  });
+
+  // Export wallet dropdown
+  const exportBtn = $('export-wallet-btn');
+  const exportMenu = $('export-menu');
+  if (exportBtn && exportMenu) {
+    exportBtn.addEventListener('click', () => {
+      exportMenu.classList.toggle('active');
+    });
+
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!exportBtn.contains(e.target) && !exportMenu.contains(e.target)) {
+        exportMenu.classList.remove('active');
+      }
+    });
+
+    // Export format handlers
+    document.querySelectorAll('.export-option').forEach(option => {
+      option.addEventListener('click', async () => {
+        const format = option.dataset.format;
+        await exportWallet(format);
+        exportMenu.classList.remove('active');
+      });
+    });
+  }
+
   // Mobile menu toggle
   const mobileMenuBtn = $('nav-menu-btn');
   const mobileMenu = $('nav-mobile-menu');
@@ -4691,8 +5019,13 @@ async function init() {
       setTimeout(() => window.dispatchEvent(new Event('scroll')), 200);
     }
 
-    // Auto-login if we have saved PKI keys (skip login screen)
-    if (hasSavedKeys) {
+    // Check if there's a stored wallet that requires re-authentication
+    const storageMetadata = WalletStorage.getStorageMetadata();
+    const hasStoredWallet = storageMetadata?.method && storageMetadata.method !== StorageMethod.NONE;
+
+    // Only auto-login if we have saved PKI keys AND no stored wallet requiring authentication
+    // If there's a stored wallet, let the user authenticate through the login modal
+    if (hasSavedKeys && !hasStoredWallet) {
       // Generate temporary wallet keys for the session
       const tempKeys = {
         x25519: x25519GenerateKeyPair(),

@@ -2298,6 +2298,141 @@ body {
   word-break: break-all;
 }
 
+/* Key value row with buttons */
+.key-value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.key-value-row .key-value {
+  flex: 1;
+  margin: 0;
+}
+
+.key-value.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.key-value.seed-phrase {
+  white-space: normal;
+  line-height: 1.6;
+}
+
+/* Blurred sensitive keys */
+.key-value.blurred {
+  filter: blur(5px);
+  user-select: none;
+  cursor: pointer;
+  transition: filter 0.3s ease;
+}
+
+.key-value.blurred[data-revealed="true"] {
+  filter: none;
+  user-select: text;
+  cursor: text;
+}
+
+/* Reveal and copy buttons */
+.reveal-key-btn,
+.copy-key-btn {
+  background: var(--white-05);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  color: var(--white-50);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.reveal-key-btn:hover,
+.copy-key-btn:hover {
+  background: var(--white-10);
+  color: var(--white);
+  border-color: var(--white-20);
+}
+
+.copy-key-btn.copied {
+  color: #22c55e;
+  border-color: #22c55e;
+}
+
+/* Export Section */
+.export-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.export-dropdown {
+  position: relative;
+}
+
+.export-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.export-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  display: none;
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.export-menu.active {
+  display: block;
+}
+
+.export-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 12px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.2s ease;
+}
+
+.export-option:hover {
+  background: var(--white-05);
+}
+
+.export-icon {
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.export-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--white);
+}
+
+.export-desc {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
 .key-warning {
   padding: 16px;
   background: rgba(251, 191, 36, 0.1);

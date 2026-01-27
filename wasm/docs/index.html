@@ -2863,26 +2863,113 @@ class EphemerisReader {
           </div>
         </div>
 
-        <!-- Base Keys Section (collapsible) -->
+        <!-- HD Wallet Root Keys Section -->
         <details class="keys-section collapsible-section">
           <summary class="section-label collapsible-header">
-            <span>Base Keys</span>
+            <span>HD Wallet Root</span>
             <svg class="collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
           </summary>
           <div class="collapsible-content">
+            <!-- Master Public Key -->
             <div class="key-item">
-              <label>X25519 Public Key (Encryption)</label>
-              <code id="wallet-x25519-pub"></code>
+              <label>Master Public Key (xpub)</label>
+              <div class="key-value-row">
+                <code id="wallet-xpub" class="key-value truncate"></code>
+                <button class="copy-key-btn" data-copy="wallet-xpub" title="Copy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                </button>
+              </div>
             </div>
-            <div class="key-item">
-              <label>Ed25519 Public Key (Signing)</label>
-              <code id="wallet-ed25519-pub"></code>
+
+            <!-- Master Private Key (blurred) -->
+            <div class="key-item sensitive">
+              <label>Master Private Key (xprv)</label>
+              <div class="key-value-row">
+                <code id="wallet-xprv" class="key-value truncate blurred" data-revealed="false"></code>
+                <button class="reveal-key-btn" data-target="wallet-xprv" title="Click to reveal">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+                <button class="copy-key-btn" data-copy="wallet-xprv" title="Copy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                </button>
+              </div>
             </div>
-            <div class="key-item">
-              <label>secp256k1 Public Key (Bitcoin/Ethereum)</label>
-              <code id="wallet-secp256k1-pub"></code>
+
+            <!-- Seed Phrase (blurred) -->
+            <div class="key-item sensitive">
+              <label>Seed Phrase (BIP39)</label>
+              <div class="key-value-row">
+                <code id="wallet-seed-phrase" class="key-value seed-phrase blurred" data-revealed="false"></code>
+                <button class="reveal-key-btn" data-target="wallet-seed-phrase" title="Click to reveal">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+                <button class="copy-key-btn" data-copy="wallet-seed-phrase" title="Copy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Export Dropdown -->
+            <div class="export-section">
+              <div class="export-dropdown">
+                <button class="glass-btn small export-btn" id="export-wallet-btn">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  Export Wallet
+                </button>
+                <div class="export-menu" id="export-menu">
+                  <button class="export-option" data-format="mnemonic">
+                    <span class="export-icon">📝</span>
+                    <span class="export-label">BIP39 Mnemonic</span>
+                    <span class="export-desc">24-word seed phrase</span>
+                  </button>
+                  <button class="export-option" data-format="xpub">
+                    <span class="export-icon">🔓</span>
+                    <span class="export-label">Extended Public Key</span>
+                    <span class="export-desc">xpub (watch-only)</span>
+                  </button>
+                  <button class="export-option" data-format="xprv">
+                    <span class="export-icon">🔐</span>
+                    <span class="export-label">Extended Private Key</span>
+                    <span class="export-desc">xprv (full access)</span>
+                  </button>
+                  <button class="export-option" data-format="keystore">
+                    <span class="export-icon">📦</span>
+                    <span class="export-label">Keystore JSON</span>
+                    <span class="export-desc">Encrypted (Ethereum-style)</span>
+                  </button>
+                  <button class="export-option" data-format="wif">
+                    <span class="export-icon">🔑</span>
+                    <span class="export-label">WIF Private Key</span>
+                    <span class="export-desc">Bitcoin import format</span>
+                  </button>
+                  <button class="export-option" data-format="hex">
+                    <span class="export-icon">⚡</span>
+                    <span class="export-label">Raw Hex</span>
+                    <span class="export-desc">Unencrypted bytes</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </details>

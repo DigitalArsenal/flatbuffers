@@ -270,17 +270,17 @@ body {
 .hero-install {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
-  padding: 8px 12px 8px 16px;
-  margin-top: 16px;
+  padding: 10px 14px;
+  margin: 20px 0;
 }
 
 .hero-install .install-cmd {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 13px;
   color: var(--white);
   white-space: nowrap;
 }

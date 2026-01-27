@@ -48,6 +48,7 @@ import WalletStorage, { StorageMethod } from './wallet-storage.mjs';
 import { PaginatedTable } from './virtual-scroller.mjs';
 import { StreamingDemo, MessageTypes, formatBytes, formatThroughput } from './streaming-demo.mjs';
 import { Builder } from 'flatbuffers';
+import { buildSigningPath, buildEncryptionPath } from '../src/hd-keys.mjs';
 
 // Import schemas as raw text
 import monsterSchema from './schemas/monster.fbs?raw';
@@ -922,21 +923,7 @@ function generateAddressForCoin(publicKey, coinType) {
   }
 }
 
-/**
- * Build signing path: m/44'/{coin}'/{account}'/0'/{index}'
- * Change index 0 = signing keys (external)
- */
-function buildSigningPath(coin, account, index) {
-  return `m/44'/${coin}'/${account}'/0'/${index}'`;
-}
-
-/**
- * Build encryption path: m/44'/{coin}'/{account}'/1'/{index}'
- * Change index 1 = encryption keys (internal)
- */
-function buildEncryptionPath(coin, account, index) {
-  return `m/44'/${coin}'/${account}'/1'/${index}'`;
-}
+// Note: buildSigningPath and buildEncryptionPath are imported from ../src/hd-keys.mjs
 
 /**
  * Update the path displays from UI inputs

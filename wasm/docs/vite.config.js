@@ -277,8 +277,8 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['bip39', 'qrcode', 'buffer', 'vcard-cryptoperson'],
-    exclude: ['@anthropic-ai/claude-code'],
+    include: ['qrcode', 'buffer', 'vcard-cryptoperson'],
+    exclude: ['@anthropic-ai/claude-code', 'hd-wallet-wasm'],
   },
   build: {
     outDir: 'dist',

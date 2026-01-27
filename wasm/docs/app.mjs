@@ -1065,6 +1065,12 @@ function login(keys) {
   $('nav-keys').style.display = 'flex';
   $('nav-logout').style.display = 'flex';
 
+  // Update mobile menu buttons
+  const mobileLogin = $('mobile-login');
+  const mobileLogout = $('mobile-logout');
+  if (mobileLogin) mobileLogin.style.display = 'none';
+  if (mobileLogout) mobileLogout.style.display = 'block';
+
   // Update keys modal display
   $('wallet-x25519-pub').textContent = toHexCompact(keys.x25519.publicKey);
   $('wallet-ed25519-pub').textContent = toHexCompact(keys.ed25519.publicKey);
@@ -1132,6 +1138,12 @@ function logout() {
   $('nav-login').style.display = 'flex';
   $('nav-keys').style.display = 'none';
   $('nav-logout').style.display = 'none';
+
+  // Update mobile menu buttons
+  const mobileLogin = $('mobile-login');
+  const mobileLogout = $('mobile-logout');
+  if (mobileLogin) mobileLogin.style.display = 'block';
+  if (mobileLogout) mobileLogout.style.display = 'none';
 
   // Clear form inputs
   const usernameEl = $('wallet-username');
@@ -4031,6 +4043,26 @@ function setupMainAppHandlers() {
         ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
         : '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
     });
+
+    // Mobile login/logout handlers
+    const mobileLogin = $('mobile-login');
+    const mobileLogout = $('mobile-logout');
+
+    if (mobileLogin) {
+      mobileLogin.addEventListener('click', () => {
+        $('login-modal').classList.add('active');
+        mobileMenu.classList.remove('open');
+        mobileMenuBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+      });
+    }
+
+    if (mobileLogout) {
+      mobileLogout.addEventListener('click', () => {
+        logout();
+        mobileMenu.classList.remove('open');
+        mobileMenuBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+      });
+    }
   }
 
   // Navigation tabs (now links) - scroll to sections instead of hide/show

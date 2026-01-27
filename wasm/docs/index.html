@@ -82,6 +82,15 @@
     <div class="hero-content">
       <h1 class="hero-title">Digital Arsenal<br/>Flatbuffers</h1>
       <p class="hero-subtitle">Blazing fast data transmission with field-level encryption, compatible with all major crypto networks.  <br/> <br/><a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener">Apache 2.0</a> licensed, free and open source.</p>
+      <div class="hero-install">
+        <code class="install-cmd">npm install flatc-wasm</code>
+        <button class="copy-install-btn" title="Copy to clipboard">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+        </button>
+      </div>
       <!-- CI Status Badges -->
       <div class="ci-badges">
         <a href="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/build.yml" target="_blank">
@@ -999,6 +1008,75 @@
       </div>
     </section>
 
+    <!-- Identity Section -->
+    <section id="identity-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Cryptographic Identity</h2>
+        <p class="section-desc">Generate a vCard with your public keys for secure sharing</p>
+      </div>
+
+      <div class="glass-card">
+        <div class="identity-form">
+          <div class="form-row">
+            <div class="glass-input-group">
+              <label>Prefix</label>
+              <input type="text" id="vcard-prefix" class="glass-input" placeholder="Dr.">
+            </div>
+            <div class="glass-input-group">
+              <label>First Name</label>
+              <input type="text" id="vcard-firstname" class="glass-input" placeholder="John">
+            </div>
+            <div class="glass-input-group">
+              <label>Middle Name</label>
+              <input type="text" id="vcard-middlename" class="glass-input" placeholder="Michael">
+            </div>
+            <div class="glass-input-group">
+              <label>Last Name</label>
+              <input type="text" id="vcard-lastname" class="glass-input" placeholder="Doe">
+            </div>
+            <div class="glass-input-group">
+              <label>Suffix</label>
+              <input type="text" id="vcard-suffix" class="glass-input" placeholder="Jr.">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="glass-input-group">
+              <label>Email</label>
+              <input type="email" id="vcard-email" class="glass-input" placeholder="john@example.com">
+            </div>
+            <div class="glass-input-group">
+              <label>Organization</label>
+              <input type="text" id="vcard-org" class="glass-input" placeholder="Company Name">
+            </div>
+            <div class="glass-input-group">
+              <label>Job Title</label>
+              <input type="text" id="vcard-title" class="glass-input" placeholder="Software Engineer">
+            </div>
+          </div>
+          <label class="checkbox-label">
+            <input type="checkbox" id="include-keys" checked>
+            <span>Include cryptographic public keys</span>
+          </label>
+        </div>
+
+        <button id="generate-vcard" class="glass-btn primary">Generate vCard</button>
+
+        <div id="vcard-result" class="vcard-result" style="display: none;">
+          <div class="qr-container">
+            <canvas id="qr-code"></canvas>
+          </div>
+          <div class="vcard-actions">
+            <button id="download-vcard" class="glass-btn">Download .vcf</button>
+            <button id="copy-vcard" class="glass-btn">Copy</button>
+          </div>
+          <details class="vcard-details">
+            <summary>View Raw vCard</summary>
+            <pre id="vcard-preview"></pre>
+          </details>
+        </div>
+      </div>
+    </section>
+
     <!-- Schema Viewer Section -->
     <section id="schema-tab" class="content-section">
       <div class="section-header">
@@ -1066,462 +1144,6 @@
             <h5>JSON Output</h5>
             <pre id="json-output" class="code-block json"></pre>
           </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Streaming Section -->
-    <section id="streaming-tab" class="content-section">
-      <div class="section-header">
-        <h2 class="section-title">Streaming Dispatcher</h2>
-        <p class="section-desc">Route mixed FlatBuffer messages to queues by type</p>
-      </div>
-
-      <!-- Explanation Section -->
-      <div class="glass-card streaming-explainer">
-        <div class="explainer-header">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-          </svg>
-          <h3>How Streaming Works</h3>
-        </div>
-        <div class="explainer-content">
-          <div class="explainer-columns">
-            <div class="explainer-column">
-              <h4>Message Flow</h4>
-              <p>FlatBuffers are self-describing binary messages with a 4-byte type identifier prefix. The streaming dispatcher reads this identifier and routes each message to the appropriate queue based on its type.</p>
-              <div class="explainer-code">
-                <code>[TYPE_ID:4bytes][SIZE:4bytes][FLATBUFFER:N bytes]</code>
-              </div>
-            </div>
-            <div class="explainer-column">
-              <h4>Message Queues</h4>
-              <p>Each message type has a dedicated queue with a fixed capacity. When full, oldest messages are overwritten (FIFO). This enables constant-memory streaming for high-throughput scenarios without allocations.</p>
-              <ul class="explainer-list">
-                <li><strong>O(1)</strong> insertion and removal</li>
-                <li><strong>Zero allocation</strong> after initialization</li>
-                <li><strong>Lock-free</strong> single-producer design</li>
-              </ul>
-            </div>
-            <div class="explainer-column">
-              <h4>Use Cases</h4>
-              <ul class="explainer-list">
-                <li><strong>Telemetry</strong> - Route sensor data by device type</li>
-                <li><strong>Gaming</strong> - Separate entity updates from events</li>
-                <li><strong>Finance</strong> - Dispatch orders, trades, and quotes</li>
-                <li><strong>IoT</strong> - Process heterogeneous device streams</li>
-              </ul>
-            </div>
-          </div>
-          <div class="explainer-diagram">
-            <svg viewBox="0 0 600 120" class="stream-diagram">
-              <!-- Input stream -->
-              <g class="stream-input">
-                <rect x="10" y="40" width="80" height="40" rx="4" fill="var(--white-10)" stroke="var(--glass-border)"/>
-                <text x="50" y="65" text-anchor="middle" fill="var(--white-80)" font-size="12">Mixed Stream</text>
-              </g>
-              <!-- Arrow to dispatcher -->
-              <path d="M95 60 L140 60" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
-              <!-- Dispatcher -->
-              <g class="stream-dispatcher">
-                <rect x="145" y="30" width="100" height="60" rx="4" fill="var(--primary)" fill-opacity="0.2" stroke="var(--primary)"/>
-                <text x="195" y="55" text-anchor="middle" fill="var(--white)" font-size="11">Dispatcher</text>
-                <text x="195" y="70" text-anchor="middle" fill="var(--white-60)" font-size="9">Read Type ID</text>
-              </g>
-              <!-- Arrows to buffers -->
-              <path d="M250 45 L300 25" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
-              <path d="M250 60 L300 60" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
-              <path d="M250 75 L300 95" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
-              <!-- Message queues -->
-              <g class="queue-viz monster">
-                <rect x="305" y="10" width="120" height="30" rx="4" fill="rgba(239, 68, 68, 0.2)" stroke="rgb(239, 68, 68)"/>
-                <text x="365" y="30" text-anchor="middle" fill="var(--white-80)" font-size="10">Monster Queue</text>
-              </g>
-              <g class="queue-viz weapon">
-                <rect x="305" y="45" width="120" height="30" rx="4" fill="rgba(59, 130, 246, 0.2)" stroke="rgb(59, 130, 246)"/>
-                <text x="365" y="65" text-anchor="middle" fill="var(--white-80)" font-size="10">Weapon Queue</text>
-              </g>
-              <g class="queue-viz galaxy">
-                <rect x="305" y="80" width="120" height="30" rx="4" fill="rgba(168, 85, 247, 0.2)" stroke="rgb(168, 85, 247)"/>
-                <text x="365" y="100" text-anchor="middle" fill="var(--white-80)" font-size="10">Galaxy Queue</text>
-              </g>
-              <!-- Arrows to consumers -->
-              <path d="M430 25 L480 25" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
-              <path d="M430 60 L480 60" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
-              <path d="M430 95 L480 95" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
-              <!-- Consumers -->
-              <g class="stream-consumers">
-                <rect x="485" y="10" width="100" height="100" rx="4" fill="var(--white-05)" stroke="var(--glass-border)"/>
-                <text x="535" y="35" text-anchor="middle" fill="var(--white-80)" font-size="10">Consumers</text>
-                <text x="535" y="55" text-anchor="middle" fill="var(--white-60)" font-size="9">Process by type</text>
-                <text x="535" y="70" text-anchor="middle" fill="var(--white-60)" font-size="9">at own pace</text>
-              </g>
-              <!-- Arrowhead marker -->
-              <defs>
-                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                  <polygon points="0 0, 10 3.5, 0 7" fill="var(--white-40)"/>
-                </marker>
-              </defs>
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <!-- API Documentation -->
-      <div class="glass-card streaming-api-docs">
-        <h3 class="card-subtitle">API Reference</h3>
-
-        <!-- Wire Format -->
-        <div class="api-section">
-          <h4>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-              <line x1="8" y1="21" x2="16" y2="21"/>
-              <line x1="12" y1="17" x2="12" y2="21"/>
-            </svg>
-            Wire Format
-          </h4>
-          <div class="wire-format">
-            <div class="wire-format-diagram">
-              <div class="wire-segment size">
-                <div class="wire-segment-box">SIZE</div>
-                <div class="wire-segment-label">4 bytes (LE)</div>
-              </div>
-              <div class="wire-segment fileid">
-                <div class="wire-segment-box">FILE_ID</div>
-                <div class="wire-segment-label">4 bytes</div>
-              </div>
-              <div class="wire-segment data">
-                <div class="wire-segment-box">FLATBUFFER DATA</div>
-                <div class="wire-segment-label">SIZE - 4 bytes</div>
-              </div>
-            </div>
-            <p class="wire-format-desc">
-              Each message is size-prefixed (little-endian) followed by a 4-byte file identifier for routing, then the FlatBuffer payload.
-            </p>
-          </div>
-        </div>
-
-        <!-- Memory Layout -->
-        <div class="api-section">
-          <h4>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <line x1="3" y1="9" x2="21" y2="9"/>
-              <line x1="9" y1="21" x2="9" y2="9"/>
-            </svg>
-            Memory Layout
-          </h4>
-          <div class="memory-layout">
-            <p class="memory-desc">Messages are stored in contiguous ring buffers in WASM linear memory. Each registered type gets its own buffer:</p>
-            <table class="memory-table">
-              <thead>
-                <tr>
-                  <th>Component</th>
-                  <th>Location</th>
-                  <th>Access Method</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Ring Buffer Base</td>
-                  <td><code>bufferPtr</code> from registration</td>
-                  <td><code>getTypeInfo(fileId).bufferPtr</code></td>
-                </tr>
-                <tr>
-                  <td>Message N</td>
-                  <td><code>bufferPtr + (N * messageSize)</code></td>
-                  <td><code>getMessage(fileId, N)</code></td>
-                </tr>
-                <tr>
-                  <td>Latest Message</td>
-                  <td><code>bufferPtr + (head * messageSize)</code></td>
-                  <td><code>getLatestMessage(fileId)</code></td>
-                </tr>
-                <tr>
-                  <td>Raw Memory View</td>
-                  <td><code>HEAPU8.subarray(ptr, ptr + size)</code></td>
-                  <td><code>new Uint8Array(wasm.HEAPU8.buffer, ptr, size)</code></td>
-                </tr>
-              </tbody>
-            </table>
-            <div class="memory-note">
-              <strong>Zero-Copy Access:</strong> <code>getMessage()</code> returns a <code>Uint8Array</code> view directly into WASM memory - no data is copied.
-              This view is valid until the next <code>pushBytes()</code> call that overwrites the ring buffer slot.
-            </div>
-          </div>
-        </div>
-
-        <!-- Initialization Example -->
-        <div class="api-section">
-          <h4>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="4 17 10 11 4 5"/>
-              <line x1="12" y1="19" x2="20" y2="19"/>
-            </svg>
-            Initialization
-          </h4>
-          <div class="code-example">
-            <div class="example-tabs extended" data-example-group="streaming-init">
-              <button class="example-tab active" data-lang="cpp">C++</button>
-              <button class="example-tab" data-lang="ts">TypeScript</button>
-              <button class="example-tab" data-lang="js">JavaScript</button>
-              <button class="example-tab" data-lang="rust">Rust</button>
-              <button class="example-tab" data-lang="go">Go</button>
-              <button class="example-tab" data-lang="python">Python</button>
-            </div>
-            <pre id="streaming-init-code" class="code-display"></pre>
-          </div>
-        </div>
-
-        <!-- Streaming Example -->
-        <div class="api-section">
-          <h4>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-            </svg>
-            Streaming Data
-          </h4>
-          <div class="code-example">
-            <div class="example-tabs extended" data-example-group="streaming-push">
-              <button class="example-tab active" data-lang="cpp">C++</button>
-              <button class="example-tab" data-lang="ts">TypeScript</button>
-              <button class="example-tab" data-lang="js">JavaScript</button>
-              <button class="example-tab" data-lang="rust">Rust</button>
-              <button class="example-tab" data-lang="go">Go</button>
-              <button class="example-tab" data-lang="python">Python</button>
-            </div>
-            <pre id="streaming-push-code" class="code-display"></pre>
-          </div>
-        </div>
-
-        <!-- Access Patterns Example -->
-        <div class="api-section">
-          <h4>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" y1="13" x2="8" y2="13"/>
-              <line x1="16" y1="17" x2="8" y2="17"/>
-            </svg>
-            Access Patterns
-          </h4>
-          <div class="code-example">
-            <div class="example-tabs extended" data-example-group="streaming-access">
-              <button class="example-tab active" data-lang="cpp">C++</button>
-              <button class="example-tab" data-lang="ts">TypeScript</button>
-              <button class="example-tab" data-lang="js">JavaScript</button>
-              <button class="example-tab" data-lang="rust">Rust</button>
-              <button class="example-tab" data-lang="go">Go</button>
-              <button class="example-tab" data-lang="python">Python</button>
-            </div>
-            <pre id="streaming-access-code" class="code-display"></pre>
-          </div>
-        </div>
-      </div>
-
-      <!-- Interactive Demo -->
-      <div class="glass-card">
-        <h3 class="card-subtitle">Interactive Demo</h3>
-        <div class="streaming-grid">
-          <div class="stream-config">
-            <label>Monster (MONS)</label>
-            <input type="number" id="stream-monster-count" class="glass-input" value="1000" min="0" max="100000" step="100">
-          </div>
-          <div class="stream-config">
-            <label>Weapon (WEAP)</label>
-            <input type="number" id="stream-weapon-count" class="glass-input" value="500" min="0" max="100000" step="100">
-          </div>
-          <div class="stream-config">
-            <label>Galaxy (GALX)</label>
-            <input type="number" id="stream-galaxy-count" class="glass-input" value="200" min="0" max="100000" step="100">
-          </div>
-          <div class="stream-config">
-            <label>Batch Size</label>
-            <input type="number" id="stream-batch-size" class="glass-input" value="100" min="1" max="1000">
-          </div>
-          <div class="stream-config">
-            <label>Delay (ms)</label>
-            <input type="number" id="stream-delay" class="glass-input" value="10" min="0" max="1000">
-          </div>
-        </div>
-
-        <div class="card-controls">
-          <button id="start-streaming" class="glass-btn primary">Start Stream</button>
-          <button id="stop-streaming" class="glass-btn" disabled>Stop</button>
-          <button id="clear-streaming" class="glass-btn">Reset</button>
-        </div>
-
-        <!-- Progress -->
-        <div class="stream-progress" id="stream-progress" style="display: none;">
-          <div class="progress-track">
-            <div class="progress-fill" id="stream-progress-fill"></div>
-          </div>
-          <div class="progress-label">
-            <span id="stream-processed">0</span> / <span id="stream-total">0</span> messages
-            <span class="progress-bytes">(<span id="stream-bytes">0 KB</span>)</span>
-          </div>
-        </div>
-
-        <!-- Queue Stats -->
-        <div class="queue-stats-grid" id="queue-stats">
-          <div class="queue-card monster" data-type="MONS">
-            <div class="queue-header">
-              <span class="queue-dot"></span>
-              <span class="queue-title">Monster (MONS)</span>
-            </div>
-            <div class="queue-bar">
-              <div class="queue-fill" id="queue-fill-MONS"></div>
-            </div>
-            <div class="queue-numbers">
-              <span><span id="queue-count-MONS">0</span> / <span id="queue-capacity-MONS">1000</span></span>
-              <span class="queue-total">Total: <span id="queue-total-MONS">0</span></span>
-            </div>
-          </div>
-          <div class="queue-card weapon" data-type="WEAP">
-            <div class="queue-header">
-              <span class="queue-dot"></span>
-              <span class="queue-title">Weapon (WEAP)</span>
-            </div>
-            <div class="queue-bar">
-              <div class="queue-fill" id="queue-fill-WEAP"></div>
-            </div>
-            <div class="queue-numbers">
-              <span><span id="queue-count-WEAP">0</span> / <span id="queue-capacity-WEAP">500</span></span>
-              <span class="queue-total">Total: <span id="queue-total-WEAP">0</span></span>
-            </div>
-          </div>
-          <div class="queue-card galaxy" data-type="GALX">
-            <div class="queue-header">
-              <span class="queue-dot"></span>
-              <span class="queue-title">Galaxy (GALX)</span>
-            </div>
-            <div class="queue-bar">
-              <div class="queue-fill" id="queue-fill-GALX"></div>
-            </div>
-            <div class="queue-numbers">
-              <span><span id="queue-count-GALX">0</span> / <span id="queue-capacity-GALX">200</span></span>
-              <span class="queue-total">Total: <span id="queue-total-GALX">0</span></span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Completion with Hex Explorer -->
-        <div class="completion-card" id="completion-stats" style="display: none;">
-          <div class="completion-split">
-            <!-- Stats Side -->
-            <div class="completion-stats-side">
-              <h4>Stream Complete</h4>
-              <div class="completion-grid">
-                <span>Messages</span><span id="complete-messages">--</span>
-                <span>Bytes</span><span id="complete-bytes">--</span>
-                <span>Time</span><span id="complete-time">--</span>
-                <span>Throughput</span><span id="complete-throughput">--</span>
-              </div>
-              <div class="wire-format-note">
-                <strong>Wire Format:</strong> Not encrypted - raw binary
-              </div>
-            </div>
-            <!-- Hex Explorer Side -->
-            <div class="hex-explorer-side">
-              <div class="hex-explorer-header">
-                <h4>Message Hex Explorer</h4>
-                <div class="hex-type-selector">
-                  <button class="hex-type-btn active" data-type="MONS">MONS</button>
-                  <button class="hex-type-btn" data-type="WEAP">WEAP</button>
-                  <button class="hex-type-btn" data-type="GALX">GALX</button>
-                </div>
-              </div>
-              <div class="hex-table-container">
-                <table class="hex-table" id="hex-table">
-                  <thead>
-                    <tr>
-                      <th class="hex-offset">Offset</th>
-                      <th class="hex-bytes">Hex Data</th>
-                      <th class="hex-ascii">ASCII</th>
-                    </tr>
-                  </thead>
-                  <tbody id="hex-table-body">
-                    <tr><td colspan="3" class="hex-empty">Run stream to view message data</td></tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="hex-pagination">
-                <button class="glass-btn small" id="hex-prev" disabled>&lt; Prev</button>
-                <span class="hex-page-info">Msg <span id="hex-current-msg">0</span> / <span id="hex-total-msgs">0</span></span>
-                <button class="glass-btn small" id="hex-next" disabled>Next &gt;</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Identity Section -->
-    <section id="identity-tab" class="content-section">
-      <div class="section-header">
-        <h2 class="section-title">Cryptographic Identity</h2>
-        <p class="section-desc">Generate a vCard with your public keys for secure sharing</p>
-      </div>
-
-      <div class="glass-card">
-        <div class="identity-form">
-          <div class="form-row">
-            <div class="glass-input-group">
-              <label>Prefix</label>
-              <input type="text" id="vcard-prefix" class="glass-input" placeholder="Dr.">
-            </div>
-            <div class="glass-input-group">
-              <label>First Name</label>
-              <input type="text" id="vcard-firstname" class="glass-input" placeholder="John">
-            </div>
-            <div class="glass-input-group">
-              <label>Middle Name</label>
-              <input type="text" id="vcard-middlename" class="glass-input" placeholder="Michael">
-            </div>
-            <div class="glass-input-group">
-              <label>Last Name</label>
-              <input type="text" id="vcard-lastname" class="glass-input" placeholder="Doe">
-            </div>
-            <div class="glass-input-group">
-              <label>Suffix</label>
-              <input type="text" id="vcard-suffix" class="glass-input" placeholder="Jr.">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="glass-input-group">
-              <label>Email</label>
-              <input type="email" id="vcard-email" class="glass-input" placeholder="john@example.com">
-            </div>
-            <div class="glass-input-group">
-              <label>Organization</label>
-              <input type="text" id="vcard-org" class="glass-input" placeholder="Company Name">
-            </div>
-            <div class="glass-input-group">
-              <label>Job Title</label>
-              <input type="text" id="vcard-title" class="glass-input" placeholder="Software Engineer">
-            </div>
-          </div>
-          <label class="checkbox-label">
-            <input type="checkbox" id="include-keys" checked>
-            <span>Include cryptographic public keys</span>
-          </label>
-        </div>
-
-        <button id="generate-vcard" class="glass-btn primary">Generate vCard</button>
-
-        <div id="vcard-result" class="vcard-result" style="display: none;">
-          <div class="qr-container">
-            <canvas id="qr-code"></canvas>
-          </div>
-          <div class="vcard-actions">
-            <button id="download-vcard" class="glass-btn">Download .vcf</button>
-            <button id="copy-vcard" class="glass-btn">Copy</button>
-          </div>
-          <details class="vcard-details">
-            <summary>View Raw vCard</summary>
-            <pre id="vcard-preview"></pre>
-          </details>
         </div>
       </div>
     </section>
@@ -2042,18 +1664,401 @@
               <div class="download-icon wasm">WA</div>
               <h4>WASM Compiler (flatc)</h4>
               <p>Run flatc in the browser or Node.js</p>
-              <div class="download-actions">
-                <button id="studio-download-flatc-wasm" class="glass-btn primary small">flatc.wasm</button>
-                <button id="studio-download-flatc-js" class="glass-btn small">flatc.mjs</button>
-              </div>
+              <code class="install-cmd">npm install flatc-wasm</code>
+              <a href="https://www.npmjs.com/package/flatc-wasm" target="_blank" class="glass-btn primary small">View on npm</a>
             </div>
             <div class="download-card featured">
               <div class="download-icon enc">EN</div>
               <h4>Encryption Module (WASM)</h4>
               <p>AES-256, X25519, secp256k1, P-256, Ed25519</p>
-              <div class="download-actions">
-                <button id="studio-download-enc-wasm" class="glass-btn primary small">encryption.wasm</button>
-                <button id="studio-download-enc-js" class="glass-btn small">encryption.mjs</button>
+              <code class="install-cmd">npm install flatc-wasm</code>
+              <a href="https://www.npmjs.com/package/flatc-wasm" target="_blank" class="glass-btn primary small">View on npm</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Streaming Section -->
+    <section id="streaming-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">Streaming Dispatcher</h2>
+        <p class="section-desc">Route mixed FlatBuffer messages to queues by type</p>
+      </div>
+
+      <!-- Explanation Section -->
+      <div class="glass-card streaming-explainer">
+        <div class="explainer-header">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          <h3>How Streaming Works</h3>
+        </div>
+        <div class="explainer-content">
+          <div class="explainer-columns">
+            <div class="explainer-column">
+              <h4>Message Flow</h4>
+              <p>FlatBuffers are self-describing binary messages with a 4-byte type identifier prefix. The streaming dispatcher reads this identifier and routes each message to the appropriate queue based on its type.</p>
+              <div class="explainer-code">
+                <code>[TYPE_ID:4bytes][SIZE:4bytes][FLATBUFFER:N bytes]</code>
+              </div>
+            </div>
+            <div class="explainer-column">
+              <h4>Message Queues</h4>
+              <p>Each message type has a dedicated queue with a fixed capacity. When full, oldest messages are overwritten (FIFO). This enables constant-memory streaming for high-throughput scenarios without allocations.</p>
+              <ul class="explainer-list">
+                <li><strong>O(1)</strong> insertion and removal</li>
+                <li><strong>Zero allocation</strong> after initialization</li>
+                <li><strong>Lock-free</strong> single-producer design</li>
+              </ul>
+            </div>
+            <div class="explainer-column">
+              <h4>Use Cases</h4>
+              <ul class="explainer-list">
+                <li><strong>Telemetry</strong> - Route sensor data by device type</li>
+                <li><strong>Gaming</strong> - Separate entity updates from events</li>
+                <li><strong>Finance</strong> - Dispatch orders, trades, and quotes</li>
+                <li><strong>IoT</strong> - Process heterogeneous device streams</li>
+              </ul>
+            </div>
+          </div>
+          <div class="explainer-diagram">
+            <svg viewBox="0 0 600 120" class="stream-diagram">
+              <!-- Input stream -->
+              <g class="stream-input">
+                <rect x="10" y="40" width="80" height="40" rx="4" fill="var(--white-10)" stroke="var(--glass-border)"/>
+                <text x="50" y="65" text-anchor="middle" fill="var(--white-80)" font-size="12">Mixed Stream</text>
+              </g>
+              <!-- Arrow to dispatcher -->
+              <path d="M95 60 L140 60" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <!-- Dispatcher -->
+              <g class="stream-dispatcher">
+                <rect x="145" y="30" width="100" height="60" rx="4" fill="var(--primary)" fill-opacity="0.2" stroke="var(--primary)"/>
+                <text x="195" y="55" text-anchor="middle" fill="var(--white)" font-size="11">Dispatcher</text>
+                <text x="195" y="70" text-anchor="middle" fill="var(--white-60)" font-size="9">Read Type ID</text>
+              </g>
+              <!-- Arrows to buffers -->
+              <path d="M250 45 L300 25" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <path d="M250 60 L300 60" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <path d="M250 75 L300 95" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <!-- Message queues -->
+              <g class="queue-viz monster">
+                <rect x="305" y="10" width="120" height="30" rx="4" fill="rgba(239, 68, 68, 0.2)" stroke="rgb(239, 68, 68)"/>
+                <text x="365" y="30" text-anchor="middle" fill="var(--white-80)" font-size="10">Monster Queue</text>
+              </g>
+              <g class="queue-viz weapon">
+                <rect x="305" y="45" width="120" height="30" rx="4" fill="rgba(59, 130, 246, 0.2)" stroke="rgb(59, 130, 246)"/>
+                <text x="365" y="65" text-anchor="middle" fill="var(--white-80)" font-size="10">Weapon Queue</text>
+              </g>
+              <g class="queue-viz galaxy">
+                <rect x="305" y="80" width="120" height="30" rx="4" fill="rgba(168, 85, 247, 0.2)" stroke="rgb(168, 85, 247)"/>
+                <text x="365" y="100" text-anchor="middle" fill="var(--white-80)" font-size="10">Galaxy Queue</text>
+              </g>
+              <!-- Arrows to consumers -->
+              <path d="M430 25 L480 25" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <path d="M430 60 L480 60" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <path d="M430 95 L480 95" stroke="var(--white-40)" stroke-width="2" marker-end="url(#arrowhead)"/>
+              <!-- Consumers -->
+              <g class="stream-consumers">
+                <rect x="485" y="10" width="100" height="100" rx="4" fill="var(--white-05)" stroke="var(--glass-border)"/>
+                <text x="535" y="35" text-anchor="middle" fill="var(--white-80)" font-size="10">Consumers</text>
+                <text x="535" y="55" text-anchor="middle" fill="var(--white-60)" font-size="9">Process by type</text>
+                <text x="535" y="70" text-anchor="middle" fill="var(--white-60)" font-size="9">at own pace</text>
+              </g>
+              <!-- Arrowhead marker -->
+              <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                  <polygon points="0 0, 10 3.5, 0 7" fill="var(--white-40)"/>
+                </marker>
+              </defs>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- API Documentation -->
+      <div class="glass-card streaming-api-docs">
+        <h3 class="card-subtitle">API Reference</h3>
+
+        <!-- Wire Format -->
+        <div class="api-section">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+            Wire Format
+          </h4>
+          <div class="wire-format">
+            <div class="wire-format-diagram">
+              <div class="wire-segment size">
+                <div class="wire-segment-box">SIZE</div>
+                <div class="wire-segment-label">4 bytes (LE)</div>
+              </div>
+              <div class="wire-segment fileid">
+                <div class="wire-segment-box">FILE_ID</div>
+                <div class="wire-segment-label">4 bytes</div>
+              </div>
+              <div class="wire-segment data">
+                <div class="wire-segment-box">FLATBUFFER DATA</div>
+                <div class="wire-segment-label">SIZE - 4 bytes</div>
+              </div>
+            </div>
+            <p class="wire-format-desc">
+              Each message is size-prefixed (little-endian) followed by a 4-byte file identifier for routing, then the FlatBuffer payload.
+            </p>
+          </div>
+        </div>
+
+        <!-- Memory Layout -->
+        <div class="api-section">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <line x1="3" y1="9" x2="21" y2="9"/>
+              <line x1="9" y1="21" x2="9" y2="9"/>
+            </svg>
+            Memory Layout
+          </h4>
+          <div class="memory-layout">
+            <p class="memory-desc">Messages are stored in contiguous ring buffers in WASM linear memory. Each registered type gets its own buffer:</p>
+            <table class="memory-table">
+              <thead>
+                <tr>
+                  <th>Component</th>
+                  <th>Location</th>
+                  <th>Access Method</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Ring Buffer Base</td>
+                  <td><code>bufferPtr</code> from registration</td>
+                  <td><code>getTypeInfo(fileId).bufferPtr</code></td>
+                </tr>
+                <tr>
+                  <td>Message N</td>
+                  <td><code>bufferPtr + (N * messageSize)</code></td>
+                  <td><code>getMessage(fileId, N)</code></td>
+                </tr>
+                <tr>
+                  <td>Latest Message</td>
+                  <td><code>bufferPtr + (head * messageSize)</code></td>
+                  <td><code>getLatestMessage(fileId)</code></td>
+                </tr>
+                <tr>
+                  <td>Raw Memory View</td>
+                  <td><code>HEAPU8.subarray(ptr, ptr + size)</code></td>
+                  <td><code>new Uint8Array(wasm.HEAPU8.buffer, ptr, size)</code></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="memory-note">
+              <strong>Zero-Copy Access:</strong> <code>getMessage()</code> returns a <code>Uint8Array</code> view directly into WASM memory - no data is copied.
+              This view is valid until the next <code>pushBytes()</code> call that overwrites the ring buffer slot.
+            </div>
+          </div>
+        </div>
+
+        <!-- Initialization Example -->
+        <div class="api-section">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="4 17 10 11 4 5"/>
+              <line x1="12" y1="19" x2="20" y2="19"/>
+            </svg>
+            Initialization
+          </h4>
+          <div class="code-example">
+            <div class="example-tabs extended" data-example-group="streaming-init">
+              <button class="example-tab active" data-lang="cpp">C++</button>
+              <button class="example-tab" data-lang="ts">TypeScript</button>
+              <button class="example-tab" data-lang="js">JavaScript</button>
+              <button class="example-tab" data-lang="rust">Rust</button>
+              <button class="example-tab" data-lang="go">Go</button>
+              <button class="example-tab" data-lang="python">Python</button>
+            </div>
+            <pre id="streaming-init-code" class="code-display"></pre>
+          </div>
+        </div>
+
+        <!-- Streaming Example -->
+        <div class="api-section">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+            Streaming Data
+          </h4>
+          <div class="code-example">
+            <div class="example-tabs extended" data-example-group="streaming-push">
+              <button class="example-tab active" data-lang="cpp">C++</button>
+              <button class="example-tab" data-lang="ts">TypeScript</button>
+              <button class="example-tab" data-lang="js">JavaScript</button>
+              <button class="example-tab" data-lang="rust">Rust</button>
+              <button class="example-tab" data-lang="go">Go</button>
+              <button class="example-tab" data-lang="python">Python</button>
+            </div>
+            <pre id="streaming-push-code" class="code-display"></pre>
+          </div>
+        </div>
+
+        <!-- Access Patterns Example -->
+        <div class="api-section">
+          <h4>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            Access Patterns
+          </h4>
+          <div class="code-example">
+            <div class="example-tabs extended" data-example-group="streaming-access">
+              <button class="example-tab active" data-lang="cpp">C++</button>
+              <button class="example-tab" data-lang="ts">TypeScript</button>
+              <button class="example-tab" data-lang="js">JavaScript</button>
+              <button class="example-tab" data-lang="rust">Rust</button>
+              <button class="example-tab" data-lang="go">Go</button>
+              <button class="example-tab" data-lang="python">Python</button>
+            </div>
+            <pre id="streaming-access-code" class="code-display"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Demo -->
+      <div class="glass-card">
+        <h3 class="card-subtitle">Interactive Demo</h3>
+        <div class="streaming-grid">
+          <div class="stream-config">
+            <label>Monster (MONS)</label>
+            <input type="number" id="stream-monster-count" class="glass-input" value="1000" min="0" max="100000" step="100">
+          </div>
+          <div class="stream-config">
+            <label>Weapon (WEAP)</label>
+            <input type="number" id="stream-weapon-count" class="glass-input" value="500" min="0" max="100000" step="100">
+          </div>
+          <div class="stream-config">
+            <label>Galaxy (GALX)</label>
+            <input type="number" id="stream-galaxy-count" class="glass-input" value="200" min="0" max="100000" step="100">
+          </div>
+          <div class="stream-config">
+            <label>Batch Size</label>
+            <input type="number" id="stream-batch-size" class="glass-input" value="100" min="1" max="1000">
+          </div>
+          <div class="stream-config">
+            <label>Delay (ms)</label>
+            <input type="number" id="stream-delay" class="glass-input" value="10" min="0" max="1000">
+          </div>
+        </div>
+
+        <div class="card-controls">
+          <button id="start-streaming" class="glass-btn primary">Start Stream</button>
+          <button id="stop-streaming" class="glass-btn" disabled>Stop</button>
+          <button id="clear-streaming" class="glass-btn">Reset</button>
+        </div>
+
+        <!-- Progress -->
+        <div class="stream-progress" id="stream-progress" style="display: none;">
+          <div class="progress-track">
+            <div class="progress-fill" id="stream-progress-fill"></div>
+          </div>
+          <div class="progress-label">
+            <span id="stream-processed">0</span> / <span id="stream-total">0</span> messages
+            <span class="progress-bytes">(<span id="stream-bytes">0 KB</span>)</span>
+          </div>
+        </div>
+
+        <!-- Queue Stats -->
+        <div class="queue-stats-grid" id="queue-stats">
+          <div class="queue-card monster" data-type="MONS">
+            <div class="queue-header">
+              <span class="queue-dot"></span>
+              <span class="queue-title">Monster (MONS)</span>
+            </div>
+            <div class="queue-bar">
+              <div class="queue-fill" id="queue-fill-MONS"></div>
+            </div>
+            <div class="queue-numbers">
+              <span><span id="queue-count-MONS">0</span> / <span id="queue-capacity-MONS">1000</span></span>
+              <span class="queue-total">Total: <span id="queue-total-MONS">0</span></span>
+            </div>
+          </div>
+          <div class="queue-card weapon" data-type="WEAP">
+            <div class="queue-header">
+              <span class="queue-dot"></span>
+              <span class="queue-title">Weapon (WEAP)</span>
+            </div>
+            <div class="queue-bar">
+              <div class="queue-fill" id="queue-fill-WEAP"></div>
+            </div>
+            <div class="queue-numbers">
+              <span><span id="queue-count-WEAP">0</span> / <span id="queue-capacity-WEAP">500</span></span>
+              <span class="queue-total">Total: <span id="queue-total-WEAP">0</span></span>
+            </div>
+          </div>
+          <div class="queue-card galaxy" data-type="GALX">
+            <div class="queue-header">
+              <span class="queue-dot"></span>
+              <span class="queue-title">Galaxy (GALX)</span>
+            </div>
+            <div class="queue-bar">
+              <div class="queue-fill" id="queue-fill-GALX"></div>
+            </div>
+            <div class="queue-numbers">
+              <span><span id="queue-count-GALX">0</span> / <span id="queue-capacity-GALX">200</span></span>
+              <span class="queue-total">Total: <span id="queue-total-GALX">0</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Completion with Hex Explorer -->
+        <div class="completion-card" id="completion-stats" style="display: none;">
+          <div class="completion-split">
+            <!-- Stats Side -->
+            <div class="completion-stats-side">
+              <h4>Stream Complete</h4>
+              <div class="completion-grid">
+                <span>Messages</span><span id="complete-messages">--</span>
+                <span>Bytes</span><span id="complete-bytes">--</span>
+                <span>Time</span><span id="complete-time">--</span>
+                <span>Throughput</span><span id="complete-throughput">--</span>
+              </div>
+              <div class="wire-format-note">
+                <strong>Wire Format:</strong> Not encrypted - raw binary
+              </div>
+            </div>
+            <!-- Hex Explorer Side -->
+            <div class="hex-explorer-side">
+              <div class="hex-explorer-header">
+                <h4>Message Hex Explorer</h4>
+                <div class="hex-type-selector">
+                  <button class="hex-type-btn active" data-type="MONS">MONS</button>
+                  <button class="hex-type-btn" data-type="WEAP">WEAP</button>
+                  <button class="hex-type-btn" data-type="GALX">GALX</button>
+                </div>
+              </div>
+              <div class="hex-table-container">
+                <table class="hex-table" id="hex-table">
+                  <thead>
+                    <tr>
+                      <th class="hex-offset">Offset</th>
+                      <th class="hex-bytes">Hex Data</th>
+                      <th class="hex-ascii">ASCII</th>
+                    </tr>
+                  </thead>
+                  <tbody id="hex-table-body">
+                    <tr><td colspan="3" class="hex-empty">Run stream to view message data</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="hex-pagination">
+                <button class="glass-btn small" id="hex-prev" disabled>&lt; Prev</button>
+                <span class="hex-page-info">Msg <span id="hex-current-msg">0</span> / <span id="hex-total-msgs">0</span></span>
+                <button class="glass-btn small" id="hex-next" disabled>Next &gt;</button>
               </div>
             </div>
           </div>
@@ -2140,7 +2145,7 @@
                 <h4>Schema (FBS)</h4>
               </div>
               <div class="pane-body code-editor-body">
-                <textarea id="aligned-schema-input" class="code-textarea" spellcheck="false" placeholder="// Example schema
+                <textarea id="aligned-schema-input" class="code-textarea" spellcheck="false">// Example schema
 namespace MyGame;
 
 struct Vec3 {
@@ -2154,7 +2159,7 @@ table Entity {
   health:int;
   mana:int;
   name:string;  // Fixed-length if string length is set
-}"></textarea>
+}</textarea>
               </div>
               <div class="pane-footer">
                 <div class="aligned-options">
@@ -2437,10 +2442,21 @@ class EphemerisReader {
         </div>
       </div>
 
+      <!-- Installation Card -->
+      <div class="glass-card install-card">
+        <h3 class="card-subtitle">Installation</h3>
+        <p class="card-desc">Install via npm to get the FlatBuffers compiler with encryption support:</p>
+        <div class="install-box">
+          <code class="install-code">npm install flatc-wasm</code>
+          <button class="copy-install-code-btn glass-btn small" data-copy="npm install flatc-wasm">Copy</button>
+        </div>
+        <p class="install-note">Works in Node.js, browsers, and any JavaScript runtime with WASM support.</p>
+      </div>
+
       <!-- Runtime Cards Grid -->
       <div class="glass-card">
-        <h3 class="card-subtitle">Available Runtimes</h3>
-        <p class="card-desc">Download pre-built bindings and template projects for your language:</p>
+        <h3 class="card-subtitle">Language Bindings</h3>
+        <p class="card-desc">Example integrations for different languages and runtimes:</p>
 
         <div class="runtimes-grid">
           <!-- Go Card -->
@@ -2669,10 +2685,10 @@ class EphemerisReader {
         </div>
       </div>
 
-      <!-- Core Downloads Card -->
+      <!-- Core Module Card -->
       <div class="glass-card">
         <h3 class="card-subtitle">Core WASM Module</h3>
-        <p class="card-desc">Download the core encryption module for manual integration:</p>
+        <p class="card-desc">The npm package includes everything you need:</p>
 
         <div class="core-downloads">
           <div class="core-download-item">
@@ -2681,7 +2697,7 @@ class EphemerisReader {
               <h4>flatc-encryption.wasm</h4>
               <p>Core encryption module compiled from Crypto++ (~1.2MB)</p>
             </div>
-            <button id="download-core-wasm" class="glass-btn primary">Download .wasm</button>
+            <button id="download-core-wasm" class="glass-btn primary">View on npm</button>
           </div>
           <div class="core-download-item">
             <div class="download-icon ts">JS</div>
@@ -2689,7 +2705,7 @@ class EphemerisReader {
               <h4>encryption.mjs</h4>
               <p>JavaScript loader with TypeScript definitions</p>
             </div>
-            <button id="download-core-loader" class="glass-btn">Download .mjs</button>
+            <button id="download-core-loader" class="glass-btn">View on npm</button>
           </div>
         </div>
       </div>
@@ -2777,7 +2793,11 @@ class EphemerisReader {
             </div>
             <div class="hd-control-group">
               <label>Account</label>
-              <input type="text" id="hd-account" class="glass-input compact hd-account-input" value="0" pattern="[0-9]*" inputmode="numeric">
+              <input type="number" id="hd-account" class="glass-input compact hd-num-input" value="0" min="0" step="1">
+            </div>
+            <div class="hd-control-group">
+              <label>Index</label>
+              <input type="number" id="hd-index" class="glass-input compact hd-num-input" value="0" min="0" step="1">
             </div>
           </div>
 

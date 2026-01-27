@@ -923,19 +923,19 @@ function generateAddressForCoin(publicKey, coinType) {
 }
 
 /**
- * Build signing path: m/44'/{coin}'/{account}'/0'/0'
+ * Build signing path: m/44'/{coin}'/{account}'/0'/{index}'
  * Change index 0 = signing keys (external)
  */
-function buildSigningPath(coin, account) {
-  return `m/44'/${coin}'/${account}'/0'/0'`;
+function buildSigningPath(coin, account, index) {
+  return `m/44'/${coin}'/${account}'/0'/${index}'`;
 }
 
 /**
- * Build encryption path: m/44'/{coin}'/{account}'/1'/0'
+ * Build encryption path: m/44'/{coin}'/{account}'/1'/{index}'
  * Change index 1 = encryption keys (internal)
  */
-function buildEncryptionPath(coin, account) {
-  return `m/44'/${coin}'/${account}'/1'/0'`;
+function buildEncryptionPath(coin, account, index) {
+  return `m/44'/${coin}'/${account}'/1'/${index}'`;
 }
 
 /**
@@ -944,9 +944,10 @@ function buildEncryptionPath(coin, account) {
 function updatePathDisplay() {
   const coin = $('hd-coin').value;
   const account = $('hd-account').value || '0';
+  const index = $('hd-index')?.value || '0';
 
-  const signingPath = buildSigningPath(coin, account);
-  const encryptionPath = buildEncryptionPath(coin, account);
+  const signingPath = buildSigningPath(coin, account, index);
+  const encryptionPath = buildEncryptionPath(coin, account, index);
 
   const signingPathEl = $('signing-path');
   const encryptionPathEl = $('encryption-path');
@@ -977,13 +978,14 @@ async function deriveAndDisplayAddress() {
 
   const coin = $('hd-coin').value;
   const account = $('hd-account').value || '0';
+  const index = $('hd-index')?.value || '0';
   const coinType = parseInt(coin);
   const coinOption = $('hd-coin').selectedOptions[0];
   const cryptoName = coinOption.dataset.name || 'Unknown';
   const cryptoSymbol = coinOption.dataset.symbol || '???';
 
-  const signingPath = buildSigningPath(coin, account);
-  const encryptionPath = buildEncryptionPath(coin, account);
+  const signingPath = buildSigningPath(coin, account, index);
+  const encryptionPath = buildEncryptionPath(coin, account, index);
 
   console.log('Deriving signing path:', signingPath);
   console.log('Deriving encryption path:', encryptionPath);
@@ -1052,6 +1054,7 @@ async function deriveAndDisplayAddress() {
 function quickDerive(coinType) {
   $('hd-coin').value = coinType;
   $('hd-account').value = '0';
+  if ($('hd-index')) $('hd-index').value = '0';
   updatePathDisplay();
   deriveAndDisplayAddress();
 }
@@ -4044,6 +4047,18 @@ function setupMainAppHandlers() {
     });
   });
 
+  // NPM install copy button
+  document.querySelector('.copy-install-btn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    try {
+      await navigator.clipboard.writeText('npm install flatc-wasm');
+      btn.classList.add('copied');
+      setTimeout(() => btn.classList.remove('copied'), 1500);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  });
+
   // Mobile menu toggle
   const mobileMenuBtn = $('nav-menu-btn');
   const mobileMenu = $('nav-mobile-menu');
@@ -4105,11 +4120,10 @@ function setupMainAppHandlers() {
   });
 
   // Update active nav link based on scroll position and update URL hash
-  const mainApp = $('main-app');
-  if (mainApp) {
-    const sections = document.querySelectorAll('.content-section');
-    const navLinks = document.querySelectorAll('.nav-link[data-tab]');
+  const sections = document.querySelectorAll('.content-section');
+  const navLinks = document.querySelectorAll('.nav-link[data-tab]');
 
+  if (sections.length > 0 && navLinks.length > 0) {
     // Map sub-sections to main nav sections
     const sectionToNav = {
       'security': 'security',
@@ -4125,17 +4139,28 @@ function setupMainAppHandlers() {
     };
 
     let lastHash = '';
-    mainApp.addEventListener('scroll', () => {
-      let currentSection = '';
-      const scrollTop = mainApp.scrollTop;
+    window.addEventListener('scroll', () => {
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const viewportHeight = window.innerHeight;
 
-      sections.forEach(section => {
-        const sectionTop = section.offsetTop - mainApp.offsetTop;
-        const sectionHeight = section.offsetHeight;
-        if (scrollTop >= sectionTop - 100 && scrollTop < sectionTop + sectionHeight - 100) {
+      // Find the section that contains the point 1/3 down the viewport
+      const checkPoint = scrollTop + viewportHeight * 0.33;
+
+      let currentSection = '';
+      for (const section of sections) {
+        const sectionTop = section.offsetTop;
+        const sectionBottom = sectionTop + section.offsetHeight;
+
+        if (checkPoint >= sectionTop && checkPoint < sectionBottom) {
           currentSection = section.id.replace('-tab', '');
+          break;
         }
-      });
+      }
+
+      // Fallback to first section if at very top
+      if (!currentSection && scrollTop < 100) {
+        currentSection = 'overview';
+      }
 
       // Map to nav section
       const navSection = sectionToNav[currentSection] || currentSection;
@@ -4158,6 +4183,7 @@ function setupMainAppHandlers() {
   // HD Wallet Derivation handlers
   const hdCoin = $('hd-coin');
   const hdAccount = $('hd-account');
+  const hdIndex = $('hd-index');
 
   // Auto-derive on any change (with debounce for input fields)
   let deriveTimeout = null;
@@ -4177,14 +4203,16 @@ function setupMainAppHandlers() {
     hdCoin.addEventListener('change', autoDerive);
   }
 
-  // Account input - restrict to digits only
+  // Account input
   if (hdAccount) {
-    hdAccount.addEventListener('input', (e) => {
-      // Only allow digits
-      e.target.value = e.target.value.replace(/[^0-9]/g, '');
-      autoDerive();
-    });
+    hdAccount.addEventListener('input', autoDerive);
     hdAccount.addEventListener('change', autoDerive);
+  }
+
+  // Index input
+  if (hdIndex) {
+    hdIndex.addEventListener('input', autoDerive);
+    hdIndex.addEventListener('change', autoDerive);
   }
 
   // Copy buttons for keys
@@ -4642,6 +4670,9 @@ async function init() {
           });
         }, 100);
       }
+    } else {
+      // Trigger scroll handler to set initial hash
+      setTimeout(() => window.dispatchEvent(new Event('scroll')), 200);
     }
 
     // Auto-login if we have saved PKI keys (skip login screen)
@@ -5701,18 +5732,18 @@ function initStudio() {
     }
   });
 
-  // Downloads
+  // Downloads - redirect to npm package
   $('studio-download-flatc-wasm')?.addEventListener('click', () => {
-    downloadFile('../dist/flatc.wasm', 'flatc.wasm');
+    window.open('https://www.npmjs.com/package/flatc-wasm', '_blank');
   });
   $('studio-download-flatc-js')?.addEventListener('click', () => {
-    downloadFile('../src/runner.mjs', 'flatc-runner.mjs');
+    window.open('https://www.npmjs.com/package/flatc-wasm', '_blank');
   });
   $('studio-download-enc-wasm')?.addEventListener('click', () => {
-    downloadFile('../dist/flatc-encryption.wasm', 'flatc-encryption.wasm');
+    window.open('https://www.npmjs.com/package/flatc-wasm', '_blank');
   });
   $('studio-download-enc-js')?.addEventListener('click', () => {
-    downloadFile('../src/encryption.mjs', 'encryption.mjs');
+    window.open('https://www.npmjs.com/package/flatc-wasm', '_blank');
   });
 
   // Runtime download handlers
@@ -7426,89 +7457,40 @@ function crc32(data) {
   return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
-async function downloadFile(path, filename) {
-  try {
-    const response = await fetch(path);
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch (err) {
-    console.error('Download failed:', err);
-    alert('Download failed: ' + err.message);
-  }
-}
-
 // =============================================================================
 // WASM Runtime Downloads
 // =============================================================================
 
 function initRuntimeDownloads() {
-  // Runtime binding download handlers
+  // Copy install command button
+  document.querySelector('.copy-install-code-btn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const text = btn.dataset.copy;
+    try {
+      await navigator.clipboard.writeText(text);
+      const originalText = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = originalText, 1500);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  });
+
+  // Runtime binding download handlers - redirect to npm
   document.querySelectorAll('[data-download]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const downloadType = btn.dataset.download;
-      await downloadRuntimeBindings(downloadType);
+    btn.addEventListener('click', () => {
+      window.open('https://www.npmjs.com/package/flatc-wasm', '_blank');
     });
   });
 
-  // Core module downloads
+  // Core module downloads - redirect to npm
   $('download-core-wasm')?.addEventListener('click', () => {
-    downloadFile('../dist/flatc-encryption.wasm', 'flatc-encryption.wasm');
+    window.open('https://www.npmjs.com/package/flatc-wasm', '_blank');
   });
 
   $('download-core-loader')?.addEventListener('click', () => {
-    downloadFile('../src/encryption.mjs', 'encryption.mjs');
+    window.open('https://www.npmjs.com/package/flatc-wasm', '_blank');
   });
-}
-
-async function downloadRuntimeBindings(type) {
-  // For now, download the docs for that language and the core WASM module
-  // In a full implementation, this would create a zip with all necessary files
-  const downloads = {
-    'go-bindings': {
-      wasm: '../dist/flatc-encryption.wasm',
-      filename: 'flatc-encryption-go.wasm'
-    },
-    'python-bindings': {
-      wasm: '../dist/flatc-encryption.wasm',
-      filename: 'flatc-encryption-python.wasm'
-    },
-    'rust-bindings': {
-      wasm: '../dist/flatc-encryption.wasm',
-      filename: 'flatc-encryption-rust.wasm'
-    },
-    'java-bindings': {
-      wasm: '../dist/flatc-encryption.wasm',
-      filename: 'flatc-encryption-java.wasm'
-    },
-    'csharp-bindings': {
-      wasm: '../dist/flatc-encryption.wasm',
-      filename: 'flatc-encryption-csharp.wasm'
-    },
-    'swift-bindings': {
-      wasm: '../dist/flatc-encryption.wasm',
-      filename: 'flatc-encryption-swift.wasm'
-    },
-    'nodejs-bindings': {
-      wasm: '../dist/flatc-encryption.wasm',
-      filename: 'flatc-encryption-nodejs.wasm'
-    },
-    'browser-bindings': {
-      wasm: '../dist/flatc-encryption.wasm',
-      filename: 'flatc-encryption-browser.wasm'
-    }
-  };
-
-  const config = downloads[type];
-  if (config) {
-    await downloadFile(config.wasm, config.filename);
-  }
 }
 
 // =============================================================================

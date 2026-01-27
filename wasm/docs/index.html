@@ -20,6 +20,9 @@
     <div class="video-overlay"></div>
   </div>
 
+  <!-- Grid Animation Background -->
+  <canvas id="grid-canvas" class="grid-background"></canvas>
+
   <!-- Navigation -->
   <nav class="nav-bar">
     <div class="nav-content">
@@ -31,14 +34,9 @@
       </a>
       <div class="nav-links" id="demo-nav-links">
         <a href="#overview" class="nav-link active" data-tab="overview">Overview</a>
-        <a href="#pki" class="nav-link" data-tab="pki">PKI</a>
-        <a href="#adversarial" class="nav-link" data-tab="adversarial">Security</a>
-        <a href="#fields" class="nav-link" data-tab="fields">Field Encryption</a>
+        <a href="#security" class="nav-link" data-tab="security">Security</a>
         <a href="#schema" class="nav-link" data-tab="schema">Schema</a>
-        <a href="#streaming" class="nav-link" data-tab="streaming">Streaming</a>
-        <a href="#identity" class="nav-link" data-tab="identity">Identity</a>
         <a href="#studio" class="nav-link" data-tab="studio">Studio</a>
-        <a href="#aligned" class="nav-link" data-tab="aligned">Aligned</a>
         <a href="#runtimes" class="nav-link" data-tab="runtimes">Runtimes</a>
         <span class="nav-divider"></span>
         <a href="https://flatbuffers.dev" target="_blank" class="nav-link nav-link-external">Docs</a>
@@ -67,20 +65,15 @@
   <!-- Mobile Menu -->
   <div id="nav-mobile-menu" class="nav-mobile-menu">
     <a href="#overview" class="nav-link" data-tab="overview">Overview</a>
-    <a href="#pki" class="nav-link" data-tab="pki">PKI</a>
-    <a href="#adversarial" class="nav-link" data-tab="adversarial">Security</a>
-    <a href="#fields" class="nav-link" data-tab="fields">Field Encryption</a>
+    <a href="#security" class="nav-link" data-tab="security">Security</a>
     <a href="#schema" class="nav-link" data-tab="schema">Schema</a>
-    <a href="#streaming" class="nav-link" data-tab="streaming">Streaming</a>
-    <a href="#identity" class="nav-link" data-tab="identity">Identity</a>
     <a href="#studio" class="nav-link" data-tab="studio">Studio</a>
-    <a href="#aligned" class="nav-link" data-tab="aligned">Aligned</a>
     <a href="#runtimes" class="nav-link" data-tab="runtimes">Runtimes</a>
     <span class="nav-divider"></span>
     <a href="https://flatbuffers.dev" target="_blank" class="nav-link nav-link-external">Docs</a>
     <span class="nav-divider"></span>
-    <button id="mobile-login" class="nav-link mobile-auth-btn">Login</button>
-    <button id="mobile-logout" class="nav-link mobile-auth-btn" style="display: none;">Logout</button>
+    <button id="mobile-login" class="glass-btn primary mobile-auth-btn">Login</button>
+    <button id="mobile-logout" class="glass-btn mobile-auth-btn" style="display: none;">Logout</button>
   </div>
 
   <!-- Hero / Login Section -->
@@ -301,7 +294,7 @@
     </section>
 
     <!-- PKI Section (Alice/Bob Public Key Encryption) -->
-    <section id="pki-tab" class="content-section">
+    <section id="security-tab" class="content-section">
       <div class="section-header">
         <h2 class="section-title">Public Key Infrastructure</h2>
         <p class="section-desc">Alice encrypts data with Bob's public key. Only Bob can decrypt with his private key.</p>

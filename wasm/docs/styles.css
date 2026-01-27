@@ -112,6 +112,18 @@ body {
   );
 }
 
+/* Grid Animation Background */
+.grid-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.4;
+}
+
 /* =============================================================================
    Navigation
    ============================================================================= */
@@ -279,24 +291,9 @@ body {
 
 /* Mobile auth buttons in menu */
 .mobile-auth-btn {
-  background: none;
-  border: none;
-  color: var(--white-80);
-  font-size: 18px;
-  padding: 16px 0;
-  text-align: left;
-  cursor: pointer;
-  transition: color 0.2s;
-  width: 100%;
-  border-bottom: 1px solid var(--glass-border);
-}
-
-.mobile-auth-btn:hover {
-  color: var(--white);
-}
-
-.mobile-auth-btn:last-child {
-  border-bottom: none;
+  margin: 12px 0;
+  width: auto;
+  justify-content: center;
 }
 
 /* =============================================================================
@@ -6905,6 +6902,7 @@ details[open] .collapse-icon {
 }
 
 .pattern-content .code-display {
+  position: static;
   margin: 0;
   border-radius: 0 0 8px 8px;
   font-size: 12px;
@@ -6912,6 +6910,25 @@ details[open] .collapse-icon {
   padding: 16px;
   max-height: 350px;
   overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 768px) {
+  .pattern-tabs {
+    flex-direction: column;
+  }
+
+  .pattern-tab {
+    width: 100%;
+    text-align: center;
+  }
+
+  .pattern-content .code-display {
+    font-size: 10px;
+    padding: 12px;
+    max-height: 300px;
+  }
 }
 
 .code-example .code-display {

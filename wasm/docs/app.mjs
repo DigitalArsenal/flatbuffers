@@ -4090,12 +4090,27 @@ function setupMainAppHandlers() {
     });
   });
 
-  // Update active nav link based on scroll position
+  // Update active nav link based on scroll position and update URL hash
   const mainApp = $('main-app');
   if (mainApp) {
     const sections = document.querySelectorAll('.content-section');
     const navLinks = document.querySelectorAll('.nav-link[data-tab]');
 
+    // Map sub-sections to main nav sections
+    const sectionToNav = {
+      'security': 'security',
+      'adversarial': 'security',
+      'fields': 'security',
+      'identity': 'security',
+      'streaming': 'runtimes',
+      'aligned': 'runtimes',
+      'runtimes': 'runtimes',
+      'overview': 'overview',
+      'schema': 'schema',
+      'studio': 'studio'
+    };
+
+    let lastHash = '';
     mainApp.addEventListener('scroll', () => {
       let currentSection = '';
       const scrollTop = mainApp.scrollTop;
@@ -4108,9 +4123,18 @@ function setupMainAppHandlers() {
         }
       });
 
+      // Map to nav section
+      const navSection = sectionToNav[currentSection] || currentSection;
+
+      // Update URL hash if changed
+      if (navSection && navSection !== lastHash) {
+        lastHash = navSection;
+        history.replaceState(null, '', `#${navSection}`);
+      }
+
       navLinks.forEach(link => {
         link.classList.remove('active');
-        if (link.dataset.tab === currentSection) {
+        if (link.dataset.tab === navSection) {
           link.classList.add('active');
         }
       });
@@ -4409,6 +4433,104 @@ function initVideoBackground() {
 }
 
 // =============================================================================
+// Grid Animation Background
+// =============================================================================
+
+function initGridAnimation() {
+  const canvas = $('grid-canvas');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  const gridSize = 40; // Size of each grid cell
+  const dotRadius = 1.5;
+
+  // Numbers that travel along grid lines
+  const travelers = [];
+  const maxTravelers = 30;
+
+  // Resize canvas to match window
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Create a traveler (number moving along grid lines)
+  function createTraveler() {
+    const horizontal = Math.random() > 0.5;
+    const value = Math.floor(Math.random() * 256).toString(16).padStart(2, '0').toUpperCase();
+
+    if (horizontal) {
+      // Move along a horizontal line
+      const row = Math.floor(Math.random() * (canvas.height / gridSize)) * gridSize;
+      return {
+        x: Math.random() > 0.5 ? -20 : canvas.width + 20,
+        y: row,
+        dx: (Math.random() > 0.5 ? 1 : -1) * (0.3 + Math.random() * 0.4),
+        dy: 0,
+        value,
+        opacity: 0.3 + Math.random() * 0.4
+      };
+    } else {
+      // Move along a vertical line
+      const col = Math.floor(Math.random() * (canvas.width / gridSize)) * gridSize;
+      return {
+        x: col,
+        y: Math.random() > 0.5 ? -20 : canvas.height + 20,
+        dx: 0,
+        dy: (Math.random() > 0.5 ? 1 : -1) * (0.3 + Math.random() * 0.4),
+        value,
+        opacity: 0.3 + Math.random() * 0.4
+      };
+    }
+  }
+
+  // Initialize travelers
+  for (let i = 0; i < maxTravelers; i++) {
+    travelers.push(createTraveler());
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw dotted grid
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    for (let x = 0; x <= canvas.width; x += gridSize) {
+      for (let y = 0; y <= canvas.height; y += gridSize) {
+        ctx.beginPath();
+        ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Update and draw travelers
+    ctx.font = '10px monospace';
+    for (let i = 0; i < travelers.length; i++) {
+      const t = travelers[i];
+
+      // Update position
+      t.x += t.dx;
+      t.y += t.dy;
+
+      // Check if out of bounds and reset
+      if (t.x < -30 || t.x > canvas.width + 30 || t.y < -30 || t.y > canvas.height + 30) {
+        travelers[i] = createTraveler();
+        continue;
+      }
+
+      // Draw number
+      ctx.fillStyle = `rgba(100, 200, 255, ${t.opacity})`;
+      ctx.fillText(t.value, t.x - 6, t.y + 3);
+    }
+
+    requestAnimationFrame(draw);
+  }
+
+  draw();
+}
+
+// =============================================================================
 // Initialization
 // =============================================================================
 
@@ -4418,6 +4540,9 @@ async function init() {
 
   // Initialize video background immediately
   initVideoBackground();
+
+  // Initialize grid animation
+  initGridAnimation();
 
   try {
     // Load encryption WASM
@@ -4468,6 +4593,24 @@ async function init() {
     setupLoginHandlers();
     setupMainAppHandlers();
     setupHelpModals();
+
+    // Handle initial hash navigation
+    const initialHash = window.location.hash.slice(1);
+    if (initialHash) {
+      const tabEl = $(`${initialHash}-tab`);
+      if (tabEl) {
+        setTimeout(() => {
+          tabEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          // Update active nav link
+          document.querySelectorAll('.nav-link[data-tab]').forEach(link => {
+            link.classList.remove('active');
+            if (link.dataset.tab === initialHash) {
+              link.classList.add('active');
+            }
+          });
+        }, 100);
+      }
+    }
 
     // Auto-login if we have saved PKI keys (skip login screen)
     if (hasSavedKeys) {

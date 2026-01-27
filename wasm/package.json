@@ -77,12 +77,7 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "peerDependencies": {
-    "@scure/bip32": "^2.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@scure/bip32": {
-      "optional": true
-    }
+  "dependencies": {
+    "hd-wallet-wasm": "^0.1.5"
   }
 }

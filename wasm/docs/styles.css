@@ -5884,7 +5884,6 @@ details[open] .collapse-icon {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--white-60);
-  margin-bottom: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

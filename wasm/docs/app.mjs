@@ -4139,9 +4139,25 @@ function setupMainAppHandlers() {
     };
 
     let lastHash = '';
+    const heroSection = $('hero-section');
+
     window.addEventListener('scroll', () => {
       const scrollTop = window.scrollY || document.documentElement.scrollTop;
       const viewportHeight = window.innerHeight;
+
+      // Check if hero/title card is visible
+      const heroBottom = heroSection ? heroSection.offsetTop + heroSection.offsetHeight : 0;
+      const isHeroVisible = scrollTop < heroBottom - 100;
+
+      // If hero is visible, clear the hash
+      if (isHeroVisible) {
+        if (lastHash !== '') {
+          lastHash = '';
+          history.replaceState(null, '', window.location.pathname);
+        }
+        navLinks.forEach(link => link.classList.remove('active'));
+        return;
+      }
 
       // Find the section that contains the point 1/3 down the viewport
       const checkPoint = scrollTop + viewportHeight * 0.33;

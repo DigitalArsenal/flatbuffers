@@ -923,28 +923,40 @@ function generateAddressForCoin(publicKey, coinType) {
 }
 
 /**
- * Get full BIP44 path from UI inputs
+ * Build signing path: m/44'/{coin}'/{account}'/0'/0'
+ * Change index 0 = signing keys (external)
  */
-function getHDPathFromUI() {
-  const purpose = $('hd-purpose').value;
-  const coin = $('hd-coin').value;
-  const account = $('hd-account').value || '0';
-  const change = $('hd-change').value;
-  const index = $('hd-index').value || '0';
-
-  return `m/${purpose}'/${coin}'/${account}'/${change}/${index}`;
+function buildSigningPath(coin, account) {
+  return `m/44'/${coin}'/${account}'/0'/0'`;
 }
 
 /**
- * Update the path display from UI inputs
+ * Build encryption path: m/44'/{coin}'/{account}'/1'/0'
+ * Change index 1 = encryption keys (internal)
+ */
+function buildEncryptionPath(coin, account) {
+  return `m/44'/${coin}'/${account}'/1'/0'`;
+}
+
+/**
+ * Update the path displays from UI inputs
  */
 function updatePathDisplay() {
-  const path = getHDPathFromUI();
-  $('full-path').textContent = path;
+  const coin = $('hd-coin').value;
+  const account = $('hd-account').value || '0';
+
+  const signingPath = buildSigningPath(coin, account);
+  const encryptionPath = buildEncryptionPath(coin, account);
+
+  const signingPathEl = $('signing-path');
+  const encryptionPathEl = $('encryption-path');
+
+  if (signingPathEl) signingPathEl.textContent = signingPath;
+  if (encryptionPathEl) encryptionPathEl.textContent = encryptionPath;
 }
 
 /**
- * Derive and display address from current path
+ * Derive and display both signing and encryption keys
  */
 async function deriveAndDisplayAddress() {
   console.log('deriveAndDisplayAddress called, hdRoot:', !!state.hdRoot);
@@ -963,19 +975,30 @@ async function deriveAndDisplayAddress() {
   // Hide warning since wallet is initialized
   if (hdNotInitialized) hdNotInitialized.style.display = 'none';
 
-  const path = getHDPathFromUI();
-  console.log('Deriving path:', path);
-
-  const coinType = parseInt($('hd-coin').value);
+  const coin = $('hd-coin').value;
+  const account = $('hd-account').value || '0';
+  const coinType = parseInt(coin);
   const coinOption = $('hd-coin').selectedOptions[0];
   const cryptoName = coinOption.dataset.name || 'Unknown';
   const cryptoSymbol = coinOption.dataset.symbol || '???';
 
+  const signingPath = buildSigningPath(coin, account);
+  const encryptionPath = buildEncryptionPath(coin, account);
+
+  console.log('Deriving signing path:', signingPath);
+  console.log('Deriving encryption path:', encryptionPath);
+
   try {
-    const childKey = deriveHDKey(path);
-    const publicKey = childKey.publicKey();
-    console.log('Derived childKey, publicKey length:', publicKey?.length);
-    const address = generateAddressForCoin(publicKey, coinType);
+    // Derive signing key
+    const signingKey = deriveHDKey(signingPath);
+    const signingPubKey = signingKey.publicKey();
+
+    // Derive encryption key
+    const encryptionKey = deriveHDKey(encryptionPath);
+    const encryptionPubKey = encryptionKey.publicKey();
+
+    // Generate address from signing key
+    const address = generateAddressForCoin(signingPubKey, coinType);
     console.log('Generated address:', address);
 
     // Get config for explorer link
@@ -984,16 +1007,25 @@ async function deriveAndDisplayAddress() {
 
     // Update UI
     $('derived-result').style.display = 'block';
+
+    // Update paths
+    $('signing-path').textContent = signingPath;
+    $('encryption-path').textContent = encryptionPath;
+
+    // Update public keys
+    $('signing-pubkey').textContent = toHexCompact(signingPubKey);
+    $('encryption-pubkey').textContent = toHexCompact(encryptionPubKey);
+
+    // Update address display
     $('derived-crypto-name').textContent = cryptoName;
     $('derived-icon').textContent = cryptoSymbol.substring(0, 2);
-    $('derived-pubkey').textContent = toHexCompact(publicKey);
     $('derived-address').textContent = address;
 
     // Update explorer link
     const explorerLink = $('derived-explorer-link');
     if (explorerUrl) {
       explorerLink.href = explorerUrl;
-      explorerLink.style.display = 'flex';
+      explorerLink.style.display = 'inline-flex';
     } else {
       explorerLink.style.display = 'none';
     }
@@ -1001,7 +1033,7 @@ async function deriveAndDisplayAddress() {
     // Generate QR code
     try {
       await QRCode.toCanvas($('address-qr'), address, {
-        width: 96,
+        width: 64,
         margin: 1,
         color: { dark: '#1e293b', light: '#ffffff' },
       });
@@ -1009,35 +1041,17 @@ async function deriveAndDisplayAddress() {
       console.warn('QR generation failed:', qrErr);
     }
 
-    // Fetch balance if API available
-    if (config && config.balanceApi) {
-      $('balance-row').style.display = 'flex';
-      $('derived-balance').textContent = 'Loading...';
-      try {
-        const balance = await fetchBalance(config.key, address);
-        $('derived-balance').textContent = balance || 'Unable to fetch';
-      } catch (err) {
-        $('derived-balance').textContent = 'Error';
-      }
-    } else {
-      $('balance-row').style.display = 'none';
-    }
-
   } catch (err) {
     console.error('Derivation failed:', err);
-    // Don't show alert, just log the error
   }
 }
 
 /**
  * Quick derive for a specific coin
  */
-function quickDerive(coinType, purpose) {
-  $('hd-purpose').value = purpose;
+function quickDerive(coinType) {
   $('hd-coin').value = coinType;
   $('hd-account').value = '0';
-  $('hd-change').value = '0';
-  $('hd-index').value = '0';
   updatePathDisplay();
   deriveAndDisplayAddress();
 }
@@ -4142,11 +4156,8 @@ function setupMainAppHandlers() {
   }
 
   // HD Wallet Derivation handlers
-  const hdPurpose = $('hd-purpose');
   const hdCoin = $('hd-coin');
   const hdAccount = $('hd-account');
-  const hdChange = $('hd-change');
-  const hdIndex = $('hd-index');
 
   // Auto-derive on any change (with debounce for input fields)
   let deriveTimeout = null;
@@ -4161,23 +4172,44 @@ function setupMainAppHandlers() {
     }, 300); // Debounce for typing
   };
 
-  const hdElements = [hdPurpose, hdCoin, hdAccount, hdChange, hdIndex];
-  // console.log('HD elements found:', hdElements.map(el => el ? el.id : 'null'));
+  // Coin dropdown
+  if (hdCoin) {
+    hdCoin.addEventListener('change', autoDerive);
+  }
 
-  hdElements.forEach(el => {
-    if (el) {
-      el.addEventListener('change', autoDerive);
-      el.addEventListener('input', autoDerive);
-    }
+  // Account input - restrict to digits only
+  if (hdAccount) {
+    hdAccount.addEventListener('input', (e) => {
+      // Only allow digits
+      e.target.value = e.target.value.replace(/[^0-9]/g, '');
+      autoDerive();
+    });
+    hdAccount.addEventListener('change', autoDerive);
+  }
+
+  // Copy buttons for keys
+  document.querySelectorAll('.hd-key-value .copy-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const targetId = btn.dataset.copy;
+      const targetEl = $(targetId);
+      if (targetEl) {
+        try {
+          await navigator.clipboard.writeText(targetEl.textContent);
+          btn.classList.add('copied');
+          setTimeout(() => btn.classList.remove('copied'), 1500);
+        } catch (err) {
+          console.error('Copy failed:', err);
+        }
+      }
+    });
   });
 
-  // Quick derive buttons
+  // Quick derive buttons (if any exist)
   document.querySelectorAll('.quick-derive .glass-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const coin = btn.dataset.coin;
-      const purpose = btn.dataset.purpose;
-      if (coin !== undefined && purpose !== undefined) {
-        quickDerive(coin, purpose);
+      if (coin !== undefined) {
+        quickDerive(coin);
       }
     });
   });

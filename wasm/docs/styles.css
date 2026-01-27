@@ -2263,47 +2263,186 @@ body {
   font-weight: 600;
 }
 
-/* HD Wallet Path Builder */
-.hd-path-builder {
-  background: var(--white-05);
-  border-radius: var(--radius-sm);
-  padding: 20px;
-  margin-bottom: 20px;
-}
-
-.path-display {
+/* HD Wallet Controls Row */
+.hd-controls-row {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 16px;
   margin-bottom: 16px;
-  row-gap: 12px;
+  align-items: flex-end;
 }
 
-.path-prefix {
-  font-family: var(--font-mono);
-  font-size: 14px;
+.hd-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hd-control-group label {
+  font-size: 11px;
   color: var(--muted);
-  padding: 8px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.path-sep {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: var(--muted);
-  padding: 8px 2px;
+.hd-account-input {
+  width: 60px !important;
+  text-align: center;
 }
 
-.path-segment {
+/* HD Key Rows */
+.hd-key-row {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--glass-border);
 }
 
-.hardened-mark {
+.hd-key-row:last-of-type {
+  border-bottom: none;
+}
+
+.hd-key-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--white-70);
+  min-width: 80px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hd-key-path {
+  flex-shrink: 0;
+}
+
+.hd-key-path code {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 11px;
   color: var(--muted);
+  background: var(--white-05);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.hd-key-value {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hd-key-value code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--white-80);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hd-key-value .copy-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+
+.hd-key-value .copy-btn:hover {
+  color: var(--white);
+}
+
+/* HD Address Row */
+.hd-address-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.hd-address-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.hd-address-info .crypto-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+}
+
+.hd-address-info .crypto-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--white-80);
+}
+
+.hd-address {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--white-70);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.hd-address-info .explorer-link {
+  color: var(--muted);
+  padding: 4px;
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+
+.hd-address-info .explorer-link:hover {
+  color: var(--white);
+}
+
+.hd-address-row .qr-section {
+  flex-shrink: 0;
+}
+
+.hd-address-row .qr-section canvas {
+  border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+  .hd-controls-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hd-key-row {
+    flex-wrap: wrap;
+  }
+
+  .hd-key-label {
+    min-width: 70px;
+  }
+
+  .hd-key-path {
+    order: 3;
+    width: 100%;
+    margin-top: 4px;
+  }
+
+  .hd-address-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .hd-address-info {
+    flex-wrap: wrap;
+  }
 }
 
 .glass-select.compact,

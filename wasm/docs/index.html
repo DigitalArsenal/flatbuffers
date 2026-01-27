@@ -2758,93 +2758,86 @@ class EphemerisReader {
         <div class="keys-section hd-section">
           <h4 class="section-label">HD Wallet Derivation (BIP44)</h4>
 
-          <div class="hd-path-builder">
-            <div class="path-display">
-              <span class="path-prefix">m/</span>
-              <span class="path-segment">
-                <select id="hd-purpose" class="glass-select compact">
-                  <option value="44">44' (BIP44)</option>
-                  <option value="49">49' (BIP49 SegWit)</option>
-                  <option value="84">84' (BIP84 Native SegWit)</option>
-                </select>
-              </span>
-              <span class="path-sep">/</span>
-              <span class="path-segment">
-                <select id="hd-coin" class="glass-select compact">
-                  <option value="0" data-symbol="BTC" data-name="Bitcoin">0' (Bitcoin)</option>
-                  <option value="60" data-symbol="ETH" data-name="Ethereum">60' (Ethereum)</option>
-                  <option value="501" data-symbol="SOL" data-name="Solana">501' (Solana)</option>
-                  <option value="2" data-symbol="LTC" data-name="Litecoin">2' (Litecoin)</option>
-                  <option value="145" data-symbol="BCH" data-name="Bitcoin Cash">145' (Bitcoin Cash)</option>
-                  <option value="3" data-symbol="DOGE" data-name="Dogecoin">3' (Dogecoin)</option>
-                  <option value="118" data-symbol="ATOM" data-name="Cosmos">118' (Cosmos)</option>
-                  <option value="330" data-symbol="ALGO" data-name="Algorand">330' (Algorand)</option>
-                  <option value="354" data-symbol="DOT" data-name="Polkadot">354' (Polkadot)</option>
-                  <option value="1815" data-symbol="ADA" data-name="Cardano">1815' (Cardano)</option>
-                </select>
-              </span>
-              <span class="path-sep">/</span>
-              <span class="path-segment">
-                <input type="number" id="hd-account" class="glass-input compact" value="0" min="0" max="2147483647">
-                <span class="hardened-mark">'</span>
-              </span>
-              <span class="path-sep">/</span>
-              <span class="path-segment">
-                <select id="hd-change" class="glass-select compact">
-                  <option value="0">0 (External)</option>
-                  <option value="1">1 (Change)</option>
-                </select>
-              </span>
-              <span class="path-sep">/</span>
-              <span class="path-segment">
-                <input type="number" id="hd-index" class="glass-input compact" value="0" min="0" max="2147483647">
-              </span>
+          <!-- HD Controls Row -->
+          <div class="hd-controls-row">
+            <div class="hd-control-group">
+              <label>Network</label>
+              <select id="hd-coin" class="glass-select compact">
+                <option value="0" data-symbol="BTC" data-name="Bitcoin">Bitcoin</option>
+                <option value="60" data-symbol="ETH" data-name="Ethereum">Ethereum</option>
+                <option value="501" data-symbol="SOL" data-name="Solana">Solana</option>
+                <option value="2" data-symbol="LTC" data-name="Litecoin">Litecoin</option>
+                <option value="145" data-symbol="BCH" data-name="Bitcoin Cash">Bitcoin Cash</option>
+                <option value="3" data-symbol="DOGE" data-name="Dogecoin">Dogecoin</option>
+                <option value="118" data-symbol="ATOM" data-name="Cosmos">Cosmos</option>
+                <option value="330" data-symbol="ALGO" data-name="Algorand">Algorand</option>
+                <option value="354" data-symbol="DOT" data-name="Polkadot">Polkadot</option>
+                <option value="1815" data-symbol="ADA" data-name="Cardano">Cardano</option>
+              </select>
             </div>
-
-            <div class="path-summary">
-              <code id="full-path">m/44'/0'/0'/0/0</code>
+            <div class="hd-control-group">
+              <label>Account</label>
+              <input type="text" id="hd-account" class="glass-input compact hd-account-input" value="0" pattern="[0-9]*" inputmode="numeric">
             </div>
           </div>
 
           <!-- HD Wallet Not Initialized Message -->
           <div id="hd-not-initialized" class="hd-not-initialized" style="display: none;">
-            <p>HD wallet not initialized. Please log out and log back in with your password or seed phrase to enable HD derivation.</p>
+            <p>HD wallet not initialized. Please log in with your seed phrase to enable HD derivation.</p>
           </div>
 
-          <!-- Derived Address Display -->
+          <!-- Derived Keys Display -->
           <div id="derived-result" class="derived-result" style="display: none;">
-            <div class="derived-header">
-              <span class="crypto-icon" id="derived-icon"></span>
-              <span class="crypto-name" id="derived-crypto-name">Bitcoin</span>
+            <!-- Signing Key Row -->
+            <div class="hd-key-row">
+              <div class="hd-key-label">Signing</div>
+              <div class="hd-key-path">
+                <code id="signing-path">m/44'/0'/0'/0'/0'</code>
+              </div>
+              <div class="hd-key-value">
+                <code id="signing-pubkey" class="truncate"></code>
+                <button class="copy-btn" data-copy="signing-pubkey" title="Copy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
+              </div>
             </div>
 
-            <div class="key-item">
-              <label>Public Key</label>
-              <code id="derived-pubkey"></code>
+            <!-- Encryption Key Row -->
+            <div class="hd-key-row">
+              <div class="hd-key-label">Encryption</div>
+              <div class="hd-key-path">
+                <code id="encryption-path">m/44'/0'/0'/1'/0'</code>
+              </div>
+              <div class="hd-key-value">
+                <code id="encryption-pubkey" class="truncate"></code>
+                <button class="copy-btn" data-copy="encryption-pubkey" title="Copy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
+              </div>
             </div>
 
-            <div class="key-item">
-              <label>Address</label>
-              <div class="address-row">
-                <code id="derived-address"></code>
-                <a id="derived-explorer-link" href="#" target="_blank" class="explorer-link glass-btn small">
+            <!-- Address Display -->
+            <div class="hd-address-row">
+              <div class="hd-address-info">
+                <span class="crypto-icon" id="derived-icon"></span>
+                <span class="crypto-name" id="derived-crypto-name">Bitcoin</span>
+                <code id="derived-address" class="hd-address"></code>
+                <a id="derived-explorer-link" href="#" target="_blank" class="explorer-link" title="View on Explorer">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                     <polyline points="15 3 21 3 21 9"></polyline>
                     <line x1="10" y1="14" x2="21" y2="3"></line>
                   </svg>
-                  View on Explorer
                 </a>
               </div>
-            </div>
-
-            <div class="balance-qr-row">
-              <div class="balance-section" id="balance-row" style="display: none;">
-                <span class="balance-label">Balance:</span>
-                <span class="balance-value" id="derived-balance">Loading...</span>
-              </div>
               <div class="qr-section">
-                <canvas id="address-qr" width="96" height="96"></canvas>
+                <canvas id="address-qr" width="64" height="64"></canvas>
               </div>
             </div>
           </div>

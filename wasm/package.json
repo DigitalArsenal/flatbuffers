@@ -1,6 +1,6 @@
 {
   "name": "flatc-wasm",
-  "version": "26.1.16",
+  "version": "26.1.17",
   "description": "FlatBuffers compiler (flatc) as a WebAssembly module - schema management, JSON/binary conversion, and code generation",
   "type": "module",
   "main": "src/index.mjs",
@@ -17,10 +17,6 @@
       "types": "./src/runner.d.ts",
       "import": "./src/runner.mjs"
     },
-    "./encryption": {
-      "types": "./src/encryption.d.ts",
-      "import": "./src/encryption.mjs"
-    },
     "./hd-keys": {
       "types": "./src/hd-keys.d.ts",
       "import": "./src/hd-keys.mjs"
@@ -36,20 +32,16 @@
     "src/index.d.ts",
     "src/runner.mjs",
     "src/runner.d.ts",
-    "src/encryption.mjs",
-    "src/encryption.d.ts",
     "src/hd-keys.mjs",
     "src/hd-keys.d.ts",
     "dist/flatc-wasm.js",
     "dist/flatc-wasm.cjs",
     "dist/flatc-wasm.d.ts",
-    "dist/flatc-encryption.wasm",
     "README.md"
   ],
   "scripts": {
     "build": "cmake --build ../build/wasm --target flatc_wasm_npm -j",
-    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_encryption.mjs && node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
-    "test:encryption": "node test/test_encryption.mjs",
+    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
     "test:aligned": "node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
     "prepublishOnly": "npm run build && npm test"
   },
@@ -78,6 +70,6 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "hd-wallet-wasm": "^0.1.7"
+    "hd-wallet-wasm": "0.2.0"
   }
 }

@@ -10,7 +10,7 @@
  */
 
 import initHDWallet from 'hd-wallet-wasm';
-import { x25519 } from '@noble/curves/ed25519';
+import { x25519, ed25519 } from '@noble/curves/ed25519';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { p256 } from '@noble/curves/p256';
 import { blake2b } from '@noble/hashes/blake2b';
@@ -31,15 +31,14 @@ import {
   sha256,
   hkdf,
   x25519GenerateKeyPair,
-  ed25519GenerateKeyPair,
   secp256k1GenerateKeyPair,
-  p256GenerateKeyPair,
-  p384GenerateKeyPair,
+  p256GenerateKeyPairAsync,
+  p384GenerateKeyPairAsync,
   EncryptionContext,
   encryptionHeaderFromJSON,
   encryptBuffer,
   decryptBuffer,
-} from '../src/encryption.mjs';
+} from './encryption-stub.mjs';
 
 import { FlatcRunner } from '../src/runner.mjs';
 import { generateAlignedCode, parseSchema } from '../src/aligned-codegen.mjs';
@@ -449,12 +448,20 @@ async function deriveKeysFromPassword(username, password) {
   state.hdRoot = state.hdWalletModule.hdkey.fromSeed(hdSeed);
   console.log('HD wallet initialized from password, hdRoot:', !!state.hdRoot);
 
+  // Derive deterministic seeds for each curve
+  const ed25519Seed = hkdf(masterKey, new Uint8Array(0), encoder.encode('ed25519-seed'), 32);
+
   const keys = {
     x25519: x25519GenerateKeyPair(),
-    ed25519: ed25519GenerateKeyPair(),
+    // Use @noble/curves ed25519 directly (hd-wallet-wasm Ed25519 not implemented)
+    ed25519: {
+      privateKey: ed25519Seed,
+      publicKey: ed25519.getPublicKey(ed25519Seed),
+    },
     secp256k1: secp256k1GenerateKeyPair(),
-    p256: p256GenerateKeyPair(),
-    p384: p384GenerateKeyPair(),
+    // P-256 and P-384 require async crypto.subtle
+    p256: await p256GenerateKeyPairAsync(),
+    p384: await p384GenerateKeyPairAsync(),
   };
 
   return keys;
@@ -480,12 +487,20 @@ async function deriveKeysFromSeed(seedPhrase) {
   state.hdRoot = state.hdWalletModule.hdkey.fromSeed(new Uint8Array(seed));
   console.log('HD wallet initialized from seed phrase, hdRoot:', !!state.hdRoot);
 
+  // Derive deterministic seeds for each curve
+  const ed25519Seed = hkdf(masterKey, new Uint8Array(0), encoder.encode('ed25519-seed'), 32);
+
   const keys = {
     x25519: x25519GenerateKeyPair(),
-    ed25519: ed25519GenerateKeyPair(),
+    // Use @noble/curves ed25519 directly (hd-wallet-wasm Ed25519 not implemented)
+    ed25519: {
+      privateKey: ed25519Seed,
+      publicKey: ed25519.getPublicKey(ed25519Seed),
+    },
     secp256k1: secp256k1GenerateKeyPair(),
-    p256: p256GenerateKeyPair(),
-    p384: p384GenerateKeyPair(),
+    // P-256 and P-384 require async crypto.subtle
+    p256: await p256GenerateKeyPairAsync(),
+    p384: await p384GenerateKeyPairAsync(),
   };
 
   return keys;
@@ -2951,7 +2966,7 @@ function deriveP256FromSeed(seed) {
   };
 }
 
-function generatePKIKeyPairs() {
+async function generatePKIKeyPairs() {
   // First try to derive from HD wallet
   if (state.hdRoot && derivePKIKeysFromHD()) {
     // PKI keys derived from HD wallet
@@ -2960,27 +2975,29 @@ function generatePKIKeyPairs() {
     const algorithm = $('pki-algorithm')?.value || 'x25519';
     state.pki.algorithm = algorithm;
 
-    let generateFn;
-    switch (algorithm) {
-      case 'x25519':
-        generateFn = x25519GenerateKeyPair;
-        break;
-      case 'secp256k1':
-        generateFn = secp256k1GenerateKeyPair;
-        break;
-      case 'p256':
-        generateFn = p256GenerateKeyPair;
-        break;
-      case 'p384':
-        generateFn = p384GenerateKeyPair;
-        break;
-      default:
-        generateFn = x25519GenerateKeyPair;
-    }
-
     try {
-      state.pki.alice = generateFn();
-      state.pki.bob = generateFn();
+      // P-256 and P-384 require async crypto.subtle
+      if (algorithm === 'p256') {
+        state.pki.alice = await p256GenerateKeyPairAsync();
+        state.pki.bob = await p256GenerateKeyPairAsync();
+      } else if (algorithm === 'p384') {
+        state.pki.alice = await p384GenerateKeyPairAsync();
+        state.pki.bob = await p384GenerateKeyPairAsync();
+      } else {
+        let generateFn;
+        switch (algorithm) {
+          case 'x25519':
+            generateFn = x25519GenerateKeyPair;
+            break;
+          case 'secp256k1':
+            generateFn = secp256k1GenerateKeyPair;
+            break;
+          default:
+            generateFn = x25519GenerateKeyPair;
+        }
+        state.pki.alice = generateFn();
+        state.pki.bob = generateFn();
+      }
     } catch (e) {
       console.error('Failed to generate PKI keys:', e);
       alert('Failed to generate keys: ' + e.message);
@@ -4624,7 +4641,7 @@ function setupMainAppHandlers() {
   $('pki-wrong-key')?.addEventListener('click', pkiTryWrongKey);
 
   // Algorithm selector - regenerate keys when curve changes
-  $('pki-algorithm')?.addEventListener('change', (e) => {
+  $('pki-algorithm')?.addEventListener('change', async (e) => {
     const newAlgorithm = e.target.value;
     state.pki.algorithm = newAlgorithm;
 
@@ -4655,27 +4672,29 @@ function setupMainAppHandlers() {
       }
     } else if (state.loggedIn) {
       // Fallback: generate random keys if no HD wallet
-      let generateFn;
-      switch (newAlgorithm) {
-        case 'x25519':
-          generateFn = x25519GenerateKeyPair;
-          break;
-        case 'secp256k1':
-          generateFn = secp256k1GenerateKeyPair;
-          break;
-        case 'p256':
-          generateFn = p256GenerateKeyPair;
-          break;
-        case 'p384':
-          generateFn = p384GenerateKeyPair;
-          break;
-        default:
-          generateFn = x25519GenerateKeyPair;
-      }
-
       try {
-        state.pki.alice = generateFn();
-        state.pki.bob = generateFn();
+        // P-256 and P-384 require async crypto.subtle
+        if (newAlgorithm === 'p256') {
+          state.pki.alice = await p256GenerateKeyPairAsync();
+          state.pki.bob = await p256GenerateKeyPairAsync();
+        } else if (newAlgorithm === 'p384') {
+          state.pki.alice = await p384GenerateKeyPairAsync();
+          state.pki.bob = await p384GenerateKeyPairAsync();
+        } else {
+          let generateFn;
+          switch (newAlgorithm) {
+            case 'x25519':
+              generateFn = x25519GenerateKeyPair;
+              break;
+            case 'secp256k1':
+              generateFn = secp256k1GenerateKeyPair;
+              break;
+            default:
+              generateFn = x25519GenerateKeyPair;
+          }
+          state.pki.alice = generateFn();
+          state.pki.bob = generateFn();
+        }
         savePKIKeys();
 
         $('alice-public-key').textContent = toHexCompact(state.pki.alice.publicKey);
@@ -5014,12 +5033,20 @@ async function init() {
     // If there's a stored wallet, let the user authenticate through the login modal
     if (hasSavedKeys && !hasStoredWallet) {
       // Generate temporary wallet keys for the session
+      // Generate random ed25519 seed for session keys
+      const tempEd25519Seed = new Uint8Array(32);
+      crypto.getRandomValues(tempEd25519Seed);
       const tempKeys = {
         x25519: x25519GenerateKeyPair(),
-        ed25519: ed25519GenerateKeyPair(),
+        // Use @noble/curves ed25519 directly (hd-wallet-wasm Ed25519 not implemented)
+        ed25519: {
+          privateKey: tempEd25519Seed,
+          publicKey: ed25519.getPublicKey(tempEd25519Seed),
+        },
         secp256k1: secp256k1GenerateKeyPair(),
-        p256: p256GenerateKeyPair(),
-        p384: p384GenerateKeyPair(),
+        // P-256 and P-384 require async crypto.subtle
+        p256: await p256GenerateKeyPairAsync(),
+        p384: await p384GenerateKeyPairAsync(),
       };
 
       // Generate encryption key and IV if not loaded from storage

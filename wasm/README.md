@@ -5,6 +5,10 @@
 <h1 align="center">flatc-wasm</h1>
 
 <p align="center">
+  <a href="https://digitalarsenal.github.io/flatbuffers/">https://digitalarsenal.github.io/flatbuffers/</a>
+</p>
+
+<p align="center">
   <strong>FlatBuffers compiler as WebAssembly — run <code>flatc</code> in Node.js or the browser with zero native dependencies</strong>
 </p>
 

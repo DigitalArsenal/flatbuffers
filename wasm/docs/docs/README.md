@@ -26,24 +26,15 @@ The default WASM build (`flatc-encryption.wasm`) uses [Crypto++](https://cryptop
 - Active maintenance and security updates
 - Full algorithm support including X25519, Ed25519, secp256k1
 
-#### Alternative: OpenSSL FIPS Provider (Requires Custom Build)
+#### FIPS Support via hd-wallet-wasm
 
-For organizations requiring FIPS 140-3 compliance, an [OpenSSL 3.x FIPS build](../../openssl-fips/README.md) can be compiled from source:
+FIPS 140-3 compatible algorithms are available through `hd-wallet-wasm`, which includes
+built-in OpenSSL FIPS support. Enable it with `wallet.initFips()`:
 
-- FIPS 140-3 validated algorithms (Certificate #4282)
-- NIST-approved curves only (P-256, P-384, P-521)
-- **Note**: X25519/Ed25519/secp256k1 are not available in FIPS mode (not NIST-approved)
-
-| Feature | Crypto++ (Default Build) | OpenSSL FIPS (Custom Build) |
-|---------|--------------------------|----------------------------|
-| X25519 | ✅ | ❌ |
-| Ed25519 | ✅ | ❌ |
-| secp256k1 | ✅ | ❌ |
-| P-256/P-384 | ✅ | ✅ |
-| AES-256 | ✅ | ✅ |
-| SHA-256/SHA-3 | ✅ | ✅ |
-| FIPS 140-3 Validated | ❌ | ✅ |
-| Pre-built WASM | ✅ | ❌ (build from source) |
+- NIST-approved curves (P-256, P-384)
+- AES-256-GCM authenticated encryption
+- HKDF, PBKDF2, scrypt key derivation
+- Full multi-curve support (secp256k1, Ed25519, X25519) also available in non-FIPS mode
 
 ### Cross-Language Interoperability
 

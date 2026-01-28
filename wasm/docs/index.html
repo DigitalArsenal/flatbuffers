@@ -44,11 +44,10 @@
       </div>
       <div class="nav-actions">
         <button id="nav-login" class="nav-btn glass-btn primary">Login</button>
-        <button id="nav-keys" class="nav-icon-btn" style="display: none;" title="Wallet">
+        <button id="nav-keys" class="nav-icon-btn" style="display: none;" title="Account">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/>
-            <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/>
-            <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
           </svg>
         </button>
         <button id="nav-logout" class="nav-btn glass-btn" style="display: none;">Logout</button>
@@ -276,7 +275,7 @@
             <circle cx="12" cy="12" r="10"/>
             <path d="M12 16v-4M12 8h.01"/>
           </svg>
-          <span><strong>Cryptographic Backends:</strong> Default build uses Crypto++ (FIPS 140-2, full algorithm support including X25519/Ed25519/secp256k1). For FIPS 140-3 compliance, an OpenSSL 3.0.9 FIPS Provider build is available (Certificate #4282, NIST curves only). See <code>wasm/openssl-fips/</code>.</span>
+          <span><strong>Cryptographic Backends:</strong> Default build uses Crypto++ (FIPS 140-2, full algorithm support including X25519/Ed25519/secp256k1). FIPS 140-3 compatible algorithms are available via <code>hd-wallet-wasm</code> with built-in OpenSSL FIPS support.</span>
         </div>
       </div>
 
@@ -1008,72 +1007,14 @@
       </div>
     </section>
 
-    <!-- Identity Section -->
+    <!-- Identity Section (vCard generator moved to Account modal) -->
     <section id="identity-tab" class="content-section">
       <div class="section-header">
         <h2 class="section-title">Cryptographic Identity</h2>
         <p class="section-desc">Generate a vCard with your public keys for secure sharing</p>
       </div>
-
       <div class="glass-card">
-        <div class="identity-form">
-          <div class="form-row">
-            <div class="glass-input-group">
-              <label>Prefix</label>
-              <input type="text" id="vcard-prefix" class="glass-input" placeholder="Dr.">
-            </div>
-            <div class="glass-input-group">
-              <label>First Name</label>
-              <input type="text" id="vcard-firstname" class="glass-input" placeholder="John">
-            </div>
-            <div class="glass-input-group">
-              <label>Middle Name</label>
-              <input type="text" id="vcard-middlename" class="glass-input" placeholder="Michael">
-            </div>
-            <div class="glass-input-group">
-              <label>Last Name</label>
-              <input type="text" id="vcard-lastname" class="glass-input" placeholder="Doe">
-            </div>
-            <div class="glass-input-group">
-              <label>Suffix</label>
-              <input type="text" id="vcard-suffix" class="glass-input" placeholder="Jr.">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="glass-input-group">
-              <label>Email</label>
-              <input type="email" id="vcard-email" class="glass-input" placeholder="john@example.com">
-            </div>
-            <div class="glass-input-group">
-              <label>Organization</label>
-              <input type="text" id="vcard-org" class="glass-input" placeholder="Company Name">
-            </div>
-            <div class="glass-input-group">
-              <label>Job Title</label>
-              <input type="text" id="vcard-title" class="glass-input" placeholder="Software Engineer">
-            </div>
-          </div>
-          <label class="checkbox-label">
-            <input type="checkbox" id="include-keys" checked>
-            <span>Include cryptographic public keys</span>
-          </label>
-        </div>
-
-        <button id="generate-vcard" class="glass-btn primary">Generate vCard</button>
-
-        <div id="vcard-result" class="vcard-result" style="display: none;">
-          <div class="qr-container">
-            <canvas id="qr-code"></canvas>
-          </div>
-          <div class="vcard-actions">
-            <button id="download-vcard" class="glass-btn">Download .vcf</button>
-            <button id="copy-vcard" class="glass-btn">Copy</button>
-          </div>
-          <details class="vcard-details">
-            <summary>View Raw vCard</summary>
-            <pre id="vcard-preview"></pre>
-          </details>
-        </div>
+        <p>Your cryptographic identity and vCard generator are available in the <strong>Account</strong> modal. Click the user icon in the top navigation bar to access your keys and generate vCards.</p>
       </div>
     </section>
 
@@ -2755,224 +2696,338 @@ class EphemerisReader {
   <div id="keys-modal" class="modal">
     <div class="modal-glass modal-wide">
       <div class="modal-header">
-        <h3>Your Keys</h3>
+        <h3>Account</h3>
         <span class="key-warning-header">Private keys stored in memory only</span>
         <button class="modal-close">&times;</button>
       </div>
       <div class="modal-body">
-        <!-- Quick Derive Buttons (moved to top) -->
-        <div class="quick-derive">
-          <span class="quick-label">Quick derive:</span>
-          <button class="glass-btn small" data-coin="0" data-purpose="84">BTC</button>
-          <button class="glass-btn small" data-coin="60" data-purpose="44">ETH</button>
-          <button class="glass-btn small" data-coin="501" data-purpose="44">SOL</button>
-          <button class="glass-btn small" data-coin="2" data-purpose="44">LTC</button>
-          <button class="glass-btn small" data-coin="3" data-purpose="44">DOGE</button>
+        <!-- Modal Tabs -->
+        <div class="modal-tabs">
+          <button class="modal-tab active" data-modal-tab="keys-tab-content">Keys</button>
+          <button class="modal-tab" data-modal-tab="vcard-tab-content">vCard</button>
         </div>
 
-        <!-- HD Wallet Section -->
-        <div class="keys-section hd-section">
-          <h4 class="section-label">HD Wallet Derivation (BIP44)</h4>
-
-          <!-- HD Controls Row -->
-          <div class="hd-controls-row">
-            <div class="hd-control-group">
-              <label>Network</label>
-              <select id="hd-coin" class="glass-select compact">
-                <option value="0" data-symbol="BTC" data-name="Bitcoin">Bitcoin</option>
-                <option value="60" data-symbol="ETH" data-name="Ethereum">Ethereum</option>
-                <option value="501" data-symbol="SOL" data-name="Solana">Solana</option>
-                <option value="2" data-symbol="LTC" data-name="Litecoin">Litecoin</option>
-                <option value="145" data-symbol="BCH" data-name="Bitcoin Cash">Bitcoin Cash</option>
-                <option value="3" data-symbol="DOGE" data-name="Dogecoin">Dogecoin</option>
-                <option value="118" data-symbol="ATOM" data-name="Cosmos">Cosmos</option>
-                <option value="330" data-symbol="ALGO" data-name="Algorand">Algorand</option>
-                <option value="354" data-symbol="DOT" data-name="Polkadot">Polkadot</option>
-                <option value="1815" data-symbol="ADA" data-name="Cardano">Cardano</option>
-              </select>
-            </div>
-            <div class="hd-control-group">
-              <label>Account</label>
-              <input type="number" id="hd-account" class="glass-input compact hd-num-input" value="0" min="0" step="1">
-            </div>
-            <div class="hd-control-group">
-              <label>Index</label>
-              <input type="number" id="hd-index" class="glass-input compact hd-num-input" value="0" min="0" step="1">
-            </div>
+        <!-- Keys Tab Content -->
+        <div id="keys-tab-content" class="modal-tab-content active">
+          <!-- Quick Derive Buttons (moved to top) -->
+          <div class="quick-derive">
+            <span class="quick-label">Quick derive:</span>
+            <button class="glass-btn small" data-coin="0" data-purpose="84">BTC</button>
+            <button class="glass-btn small" data-coin="60" data-purpose="44">ETH</button>
+            <button class="glass-btn small" data-coin="501" data-purpose="44">SOL</button>
+            <button class="glass-btn small" data-coin="2" data-purpose="44">LTC</button>
+            <button class="glass-btn small" data-coin="3" data-purpose="44">DOGE</button>
           </div>
 
-          <!-- HD Wallet Not Initialized Message -->
-          <div id="hd-not-initialized" class="hd-not-initialized" style="display: none;">
-            <p>HD wallet not initialized. Please log in with your seed phrase to enable HD derivation.</p>
-          </div>
+          <!-- HD Wallet Section -->
+          <div class="keys-section hd-section">
+            <h4 class="section-label">HD Wallet Derivation (BIP44)</h4>
 
-          <!-- Derived Keys Display -->
-          <div id="derived-result" class="derived-result" style="display: none;">
-            <!-- Signing Key Row -->
-            <div class="hd-key-row">
-              <div class="hd-key-label">Signing</div>
-              <div class="hd-key-path">
-                <code id="signing-path">m/44'/0'/0'/0'/0'</code>
+            <!-- HD Controls Row -->
+            <div class="hd-controls-row">
+              <div class="hd-control-group">
+                <label>Network</label>
+                <select id="hd-coin" class="glass-select compact">
+                  <option value="0" data-symbol="BTC" data-name="Bitcoin">Bitcoin</option>
+                  <option value="60" data-symbol="ETH" data-name="Ethereum">Ethereum</option>
+                  <option value="501" data-symbol="SOL" data-name="Solana">Solana</option>
+                  <option value="2" data-symbol="LTC" data-name="Litecoin">Litecoin</option>
+                  <option value="145" data-symbol="BCH" data-name="Bitcoin Cash">Bitcoin Cash</option>
+                  <option value="3" data-symbol="DOGE" data-name="Dogecoin">Dogecoin</option>
+                  <option value="118" data-symbol="ATOM" data-name="Cosmos">Cosmos</option>
+                  <option value="330" data-symbol="ALGO" data-name="Algorand">Algorand</option>
+                  <option value="354" data-symbol="DOT" data-name="Polkadot">Polkadot</option>
+                  <option value="1815" data-symbol="ADA" data-name="Cardano">Cardano</option>
+                </select>
               </div>
-              <div class="hd-key-value">
-                <code id="signing-pubkey" class="truncate"></code>
-                <button class="copy-btn" data-copy="signing-pubkey" title="Copy">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                  </svg>
-                </button>
+              <div class="hd-control-group">
+                <label>Account</label>
+                <input type="number" id="hd-account" class="glass-input compact hd-num-input" value="0" min="0" step="1">
+              </div>
+              <div class="hd-control-group">
+                <label>Index</label>
+                <input type="number" id="hd-index" class="glass-input compact hd-num-input" value="0" min="0" step="1">
               </div>
             </div>
 
-            <!-- Encryption Key Row -->
-            <div class="hd-key-row">
-              <div class="hd-key-label">Encryption</div>
-              <div class="hd-key-path">
-                <code id="encryption-path">m/44'/0'/0'/1'/0'</code>
-              </div>
-              <div class="hd-key-value">
-                <code id="encryption-pubkey" class="truncate"></code>
-                <button class="copy-btn" data-copy="encryption-pubkey" title="Copy">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                  </svg>
-                </button>
-              </div>
+            <!-- HD Wallet Not Initialized Message -->
+            <div id="hd-not-initialized" class="hd-not-initialized" style="display: none;">
+              <p>HD wallet not initialized. Please log in with a password or seed phrase to enable HD derivation.</p>
             </div>
 
-            <!-- Address Display -->
-            <div class="hd-address-row">
-              <div class="hd-address-info">
-                <span class="crypto-icon" id="derived-icon"></span>
-                <span class="crypto-name" id="derived-crypto-name">Bitcoin</span>
-                <code id="derived-address" class="hd-address"></code>
-                <a id="derived-explorer-link" href="#" target="_blank" class="explorer-link" title="View on Explorer">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <line x1="10" y1="14" x2="21" y2="3"></line>
-                  </svg>
-                </a>
+            <!-- Derived Keys Display -->
+            <div id="derived-result" class="derived-result" style="display: none;">
+              <!-- Signing Key Row -->
+              <div class="hd-key-row">
+                <div class="hd-key-label">Signing</div>
+                <div class="hd-key-path">
+                  <code id="signing-path">m/44'/0'/0'/0'/0'</code>
+                </div>
+                <div class="hd-key-value">
+                  <code id="signing-pubkey" class="truncate"></code>
+                  <button class="copy-btn" data-copy="signing-pubkey" title="Copy">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <div class="qr-section">
-                <canvas id="address-qr" width="64" height="64"></canvas>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        <!-- HD Wallet Root Keys Section -->
-        <details class="keys-section collapsible-section">
-          <summary class="section-label collapsible-header">
-            <span>HD Wallet Root</span>
-            <svg class="collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </summary>
-          <div class="collapsible-content">
-            <!-- Master Public Key -->
-            <div class="key-item">
-              <label>Master Public Key (xpub)</label>
-              <div class="key-value-row">
-                <code id="wallet-xpub" class="key-value truncate"></code>
-                <button class="copy-key-btn" data-copy="wallet-xpub" title="Copy">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                  </svg>
-                </button>
+              <!-- Encryption Key Row -->
+              <div class="hd-key-row">
+                <div class="hd-key-label">Encryption</div>
+                <div class="hd-key-path">
+                  <code id="encryption-path">m/44'/0'/0'/1'/0'</code>
+                </div>
+                <div class="hd-key-value">
+                  <code id="encryption-pubkey" class="truncate"></code>
+                  <button class="copy-btn" data-copy="encryption-pubkey" title="Copy">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <!-- Master Private Key (blurred) -->
-            <div class="key-item sensitive">
-              <label>Master Private Key (xprv)</label>
-              <div class="key-value-row">
-                <code id="wallet-xprv" class="key-value truncate blurred" data-revealed="false"></code>
-                <button class="reveal-key-btn" data-target="wallet-xprv" title="Click to reveal">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                </button>
-                <button class="copy-key-btn" data-copy="wallet-xprv" title="Copy">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <!-- Seed Phrase (blurred) -->
-            <div class="key-item sensitive">
-              <label>Seed Phrase (BIP39)</label>
-              <div class="key-value-row">
-                <code id="wallet-seed-phrase" class="key-value seed-phrase blurred" data-revealed="false"></code>
-                <button class="reveal-key-btn" data-target="wallet-seed-phrase" title="Click to reveal">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                </button>
-                <button class="copy-key-btn" data-copy="wallet-seed-phrase" title="Copy">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            <!-- Export Dropdown -->
-            <div class="export-section">
-              <div class="export-dropdown">
-                <button class="glass-btn small export-btn" id="export-wallet-btn">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="7 10 12 15 17 10"/>
-                    <line x1="12" y1="15" x2="12" y2="3"/>
-                  </svg>
-                  Export Wallet
-                </button>
-                <div class="export-menu" id="export-menu">
-                  <button class="export-option" data-format="mnemonic">
-                    <span class="export-icon">📝</span>
-                    <span class="export-label">BIP39 Mnemonic</span>
-                    <span class="export-desc">24-word seed phrase</span>
-                  </button>
-                  <button class="export-option" data-format="xpub">
-                    <span class="export-icon">🔓</span>
-                    <span class="export-label">Extended Public Key</span>
-                    <span class="export-desc">xpub (watch-only)</span>
-                  </button>
-                  <button class="export-option" data-format="xprv">
-                    <span class="export-icon">🔐</span>
-                    <span class="export-label">Extended Private Key</span>
-                    <span class="export-desc">xprv (full access)</span>
-                  </button>
-                  <button class="export-option" data-format="keystore">
-                    <span class="export-icon">📦</span>
-                    <span class="export-label">Keystore JSON</span>
-                    <span class="export-desc">Encrypted (Ethereum-style)</span>
-                  </button>
-                  <button class="export-option" data-format="wif">
-                    <span class="export-icon">🔑</span>
-                    <span class="export-label">WIF Private Key</span>
-                    <span class="export-desc">Bitcoin import format</span>
-                  </button>
-                  <button class="export-option" data-format="hex">
-                    <span class="export-icon">⚡</span>
-                    <span class="export-label">Raw Hex</span>
-                    <span class="export-desc">Unencrypted bytes</span>
-                  </button>
+              <!-- Address Display -->
+              <div class="hd-address-row">
+                <div class="hd-address-info">
+                  <span class="crypto-icon" id="derived-icon"></span>
+                  <span class="crypto-name" id="derived-crypto-name">Bitcoin</span>
+                  <code id="derived-address" class="hd-address"></code>
+                  <a id="derived-explorer-link" href="#" target="_blank" class="explorer-link" title="View on Explorer">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                      <polyline points="15 3 21 3 21 9"></polyline>
+                      <line x1="10" y1="14" x2="21" y2="3"></line>
+                    </svg>
+                  </a>
+                </div>
+                <div class="qr-section">
+                  <canvas id="address-qr" width="64" height="64"></canvas>
                 </div>
               </div>
             </div>
           </div>
-        </details>
+
+          <!-- HD Wallet Root Keys Section -->
+          <details class="keys-section collapsible-section">
+            <summary class="section-label collapsible-header">
+              <span>HD Wallet Root</span>
+              <svg class="collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </summary>
+            <div class="collapsible-content">
+              <!-- Master Public Key -->
+              <div class="key-item">
+                <label>Master Public Key (xpub)</label>
+                <div class="key-value-row">
+                  <code id="wallet-xpub" class="key-value truncate"></code>
+                  <button class="copy-key-btn" data-copy="wallet-xpub" title="Copy">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Master Private Key (blurred) -->
+              <div class="key-item sensitive">
+                <label>Master Private Key (xprv)</label>
+                <div class="key-value-row">
+                  <code id="wallet-xprv" class="key-value truncate blurred" data-revealed="false"></code>
+                  <button class="reveal-key-btn" data-target="wallet-xprv" title="Click to reveal">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </button>
+                  <button class="copy-key-btn" data-copy="wallet-xprv" title="Copy">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Seed Phrase (blurred) -->
+              <div class="key-item sensitive">
+                <label>Seed Phrase (BIP39)</label>
+                <div class="key-value-row">
+                  <code id="wallet-seed-phrase" class="key-value seed-phrase blurred" data-revealed="false"></code>
+                  <button class="reveal-key-btn" data-target="wallet-seed-phrase" title="Click to reveal">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </button>
+                  <button class="copy-key-btn" data-copy="wallet-seed-phrase" title="Copy">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Export Dropdown -->
+              <div class="export-section">
+                <div class="export-dropdown">
+                  <button class="glass-btn small export-btn" id="export-wallet-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Export Wallet
+                  </button>
+                  <div class="export-menu" id="export-menu">
+                    <button class="export-option" data-format="mnemonic">
+                      <span class="export-icon">📝</span>
+                      <span class="export-label">BIP39 Mnemonic</span>
+                      <span class="export-desc">24-word seed phrase</span>
+                    </button>
+                    <button class="export-option" data-format="xpub">
+                      <span class="export-icon">🔓</span>
+                      <span class="export-label">Extended Public Key</span>
+                      <span class="export-desc">xpub (watch-only)</span>
+                    </button>
+                    <button class="export-option" data-format="xprv">
+                      <span class="export-icon">🔐</span>
+                      <span class="export-label">Extended Private Key</span>
+                      <span class="export-desc">xprv (full access)</span>
+                    </button>
+                    <button class="export-option" data-format="keystore">
+                      <span class="export-icon">📦</span>
+                      <span class="export-label">Keystore JSON</span>
+                      <span class="export-desc">Encrypted (Ethereum-style)</span>
+                    </button>
+                    <button class="export-option" data-format="wif">
+                      <span class="export-icon">🔑</span>
+                      <span class="export-label">WIF Private Key</span>
+                      <span class="export-desc">Bitcoin import format</span>
+                    </button>
+                    <button class="export-option" data-format="hex">
+                      <span class="export-icon">⚡</span>
+                      <span class="export-label">Raw Hex</span>
+                      <span class="export-desc">Unencrypted bytes</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- vCard Tab Content -->
+        <div id="vcard-tab-content" class="modal-tab-content">
+          <!-- Form View -->
+          <div id="vcard-form-view">
+            <!-- Photo Upload -->
+            <div class="photo-upload-section">
+              <div class="photo-preview" id="vcard-photo-preview">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="photo-placeholder-icon">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                <video id="vcard-camera-video" autoplay playsinline style="display:none;width:100%;height:100%;object-fit:cover;"></video>
+              </div>
+              <div class="photo-actions">
+                <label class="glass-btn small" for="vcard-photo-input">Upload</label>
+                <input type="file" id="vcard-photo-input" accept="image/*" hidden>
+                <button id="vcard-camera-btn" class="glass-btn small" style="display:none;">Take Photo</button>
+                <button id="vcard-camera-capture" class="glass-btn small primary" style="display:none;">Capture</button>
+                <button id="vcard-camera-cancel" class="glass-btn small" style="display:none;">Cancel</button>
+                <button id="vcard-photo-remove" class="glass-btn small" style="display:none;">Remove</button>
+              </div>
+            </div>
+
+            <!-- vCard Form -->
+            <div class="identity-form">
+              <div class="form-row">
+                <div class="glass-input-group">
+                  <label>Prefix</label>
+                  <input type="text" id="vcard-prefix" class="glass-input" placeholder="Dr.">
+                </div>
+                <div class="glass-input-group">
+                  <label>First Name</label>
+                  <input type="text" id="vcard-firstname" class="glass-input" placeholder="John">
+                </div>
+                <div class="glass-input-group">
+                  <label>Middle Name</label>
+                  <input type="text" id="vcard-middlename" class="glass-input" placeholder="Michael">
+                </div>
+                <div class="glass-input-group">
+                  <label>Last Name</label>
+                  <input type="text" id="vcard-lastname" class="glass-input" placeholder="Doe">
+                </div>
+                <div class="glass-input-group">
+                  <label>Suffix</label>
+                  <input type="text" id="vcard-suffix" class="glass-input" placeholder="Jr.">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="glass-input-group">
+                  <label>Email</label>
+                  <input type="email" id="vcard-email" class="glass-input" placeholder="john@example.com">
+                </div>
+                <div class="glass-input-group">
+                  <label>Organization</label>
+                  <input type="text" id="vcard-org" class="glass-input" placeholder="Company Name">
+                </div>
+                <div class="glass-input-group">
+                  <label>Job Title</label>
+                  <input type="text" id="vcard-title" class="glass-input" placeholder="Software Engineer">
+                </div>
+              </div>
+              <label class="checkbox-label">
+                <input type="checkbox" id="include-keys" checked>
+                <span>Include cryptographic public keys</span>
+              </label>
+            </div>
+
+            <!-- vCard Actions Row -->
+            <div class="vcard-actions-row">
+              <button id="generate-vcard" class="glass-btn primary">Generate vCard</button>
+              <label class="glass-btn import-btn" for="vcf-import-input">Import vCard</label>
+              <input type="file" id="vcf-import-input" accept=".vcf,text/vcard" hidden>
+              <button id="vcf-contacts-btn" class="glass-btn small" style="display: none;">From Contacts</button>
+            </div>
+
+            <!-- VCF Import Result -->
+            <div id="vcf-import-result" class="vcf-import-result" style="display: none;">
+              <h4 class="section-label">Imported Contact</h4>
+              <div class="vcf-import-card">
+                <div class="vcf-import-photo" id="vcf-import-photo"></div>
+                <div class="vcf-import-fields" id="vcf-import-fields"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Result View (replaces form when vCard is generated) -->
+          <div id="vcard-result-view" style="display: none;">
+            <div class="qr-container">
+              <canvas id="qr-code"></canvas>
+            </div>
+            <div class="vcard-result-actions">
+              <button id="download-vcard" class="glass-btn primary">Download .vcf</button>
+              <button id="copy-vcard" class="glass-btn">Copy</button>
+            </div>
+            <details class="vcard-details">
+              <summary>View Raw vCard</summary>
+              <pre id="vcard-preview"></pre>
+            </details>
+            <button id="vcard-back-btn" class="glass-btn vcard-back-btn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+              Back to Editor
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

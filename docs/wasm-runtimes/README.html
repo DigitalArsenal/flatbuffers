@@ -245,62 +245,15 @@
 <li>Active maintenance and security updates</li>
 <li>Full algorithm support including X25519, Ed25519, secp256k1</li>
 </ul>
-<h4>Alternative: OpenSSL FIPS Provider (Requires Custom Build)</h4>
-<p>For organizations requiring FIPS 140-3 compliance, an <a href="../../openssl-fips/README.html">OpenSSL 3.x FIPS build</a> can be compiled from source:</p>
+<h4>FIPS Support via hd-wallet-wasm</h4>
+<p>FIPS 140-3 compatible algorithms are available through <code>hd-wallet-wasm</code>, which includes
+built-in OpenSSL FIPS support. Enable it with <code>wallet.initFips()</code>:</p>
 <ul>
-<li>FIPS 140-3 validated algorithms (Certificate #4282)</li>
-<li>NIST-approved curves only (P-256, P-384, P-521)</li>
-<li><strong>Note</strong>: X25519/Ed25519/secp256k1 are not available in FIPS mode (not NIST-approved)</li>
+<li>NIST-approved curves (P-256, P-384)</li>
+<li>AES-256-GCM authenticated encryption</li>
+<li>HKDF, PBKDF2, scrypt key derivation</li>
+<li>Full multi-curve support (secp256k1, Ed25519, X25519) also available in non-FIPS mode</li>
 </ul>
-<table>
-<thead>
-<tr>
-<th>Feature</th>
-<th>Crypto++ (Default Build)</th>
-<th>OpenSSL FIPS (Custom Build)</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>X25519</td>
-<td>✅</td>
-<td>❌</td>
-</tr>
-<tr>
-<td>Ed25519</td>
-<td>✅</td>
-<td>❌</td>
-</tr>
-<tr>
-<td>secp256k1</td>
-<td>✅</td>
-<td>❌</td>
-</tr>
-<tr>
-<td>P-256/P-384</td>
-<td>✅</td>
-<td>✅</td>
-</tr>
-<tr>
-<td>AES-256</td>
-<td>✅</td>
-<td>✅</td>
-</tr>
-<tr>
-<td>SHA-256/SHA-3</td>
-<td>✅</td>
-<td>✅</td>
-</tr>
-<tr>
-<td>FIPS 140-3 Validated</td>
-<td>❌</td>
-<td>✅</td>
-</tr>
-<tr>
-<td>Pre-built WASM</td>
-<td>✅</td>
-<td>❌ (build from source)</td>
-</tr>
-</tbody></table>
 <h3>Cross-Language Interoperability</h3>
 <p>Data encrypted in one language can be decrypted in any other:</p>
 <pre><code>Go ↔ Python ↔ Rust ↔ Java ↔ C# ↔ Swift ↔ Node.js ↔ Browser

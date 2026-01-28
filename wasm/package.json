@@ -70,6 +70,6 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "hd-wallet-wasm": "0.2.0"
+    "hd-wallet-wasm": "0.2.1"
   }
 }

@@ -141,6 +141,10 @@ body {
   border-bottom: 1px solid var(--glass-border);
 }
 
+body:has(.modal.active) .nav-bar {
+  z-index: 1;
+}
+
 .nav-content {
   max-width: 1200px;
   margin: 0 auto;
@@ -715,6 +719,192 @@ body {
 
 .method-content.active {
   display: block;
+}
+
+/* Modal Tabs (Account modal - Keys / vCard) */
+.modal-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 4px;
+  background: var(--white-05);
+  border-radius: var(--radius-sm);
+}
+
+.modal-tab {
+  flex: 1;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  color: var(--white-60);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.modal-tab.active {
+  background: var(--glass-hover);
+  color: var(--white);
+}
+
+.modal-tab-content {
+  display: none;
+}
+
+.modal-tab-content.active {
+  display: block;
+}
+
+/* Photo Upload */
+.photo-upload-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.photo-preview {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--white-05);
+  border: 2px dashed var(--white-20);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.photo-preview:hover {
+  border-color: var(--white-40);
+}
+
+.photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-placeholder-icon {
+  width: 40px;
+  height: 40px;
+  opacity: 0.3;
+}
+
+.photo-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* vCard Actions Row */
+.vcard-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+
+.import-btn {
+  margin-left: auto;
+  background: rgba(59, 130, 246, 0.25);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  color: #93bbfc;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.import-btn:hover {
+  background: rgba(59, 130, 246, 0.4);
+  border-color: rgba(59, 130, 246, 0.7);
+  color: #bdd4fd;
+}
+
+/* VCF Import Result */
+.vcf-import-result {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--white-05);
+  border-radius: var(--radius-sm);
+}
+
+.vcf-import-card {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.vcf-import-photo {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--white-05);
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vcf-import-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vcf-import-fields {
+  flex: 1;
+  min-width: 0;
+}
+
+.vcf-import-field {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.vcf-import-field-label {
+  color: var(--white-60);
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.vcf-import-field-value {
+  color: var(--white);
+  word-break: break-all;
+}
+
+.vcf-import-keys {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--white-10);
+}
+
+.vcf-import-key {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+.vcf-import-key-type {
+  color: var(--accent);
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.vcf-import-key-value {
+  color: var(--white-60);
+  word-break: break-all;
 }
 
 .entropy-bar {
@@ -2092,8 +2282,7 @@ body {
   accent-color: var(--white);
 }
 
-.vcard-result {
-  margin-top: 32px;
+#vcard-result-view {
   text-align: center;
 }
 
@@ -2109,11 +2298,18 @@ body {
   display: block;
 }
 
-.vcard-actions {
+.vcard-result-actions {
   display: flex;
   justify-content: center;
   gap: 12px;
   margin-bottom: 20px;
+}
+
+.vcard-back-btn {
+  margin-top: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .vcard-details {

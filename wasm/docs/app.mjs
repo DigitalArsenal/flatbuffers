@@ -9,7 +9,7 @@
  * 5. Streaming demo with message routing by type
  */
 
-import initHDWallet from 'hd-wallet-wasm';
+import initHDWallet, { Curve } from 'hd-wallet-wasm';
 import { x25519, ed25519 } from '@noble/curves/ed25519';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { p256 } from '@noble/curves/p256';
@@ -30,15 +30,46 @@ import {
   loadEncryptionWasm,
   sha256,
   hkdf,
-  x25519GenerateKeyPair,
-  secp256k1GenerateKeyPair,
-  p256GenerateKeyPairAsync,
-  p384GenerateKeyPairAsync,
   EncryptionContext,
   encryptionHeaderFromJSON,
   encryptBuffer,
   decryptBuffer,
 } from './encryption-stub.mjs';
+
+// Key generation using @noble/curves
+// TODO: Replace with hd-wallet-wasm curves API once WASM exports _hd_curve_pubkey_from_privkey
+function generateKeyPair(curveType) {
+  if (curveType === Curve.SECP256K1) {
+    const privateKey = secp256k1.utils.randomPrivateKey();
+    const publicKey = secp256k1.getPublicKey(privateKey, true);
+    return { privateKey, publicKey };
+  }
+  if (curveType === Curve.X25519) {
+    const privateKey = x25519.utils.randomPrivateKey();
+    const publicKey = x25519.getPublicKey(privateKey);
+    return { privateKey, publicKey };
+  }
+  throw new Error(`Unsupported curve type: ${curveType}`);
+}
+
+// P-256/P-384 key generation via WebCrypto (hardware accelerated)
+async function p256GenerateKeyPairAsync() {
+  const keyPair = await crypto.subtle.generateKey(
+    { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']
+  );
+  const rawPublic = await crypto.subtle.exportKey('raw', keyPair.publicKey);
+  const pkcs8Private = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
+  return { publicKey: new Uint8Array(rawPublic), privateKey: new Uint8Array(pkcs8Private) };
+}
+
+async function p384GenerateKeyPairAsync() {
+  const keyPair = await crypto.subtle.generateKey(
+    { name: 'ECDSA', namedCurve: 'P-384' }, true, ['sign', 'verify']
+  );
+  const rawPublic = await crypto.subtle.exportKey('raw', keyPair.publicKey);
+  const pkcs8Private = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
+  return { publicKey: new Uint8Array(rawPublic), privateKey: new Uint8Array(pkcs8Private) };
+}
 
 import { FlatcRunner } from '../src/runner.mjs';
 import { generateAlignedCode, parseSchema } from '../src/aligned-codegen.mjs';
@@ -436,29 +467,29 @@ async function deriveKeysFromPassword(username, password) {
   const usernameSalt = encoder.encode(username);
   const passwordBytes = encoder.encode(password);
 
-  const initialHash = sha256(new Uint8Array([...usernameSalt, ...passwordBytes]));
-  const masterKey = hkdf(initialHash, usernameSalt, encoder.encode('master-key'), 32);
+  const initialHash = await sha256(new Uint8Array([...usernameSalt, ...passwordBytes]));
+  const masterKey = await hkdf(initialHash, usernameSalt, encoder.encode('master-key'), 32);
 
-  state.encryptionKey = hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-key'), 32);
-  state.encryptionIV = hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-iv'), 16);
+  state.encryptionKey = await hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-key'), 32);
+  state.encryptionIV = await hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-iv'), 16);
 
   // Create 64-byte seed for HD wallet (password-based, not BIP39)
-  const hdSeed = hkdf(masterKey, new Uint8Array(0), encoder.encode('hd-wallet-seed'), 64);
+  const hdSeed = await hkdf(masterKey, new Uint8Array(0), encoder.encode('hd-wallet-seed'), 64);
   state.masterSeed = hdSeed;
   state.hdRoot = state.hdWalletModule.hdkey.fromSeed(hdSeed);
   console.log('HD wallet initialized from password, hdRoot:', !!state.hdRoot);
 
   // Derive deterministic seeds for each curve
-  const ed25519Seed = hkdf(masterKey, new Uint8Array(0), encoder.encode('ed25519-seed'), 32);
+  const ed25519Seed = await hkdf(masterKey, new Uint8Array(0), encoder.encode('ed25519-seed'), 32);
 
   const keys = {
-    x25519: x25519GenerateKeyPair(),
+    x25519: generateKeyPair(Curve.X25519),
     // Use @noble/curves ed25519 directly (hd-wallet-wasm Ed25519 not implemented)
     ed25519: {
       privateKey: ed25519Seed,
       publicKey: ed25519.getPublicKey(ed25519Seed),
     },
-    secp256k1: secp256k1GenerateKeyPair(),
+    secp256k1: generateKeyPair(Curve.SECP256K1),
     // P-256 and P-384 require async crypto.subtle
     p256: await p256GenerateKeyPairAsync(),
     p384: await p384GenerateKeyPairAsync(),
@@ -472,15 +503,15 @@ async function deriveKeysFromSeed(seedPhrase) {
   const seed = state.hdWalletModule.mnemonic.toSeed(seedPhrase);
   const encoder = new TextEncoder();
 
-  const masterKey = hkdf(
+  const masterKey = await hkdf(
     new Uint8Array(seed.slice(0, 32)),
     new Uint8Array(0),
     encoder.encode('flatbuffers-wallet'),
     32
   );
 
-  state.encryptionKey = hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-key'), 32);
-  state.encryptionIV = hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-iv'), 16);
+  state.encryptionKey = await hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-key'), 32);
+  state.encryptionIV = await hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-iv'), 16);
 
   // Store seed for HD wallet derivation (BIP39 standard)
   state.masterSeed = new Uint8Array(seed);
@@ -488,16 +519,16 @@ async function deriveKeysFromSeed(seedPhrase) {
   console.log('HD wallet initialized from seed phrase, hdRoot:', !!state.hdRoot);
 
   // Derive deterministic seeds for each curve
-  const ed25519Seed = hkdf(masterKey, new Uint8Array(0), encoder.encode('ed25519-seed'), 32);
+  const ed25519Seed = await hkdf(masterKey, new Uint8Array(0), encoder.encode('ed25519-seed'), 32);
 
   const keys = {
-    x25519: x25519GenerateKeyPair(),
+    x25519: generateKeyPair(Curve.X25519),
     // Use @noble/curves ed25519 directly (hd-wallet-wasm Ed25519 not implemented)
     ed25519: {
       privateKey: ed25519Seed,
       publicKey: ed25519.getPublicKey(ed25519Seed),
     },
-    secp256k1: secp256k1GenerateKeyPair(),
+    secp256k1: generateKeyPair(Curve.SECP256K1),
     // P-256 and P-384 require async crypto.subtle
     p256: await p256GenerateKeyPairAsync(),
     p384: await p384GenerateKeyPairAsync(),
@@ -525,15 +556,15 @@ const STORED_WALLET_KEY = 'encrypted_wallet';
 /**
  * Derive an encryption key from a 6-digit PIN using HKDF
  */
-function deriveKeyFromPIN(pin) {
+async function deriveKeyFromPIN(pin) {
   const encoder = new TextEncoder();
   const pinBytes = encoder.encode(pin);
   // Use a fixed salt for PIN derivation (since PIN is low entropy, we rely on the
   // encryption being local-only and rate-limited by user interaction)
   const salt = encoder.encode('flatbuffers-wallet-pin-v1');
-  const pinHash = sha256(new Uint8Array([...salt, ...pinBytes]));
-  const encryptionKey = hkdf(pinHash, salt, encoder.encode('pin-encryption-key'), 32);
-  const iv = hkdf(pinHash, salt, encoder.encode('pin-encryption-iv'), 16);
+  const pinHash = await sha256(new Uint8Array([...salt, ...pinBytes]));
+  const encryptionKey = await hkdf(pinHash, salt, encoder.encode('pin-encryption-key'), 32);
+  const iv = await hkdf(pinHash, salt, encoder.encode('pin-encryption-iv'), 16);
   return { encryptionKey, iv };
 }
 
@@ -545,7 +576,7 @@ async function storeWalletWithPIN(pin, walletData) {
     throw new Error('PIN must be exactly 6 digits');
   }
 
-  const { encryptionKey, iv } = deriveKeyFromPIN(pin);
+  const { encryptionKey, iv } = await deriveKeyFromPIN(pin);
 
   // Serialize wallet data to JSON, then to bytes
   const encoder = new TextEncoder();
@@ -591,7 +622,7 @@ async function retrieveWalletWithPIN(pin) {
   }
 
   const stored = JSON.parse(storedJson);
-  const { encryptionKey, iv } = deriveKeyFromPIN(pin);
+  const { encryptionKey, iv } = await deriveKeyFromPIN(pin);
 
   // Decode base64 ciphertext
   const ciphertext = Uint8Array.from(atob(stored.ciphertext), c => c.charCodeAt(0));
@@ -742,9 +773,9 @@ async function registerPasskeyAndStoreWallet(walletData) {
     // Derive encryption key from the key material
     const encoder = new TextEncoder();
     const salt = encoder.encode('flatbuffers-passkey-v1');
-    const keyHash = sha256(new Uint8Array([...salt, ...encryptionKeyMaterial]));
-    const encryptionKey = hkdf(keyHash, salt, encoder.encode('passkey-encryption-key'), 32);
-    const iv = hkdf(keyHash, salt, encoder.encode('passkey-encryption-iv'), 16);
+    const keyHash = await sha256(new Uint8Array([...salt, ...encryptionKeyMaterial]));
+    const encryptionKey = await hkdf(keyHash, salt, encoder.encode('passkey-encryption-key'), 32);
+    const iv = await hkdf(keyHash, salt, encoder.encode('passkey-encryption-iv'), 16);
 
     // Encrypt wallet data
     const plaintext = encoder.encode(JSON.stringify(walletData));
@@ -845,9 +876,9 @@ async function authenticatePasskeyAndRetrieveWallet() {
     // Derive encryption key from the key material
     const encoder = new TextEncoder();
     const salt = encoder.encode('flatbuffers-passkey-v1');
-    const keyHash = sha256(new Uint8Array([...salt, ...encryptionKeyMaterial]));
-    const encryptionKey = hkdf(keyHash, salt, encoder.encode('passkey-encryption-key'), 32);
-    const iv = hkdf(keyHash, salt, encoder.encode('passkey-encryption-iv'), 16);
+    const keyHash = await sha256(new Uint8Array([...salt, ...encryptionKeyMaterial]));
+    const encryptionKey = await hkdf(keyHash, salt, encoder.encode('passkey-encryption-key'), 32);
+    const iv = await hkdf(keyHash, salt, encoder.encode('passkey-encryption-iv'), 16);
 
     // Decrypt wallet data
     const ciphertext = Uint8Array.from(atob(encryptedWallet.ciphertext), c => c.charCodeAt(0));
@@ -1282,7 +1313,7 @@ async function exportWallet(format) {
         const btcPath = "m/44'/0'/0'/0/0";
         const derived = state.hdRoot.derivePath(btcPath);
         const privateKeyBytes = derived.privateKey;
-        data = privateKeyToWIF(privateKeyBytes, true); // mainnet, compressed
+        data = await privateKeyToWIF(privateKeyBytes, true); // mainnet, compressed
         filename = 'wallet-private-key.wif';
         mimeType = 'text/plain';
       } catch (err) {
@@ -1320,7 +1351,7 @@ async function exportWallet(format) {
  * @param {boolean} compressed - Whether to use compressed format
  * @returns {string} WIF-encoded private key
  */
-function privateKeyToWIF(privateKey, compressed = true) {
+async function privateKeyToWIF(privateKey, compressed = true) {
   // WIF format: version byte + private key + (optional compression flag) + checksum
   const version = 0x80; // Mainnet
   const payload = new Uint8Array(compressed ? 34 : 33);
@@ -1331,8 +1362,8 @@ function privateKeyToWIF(privateKey, compressed = true) {
   }
 
   // Double SHA256 for checksum
-  const hash1 = sha256(payload);
-  const hash2 = sha256(hash1);
+  const hash1 = await sha256(payload);
+  const hash2 = await sha256(hash1);
   const checksum = hash2.slice(0, 4);
 
   // Combine and encode as Base58
@@ -1395,7 +1426,7 @@ async function createKeystoreJSON(seed, password) {
   const iterations = 100000;
   let key = encoder.encode(password);
   for (let i = 0; i < Math.min(iterations / 1000, 100); i++) {
-    key = sha256(new Uint8Array([...key, ...salt]));
+    key = await sha256(new Uint8Array([...key, ...salt]));
   }
   const derivedKey = key.slice(0, 32);
 
@@ -2984,19 +3015,9 @@ async function generatePKIKeyPairs() {
         state.pki.alice = await p384GenerateKeyPairAsync();
         state.pki.bob = await p384GenerateKeyPairAsync();
       } else {
-        let generateFn;
-        switch (algorithm) {
-          case 'x25519':
-            generateFn = x25519GenerateKeyPair;
-            break;
-          case 'secp256k1':
-            generateFn = secp256k1GenerateKeyPair;
-            break;
-          default:
-            generateFn = x25519GenerateKeyPair;
-        }
-        state.pki.alice = generateFn();
-        state.pki.bob = generateFn();
+        const curveType = algorithm === 'secp256k1' ? Curve.SECP256K1 : Curve.X25519;
+        state.pki.alice = generateKeyPair(curveType);
+        state.pki.bob = generateKeyPair(curveType);
       }
     } catch (e) {
       console.error('Failed to generate PKI keys:', e);
@@ -4681,19 +4702,9 @@ function setupMainAppHandlers() {
           state.pki.alice = await p384GenerateKeyPairAsync();
           state.pki.bob = await p384GenerateKeyPairAsync();
         } else {
-          let generateFn;
-          switch (newAlgorithm) {
-            case 'x25519':
-              generateFn = x25519GenerateKeyPair;
-              break;
-            case 'secp256k1':
-              generateFn = secp256k1GenerateKeyPair;
-              break;
-            default:
-              generateFn = x25519GenerateKeyPair;
-          }
-          state.pki.alice = generateFn();
-          state.pki.bob = generateFn();
+          const curveType = newAlgorithm === 'secp256k1' ? Curve.SECP256K1 : Curve.X25519;
+          state.pki.alice = generateKeyPair(curveType);
+          state.pki.bob = generateKeyPair(curveType);
         }
         savePKIKeys();
 
@@ -5037,13 +5048,13 @@ async function init() {
       const tempEd25519Seed = new Uint8Array(32);
       crypto.getRandomValues(tempEd25519Seed);
       const tempKeys = {
-        x25519: x25519GenerateKeyPair(),
+        x25519: generateKeyPair(Curve.X25519),
         // Use @noble/curves ed25519 directly (hd-wallet-wasm Ed25519 not implemented)
         ed25519: {
           privateKey: tempEd25519Seed,
           publicKey: ed25519.getPublicKey(tempEd25519Seed),
         },
-        secp256k1: secp256k1GenerateKeyPair(),
+        secp256k1: generateKeyPair(Curve.SECP256K1),
         // P-256 and P-384 require async crypto.subtle
         p256: await p256GenerateKeyPairAsync(),
         p384: await p384GenerateKeyPairAsync(),
@@ -5055,8 +5066,8 @@ async function init() {
         // Use a random seed for session-based encryption
         const randomSeed = new Uint8Array(32);
         crypto.getRandomValues(randomSeed);
-        state.encryptionKey = hkdf(randomSeed, new Uint8Array(0), encoder.encode('buffer-encryption-key'), 32);
-        state.encryptionIV = hkdf(randomSeed, new Uint8Array(0), encoder.encode('buffer-encryption-iv'), 16);
+        state.encryptionKey = await hkdf(randomSeed, new Uint8Array(0), encoder.encode('buffer-encryption-key'), 32);
+        state.encryptionIV = await hkdf(randomSeed, new Uint8Array(0), encoder.encode('buffer-encryption-iv'), 16);
         // Save the keys so they persist
         savePKIKeys();
       }

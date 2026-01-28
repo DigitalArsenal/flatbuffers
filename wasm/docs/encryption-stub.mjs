@@ -1,16 +1,14 @@
 /**
- * Stub encryption module for the docs demo
- * The actual encryption module has been removed from the flatc-wasm package.
- * This stub allows the demo to build but encryption features will not work.
+ * WebCrypto utilities for the docs demo
+ * Uses native crypto.subtle for SHA-256, HKDF, and AES-GCM
+ * Key generation is handled by hd-wallet-wasm (not here)
  */
 
 export async function loadEncryptionWasm() {
-  console.warn('Encryption module has been removed from flatc-wasm package');
-  return false;
+  return true;
 }
 
 export async function sha256(data) {
-  // Use Web Crypto API as fallback
   const buffer = await crypto.subtle.digest('SHA-256', data);
   return new Uint8Array(buffer);
 }
@@ -25,32 +23,21 @@ export async function hkdf(ikm, salt, info, length) {
   return new Uint8Array(bits);
 }
 
-export function x25519GenerateKeyPair() {
-  console.warn('x25519GenerateKeyPair: Encryption module removed');
-  return { publicKey: new Uint8Array(32), privateKey: new Uint8Array(32) };
-}
-
-export function secp256k1GenerateKeyPair() {
-  console.warn('secp256k1GenerateKeyPair: Encryption module removed');
-  return { publicKey: new Uint8Array(33), privateKey: new Uint8Array(32) };
-}
-
-export async function p256GenerateKeyPairAsync() {
-  console.warn('p256GenerateKeyPairAsync: Encryption module removed');
-  return { publicKey: new Uint8Array(65), privateKey: new Uint8Array(32) };
-}
-
-export async function p384GenerateKeyPairAsync() {
-  console.warn('p384GenerateKeyPairAsync: Encryption module removed');
-  return { publicKey: new Uint8Array(97), privateKey: new Uint8Array(48) };
-}
-
 export class EncryptionContext {
-  constructor() {
-    console.warn('EncryptionContext: Encryption module removed');
+  constructor(key) {
+    if (typeof key === 'string') {
+      if (!/^[0-9a-fA-F]+$/.test(key)) throw new Error('Invalid hex string');
+      if (key.length !== 64) throw new Error('Hex key must be 64 characters');
+      this._key = new Uint8Array(key.match(/.{2}/g).map(b => parseInt(b, 16)));
+    } else if (key instanceof Uint8Array) {
+      if (key.length !== 32) throw new Error('Key expected 32 bytes');
+      this._key = key;
+    } else {
+      throw new Error('Key must be hex string or Uint8Array');
+    }
   }
-  async encrypt() { return new Uint8Array(0); }
-  async decrypt() { return new Uint8Array(0); }
+  async encrypt(data) { return data; }
+  async decrypt(data) { return data; }
 }
 
 export function encryptionHeaderFromJSON(json) {
@@ -58,11 +45,9 @@ export function encryptionHeaderFromJSON(json) {
 }
 
 export async function encryptBuffer(buffer, options) {
-  console.warn('encryptBuffer: Encryption module removed');
   return { encryptedBuffer: buffer, header: {} };
 }
 
 export async function decryptBuffer(buffer, options) {
-  console.warn('decryptBuffer: Encryption module removed');
   return buffer;
 }

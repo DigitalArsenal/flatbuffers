@@ -1,6 +1,6 @@
 {
   "name": "flatc-wasm",
-  "version": "25.12.19-wasm.2",
+  "version": "25.12.19-wasm.3",
   "description": "FlatBuffers compiler (flatc) as a WebAssembly module - schema management, JSON/binary conversion, and code generation",
   "type": "module",
   "main": "src/index.mjs",
@@ -44,7 +44,7 @@
     "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
     "test:aligned": "node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
     "prepublishOnly": "npm test",
-    "prepare": "cd .. && husky"
+    "prepare": "cd .. && husky || true"
   },
   "repository": {
     "type": "git",

@@ -25,6 +25,8 @@ jobs:
   publish-npm-wasm:
     name: Publish NPM (flatc-wasm)
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     defaults:
       run:
         working-directory: ./wasm
@@ -35,9 +37,7 @@ jobs:
           node-version: '20.x'
           registry-url: 'https://registry.npmjs.org'
 
-      - run: npm publish --tag latest
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm publish --tag latest --provenance --access public
 
   publish-pypi:
     name: Publish PyPi

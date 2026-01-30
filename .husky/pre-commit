@@ -1,0 +1,101 @@
+#!/bin/bash
+#
+# Pre-commit hook: flatc-wasm version bump + docs build
+#
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+DEMO_SRC="$REPO_ROOT/wasm/docs"
+DOCS_DIR="$REPO_ROOT/docs"
+
+# --- flatc-wasm version bump ---
+# Reads the base version from CMake/Version.cmake and compares with wasm/package.json.
+# If the base version changed, reset to X.Y.Z-wasm.0.
+# If base is the same but wasm/ files changed, increment wasm.N.
+WASM_PKG="$REPO_ROOT/wasm/package.json"
+VERSION_CMAKE="$REPO_ROOT/CMake/Version.cmake"
+WASM_CHANGED=$(git diff --cached --name-only | grep -E "^wasm/" || true)
+
+if [ -n "$WASM_CHANGED" ]; then
+    # Read base version from CMake/Version.cmake
+    CMAKE_MAJOR=$(grep 'set(VERSION_MAJOR' "$VERSION_CMAKE" | sed 's/[^0-9]//g')
+    CMAKE_MINOR=$(grep 'set(VERSION_MINOR' "$VERSION_CMAKE" | sed 's/[^0-9]//g')
+    CMAKE_PATCH=$(grep 'set(VERSION_PATCH' "$VERSION_CMAKE" | sed 's/[^0-9]//g')
+    CMAKE_BASE="${CMAKE_MAJOR}.${CMAKE_MINOR}.${CMAKE_PATCH}"
+
+    # Read current version from wasm/package.json
+    CURRENT_VER=$(node -p "require('$WASM_PKG').version")
+    CURRENT_BASE=$(echo "$CURRENT_VER" | sed 's/-wasm\..*//')
+    CURRENT_WASM_NUM=$(echo "$CURRENT_VER" | sed -n 's/.*-wasm\.\([0-9]*\)/\1/p')
+    CURRENT_WASM_NUM=${CURRENT_WASM_NUM:-0}
+
+    if [ "$CMAKE_BASE" != "$CURRENT_BASE" ]; then
+        NEW_VER="${CMAKE_BASE}-wasm.0"
+    else
+        NEW_WASM_NUM=$((CURRENT_WASM_NUM + 1))
+        NEW_VER="${CMAKE_BASE}-wasm.${NEW_WASM_NUM}"
+    fi
+
+    if [ "$CURRENT_VER" != "$NEW_VER" ]; then
+        echo "Bumping flatc-wasm version: $CURRENT_VER -> $NEW_VER"
+        node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('$WASM_PKG', 'utf8'));
+            pkg.version = '$NEW_VER';
+            fs.writeFileSync('$WASM_PKG', JSON.stringify(pkg, null, 2) + '\n');
+        "
+        git add "$WASM_PKG"
+    fi
+fi
+
+# --- Docs build ---
+# Check if demo files have changed
+DEMO_CHANGED=$(git diff --cached --name-only | grep -E "^wasm/docs/" || true)
+
+if [ -z "$DEMO_CHANGED" ]; then
+    # No demo changes, skip build
+    exit 0
+fi
+
+echo "DA FlatBuffers demo files changed, building for GitHub Pages..."
+
+# Check if npm is available
+if ! command -v npm &> /dev/null; then
+    echo "Warning: npm not found, skipping demo build"
+    exit 0
+fi
+
+# Navigate to demo directory
+cd "$DEMO_SRC"
+
+# Install dependencies if node_modules doesn't exist or package.json changed
+if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
+    echo "Installing dependencies..."
+    npm install
+fi
+
+# Build the demo (vite-plugin-singlefile inlines everything into index.html)
+echo "Building single-file demo..."
+npm run build
+
+# Copy the single-file index.html to docs/index.html
+echo "Copying to docs/index.html..."
+cp dist/index.html "$DOCS_DIR/index.html"
+
+# Copy WASM file to docs/ (required at runtime, can't be inlined)
+if [ -f "dist/flatc-encryption.wasm" ]; then
+    cp dist/flatc-encryption.wasm "$DOCS_DIR/flatc-encryption.wasm"
+fi
+
+# Copy favicon if present
+if [ -f "dist/favicon.svg" ]; then
+    cp dist/favicon.svg "$DOCS_DIR/favicon.svg"
+fi
+
+# Stage the docs files
+git add "$DOCS_DIR/index.html"
+[ -f "$DOCS_DIR/flatc-encryption.wasm" ] && git add "$DOCS_DIR/flatc-encryption.wasm"
+[ -f "$DOCS_DIR/favicon.svg" ] && git add "$DOCS_DIR/favicon.svg"
+
+echo "Single-file demo built and staged for commit."

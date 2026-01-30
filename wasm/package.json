@@ -1,6 +1,6 @@
 {
   "name": "flatc-wasm",
-  "version": "26.1.17",
+  "version": "25.12.19-wasm.1",
   "description": "FlatBuffers compiler (flatc) as a WebAssembly module - schema management, JSON/binary conversion, and code generation",
   "type": "module",
   "main": "src/index.mjs",
@@ -43,7 +43,8 @@
     "build": "cmake --build ../build/wasm --target flatc_wasm_npm -j",
     "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
     "test:aligned": "node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "prepare": "cd .. && husky"
   },
   "repository": {
     "type": "git",
@@ -71,5 +72,8 @@
   },
   "dependencies": {
     "hd-wallet-wasm": "0.2.1"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
   }
 }

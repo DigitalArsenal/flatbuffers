@@ -22,6 +22,23 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+  publish-npm-wasm:
+    name: Publish NPM (flatc-wasm)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./wasm
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: npm publish --tag latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   publish-pypi:
     name: Publish PyPi
     runs-on: ubuntu-latest
@@ -100,7 +117,7 @@ jobs:
           OSSRH_USERNAME: ${{ secrets.OSSRH_USER_V2 }}
           OSSRH_PASSWORD: ${{ secrets.OSSRH_TOKEN_V2 }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
-          
+
   publish-maven-kotlin:
     name: Publish Maven - Kotlin
     runs-on: ubuntu-latest
@@ -138,7 +155,7 @@ jobs:
         with:
           toolchain: stable
           override: true
-          
+
       - name: Publish Flatbuffers
         uses: katyo/publish-crates@v2
         with:

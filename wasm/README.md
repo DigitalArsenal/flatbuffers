@@ -14,9 +14,10 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/flatc-wasm"><img src="https://img.shields.io/npm/v/flatc-wasm.svg" alt="npm"></a>
-  <a href="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/build.yml"><img src="https://github.com/DigitalArsenal/flatbuffers/workflows/CI/badge.svg" alt="CI"></a>
-  <a href="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/pages/pages-build-deployment"><img src="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/pages/pages-build-deployment/badge.svg" alt="Docs"></a>
-  <a href="https://github.com/AltAlpha/flatbuffers/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/build.yml"><img src="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/build.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/docs.yml"><img src="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/docs.yml/badge.svg" alt="Docs"></a>
+  <a href="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/npm-publish-wasm.yml"><img src="https://github.com/DigitalArsenal/flatbuffers/actions/workflows/npm-publish-wasm.yml/badge.svg" alt="Publish"></a>
+  <a href="https://github.com/DigitalArsenal/flatbuffers/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
 </p>
 
 ---

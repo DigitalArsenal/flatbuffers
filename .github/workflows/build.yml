@@ -191,7 +191,7 @@ jobs:
 
   build-dotnet-windows:
     name: Build .NET Windows
-    runs-on: windows-2022-64core
+    runs-on: windows-latest
     strategy:
       matrix:
         configuration: [

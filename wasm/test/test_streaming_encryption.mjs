@@ -47,7 +47,7 @@ import {
   encryptionHeaderFromJSON,
   KEY_SIZE,
   IV_SIZE,
-} from '../src/encryption.mjs';
+} from '../src/index.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SRC_DIR = path.join(__dirname, '..', 'src');

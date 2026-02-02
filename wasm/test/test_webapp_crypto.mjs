@@ -24,7 +24,7 @@ import {
   clearAllIVTracking,
   CryptoError,
   CryptoErrorCode,
-} from '../src/encryption.mjs';
+} from '../src/index.mjs';
 
 let passed = 0;
 let failed = 0;

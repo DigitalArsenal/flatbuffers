@@ -265,7 +265,6 @@ if(EMSCRIPTEN)
     $<$<CONFIG:Release>:-O3>
     $<$<CONFIG:Release>:-flto>
     $<$<CONFIG:Release>:--strip-debug>
-    $<$<CONFIG:Release>:-sSTRIP=1>
     $<$<CONFIG:Debug>:-g>
     $<$<CONFIG:Debug>:-sASSERTIONS=2>
   )
@@ -494,7 +493,6 @@ module.exports.default = createModule;
     $<$<CONFIG:Release>:-O3>
     $<$<CONFIG:Release>:-flto>
     $<$<CONFIG:Release>:--strip-debug>
-    $<$<CONFIG:Release>:-sSTRIP=1>
     $<$<CONFIG:Debug>:-g>
   )
 

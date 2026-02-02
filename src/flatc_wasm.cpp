@@ -982,7 +982,7 @@ int32_t wasm_stream_set_encryption(const uint8_t* config_ptr,
 
 EMSCRIPTEN_KEEPALIVE
 void wasm_stream_clear_encryption() {
-  flatbuffers::wasm::g_stream_encryption_ctx.reset();
+  g_stream_encryption_ctx.reset();
 }
 
 }  // extern "C"

@@ -30,7 +30,7 @@ import {
   encryptBuffer,
   decryptBuffer,
   encryptionHeaderFromJSON,
-} from "../../src/encryption.mjs";
+} from "../../src/index.mjs";
 
 import { FlatcRunner } from "flatc-wasm";
 

@@ -5,7 +5,7 @@
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { FlatcRunner } from "flatc-wasm";
-import { loadEncryptionWasm, isInitialized } from "../../src/encryption.mjs";
+import { loadEncryptionWasm, isInitialized } from "../../src/index.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

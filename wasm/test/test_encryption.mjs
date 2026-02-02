@@ -78,7 +78,7 @@ import {
   ED25519_PRIVATE_KEY_SIZE,
   ED25519_PUBLIC_KEY_SIZE,
   ED25519_SIGNATURE_SIZE,
-} from '../src/encryption.mjs';
+} from '../src/index.mjs';
 
 let passed = 0;
 let failed = 0;
@@ -1632,7 +1632,7 @@ async function main() {
   log('\n[Authenticated Encryption]');
 
   await test('encryptAuthenticated produces authenticated ciphertext', async () => {
-    const { encryptAuthenticated, decryptAuthenticated } = await import('../src/encryption.mjs');
+    const { encryptAuthenticated, decryptAuthenticated } = await import('../src/index.mjs');
     const key = randomBytes(KEY_SIZE);
     const plaintext = new TextEncoder().encode('Secret authenticated message!');
 
@@ -1647,7 +1647,7 @@ async function main() {
   });
 
   await test('decryptAuthenticated rejects tampered ciphertext', async () => {
-    const { encryptAuthenticated, decryptAuthenticated, CryptoError } = await import('../src/encryption.mjs');
+    const { encryptAuthenticated, decryptAuthenticated, CryptoError } = await import('../src/index.mjs');
     const key = randomBytes(KEY_SIZE);
     const plaintext = new TextEncoder().encode('Do not tamper!');
 
@@ -1668,7 +1668,7 @@ async function main() {
   });
 
   await test('encryptAuthenticated with associated data', async () => {
-    const { encryptAuthenticated, decryptAuthenticated } = await import('../src/encryption.mjs');
+    const { encryptAuthenticated, decryptAuthenticated } = await import('../src/index.mjs');
     const key = randomBytes(KEY_SIZE);
     const plaintext = new TextEncoder().encode('Secret message');
     const aad = new TextEncoder().encode('additional authenticated data');
@@ -1680,7 +1680,7 @@ async function main() {
   });
 
   await test('decryptAuthenticated rejects wrong associated data', async () => {
-    const { encryptAuthenticated, decryptAuthenticated } = await import('../src/encryption.mjs');
+    const { encryptAuthenticated, decryptAuthenticated } = await import('../src/index.mjs');
     const key = randomBytes(KEY_SIZE);
     const plaintext = new TextEncoder().encode('Secret message');
     const aad = new TextEncoder().encode('correct AAD');
@@ -1707,7 +1707,7 @@ async function main() {
   // For now, we test the MAC generation/verification logic directly
 
   await test('encryptBuffer returns MAC by default', async () => {
-    const { EncryptionContext, hmacSha256, hkdf, HMAC_SIZE, KEY_SIZE: KS, IV_SIZE } = await import('../src/encryption.mjs');
+    const { EncryptionContext, hmacSha256, hkdf, HMAC_SIZE, KEY_SIZE: KS, IV_SIZE } = await import('../src/index.mjs');
 
     // Test the MAC computation logic directly since we need a real FlatBuffer for encryptBuffer
     const key = randomBytes(KS);
@@ -1719,7 +1719,7 @@ async function main() {
     const macKey = hkdf(key, null, textEncoder.encode('flatbuffer-mac-key'), KS);
 
     // Compute MAC over nonce || buffer
-    const { hmacSha256: computeHmac } = await import('../src/encryption.mjs');
+    const { hmacSha256: computeHmac } = await import('../src/index.mjs');
     const macInput = new Uint8Array(IV_SIZE + buffer.length);
     macInput.set(nonce, 0);
     macInput.set(buffer, IV_SIZE);
@@ -1729,7 +1729,7 @@ async function main() {
   });
 
   await test('MAC verification detects tampering', async () => {
-    const { hmacSha256, hmacSha256Verify, hkdf, KEY_SIZE: KS, IV_SIZE } = await import('../src/encryption.mjs');
+    const { hmacSha256, hmacSha256Verify, hkdf, KEY_SIZE: KS, IV_SIZE } = await import('../src/index.mjs');
 
     const key = randomBytes(KS);
     const nonce = randomBytes(IV_SIZE);

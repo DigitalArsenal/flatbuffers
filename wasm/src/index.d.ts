@@ -185,3 +185,213 @@ export interface FlatcModule {
 export declare function createFlatcModule(options?: CreateModuleOptions): Promise<FlatcModule>;
 
 export default createFlatcModule;
+
+// =============================================================================
+// Encryption — Constants
+// =============================================================================
+
+export declare const KEY_SIZE: 32;
+export declare const IV_SIZE: 16;
+export declare const SHA256_SIZE: 32;
+export declare const HMAC_SIZE: 32;
+export declare const X25519_PRIVATE_KEY_SIZE: 32;
+export declare const X25519_PUBLIC_KEY_SIZE: 32;
+export declare const SECP256K1_PRIVATE_KEY_SIZE: 32;
+export declare const SECP256K1_PUBLIC_KEY_SIZE: 33;
+export declare const P256_PRIVATE_KEY_SIZE: 32;
+export declare const P256_PUBLIC_KEY_SIZE: 65;
+export declare const P384_PRIVATE_KEY_SIZE: 48;
+export declare const P384_PUBLIC_KEY_SIZE: 97;
+export declare const ED25519_PRIVATE_KEY_SIZE: 64;
+export declare const ED25519_PUBLIC_KEY_SIZE: 32;
+export declare const ED25519_SIGNATURE_SIZE: 64;
+
+// =============================================================================
+// Encryption — Error Types
+// =============================================================================
+
+export declare const CryptoErrorCode: Readonly<{
+  IV_REUSE: 'IV_REUSE';
+  INVALID_KEY: 'INVALID_KEY';
+  INVALID_IV: 'INVALID_IV';
+  INVALID_INPUT: 'INVALID_INPUT';
+  NOT_INITIALIZED: 'NOT_INITIALIZED';
+  WASM_ERROR: 'WASM_ERROR';
+  AUTHENTICATION_FAILED: 'AUTHENTICATION_FAILED';
+}>;
+
+export declare class CryptoError extends Error {
+  code: string;
+  constructor(message: string, code: string);
+}
+
+// =============================================================================
+// Encryption — Key Exchange Algorithm Enum
+// =============================================================================
+
+export declare const KeyExchangeAlgorithm: Readonly<{
+  X25519: 'x25519';
+  SECP256K1: 'secp256k1';
+  P256: 'p256';
+  P384: 'p384';
+}>;
+
+// =============================================================================
+// Encryption — Module Loading & Info
+// =============================================================================
+
+export declare function loadEncryptionWasm(): Promise<void>;
+export declare function isInitialized(): boolean;
+export declare function hasCryptopp(): boolean;
+export declare function getVersion(): string;
+
+// =============================================================================
+// Encryption — IV Tracking
+// =============================================================================
+
+export declare function clearIVTracking(key: Uint8Array): void;
+export declare function clearAllIVTracking(): void;
+
+// =============================================================================
+// Encryption — Hashing & KDF
+// =============================================================================
+
+export declare function sha256(data: Uint8Array): Uint8Array;
+export declare function hkdf(ikm: Uint8Array, salt: Uint8Array | null, info: Uint8Array | null, length: number): Uint8Array;
+export declare function hmacSha256(key: Uint8Array, data: Uint8Array): Uint8Array;
+export declare function hmacSha256Verify(key: Uint8Array, data: Uint8Array, mac: Uint8Array): boolean;
+
+// =============================================================================
+// Encryption — AES-256-CTR
+// =============================================================================
+
+export declare function encryptBytes(data: Uint8Array, key: Uint8Array, iv: Uint8Array): void;
+export declare function decryptBytes(data: Uint8Array, key: Uint8Array, iv: Uint8Array): void;
+export declare function generateIV(): Uint8Array;
+export declare function encryptBytesCopy(plaintext: Uint8Array, key: Uint8Array, iv?: Uint8Array): { ciphertext: Uint8Array; iv: Uint8Array };
+export declare function decryptBytesCopy(ciphertext: Uint8Array, key: Uint8Array, iv: Uint8Array): Uint8Array;
+
+// =============================================================================
+// Encryption — X25519
+// =============================================================================
+
+export interface KeyPair {
+  privateKey: Uint8Array;
+  publicKey: Uint8Array;
+}
+
+export declare function x25519GenerateKeyPair(existingPrivateKey?: Uint8Array): KeyPair;
+export declare function x25519SharedSecret(privateKey: Uint8Array, publicKey: Uint8Array): Uint8Array;
+export declare function x25519DeriveKey(sharedSecret: Uint8Array, context?: string | Uint8Array): Uint8Array;
+
+// =============================================================================
+// Encryption — secp256k1
+// =============================================================================
+
+export declare function secp256k1GenerateKeyPair(): KeyPair;
+export declare function secp256k1SharedSecret(privateKey: Uint8Array, publicKey: Uint8Array): Uint8Array;
+export declare function secp256k1DeriveKey(sharedSecret: Uint8Array, context?: string | Uint8Array): Uint8Array;
+export declare function secp256k1Sign(privateKey: Uint8Array, data: Uint8Array): Uint8Array;
+export declare function secp256k1Verify(publicKey: Uint8Array, data: Uint8Array, signature: Uint8Array): boolean;
+
+// =============================================================================
+// Encryption — P-256
+// =============================================================================
+
+export declare function p256GenerateKeyPairAsync(): Promise<KeyPair>;
+export declare function p256SharedSecretAsync(privateKeyPkcs8: Uint8Array, publicKeyRaw: Uint8Array): Promise<Uint8Array>;
+export declare function p256DeriveKey(sharedSecret: Uint8Array, context?: string | Uint8Array): Uint8Array;
+export declare function p256SignAsync(privateKeyPkcs8: Uint8Array, data: Uint8Array): Promise<Uint8Array>;
+export declare function p256VerifyAsync(publicKeyRaw: Uint8Array, data: Uint8Array, signature: Uint8Array): Promise<boolean>;
+
+// =============================================================================
+// Encryption — P-384
+// =============================================================================
+
+export declare function p384GenerateKeyPairAsync(): Promise<KeyPair>;
+export declare function p384SharedSecretAsync(privateKeyPkcs8: Uint8Array, publicKeyRaw: Uint8Array): Promise<Uint8Array>;
+export declare function p384DeriveKey(sharedSecret: Uint8Array, context?: string | Uint8Array): Uint8Array;
+export declare function p384SignAsync(privateKeyPkcs8: Uint8Array, data: Uint8Array): Promise<Uint8Array>;
+export declare function p384VerifyAsync(publicKeyRaw: Uint8Array, data: Uint8Array, signature: Uint8Array): Promise<boolean>;
+
+// =============================================================================
+// Encryption — Ed25519
+// =============================================================================
+
+export declare function ed25519GenerateKeyPair(): KeyPair;
+export declare function ed25519Sign(privateKey: Uint8Array, data: Uint8Array): Uint8Array;
+export declare function ed25519Verify(publicKey: Uint8Array, data: Uint8Array, signature: Uint8Array): boolean;
+
+// =============================================================================
+// Encryption — Encryption Header
+// =============================================================================
+
+export interface EncryptionHeader {
+  version: number;
+  algorithm: string;
+  senderPublicKey: Uint8Array;
+  recipientKeyId: Uint8Array;
+  iv: Uint8Array;
+  context: string;
+}
+
+export interface CreateEncryptionHeaderOptions {
+  algorithm: string;
+  senderPublicKey: Uint8Array;
+  recipientKeyId: Uint8Array;
+  iv?: Uint8Array;
+  context?: string;
+}
+
+export declare function computeKeyId(publicKey: Uint8Array): Uint8Array;
+export declare function createEncryptionHeader(options: CreateEncryptionHeaderOptions): EncryptionHeader;
+export declare function encryptionHeaderToJSON(header: EncryptionHeader): string;
+export declare function encryptionHeaderFromJSON(input: string | object): EncryptionHeader;
+
+// =============================================================================
+// Encryption — Authenticated Encryption
+// =============================================================================
+
+export declare function encryptAuthenticated(plaintext: Uint8Array, key: Uint8Array, aad?: Uint8Array): Uint8Array;
+export declare function decryptAuthenticated(data: Uint8Array, key: Uint8Array, aad?: Uint8Array): Uint8Array;
+
+// =============================================================================
+// Encryption — Buffer Encryption (stubs)
+// =============================================================================
+
+export declare function encryptBuffer(buffer: Uint8Array, schema: any, ctx: any): Uint8Array;
+export declare function decryptBuffer(buffer: Uint8Array, schema: any, ctx: any): Uint8Array;
+export declare function parseSchemaForEncryption(schema: string, rootType?: string): { rootType: string; fields: any[]; enums: Record<string, any> };
+
+// =============================================================================
+// Encryption — EncryptionContext
+// =============================================================================
+
+export interface EncryptionContextOptions {
+  algorithm?: 'x25519' | 'secp256k1';
+  context?: string;
+}
+
+export declare class EncryptionContext {
+  constructor(key: Uint8Array | string);
+
+  static fromHex(hexKey: string): EncryptionContext;
+  static forEncryption(recipientPublicKey: Uint8Array, options?: EncryptionContextOptions): EncryptionContext;
+  static forDecryption(privateKey: Uint8Array, header: EncryptionHeader, contextStr?: string): EncryptionContext;
+
+  isValid(): boolean;
+  getKey(): Uint8Array;
+  getEphemeralPublicKey(): Uint8Array | null;
+  getAlgorithm(): string | null;
+  getContext(): string | null;
+  getHeader(): EncryptionHeader;
+  getHeaderJSON(): string;
+
+  deriveFieldKey(fieldId: number): Uint8Array;
+  deriveFieldIV(fieldId: number): Uint8Array;
+
+  encryptScalar(buffer: Uint8Array, offset: number, length: number, fieldId: number): void;
+  decryptScalar(buffer: Uint8Array, offset: number, length: number, fieldId: number): void;
+  encryptBuffer(buffer: Uint8Array, recordIndex: number): void;
+  decryptBuffer(buffer: Uint8Array, recordIndex: number): void;
+}

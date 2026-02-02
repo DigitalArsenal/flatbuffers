@@ -42,7 +42,7 @@ import {
   hkdf,
   KEY_SIZE,
   IV_SIZE,
-} from '../src/encryption.mjs';
+} from '../src/index.mjs';
 
 let passed = 0;
 let failed = 0;

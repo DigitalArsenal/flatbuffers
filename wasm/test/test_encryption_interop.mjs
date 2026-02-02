@@ -41,7 +41,7 @@ import {
   KEY_SIZE,
   IV_SIZE,
   SHA256_SIZE,
-} from '../src/encryption.mjs';
+} from '../src/index.mjs';
 
 // =============================================================================
 // Test Utilities

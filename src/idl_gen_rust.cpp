@@ -1610,9 +1610,23 @@ class RustGenerator : public BaseGenerator {
             : "None";
     const std::string unwrap = field.IsOptional() ? "" : ".unwrap()";
 
-    return "unsafe { self._tab.get::<" + typname +
+    std::string result = "unsafe { self._tab.get:<" + typname +
            ">({{STRUCT_TY}}::" + vt_offset + ", " + default_value + ")" +
            unwrap + "}";
+    
+    // Add encryption support for fields with (encrypted) attribute
+    if (field.attributes.Lookup("encrypted") != nullptr) {
+      const Type& type = field.value.type;
+      if (IsString(type)) {
+        result = "flatbuffers_encryption::decrypt_string(" + result + 
+                 ", &self.encryption_ctx, {{STRUCT_TY}}::" + vt_offset + ")";
+      } else if (IsScalar(type.base_type)) {
+        result = "flatbuffers_encryption::decrypt_scalar(" + result + 
+                 ", &self.encryption_ctx, {{STRUCT_TY}}::" + vt_offset + ")";
+      }
+    }
+    
+    return result;
   }
 
   // Generates a fully-qualified name getter for use with --gen-name-strings
@@ -2834,7 +2848,7 @@ class RustGenerator : public BaseGenerator {
         code_ += "  // Safety:";
         code_ += "  // Created from a valid Table for this object";
         code_ += "  // Which contains a valid value in this slot";
-        code_ += "  ::flatbuffers::EndianScalar::from_little_endian(unsafe {";
+        code_ += "  let raw_value = ::flatbuffers::EndianScalar::from_little_endian(unsafe {";
         code_ += "    ::core::ptr::copy_nonoverlapping(";
         code_ += "      self.0[{{FIELD_OFFSET}}..].as_ptr(),";
         code_ += "      mem.as_mut_ptr() as *mut u8,";
@@ -2843,7 +2857,13 @@ class RustGenerator : public BaseGenerator {
             "::flatbuffers::EndianScalar>::Scalar>(),";
         code_ += "    );";
         code_ += "    mem.assume_init()";
-        code_ += "  })";
+        code_ += "  });";
+        // Add encryption support for fields with (encrypted) attribute
+        if (field.attributes.Lookup("encrypted") != nullptr) {
+          code_ += "  flatbuffers_encryption::decrypt_scalar(raw_value, &self.encryption_ctx, {{FIELD_OFFSET}})";
+        } else {
+          code_ += "  raw_value";
+        }
       }
       code_ += "}\n";
       // Setter.

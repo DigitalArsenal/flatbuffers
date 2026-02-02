@@ -822,15 +822,24 @@ class JavaGenerator : public BaseGenerator {
         code += "()";
         member_suffix += "";
         if (struct_def.fixed) {
-          code += " { return " + getter;
-          code += "(bb_pos + ";
-          code += NumToString(field.value.offset) + ")";
-          code += dest_mask;
+          auto raw_value = getter + "(bb_pos + " + NumToString(field.value.offset) + ")" + dest_mask;
+          if (field.attributes.Lookup("encrypted") != nullptr) {
+            code += " { return FlatbuffersEncryption.decryptScalar(" + raw_value + ", this.encryptionCtx, " + NumToString(field.value.offset) + ")";
+          } else {
+            code += " { return " + raw_value;
+          }
         } else {
-          code += offset_prefix + getter;
-          code += "(o + bb_pos)" + dest_mask;
-          code += " : ";
-          code += GenDefaultValue(field);
+          auto raw_getter = getter + "(o + bb_pos)" + dest_mask;
+          if (field.attributes.Lookup("encrypted") != nullptr) {
+            code += offset_prefix;
+            code += "FlatbuffersEncryption.decryptScalar(" + raw_getter + ", this.encryptionCtx, " + NumToString(field.value.offset) + ")";
+            code += " : ";
+            code += GenDefaultValue(field);
+          } else {
+            code += offset_prefix + raw_getter;
+            code += " : ";
+            code += GenDefaultValue(field);
+          }
         }
       } else {
         switch (field.value.type.base_type) {
@@ -852,8 +861,14 @@ class JavaGenerator : public BaseGenerator {
           case BASE_TYPE_STRING:
             code += "()";
             member_suffix += "";
-            code += offset_prefix + getter + "(o + ";
-            code += "bb_pos) : null";
+            {
+              auto raw_getter = getter + "(o + bb_pos)";
+              if (field.attributes.Lookup("encrypted") != nullptr) {
+                code += offset_prefix + "FlatbuffersEncryption.decryptString(" + raw_getter + ", this.encryptionCtx, " + NumToString(field.value.offset) + ") : null";
+              } else {
+                code += offset_prefix + raw_getter + " : null";
+              }
+            }
             break;
           case BASE_TYPE_ARRAY:
             FLATBUFFERS_FALLTHROUGH();  // fall thru

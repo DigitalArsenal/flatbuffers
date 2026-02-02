@@ -863,6 +863,20 @@ if (ptr == 0) {
 <li><a href="README.md#api-reference">API Reference</a></li>
 <li><a href="README.md#security-considerations">Security Considerations</a></li>
 </ul>
+<hr>
+<h2>Per-Field Encryption with <code>(encrypted)</code></h2>
+<p>Fields marked with the <code>(encrypted)</code> attribute in your FlatBuffers schema are automatically encrypted and decrypted by the generated accessors when an <code>EncryptionContext</code> is provided. The per-field IV is derived using HKDF from the master key and the field name, ensuring deterministic and consistent behavior across all runtimes.</p>
+<pre><code class="language-java">import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
+// Generated classes accept optional EncryptionContext
+Cipher cipher = Cipher.getInstance("AES/CTR/NoPadding");
+SecretKeySpec keySpec = new SecretKeySpec(key, "AES");
+IvParameterSpec ivSpec = new IvParameterSpec(deriveFieldIV(key, fieldName));
+cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec);
+byte[] plaintext = cipher.doFinal(ciphertext);
+</code></pre>
 </article>
   </div>
 </body>

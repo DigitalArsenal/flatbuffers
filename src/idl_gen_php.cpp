@@ -245,9 +245,21 @@ class PhpGenerator : public BaseGenerator {
     code += Indent + Indent + "$o = $this->__offset(" +
             NumToString(field.value.offset) + ");\n" + Indent + Indent +
             "return $o != 0 ? ";
+    
+    // Check if field has encryption attribute and wrap with decryption
+    if (field.attributes.Lookup("encrypted") != nullptr) {
+      code += "FlatbuffersEncryption::decryptScalar(";
+    }
+    
     code += "$this->bb->get";
     code += ConvertCase(GenTypeGet(field.value.type), Case::kUpperCamel) +
             "($o + $this->bb_pos)";
+    
+    // Close encryption wrapper if needed
+    if (field.attributes.Lookup("encrypted") != nullptr) {
+      code += ")";
+    }
+    
     code += " : " + GenDefaultValue(field.value) + ";\n";
     code += Indent + "}\n\n";
   }
@@ -299,15 +311,28 @@ class PhpGenerator : public BaseGenerator {
   // Get the value of a string.
   void GetStringField(const FieldDef& field, std::string* code_ptr) {
     std::string& code = *code_ptr;
+    bool encrypted = field.attributes.Lookup("encrypted") != nullptr;
     code += Indent + "public function get";
     code += ConvertCase(field.name, Case::kUpperCamel);
     code += "()\n";
     code += Indent + "{\n";
     code += Indent + Indent + "$o = $this->__offset(" +
             NumToString(field.value.offset) + ");\n";
-    code += Indent + Indent;
-    code += "return $o != 0 ? $this->__string($o + $this->bb_pos) : ";
-    code += GenDefaultValue(field.value) + ";\n";
+    if (encrypted) {
+      code += Indent + Indent + "if ($o == 0) return " +
+              GenDefaultValue(field.value) + ";\n";
+      code += Indent + Indent + "$raw = $this->__string($o + $this->bb_pos);\n";
+      code += Indent + Indent +
+              "if ($this->encryptionCtx === null) return $raw;\n";
+      code += Indent + Indent +
+              "return FlatbuffersEncryption::decryptString($raw, "
+              "$this->encryptionCtx, /*fieldId=*/" +
+              NumToString(field.value.offset) + ");\n";
+    } else {
+      code += Indent + Indent;
+      code += "return $o != 0 ? $this->__string($o + $this->bb_pos) : ";
+      code += GenDefaultValue(field.value) + ";\n";
+    }
     code += Indent + "}\n\n";
   }
 

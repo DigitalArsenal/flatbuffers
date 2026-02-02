@@ -21,6 +21,7 @@
 #include "flatbuffers/idl.h"
 #include "flatbuffers/util.h"
 #include "flatbuffers/file_manager.h"
+#include "flatbuffers/encryption.h"
 
 // Code generators
 #include "idl_gen_fbs.h"
@@ -774,6 +775,214 @@ int32_t wasm_get_language_id(const char* name) {
   if (lang == "fbs" || lang == "flatbuffers") return static_cast<int32_t>(Language::FBS);
 
   return -1;
+}
+
+// ----------------------------------------------------------------------------
+// Encrypted Conversion: JSON → Encrypted FlatBuffer Binary
+// ----------------------------------------------------------------------------
+
+// Encryption output: header + encrypted data stored contiguously
+static std::vector<uint8_t> g_encryption_header_buf;
+
+EMSCRIPTEN_KEEPALIVE
+const uint8_t* wasm_json_to_binary_encrypted(
+    int32_t schema_id,
+    const char* json, uint32_t json_len,
+    const uint8_t* encryption_config, uint32_t config_len,
+    uint32_t* out_len, uint32_t* out_header_len) {
+  using namespace flatbuffers;
+  using namespace flatbuffers::wasm;
+
+  // First, do the normal JSON → binary conversion
+  uint32_t binary_len = 0;
+  const uint8_t* binary = wasm_json_to_binary(schema_id, json, json_len,
+                                               &binary_len);
+  if (!binary) {
+    *out_len = 0;
+    *out_header_len = 0;
+    return nullptr;
+  }
+
+  // Copy binary data since g_output_buffer will be reused
+  std::vector<uint8_t> binary_copy(binary, binary + binary_len);
+
+  // Extract encryption key from config (first 32 bytes)
+  if (config_len < kEncryptionKeySize) {
+    SetError("Encryption config too small: need at least 32 bytes for key");
+    *out_len = 0;
+    *out_header_len = 0;
+    return nullptr;
+  }
+
+  EncryptionContext ctx(encryption_config, kEncryptionKeySize);
+  if (!ctx.IsValid()) {
+    SetError("Invalid encryption key");
+    *out_len = 0;
+    *out_header_len = 0;
+    return nullptr;
+  }
+
+  // Get schema entry for binary schema (.bfbs) generation
+  auto it = g_schemas.find(schema_id);
+  if (it == g_schemas.end()) {
+    SetError("Schema not found");
+    *out_len = 0;
+    *out_header_len = 0;
+    return nullptr;
+  }
+
+  // Serialize schema to .bfbs for reflection-based encryption
+  Parser& parser = *it->second.parser;
+  parser.Serialize();
+  const auto& bfbs = parser.builder_.GetBufferPointer();
+  const auto bfbs_size = parser.builder_.GetSize();
+
+  // Encrypt the buffer in-place
+  auto result = EncryptBuffer(binary_copy.data(), binary_copy.size(),
+                               bfbs, bfbs_size, ctx);
+  if (!result.ok()) {
+    SetError("Encryption failed: " + result.message);
+    *out_len = 0;
+    *out_header_len = 0;
+    return nullptr;
+  }
+
+  // Store result in output buffer
+  g_output_buffer = std::move(binary_copy);
+  *out_header_len = 0;  // Header generation handled at JS layer
+  *out_len = static_cast<uint32_t>(g_output_buffer.size());
+  return g_output_buffer.data();
+}
+
+// ----------------------------------------------------------------------------
+// Decrypted Conversion: Encrypted FlatBuffer Binary → JSON
+// ----------------------------------------------------------------------------
+
+EMSCRIPTEN_KEEPALIVE
+const char* wasm_binary_to_json_decrypted(
+    int32_t schema_id,
+    const uint8_t* binary, uint32_t binary_len,
+    const uint8_t* key, uint32_t key_len,
+    uint32_t* out_len) {
+  using namespace flatbuffers;
+  using namespace flatbuffers::wasm;
+
+  if (key_len < kEncryptionKeySize) {
+    SetError("Decryption key too small: need 32 bytes");
+    *out_len = 0;
+    return nullptr;
+  }
+
+  auto it = g_schemas.find(schema_id);
+  if (it == g_schemas.end()) {
+    SetError("Schema not found");
+    *out_len = 0;
+    return nullptr;
+  }
+
+  // Copy binary so we can decrypt in-place
+  std::vector<uint8_t> decrypted(binary, binary + binary_len);
+
+  EncryptionContext ctx(key, kEncryptionKeySize);
+  if (!ctx.IsValid()) {
+    SetError("Invalid decryption key");
+    *out_len = 0;
+    return nullptr;
+  }
+
+  // Get binary schema
+  Parser& parser = *it->second.parser;
+  parser.Serialize();
+  const auto& bfbs = parser.builder_.GetBufferPointer();
+  const auto bfbs_size = parser.builder_.GetSize();
+
+  // Decrypt in-place
+  auto result = DecryptBuffer(decrypted.data(), decrypted.size(),
+                               bfbs, bfbs_size, ctx);
+  if (!result.ok()) {
+    SetError("Decryption failed: " + result.message);
+    *out_len = 0;
+    return nullptr;
+  }
+
+  // Now convert decrypted binary to JSON
+  return wasm_binary_to_json(schema_id, decrypted.data(),
+                              static_cast<uint32_t>(decrypted.size()), out_len);
+}
+
+// ----------------------------------------------------------------------------
+// Auto-detect Encrypted Conversion
+// ----------------------------------------------------------------------------
+
+EMSCRIPTEN_KEEPALIVE
+int32_t wasm_convert_auto_encrypted(
+    int32_t schema_id,
+    const uint8_t* data, uint32_t data_len,
+    const uint8_t* encryption_config, uint32_t config_len,
+    const uint8_t** out_ptr, uint32_t* out_len) {
+  using namespace flatbuffers::wasm;
+
+  if (LooksLikeJson(data, data_len)) {
+    // Input is JSON → encrypt to binary
+    uint32_t header_len = 0;
+    const uint8_t* result = wasm_json_to_binary_encrypted(
+        schema_id,
+        reinterpret_cast<const char*>(data), data_len,
+        encryption_config, config_len,
+        out_len, &header_len);
+    if (!result) return -1;
+    *out_ptr = result;
+    return 0;
+  } else if (LooksLikeFlatBuffer(data, data_len)) {
+    // Input is binary → decrypt to JSON
+    const char* result = wasm_binary_to_json_decrypted(
+        schema_id,
+        data, data_len,
+        encryption_config, config_len,
+        out_len);
+    if (!result) return -1;
+    *out_ptr = reinterpret_cast<const uint8_t*>(result);
+    return 1;
+  } else {
+    SetError("Unable to detect input format");
+    *out_ptr = nullptr;
+    *out_len = 0;
+    return -1;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Streaming Encryption Configuration
+// ----------------------------------------------------------------------------
+
+static std::unique_ptr<flatbuffers::EncryptionContext> g_stream_encryption_ctx;
+
+EMSCRIPTEN_KEEPALIVE
+int32_t wasm_stream_set_encryption(const uint8_t* config_ptr,
+                                    uint32_t config_size) {
+  using namespace flatbuffers;
+  using namespace flatbuffers::wasm;
+
+  if (!config_ptr || config_size < kEncryptionKeySize) {
+    SetError("Encryption config too small");
+    return -1;
+  }
+
+  g_stream_encryption_ctx = std::make_unique<EncryptionContext>(
+      config_ptr, kEncryptionKeySize);
+
+  if (!g_stream_encryption_ctx->IsValid()) {
+    g_stream_encryption_ctx.reset();
+    SetError("Invalid encryption key");
+    return -1;
+  }
+
+  return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+void wasm_stream_clear_encryption() {
+  flatbuffers::wasm::g_stream_encryption_ctx.reset();
 }
 
 }  // extern "C"

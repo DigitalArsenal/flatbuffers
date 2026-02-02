@@ -796,8 +796,16 @@ class SwiftGenerator : public BaseGenerator {
     GenComment(field.doc_comment);
     if (IsScalar(field.value.type.base_type) && !IsEnum(field.value.type) &&
         !IsBool(field.value.type.base_type)) {
-      code_ += GenReaderMainBody(optional) + GenOffset() + const_string +
-               GenReader("VALUETYPE", "o") + " }";
+      if (field.attributes.Lookup("encrypted") != nullptr) {
+        const auto field_id = NumToString(field.value.offset);
+        code_ += GenReaderMainBody(optional) + GenOffset() + const_string +
+                 "FlatbuffersEncryption.decryptScalar(" +
+                 GenReader("VALUETYPE", "o") +
+                 ", encryptionCtx: self.encryptionCtx, fieldId: " + field_id + ") }";
+      } else {
+        code_ += GenReaderMainBody(optional) + GenOffset() + const_string +
+                 GenReader("VALUETYPE", "o") + " }";
+      }
       if (parser_.opts.mutable_buffer) code_ += GenMutate("o", GenOffset());
       return;
     }
@@ -855,8 +863,16 @@ class SwiftGenerator : public BaseGenerator {
         const auto default_string = "\"" + SwiftConstant(field) + "\"";
         code_.SetValue("VALUETYPE", GenType(field.value.type));
         code_.SetValue("CONSTANT", field.IsDefault() ? default_string : "nil");
-        code_ += GenReaderMainBody(is_required) + GenOffset() +
-                 required_reader + "{{ACCESS}}.string(at: o) }";
+        if (field.attributes.Lookup("encrypted") != nullptr) {
+          const auto field_id = NumToString(field.value.offset);
+          code_ += GenReaderMainBody(is_required) + GenOffset() +
+                   required_reader + "FlatbuffersEncryption.decryptString(" +
+                   "{{ACCESS}}.string(at: o), encryptionCtx: self.encryptionCtx, fieldId: " +
+                   field_id + ") }";
+        } else {
+          code_ += GenReaderMainBody(is_required) + GenOffset() +
+                   required_reader + "{{ACCESS}}.string(at: o) }";
+        }
         code_ += "{{ACCESS_TYPE}} var {{FIELDVAR}}SegmentArray: [UInt8]" +
                  is_required +
                  " { return "

@@ -845,6 +845,28 @@ if result[0] == 0 {
 <li><a href="README.md#api-reference">API Reference</a></li>
 <li><a href="README.md#security-considerations">Security Considerations</a></li>
 </ul>
+<hr>
+<h2>Per-Field Encryption with <code>(encrypted)</code></h2>
+<p>Fields marked with the <code>(encrypted)</code> attribute in your FlatBuffers schema are automatically encrypted and decrypted by the generated accessors when an <code>EncryptionContext</code> is provided. The per-field IV is derived using HKDF from the master key and the field name, ensuring deterministic and consistent behavior across all runtimes.</p>
+<pre><code class="language-go">import (
+    "crypto/aes"
+    "crypto/cipher"
+)
+
+// EncryptionContext wraps AES-256-CTR for (encrypted) fields
+type EncryptionContext struct {
+    key []byte // 32-byte AES-256 key
+}
+
+func (ctx *EncryptionContext) DecryptField(ciphertext []byte, fieldName string) ([]byte, error) {
+    iv := deriveFieldIV(ctx.key, fieldName) // HKDF-derived per-field IV
+    block, _ := aes.NewCipher(ctx.key)
+    stream := cipher.NewCTR(block, iv)
+    plaintext := make([]byte, len(ciphertext))
+    stream.XORKeyStream(plaintext, ciphertext)
+    return plaintext, nil
+}
+</code></pre>
 </article>
   </div>
 </body>

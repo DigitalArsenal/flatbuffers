@@ -28,6 +28,7 @@
 | **Conversion** | JSON ↔ FlatBuffer binary with auto-detection |
 | **Code Gen** | 13 languages: C++, TypeScript, Go, Rust, Python, Java, C#, Swift, Kotlin, Dart, PHP, Lua, Nim |
 | **JSON Schema** | Import JSON Schema as input, export FlatBuffers to JSON Schema |
+| **Encryption** | Per-field AES-256-CTR encryption with `(encrypted)` attribute |
 | **Streaming** | Process large data with streaming APIs |
 | **Cross-Lang** | Same WASM runs in Node.js, Go, Python, Rust, Java, C#, Swift |
 | **Zero Deps** | Self-contained with inlined WASM binaries |
@@ -64,6 +65,12 @@ npm install flatc-wasm
   - [Fixed-Length Strings](#fixed-length-strings)
   - [Supported Types](#supported-types)
   - [WASM Interop Example](#wasm-interop-example)
+- [Encryption](#encryption)
+  - [Per-Field Encryption](#per-field-encryption)
+  - [FlatcRunner Encryption API](#flatcrunner-encryption-api)
+  - [Streaming Encryption](#streaming-encryption)
+  - [Encryption Configuration](#encryption-configuration)
+  - [FIPS Mode](#fips-mode)
 - [Plugin Architecture](#plugin-architecture)
   - [Code Generator Plugins](#code-generator-plugins)
   - [Schema Transformation Plugins](#schema-transformation-plugins)
@@ -2088,6 +2095,192 @@ class EphemerisVisualizer {
 
 ---
 
+## Encryption
+
+flatc-wasm supports per-field AES-256-CTR encryption for FlatBuffer data. Fields marked with the `(encrypted)` attribute are transparently encrypted and decrypted, with key derivation via HKDF so each field gets a unique key/IV pair.
+
+### Per-Field Encryption
+
+Mark fields in your schema with the `(encrypted)` attribute:
+
+```fbs
+table UserRecord {
+  id: uint64;
+  name: string;
+  ssn: string (encrypted);
+  credit_card: string (encrypted);
+  email: string;
+}
+root_type UserRecord;
+```
+
+When encryption is active, only the `ssn` and `credit_card` fields are encrypted. Other fields remain in plaintext, allowing indexing and queries on non-sensitive data.
+
+**How it works:**
+- A shared secret is derived via ECDH (X25519, secp256k1, P-256, or P-384)
+- HKDF derives a unique AES-256 key and IV per field using the field name as context
+- Each field is encrypted independently with AES-256-CTR
+- An `EncryptionHeader` FlatBuffer stores the ephemeral public key and algorithm metadata
+
+### FlatcRunner Encryption API
+
+The `FlatcRunner` class provides high-level encryption methods:
+
+```javascript
+import { FlatcRunner } from 'flatc-wasm';
+
+const flatc = await FlatcRunner.init();
+
+const schema = {
+  entry: '/user.fbs',
+  files: {
+    '/user.fbs': `
+      table UserRecord {
+        id: uint64;
+        name: string;
+        ssn: string (encrypted);
+      }
+      root_type UserRecord;
+    `
+  }
+};
+
+const json = JSON.stringify({ id: 1, name: 'Alice', ssn: '123-45-6789' });
+
+// Encrypt: JSON → encrypted FlatBuffer
+const { header, data } = flatc.generateBinaryEncrypted(schema, json, {
+  publicKey: recipientPublicKey,   // Uint8Array (32 bytes for X25519)
+  algorithm: 'x25519',            // Key exchange algorithm
+  context: 'user-records',        // Optional HKDF domain separation
+});
+
+// Decrypt: encrypted FlatBuffer → JSON
+const decryptedJson = flatc.generateJSONDecrypted(schema, { path: '/user.bin', data }, {
+  privateKey: recipientPrivateKey, // Uint8Array
+  header: header,                  // EncryptionHeader from encrypt step
+});
+
+console.log(JSON.parse(decryptedJson));
+// { id: 1, name: 'Alice', ssn: '123-45-6789' }
+```
+
+#### Encryption Options
+
+```javascript
+// GenerateBinaryEncrypted options
+{
+  publicKey: Uint8Array,            // Recipient's public key (required)
+  algorithm: 'x25519' | 'secp256k1' | 'p256' | 'p384',  // Default: 'x25519'
+  fields: ['ssn', 'credit_card'],   // Specific fields (default: all (encrypted) fields)
+  context: 'my-app',               // HKDF context for domain separation
+  fips: false,                      // Use OpenSSL/FIPS backend
+}
+
+// GenerateJSONDecrypted options
+{
+  privateKey: Uint8Array,           // Decryption private key (required)
+  header: Uint8Array,               // EncryptionHeader from encryption step
+}
+```
+
+### Streaming Encryption
+
+The `StreamingDispatcher` supports persistent encryption sessions for processing multiple messages:
+
+```javascript
+import { StreamingDispatcher } from 'flatc-wasm';
+
+const dispatcher = new StreamingDispatcher(wasmModule);
+
+// Enable encryption for the session
+dispatcher.setEncryption(recipientPublicKey, {
+  algorithm: 'x25519',
+  context: 'stream-session',
+});
+
+// All subsequent messages are encrypted/decrypted automatically
+dispatcher.dispatch(messageBuffer);
+
+// Check encryption status
+console.log(dispatcher.isEncryptionActive()); // true
+
+// Disable encryption (securely zeros key material)
+dispatcher.clearEncryption();
+```
+
+### Encryption Configuration
+
+The encryption configuration is defined as a FlatBuffer schema (`encryption_config.fbs`):
+
+```fbs
+enum DataFormat : byte { FlatBuffer, JSON }
+enum EncryptionDirection : byte { Encrypt, Decrypt }
+
+table EncryptionConfig {
+  recipient_public_key: [ubyte];
+  algorithm: string;          // "x25519", "secp256k1", "p256", "p384"
+  field_names: [string];      // Fields to encrypt (empty = use schema attributes)
+  context: string;            // HKDF domain separation
+  fips_mode: bool = false;
+  direction: EncryptionDirection = Encrypt;
+  private_key: [ubyte];       // For decryption
+}
+```
+
+The `EncryptionHeader` stored with encrypted data:
+
+```fbs
+enum KeyExchangeAlgorithm : byte { X25519, Secp256k1, P256, P384 }
+
+table EncryptionHeader {
+  version: uint8 = 1;
+  algorithm: KeyExchangeAlgorithm;
+  ephemeral_public_key: [ubyte];
+  encrypted_field_indices: [uint16];
+  context: string;
+}
+```
+
+### FIPS Mode
+
+For environments requiring FIPS 140-2 compliance, build with OpenSSL instead of Crypto++:
+
+```bash
+cmake -B build/wasm -S . \
+  -DFLATBUFFERS_BUILD_WASM=ON \
+  -DFLATBUFFERS_WASM_USE_OPENSSL=ON
+
+cmake --build build/wasm --target flatc_wasm_npm
+```
+
+When FIPS mode is enabled:
+- All cryptographic operations use OpenSSL EVP APIs
+- AES-256-CTR via `EVP_aes_256_ctr()`
+- HKDF via `EVP_PKEY_derive()` with `EVP_PKEY_HKDF`
+- X25519, P-256, P-384 ECDH via `EVP_PKEY_derive()`
+- Ed25519 and ECDSA signatures via `EVP_DigestSign`/`EVP_DigestVerify`
+
+To use FIPS mode at runtime, set `fips: true` in encryption options:
+
+```javascript
+const { header, data } = flatc.generateBinaryEncrypted(schema, json, {
+  publicKey: recipientPublicKey,
+  algorithm: 'p256',
+  fips: true,
+});
+```
+
+### Supported Key Exchange Algorithms
+
+| Algorithm | Key Size | Curve | Use Case |
+|-----------|----------|-------|----------|
+| `x25519` | 32 bytes | Curve25519 | Default, fast, modern |
+| `secp256k1` | 33 bytes (compressed) | secp256k1 | Bitcoin/blockchain compatibility |
+| `p256` | 33 bytes (compressed) | NIST P-256 | FIPS compliance, broad support |
+| `p384` | 49 bytes (compressed) | NIST P-384 | Higher security margin |
+
+---
+
 ## Plugin Architecture
 
 The flatc-wasm package supports an extensible plugin architecture for custom code generators and transformations.
@@ -2213,4 +2406,4 @@ function toRustType(field) {
 
 Apache-2.0
 
-This package is part of the [FlatBuffers](https://github.com/google/flatbuffers) project by Google.
+This package a fork of the [FlatBuffers](https://github.com/google/flatbuffers) project by Google.

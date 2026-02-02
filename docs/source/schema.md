@@ -474,6 +474,53 @@ Current understood attributes:
   not be any reason to use this flag.
 - 'native*\*'. Several attributes have been added to support the C++ object
   Based API. All such attributes are prefixed with the term "native*".
+- `encrypted` (on a table field): marks the field for per-field AES-256-CTR
+  encryption. Encrypted fields preserve the binary layout so the buffer remains
+  a valid FlatBuffer even before decryption. See [Encryption](encryption.md) for
+  full details.
+
+## Field-Level Encryption
+
+FlatBuffers supports optional per-field encryption via the `encrypted` attribute.
+Fields marked with this attribute are encrypted in-place using AES-256-CTR,
+preserving the binary layout so that the buffer remains structurally valid.
+
+```c title="secure_record.fbs"
+attribute "encrypted";
+
+table UserRecord {
+  public_id: uint64;                    // Not encrypted
+  username: string;                     // Not encrypted
+  password_hash: string (encrypted);    // Encrypted
+  private_key: [ubyte] (encrypted);     // Encrypted
+  coordinates: Vec3 (encrypted);        // Encrypted struct
+}
+```
+
+Generated accessors handle encryption transparently when an encryption context
+is provided. Without the context, accessors return the raw (encrypted) bytes.
+
+### Key Management
+
+A single 256-bit master key protects the buffer. Per-field keys and IVs are
+derived using HKDF-SHA256 with the field identifier, so each field uses a
+unique keystream without requiring additional key storage.
+
+Key exchange between parties is performed with ECDH. A typical workflow is:
+
+1. Sender and receiver exchange public keys (e.g. X25519).
+2. ECDH produces a shared secret.
+3. HKDF derives the 256-bit master key from the shared secret.
+4. Per-field keys are derived automatically during encryption/decryption.
+
+### FIPS Mode
+
+When built with a FIPS-validated cryptographic provider (e.g. OpenSSL FIPS
+module), all encryption operations use FIPS-approved algorithms. AES-256-CTR
+and HKDF-SHA256 are both FIPS 140-2 approved primitives.
+
+For the complete specification, including supported types, binary format
+details, and API references, see the [Encryption](encryption.md) page.
 
 ## JSON Parsing
 

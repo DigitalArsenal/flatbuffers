@@ -366,6 +366,69 @@ export class StreamingDispatcher {
   }
 
   // =========================================================================
+  // Encryption
+  // =========================================================================
+
+  /**
+   * Set encryption configuration for the dispatcher.
+   * When active, (encrypted) fields in stored messages are encrypted/decrypted.
+   *
+   * @param {Uint8Array} publicKey - 32-byte encryption key
+   * @param {Object} [config={}] - Additional config (schema, direction, etc.)
+   * @returns {boolean} true on success
+   */
+  setEncryption(publicKey, config = {}) {
+    if (!publicKey || publicKey.length < 32) {
+      throw new Error('Encryption key must be at least 32 bytes');
+    }
+
+    // Copy key to WASM memory
+    const keyPtr = this._wasm._malloc(publicKey.length);
+    if (!keyPtr) throw new Error('Failed to allocate memory for encryption key');
+    this._wasm.HEAPU8.set(publicKey, keyPtr);
+
+    // Copy schema data if provided
+    let schemaPtr = 0;
+    let schemaSize = 0;
+    if (config.schema) {
+      schemaSize = config.schema.length;
+      schemaPtr = this._wasm._malloc(schemaSize);
+      if (schemaPtr) {
+        this._wasm.HEAPU8.set(config.schema, schemaPtr);
+      }
+    }
+
+    const result = this._wasm._dispatcher_set_encryption(
+      keyPtr, publicKey.length, schemaPtr, schemaSize
+    );
+
+    this._wasm._free(keyPtr);
+    if (schemaPtr) this._wasm._free(schemaPtr);
+
+    this._encryptionActive = result === 0;
+    this._encryptionConfig = config;
+    return result === 0;
+  }
+
+  /**
+   * Clear encryption state, securely zeroing key material.
+   * Subsequent messages will be processed in plaintext.
+   */
+  clearEncryption() {
+    this._wasm._dispatcher_clear_encryption();
+    this._encryptionActive = false;
+    this._encryptionConfig = null;
+  }
+
+  /**
+   * Check if encryption is currently active.
+   * @returns {boolean}
+   */
+  isEncryptionActive() {
+    return this._wasm._dispatcher_is_encryption_active() === 1;
+  }
+
+  // =========================================================================
   // Convenience Methods
   // =========================================================================
 

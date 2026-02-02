@@ -805,33 +805,82 @@ class DartGenerator : public BaseGenerator {
         code += "    }\n";
         code += "  }\n";
       } else {
-        code += " => ";
-        if (field.value.type.enum_def &&
-            field.value.type.base_type != BASE_TYPE_VECTOR) {
-          code += GenDartTypeName(field.value.type,
-                                  struct_def.defined_namespace, field) +
-                  (isNullable ? "._createOrNull(" : ".fromValue(");
+        const bool is_encrypted = field.attributes.Lookup("encrypted") != nullptr;
+        
+        if (is_encrypted) {
+          // Generate block-style getter with encryption support
+          code += " {\n";
+          code += "    final rawValue = ";
+          
+          if (field.value.type.enum_def &&
+              field.value.type.base_type != BASE_TYPE_VECTOR) {
+            code += GenDartTypeName(field.value.type,
+                                    struct_def.defined_namespace, field) +
+                    (isNullable ? "._createOrNull(" : ".fromValue(");
+          }
+          
+          code += GenReaderTypeName(field.value.type,
+                                    struct_def.defined_namespace, field);
+          if (struct_def.fixed) {
+            code +=
+                ".read(_bc, _bcOffset + " + NumToString(field.value.offset) + ")";
+          } else {
+            code += ".vTableGet";
+            std::string offset = NumToString(field.value.offset);
+            if (isNullable) {
+              code += "Nullable(_bc, _bcOffset, " + offset + ")";
+            } else {
+              code += "(_bc, _bcOffset, " + offset + ", " + defaultValue + ")";
+            }
+          }
+          if (field.value.type.enum_def &&
+              field.value.type.base_type != BASE_TYPE_VECTOR) {
+            code += ")";
+          }
+          code += ";\n";
+          
+          // Add decryption call based on type
+          if (IsString(field.value.type)) {
+            code += "    return FlatbuffersEncryption.decryptString(rawValue, encryptionCtx, " +
+                    NumToString(field.value.offset) + ");\n";
+          } else if (IsScalar(field.value.type.base_type)) {
+            code += "    return FlatbuffersEncryption.decryptScalar(rawValue, encryptionCtx, " +
+                    NumToString(field.value.offset) + ");\n";
+          } else {
+            code += "    return rawValue;\n";
+          }
+          code += "  }\n";
+        } else {
+          // Original one-liner getter
+          code += " => ";
+          if (field.value.type.enum_def &&
+              field.value.type.base_type != BASE_TYPE_VECTOR) {
+            code += GenDartTypeName(field.value.type,
+                                    struct_def.defined_namespace, field) +
+                    (isNullable ? "._createOrNull(" : ".fromValue(");
+          }
+
+          code += GenReaderTypeName(field.value.type,
+                                    struct_def.defined_namespace, field);
+          if (struct_def.fixed) {
+            code +=
+                ".read(_bc, _bcOffset + " + NumToString(field.value.offset) + ")";
+          } else {
+            code += ".vTableGet";
+            std::string offset = NumToString(field.value.offset);
+            if (isNullable) {
+              code += "Nullable(_bc, _bcOffset, " + offset + ")";
+            } else {
+              code += "(_bc, _bcOffset, " + offset + ", " + defaultValue + ")";
+            }
+          }
+          if (field.value.type.enum_def &&
+              field.value.type.base_type != BASE_TYPE_VECTOR) {
+            code += ")";
+          }
+          code += ";\n";
         }
 
-        code += GenReaderTypeName(field.value.type,
-                                  struct_def.defined_namespace, field);
-        if (struct_def.fixed) {
-          code +=
-              ".read(_bc, _bcOffset + " + NumToString(field.value.offset) + ")";
-        } else {
-          code += ".vTableGet";
-          std::string offset = NumToString(field.value.offset);
-          if (isNullable) {
-            code += "Nullable(_bc, _bcOffset, " + offset + ")";
-          } else {
-            code += "(_bc, _bcOffset, " + offset + ", " + defaultValue + ")";
-          }
-        }
-        if (field.value.type.enum_def &&
-            field.value.type.base_type != BASE_TYPE_VECTOR) {
-          code += ")";
-        }
-        code += ";\n";
       }
 
       if (NeedsCompat(field_name, compat_name)) {

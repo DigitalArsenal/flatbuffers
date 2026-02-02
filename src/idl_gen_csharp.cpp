@@ -1027,10 +1027,17 @@ class CSharpGenerator : public BaseGenerator {
           code += NumToString(field.value.offset) + ")";
           code += dest_mask;
         } else {
-          code += offset_prefix + getter;
-          code += "(o + __p.bb_pos)" + dest_mask;
-          code += " : " + default_cast;
-          code += GenDefaultValue(field);
+          if (field.attributes.Lookup("encrypted") != nullptr) {
+            code += " { int o = __p.__offset(" + NumToString(field.value.offset) + "); ";
+            code += "if (o == 0) return " + default_cast + GenDefaultValue(field) + "; ";
+            code += "var rawValue = " + getter + "(o + __p.bb_pos)" + dest_mask + "; ";
+            code += "return FlatbuffersEncryption.DecryptScalar(rawValue, this.EncryptionCtx, " + NumToString(field.value.offset) + ")";
+          } else {
+            code += offset_prefix + getter;
+            code += "(o + __p.bb_pos)" + dest_mask;
+            code += " : " + default_cast;
+            code += GenDefaultValue(field);
+          }
         }
       } else {
         switch (field.value.type.base_type) {
@@ -1053,8 +1060,15 @@ class CSharpGenerator : public BaseGenerator {
           case BASE_TYPE_STRING:
             code += " { get";
             member_suffix += "} ";
-            code += offset_prefix + getter + "(o + " + "__p.";
-            code += "bb_pos) : null";
+            if (field.attributes.Lookup("encrypted") != nullptr) {
+              code += " { int o = __p.__offset(" + NumToString(field.value.offset) + "); ";
+              code += "if (o == 0) return null; ";
+              code += "var rawValue = " + getter + "(o + __p.bb_pos); ";
+              code += "return FlatbuffersEncryption.DecryptString(rawValue, this.EncryptionCtx, " + NumToString(field.value.offset) + ")";
+            } else {
+              code += offset_prefix + getter + "(o + " + "__p.";
+              code += "bb_pos) : null";
+            }
             break;
           case BASE_TYPE_ARRAY:
             FLATBUFFERS_FALLTHROUGH();  // fall thru

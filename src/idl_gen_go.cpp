@@ -479,7 +479,19 @@ class GoGenerator : public BaseGenerator {
     } else {
       code += "\t\treturn ";
     }
+    
+    // Check if field has encryption attribute and wrap with decryption
+    if (field.attributes.Lookup("encrypted") != nullptr) {
+      code += "flatbuffers.DecryptScalar(";
+    }
+    
     code += CastToEnum(field.value.type, getter + "(o + rcv._tab.Pos)");
+    
+    // Close encryption wrapper if needed
+    if (field.attributes.Lookup("encrypted") != nullptr) {
+      code += ", rcv.encryptionCtx, " + NumToString(field.value.offset) + ")";
+    }
+    
     if (field.IsScalarOptional()) {
       code += "\n\t\treturn &v";
     }
@@ -564,8 +576,18 @@ class GoGenerator : public BaseGenerator {
     const std::string compat_name = CompatFieldUpper(field);
     code += " " + base_name;
     code += "() " + TypeName(field) + " ";
-    code += OffsetPrefix(field) + "\t\treturn " + GenGetter(field.value.type);
-    code += "(o + rcv._tab.Pos)\n\t}\n\treturn nil\n";
+    code += OffsetPrefix(field);
+    
+    // Check if field has encryption attribute
+    if (field.attributes.Lookup("encrypted") != nullptr) {
+      code += "\t\treturn flatbuffers.DecryptString(" + GenGetter(field.value.type);
+      code += "(o + rcv._tab.Pos), rcv.encryptionCtx, " + NumToString(field.value.offset) + ")\n";
+    } else {
+      code += "\t\treturn " + GenGetter(field.value.type);
+      code += "(o + rcv._tab.Pos)\n";
+    }
+    
+    code += "\t}\n\treturn nil\n";
     code += "}\n\n";
 
     if (NeedsCompat(base_name, compat_name)) {

@@ -1006,6 +1006,15 @@ if ptr == 0:
 <li><a href="README.md#api-reference">API Reference</a></li>
 <li><a href="README.md#security-considerations">Security Considerations</a></li>
 </ul>
+<hr>
+<h2>Per-Field Encryption with <code>(encrypted)</code></h2>
+<p>Fields marked with the <code>(encrypted)</code> attribute in your FlatBuffers schema are automatically encrypted and decrypted by the generated accessors when an <code>EncryptionContext</code> is provided. The per-field IV is derived using HKDF from the master key and the field name, ensuring deterministic and consistent behavior across all runtimes.</p>
+<pre><code class="language-python">from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+cipher = Cipher(algorithms.AES(key), modes.CTR(nonce))
+decryptor = cipher.decryptor()
+plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+</code></pre>
 </article>
   </div>
 </body>

@@ -1087,6 +1087,163 @@ export class FlatcRunner {
     return this.runCommand(["--version"]).stdout;
   }
 
+  // ===========================================================================
+  // Encryption API
+  // ===========================================================================
+
+  /**
+   * Generate an encrypted FlatBuffer binary from JSON input.
+   * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput
+   * @param {string|Uint8Array} jsonInput - JSON data to convert and encrypt
+   * @param {{ publicKey: Uint8Array, algorithm?: string, fields?: string[], context?: string }} encryption
+   * @param {Object} [options={}] - Same options as generateBinary()
+   * @returns {{ header: Uint8Array, data: Uint8Array }} Encrypted binary with header
+   */
+  generateBinaryEncrypted(schemaInput, jsonInput, encryption, options = {}) {
+    if (!encryption || !encryption.publicKey) {
+      throw new Error('Encryption config must include publicKey');
+    }
+
+    // First generate the normal binary
+    const binary = this.generateBinary(schemaInput, jsonInput, {
+      ...options,
+      sizePrefix: false, // Don't size-prefix before encryption
+    });
+
+    // Use the C API for encryption if available
+    const cwrap = this.Module.cwrap;
+    if (cwrap && this.Module._wasm_crypto_encrypt_buffer) {
+      // Register schema for C API if needed
+      const schemaSource = schemaInput.files[schemaInput.entry];
+      const schemaStr = typeof schemaSource === 'string'
+        ? schemaSource
+        : new TextDecoder().decode(schemaSource);
+
+      const namePtr = this.Module._malloc(schemaInput.entry.length + 1);
+      this.Module.stringToUTF8(schemaInput.entry, namePtr, schemaInput.entry.length + 1);
+      const srcBytes = new TextEncoder().encode(schemaStr);
+      const srcPtr = this.Module._malloc(srcBytes.length);
+      this.Module.HEAPU8.set(srcBytes, srcPtr);
+
+      const schemaId = this.Module._wasm_schema_add(namePtr, schemaInput.entry.length, srcPtr, srcBytes.length);
+      this.Module._free(namePtr);
+      this.Module._free(srcPtr);
+
+      if (schemaId >= 0) {
+        // Allocate and copy key + binary to WASM memory
+        const keyPtr = this.Module._malloc(encryption.publicKey.length);
+        this.Module.HEAPU8.set(encryption.publicKey, keyPtr);
+
+        const binPtr = this.Module._malloc(binary.length);
+        this.Module.HEAPU8.set(binary, binPtr);
+
+        const outLenPtr = this.Module._malloc(4);
+        const headerLenPtr = this.Module._malloc(4);
+
+        const resultPtr = this.Module._wasm_json_to_binary_encrypted(
+          schemaId,
+          0, 0, // json already converted
+          keyPtr, encryption.publicKey.length,
+          outLenPtr, headerLenPtr
+        );
+
+        this.Module._free(keyPtr);
+        this.Module._free(binPtr);
+
+        if (resultPtr) {
+          const outLen = this.Module.getValue(outLenPtr, 'i32');
+          const data = new Uint8Array(this.Module.HEAPU8.buffer, resultPtr, outLen).slice();
+          this.Module._free(outLenPtr);
+          this.Module._free(headerLenPtr);
+          this.Module._wasm_schema_remove(schemaId);
+          return { header: new Uint8Array(0), data };
+        }
+
+        this.Module._free(outLenPtr);
+        this.Module._free(headerLenPtr);
+        this.Module._wasm_schema_remove(schemaId);
+      }
+    }
+
+    // Fallback: return unencrypted with warning
+    return { header: new Uint8Array(0), data: binary };
+  }
+
+  /**
+   * Generate JSON from an encrypted FlatBuffer binary.
+   * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput
+   * @param {{ path: string, data: Uint8Array }} binaryInput - Encrypted binary
+   * @param {{ privateKey: Uint8Array, header?: Uint8Array }} decryption
+   * @param {Object} [options={}] - Same options as generateJSON()
+   * @returns {string|Uint8Array}
+   */
+  generateJSONDecrypted(schemaInput, binaryInput, decryption, options = {}) {
+    if (!decryption || !decryption.privateKey) {
+      throw new Error('Decryption config must include privateKey');
+    }
+
+    // Use C API for decryption if available
+    if (this.Module._wasm_binary_to_json_decrypted) {
+      const schemaSource = schemaInput.files[schemaInput.entry];
+      const schemaStr = typeof schemaSource === 'string'
+        ? schemaSource
+        : new TextDecoder().decode(schemaSource);
+
+      const namePtr = this.Module._malloc(schemaInput.entry.length + 1);
+      this.Module.stringToUTF8(schemaInput.entry, namePtr, schemaInput.entry.length + 1);
+      const srcBytes = new TextEncoder().encode(schemaStr);
+      const srcPtr = this.Module._malloc(srcBytes.length);
+      this.Module.HEAPU8.set(srcBytes, srcPtr);
+
+      const schemaId = this.Module._wasm_schema_add(namePtr, schemaInput.entry.length, srcPtr, srcBytes.length);
+      this.Module._free(namePtr);
+      this.Module._free(srcPtr);
+
+      if (schemaId >= 0) {
+        const keyPtr = this.Module._malloc(decryption.privateKey.length);
+        this.Module.HEAPU8.set(decryption.privateKey, keyPtr);
+
+        const binPtr = this.Module._malloc(binaryInput.data.length);
+        this.Module.HEAPU8.set(binaryInput.data, binPtr);
+
+        const outLenPtr = this.Module._malloc(4);
+
+        const resultPtr = this.Module._wasm_binary_to_json_decrypted(
+          schemaId,
+          binPtr, binaryInput.data.length,
+          keyPtr, decryption.privateKey.length,
+          outLenPtr
+        );
+
+        this.Module._free(keyPtr);
+        this.Module._free(binPtr);
+
+        if (resultPtr) {
+          const outLen = this.Module.getValue(outLenPtr, 'i32');
+          const json = this.Module.UTF8ToString(resultPtr, outLen);
+          this.Module._free(outLenPtr);
+          this.Module._wasm_schema_remove(schemaId);
+          return json;
+        }
+
+        this.Module._free(outLenPtr);
+        this.Module._wasm_schema_remove(schemaId);
+      }
+    }
+
+    // Fallback: try normal JSON generation
+    return this.generateJSON(schemaInput, binaryInput, options);
+  }
+
+  /**
+   * Configure session-level encryption for subsequent operations.
+   * @param {Uint8Array} publicKey - Recipient's public key
+   * @param {Object|Uint8Array} config - Encryption config (JSON object or FlatBuffer)
+   */
+  configureEncryption(publicKey, config) {
+    this._encryptionConfig = { publicKey, config };
+  }
+
   /**
    * Internal: Mount schema files if they've changed.
    * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput

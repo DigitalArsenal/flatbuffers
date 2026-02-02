@@ -128,6 +128,10 @@ class LobsterGenerator : public BaseGenerator {
       }
       if (field.value.type.enum_def)
         acc = NormalizedName(*field.value.type.enum_def) + "(" + acc + ")";
+      if (field.attributes.Lookup("encrypted") != nullptr) {
+        acc = "flatbuffers_encryption_decrypt_scalar(" + acc +
+              ", encryption_ctx, " + NumToString(field.value.offset) + ")";
+      }
       if (field.IsOptional()) {
         acc += ", flatbuffers.field_present(buf_, pos_, " + offsets + ")";
         code += def + "() -> " + LobsterType(field.value.type) +
@@ -160,10 +164,16 @@ class LobsterGenerator : public BaseGenerator {
         break;
       }
       case BASE_TYPE_STRING:
-        code += def +
-                "() -> string:\n        return "
-                "flatbuffers.field_string(buf_, pos_, " +
-                offsets + ")\n";
+        code += def + "() -> string:\n        return ";
+        if (field.attributes.Lookup("encrypted") != nullptr) {
+          code += "flatbuffers_encryption_decrypt_string("
+                  "flatbuffers.field_string(buf_, pos_, " +
+                  offsets + "), encryption_ctx, " +
+                  NumToString(field.value.offset) + ")";
+        } else {
+          code += "flatbuffers.field_string(buf_, pos_, " + offsets + ")";
+        }
+        code += "\n";
         break;
       case BASE_TYPE_VECTOR: {
         auto vectortype = field.value.type.VectorType();

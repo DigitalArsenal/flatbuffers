@@ -76,6 +76,51 @@ export {
   CoinTypeInfo,
 } from "./hd-keys.js";
 
+// Encryption types
+export interface EncryptionOptions {
+  /** Recipient's public key (32 bytes for X25519, 33 for secp256k1/P-256/P-384) */
+  publicKey: Uint8Array;
+  /** Key exchange algorithm (default: "x25519") */
+  algorithm?: "x25519" | "secp256k1" | "p256" | "p384";
+  /** Field names to encrypt (if empty, uses (encrypted) attribute from schema) */
+  fields?: string[];
+  /** HKDF context string for domain separation */
+  context?: string;
+  /** Use FIPS mode (OpenSSL path) */
+  fips?: boolean;
+}
+
+export interface DecryptionOptions {
+  /** Private key for decryption */
+  privateKey: Uint8Array;
+  /** Encryption header (if separate from data) */
+  header?: Uint8Array;
+}
+
+export interface EncryptedBinaryResult {
+  /** Encryption header (EncryptionHeader FlatBuffer) */
+  header: Uint8Array;
+  /** Encrypted FlatBuffer data */
+  data: Uint8Array;
+}
+
+export interface GenerateBinaryEncryptedOptions {
+  /** Same as GenerateBinaryOptions */
+  unknownJson?: boolean;
+  strictJson?: boolean;
+  fileIdentifier?: boolean;
+  sizePrefix?: boolean;
+}
+
+export interface GenerateJSONDecryptedOptions {
+  /** Same as GenerateJSONOptions */
+  strictJson?: boolean;
+  rawBinary?: boolean;
+  defaultsJson?: boolean;
+  encoding?: "utf8" | null;
+  skipValidation?: boolean;
+}
+
 /**
  * Options for creating the WASM module.
  */

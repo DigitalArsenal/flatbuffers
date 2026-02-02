@@ -753,7 +753,584 @@ bool Ed25519Verify(
   }
 }
 
-#else  // !FLATBUFFERS_USE_CRYPTOPP
+#elif defined(FLATBUFFERS_USE_OPENSSL)
+
+// =============================================================================
+// OpenSSL Implementation - FIPS Compliant
+// =============================================================================
+// When OpenSSL is available, use EVP APIs for FIPS-validated algorithms.
+// Supports: AES-256-CTR, HKDF-SHA256, P-256, P-384, ECDH, ECDSA.
+// X25519 and Ed25519 supported via OpenSSL 1.1.1+.
+// secp256k1 supported via OpenSSL with custom curve registration.
+
+#include <openssl/evp.h>
+#include <openssl/kdf.h>
+#include <openssl/ec.h>
+#include <openssl/ecdh.h>
+#include <openssl/ecdsa.h>
+#include <openssl/sha.h>
+#include <openssl/rand.h>
+#include <openssl/err.h>
+#include <openssl/core_names.h>
+#include <openssl/param_build.h>
+
+// Secure memory clear
+static void SecureClear(void* ptr, size_t size) {
+  if (ptr && size > 0) {
+    OPENSSL_cleanse(ptr, size);
+  }
+}
+
+// Secure clear for vectors
+static void SecureClearVector(std::vector<uint8_t>& v) {
+  if (!v.empty()) {
+    SecureClear(v.data(), v.size());
+  }
+}
+
+// Thread-safe entropy pool
+static std::vector<uint8_t> g_entropy_pool;
+
+void InjectEntropy(const uint8_t* seed, size_t size) {
+  if (seed && size > 0) {
+    RAND_seed(seed, static_cast<int>(size));
+  }
+}
+
+// --- AES-256-CTR ---
+
+void EncryptBytes(uint8_t* data, size_t size,
+                  const uint8_t* key, const uint8_t* iv) {
+  if (!data || !key || !iv || size == 0) return;
+
+  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+  if (!ctx) return;
+
+  int outlen = 0;
+  if (EVP_EncryptInit_ex(ctx, EVP_aes_256_ctr(), nullptr, key, iv) == 1) {
+    EVP_EncryptUpdate(ctx, data, &outlen, data, static_cast<int>(size));
+    int final_len = 0;
+    EVP_EncryptFinal_ex(ctx, data + outlen, &final_len);
+  }
+  EVP_CIPHER_CTX_free(ctx);
+}
+
+// --- SHA-256 ---
+
+void SHA256(const uint8_t* data, size_t size, uint8_t* hash) {
+  if (!data || !hash) return;
+  ::SHA256(data, size, hash);
+}
+
+// --- HKDF ---
+
+void HKDF(const uint8_t* ikm, size_t ikm_size,
+          const uint8_t* salt, size_t salt_size,
+          const uint8_t* info, size_t info_size,
+          uint8_t* okm, size_t okm_size) {
+  if (!ikm || !okm || okm_size == 0) return;
+
+  EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, nullptr);
+  if (!pctx) return;
+
+  if (EVP_PKEY_derive_init(pctx) <= 0 ||
+      EVP_PKEY_CTX_set_hkdf_md(pctx, EVP_sha256()) <= 0 ||
+      EVP_PKEY_CTX_set1_hkdf_key(pctx, ikm, static_cast<int>(ikm_size)) <= 0) {
+    EVP_PKEY_CTX_free(pctx);
+    return;
+  }
+
+  if (salt && salt_size > 0) {
+    EVP_PKEY_CTX_set1_hkdf_salt(pctx, salt, static_cast<int>(salt_size));
+  }
+  if (info && info_size > 0) {
+    EVP_PKEY_CTX_add1_hkdf_info(pctx, info, static_cast<int>(info_size));
+  }
+
+  size_t outlen = okm_size;
+  EVP_PKEY_derive(pctx, okm, &outlen);
+  EVP_PKEY_CTX_free(pctx);
+}
+
+// --- Key derivation utilities ---
+
+void DeriveSymmetricKey(
+    const uint8_t* shared_secret, size_t shared_secret_size,
+    const uint8_t* context, size_t context_size,
+    uint8_t* key) {
+  HKDF(shared_secret, shared_secret_size, nullptr, 0,
+       context, context_size, key, kEncryptionKeySize);
+}
+
+namespace internal {
+void DeriveKey(const uint8_t* master_key, size_t master_key_size,
+               const uint8_t* info, size_t info_size,
+               uint8_t* out_key, size_t out_key_size) {
+  HKDF(master_key, master_key_size, nullptr, 0,
+       info, info_size, out_key, out_key_size);
+}
+}  // namespace internal
+
+// --- X25519 ---
+
+KeyPair X25519GenerateKeyPair() {
+  KeyPair kp;
+  EVP_PKEY* pkey = nullptr;
+  EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_X25519, nullptr);
+  if (!pctx) return kp;
+  if (EVP_PKEY_keygen_init(pctx) <= 0 || EVP_PKEY_keygen(pctx, &pkey) <= 0) {
+    EVP_PKEY_CTX_free(pctx);
+    return kp;
+  }
+  EVP_PKEY_CTX_free(pctx);
+
+  size_t priv_len = kX25519PrivateKeySize, pub_len = kX25519PublicKeySize;
+  kp.private_key.resize(priv_len);
+  kp.public_key.resize(pub_len);
+  EVP_PKEY_get_raw_private_key(pkey, kp.private_key.data(), &priv_len);
+  EVP_PKEY_get_raw_public_key(pkey, kp.public_key.data(), &pub_len);
+  EVP_PKEY_free(pkey);
+  return kp;
+}
+
+bool X25519SharedSecret(const uint8_t* private_key,
+                        const uint8_t* public_key,
+                        uint8_t* shared_secret) {
+  if (!private_key || !public_key || !shared_secret) return false;
+
+  EVP_PKEY* priv = EVP_PKEY_new_raw_private_key(EVP_PKEY_X25519, nullptr,
+                                                  private_key, kX25519PrivateKeySize);
+  EVP_PKEY* pub = EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, nullptr,
+                                                public_key, kX25519PublicKeySize);
+  if (!priv || !pub) {
+    EVP_PKEY_free(priv);
+    EVP_PKEY_free(pub);
+    return false;
+  }
+
+  EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(priv, nullptr);
+  bool ok = false;
+  if (ctx && EVP_PKEY_derive_init(ctx) > 0 &&
+      EVP_PKEY_derive_set_peer(ctx, pub) > 0) {
+    size_t len = kX25519SharedSecretSize;
+    ok = EVP_PKEY_derive(ctx, shared_secret, &len) > 0;
+  }
+
+  EVP_PKEY_CTX_free(ctx);
+  EVP_PKEY_free(priv);
+  EVP_PKEY_free(pub);
+  return ok;
+}
+
+// --- P-256 ---
+
+static KeyPair ECGenerateKeyPair(int nid, size_t priv_size, size_t pub_size) {
+  KeyPair kp;
+  EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr);
+  if (!pctx) return kp;
+  EVP_PKEY* pkey = nullptr;
+  if (EVP_PKEY_keygen_init(pctx) <= 0) { EVP_PKEY_CTX_free(pctx); return kp; }
+  if (EVP_PKEY_CTX_set_ec_paramgen_curve_nid(pctx, nid) <= 0) { EVP_PKEY_CTX_free(pctx); return kp; }
+  if (EVP_PKEY_keygen(pctx, &pkey) <= 0) { EVP_PKEY_CTX_free(pctx); return kp; }
+  EVP_PKEY_CTX_free(pctx);
+
+  // Extract private key
+  BIGNUM* priv_bn = nullptr;
+  EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_PRIV_KEY, &priv_bn);
+  if (priv_bn) {
+    kp.private_key.resize(priv_size);
+    int len = BN_bn2binpad(priv_bn, kp.private_key.data(), static_cast<int>(priv_size));
+    if (len <= 0) kp.private_key.clear();
+    BN_free(priv_bn);
+  }
+
+  // Extract compressed public key
+  size_t pub_len = 0;
+  EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY, nullptr, 0, &pub_len);
+  std::vector<uint8_t> uncompressed(pub_len);
+  EVP_PKEY_get_octet_string_param(pkey, OSSL_PKEY_PARAM_ENCODED_PUBLIC_KEY, uncompressed.data(), pub_len, &pub_len);
+
+  // Compress: take x-coord and prefix with 02/03 based on y parity
+  if (pub_len > 0 && uncompressed[0] == 0x04) {
+    size_t coord_size = (pub_len - 1) / 2;
+    kp.public_key.resize(1 + coord_size);
+    kp.public_key[0] = (uncompressed[pub_len - 1] & 1) ? 0x03 : 0x02;
+    memcpy(kp.public_key.data() + 1, uncompressed.data() + 1, coord_size);
+  }
+
+  EVP_PKEY_free(pkey);
+  return kp;
+}
+
+static bool ECSharedSecret(int nid, const uint8_t* private_key, size_t priv_size,
+                           const uint8_t* public_key, size_t public_key_size,
+                           uint8_t* shared_secret) {
+  if (!private_key || !public_key || !shared_secret) return false;
+
+  // Build private key EVP_PKEY
+  OSSL_PARAM_BLD* bld = OSSL_PARAM_BLD_new();
+  if (!bld) return false;
+  const char* group_name = (nid == NID_X9_62_prime256v1) ? "P-256" :
+                           (nid == NID_secp384r1) ? "P-384" : "secp256k1";
+  OSSL_PARAM_BLD_push_utf8_string(bld, OSSL_PKEY_PARAM_GROUP_NAME, group_name, 0);
+  BIGNUM* priv_bn = BN_bin2bn(private_key, static_cast<int>(priv_size), nullptr);
+  OSSL_PARAM_BLD_push_BN(bld, OSSL_PKEY_PARAM_PRIV_KEY, priv_bn);
+
+  OSSL_PARAM* params = OSSL_PARAM_BLD_to_param(bld);
+  EVP_PKEY_CTX* kctx = EVP_PKEY_CTX_new_from_name(nullptr, "EC", nullptr);
+  EVP_PKEY* priv_pkey = nullptr;
+  EVP_PKEY_fromdata_init(kctx);
+  EVP_PKEY_fromdata(kctx, &priv_pkey, EVP_PKEY_KEYPAIR, params);
+  EVP_PKEY_CTX_free(kctx);
+  OSSL_PARAM_free(params);
+  OSSL_PARAM_BLD_free(bld);
+  BN_free(priv_bn);
+
+  // Build public key EVP_PKEY
+  bld = OSSL_PARAM_BLD_new();
+  OSSL_PARAM_BLD_push_utf8_string(bld, OSSL_PKEY_PARAM_GROUP_NAME, group_name, 0);
+  OSSL_PARAM_BLD_push_octet_string(bld, OSSL_PKEY_PARAM_PUB_KEY, public_key, public_key_size);
+  params = OSSL_PARAM_BLD_to_param(bld);
+  kctx = EVP_PKEY_CTX_new_from_name(nullptr, "EC", nullptr);
+  EVP_PKEY* pub_pkey = nullptr;
+  EVP_PKEY_fromdata_init(kctx);
+  EVP_PKEY_fromdata(kctx, &pub_pkey, EVP_PKEY_PUBLIC_KEY, params);
+  EVP_PKEY_CTX_free(kctx);
+  OSSL_PARAM_free(params);
+  OSSL_PARAM_BLD_free(bld);
+
+  if (!priv_pkey || !pub_pkey) {
+    EVP_PKEY_free(priv_pkey);
+    EVP_PKEY_free(pub_pkey);
+    return false;
+  }
+
+  EVP_PKEY_CTX* dctx = EVP_PKEY_CTX_new(priv_pkey, nullptr);
+  bool ok = false;
+  if (dctx && EVP_PKEY_derive_init(dctx) > 0 &&
+      EVP_PKEY_derive_set_peer(dctx, pub_pkey) > 0) {
+    size_t secret_len = 0;
+    EVP_PKEY_derive(dctx, nullptr, &secret_len);
+    std::vector<uint8_t> raw_secret(secret_len);
+    if (EVP_PKEY_derive(dctx, raw_secret.data(), &secret_len) > 0) {
+      // Hash to 32 bytes
+      ::SHA256(raw_secret.data(), secret_len, shared_secret);
+      ok = true;
+    }
+    SecureClearVector(raw_secret);
+  }
+
+  EVP_PKEY_CTX_free(dctx);
+  EVP_PKEY_free(priv_pkey);
+  EVP_PKEY_free(pub_pkey);
+  return ok;
+}
+
+KeyPair P256GenerateKeyPair() {
+  return ECGenerateKeyPair(NID_X9_62_prime256v1, kP256PrivateKeySize, kP256PublicKeySize);
+}
+
+bool P256SharedSecret(const uint8_t* private_key,
+                      const uint8_t* public_key, size_t public_key_size,
+                      uint8_t* shared_secret) {
+  return ECSharedSecret(NID_X9_62_prime256v1, private_key, kP256PrivateKeySize,
+                        public_key, public_key_size, shared_secret);
+}
+
+KeyPair P384GenerateKeyPair() {
+  return ECGenerateKeyPair(NID_secp384r1, kP384PrivateKeySize, kP384PublicKeySize);
+}
+
+bool P384SharedSecret(const uint8_t* private_key,
+                      const uint8_t* public_key, size_t public_key_size,
+                      uint8_t* shared_secret) {
+  return ECSharedSecret(NID_secp384r1, private_key, kP384PrivateKeySize,
+                        public_key, public_key_size, shared_secret);
+}
+
+KeyPair Secp256k1GenerateKeyPair() {
+  return ECGenerateKeyPair(NID_secp256k1, kSecp256k1PrivateKeySize, kSecp256k1PublicKeySize);
+}
+
+bool Secp256k1SharedSecret(const uint8_t* private_key,
+                           const uint8_t* public_key, size_t public_key_size,
+                           uint8_t* shared_secret) {
+  return ECSharedSecret(NID_secp256k1, private_key, kSecp256k1PrivateKeySize,
+                        public_key, public_key_size, shared_secret);
+}
+
+// --- Signatures ---
+
+static Signature ECSign(int nid, const uint8_t* private_key, size_t priv_size,
+                        const uint8_t* data, size_t data_size,
+                        size_t sig_size) {
+  Signature sig;
+  // Build private key
+  OSSL_PARAM_BLD* bld = OSSL_PARAM_BLD_new();
+  const char* group_name = (nid == NID_X9_62_prime256v1) ? "P-256" :
+                           (nid == NID_secp384r1) ? "P-384" : "secp256k1";
+  OSSL_PARAM_BLD_push_utf8_string(bld, OSSL_PKEY_PARAM_GROUP_NAME, group_name, 0);
+  BIGNUM* priv_bn = BN_bin2bn(private_key, static_cast<int>(priv_size), nullptr);
+  OSSL_PARAM_BLD_push_BN(bld, OSSL_PKEY_PARAM_PRIV_KEY, priv_bn);
+  OSSL_PARAM* params = OSSL_PARAM_BLD_to_param(bld);
+  EVP_PKEY_CTX* kctx = EVP_PKEY_CTX_new_from_name(nullptr, "EC", nullptr);
+  EVP_PKEY* pkey = nullptr;
+  EVP_PKEY_fromdata_init(kctx);
+  EVP_PKEY_fromdata(kctx, &pkey, EVP_PKEY_KEYPAIR, params);
+  EVP_PKEY_CTX_free(kctx);
+  OSSL_PARAM_free(params);
+  OSSL_PARAM_BLD_free(bld);
+  BN_free(priv_bn);
+  if (!pkey) return sig;
+
+  EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+  if (EVP_DigestSignInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) > 0) {
+    size_t siglen = 0;
+    EVP_DigestSign(mdctx, nullptr, &siglen, data, data_size);
+    std::vector<uint8_t> der_sig(siglen);
+    if (EVP_DigestSign(mdctx, der_sig.data(), &siglen, data, data_size) > 0) {
+      // Convert DER to raw r||s
+      const uint8_t* p = der_sig.data();
+      ECDSA_SIG* ecdsa_sig = d2i_ECDSA_SIG(nullptr, &p, static_cast<long>(siglen));
+      if (ecdsa_sig) {
+        const BIGNUM* r = nullptr;
+        const BIGNUM* s = nullptr;
+        ECDSA_SIG_get0(ecdsa_sig, &r, &s);
+        size_t half = sig_size / 2;
+        sig.data.resize(sig_size);
+        BN_bn2binpad(r, sig.data.data(), static_cast<int>(half));
+        BN_bn2binpad(s, sig.data.data() + half, static_cast<int>(half));
+        ECDSA_SIG_free(ecdsa_sig);
+      }
+    }
+  }
+  EVP_MD_CTX_free(mdctx);
+  EVP_PKEY_free(pkey);
+  return sig;
+}
+
+static bool ECVerify(int nid, const uint8_t* public_key, size_t public_key_size,
+                     const uint8_t* data, size_t data_size,
+                     const uint8_t* signature, size_t signature_size) {
+  // Build public key
+  OSSL_PARAM_BLD* bld = OSSL_PARAM_BLD_new();
+  const char* group_name = (nid == NID_X9_62_prime256v1) ? "P-256" :
+                           (nid == NID_secp384r1) ? "P-384" : "secp256k1";
+  OSSL_PARAM_BLD_push_utf8_string(bld, OSSL_PKEY_PARAM_GROUP_NAME, group_name, 0);
+  OSSL_PARAM_BLD_push_octet_string(bld, OSSL_PKEY_PARAM_PUB_KEY, public_key, public_key_size);
+  OSSL_PARAM* params = OSSL_PARAM_BLD_to_param(bld);
+  EVP_PKEY_CTX* kctx = EVP_PKEY_CTX_new_from_name(nullptr, "EC", nullptr);
+  EVP_PKEY* pkey = nullptr;
+  EVP_PKEY_fromdata_init(kctx);
+  EVP_PKEY_fromdata(kctx, &pkey, EVP_PKEY_PUBLIC_KEY, params);
+  EVP_PKEY_CTX_free(kctx);
+  OSSL_PARAM_free(params);
+  OSSL_PARAM_BLD_free(bld);
+  if (!pkey) return false;
+
+  // Convert raw r||s to DER
+  size_t half = signature_size / 2;
+  BIGNUM* r = BN_bin2bn(signature, static_cast<int>(half), nullptr);
+  BIGNUM* s = BN_bin2bn(signature + half, static_cast<int>(half), nullptr);
+  ECDSA_SIG* ecdsa_sig = ECDSA_SIG_new();
+  ECDSA_SIG_set0(ecdsa_sig, r, s);
+  int der_len = i2d_ECDSA_SIG(ecdsa_sig, nullptr);
+  std::vector<uint8_t> der_sig(der_len);
+  uint8_t* p = der_sig.data();
+  i2d_ECDSA_SIG(ecdsa_sig, &p);
+  ECDSA_SIG_free(ecdsa_sig);
+
+  EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+  bool ok = false;
+  if (EVP_DigestVerifyInit(mdctx, nullptr, EVP_sha256(), nullptr, pkey) > 0) {
+    ok = EVP_DigestVerify(mdctx, der_sig.data(), der_len, data, data_size) == 1;
+  }
+  EVP_MD_CTX_free(mdctx);
+  EVP_PKEY_free(pkey);
+  return ok;
+}
+
+Signature Secp256k1Sign(const uint8_t* private_key,
+                        const uint8_t* data, size_t data_size) {
+  auto sig = ECSign(NID_secp256k1, private_key, kSecp256k1PrivateKeySize,
+                    data, data_size, kSecp256k1SignatureSize);
+  sig.algorithm = SignatureAlgorithm::Secp256k1_ECDSA;
+  return sig;
+}
+
+bool Secp256k1Verify(const uint8_t* public_key, size_t public_key_size,
+                     const uint8_t* data, size_t data_size,
+                     const uint8_t* signature, size_t signature_size) {
+  return ECVerify(NID_secp256k1, public_key, public_key_size, data, data_size,
+                  signature, signature_size);
+}
+
+Signature P256Sign(const uint8_t* private_key,
+                   const uint8_t* data, size_t data_size) {
+  auto sig = ECSign(NID_X9_62_prime256v1, private_key, kP256PrivateKeySize,
+                    data, data_size, kP256SignatureSize);
+  sig.algorithm = SignatureAlgorithm::P256_ECDSA;
+  return sig;
+}
+
+bool P256Verify(const uint8_t* public_key, size_t public_key_size,
+                const uint8_t* data, size_t data_size,
+                const uint8_t* signature, size_t signature_size) {
+  return ECVerify(NID_X9_62_prime256v1, public_key, public_key_size,
+                  data, data_size, signature, signature_size);
+}
+
+Signature P384Sign(const uint8_t* private_key,
+                   const uint8_t* data, size_t data_size) {
+  auto sig = ECSign(NID_secp384r1, private_key, kP384PrivateKeySize,
+                    data, data_size, kP384SignatureSize);
+  sig.algorithm = SignatureAlgorithm::P384_ECDSA;
+  return sig;
+}
+
+bool P384Verify(const uint8_t* public_key, size_t public_key_size,
+                const uint8_t* data, size_t data_size,
+                const uint8_t* signature, size_t signature_size) {
+  return ECVerify(NID_secp384r1, public_key, public_key_size,
+                  data, data_size, signature, signature_size);
+}
+
+// --- Ed25519 ---
+
+Signature Ed25519Sign(const uint8_t* private_key,
+                      const uint8_t* data, size_t data_size) {
+  Signature sig;
+  EVP_PKEY* pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, nullptr,
+                                                  private_key, 32);
+  if (!pkey) return sig;
+
+  EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+  if (EVP_DigestSignInit(mdctx, nullptr, nullptr, nullptr, pkey) > 0) {
+    size_t siglen = kEd25519SignatureSize;
+    sig.data.resize(siglen);
+    if (EVP_DigestSign(mdctx, sig.data.data(), &siglen, data, data_size) <= 0) {
+      sig.data.clear();
+    }
+  }
+  EVP_MD_CTX_free(mdctx);
+  EVP_PKEY_free(pkey);
+  sig.algorithm = SignatureAlgorithm::Ed25519;
+  return sig;
+}
+
+bool Ed25519Verify(const uint8_t* public_key,
+                   const uint8_t* data, size_t data_size,
+                   const uint8_t* signature) {
+  EVP_PKEY* pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, nullptr,
+                                                 public_key, kEd25519PublicKeySize);
+  if (!pkey) return false;
+
+  EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+  bool ok = false;
+  if (EVP_DigestVerifyInit(mdctx, nullptr, nullptr, nullptr, pkey) > 0) {
+    ok = EVP_DigestVerify(mdctx, signature, kEd25519SignatureSize,
+                          data, data_size) == 1;
+  }
+  EVP_MD_CTX_free(mdctx);
+  EVP_PKEY_free(pkey);
+  return ok;
+}
+
+// --- Generic dispatch ---
+
+KeyPair GenerateKeyPair(KeyExchangeAlgorithm algorithm) {
+  switch (algorithm) {
+    case KeyExchangeAlgorithm::X25519: return X25519GenerateKeyPair();
+    case KeyExchangeAlgorithm::Secp256k1: return Secp256k1GenerateKeyPair();
+    case KeyExchangeAlgorithm::P256: return P256GenerateKeyPair();
+    case KeyExchangeAlgorithm::P384: return P384GenerateKeyPair();
+    default: return {};
+  }
+}
+
+bool ComputeSharedSecret(KeyExchangeAlgorithm algorithm,
+                         const uint8_t* private_key, size_t private_key_size,
+                         const uint8_t* public_key, size_t public_key_size,
+                         uint8_t* shared_secret) {
+  switch (algorithm) {
+    case KeyExchangeAlgorithm::X25519:
+      return X25519SharedSecret(private_key, public_key, shared_secret);
+    case KeyExchangeAlgorithm::Secp256k1:
+      return Secp256k1SharedSecret(private_key, public_key, public_key_size, shared_secret);
+    case KeyExchangeAlgorithm::P256:
+      return P256SharedSecret(private_key, public_key, public_key_size, shared_secret);
+    case KeyExchangeAlgorithm::P384:
+      return P384SharedSecret(private_key, public_key, public_key_size, shared_secret);
+    default: return false;
+  }
+}
+
+KeyPair GenerateSigningKeyPair(SignatureAlgorithm algorithm) {
+  switch (algorithm) {
+    case SignatureAlgorithm::Ed25519: {
+      KeyPair kp;
+      EVP_PKEY* pkey = nullptr;
+      EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_ED25519, nullptr);
+      if (pctx && EVP_PKEY_keygen_init(pctx) > 0 && EVP_PKEY_keygen(pctx, &pkey) > 0) {
+        size_t priv_len = 32, pub_len = 32;
+        std::vector<uint8_t> seed(32);
+        EVP_PKEY_get_raw_private_key(pkey, seed.data(), &priv_len);
+        kp.public_key.resize(pub_len);
+        EVP_PKEY_get_raw_public_key(pkey, kp.public_key.data(), &pub_len);
+        // Ed25519 private key = seed || public key (64 bytes)
+        kp.private_key.resize(kEd25519PrivateKeySize);
+        memcpy(kp.private_key.data(), seed.data(), 32);
+        memcpy(kp.private_key.data() + 32, kp.public_key.data(), 32);
+        SecureClearVector(seed);
+      }
+      EVP_PKEY_CTX_free(pctx);
+      EVP_PKEY_free(pkey);
+      return kp;
+    }
+    case SignatureAlgorithm::Secp256k1_ECDSA:
+      return Secp256k1GenerateKeyPair();
+    case SignatureAlgorithm::P256_ECDSA:
+      return P256GenerateKeyPair();
+    case SignatureAlgorithm::P384_ECDSA:
+      return P384GenerateKeyPair();
+    default: return {};
+  }
+}
+
+Signature Sign(SignatureAlgorithm algorithm,
+               const uint8_t* private_key, size_t private_key_size,
+               const uint8_t* data, size_t data_size) {
+  switch (algorithm) {
+    case SignatureAlgorithm::Ed25519:
+      return Ed25519Sign(private_key, data, data_size);
+    case SignatureAlgorithm::Secp256k1_ECDSA:
+      return Secp256k1Sign(private_key, data, data_size);
+    case SignatureAlgorithm::P256_ECDSA:
+      return P256Sign(private_key, data, data_size);
+    case SignatureAlgorithm::P384_ECDSA:
+      return P384Sign(private_key, data, data_size);
+    default: return {};
+  }
+}
+
+bool Verify(SignatureAlgorithm algorithm,
+            const uint8_t* public_key, size_t public_key_size,
+            const uint8_t* data, size_t data_size,
+            const uint8_t* signature, size_t signature_size) {
+  switch (algorithm) {
+    case SignatureAlgorithm::Ed25519:
+      return Ed25519Verify(public_key, data, data_size, signature);
+    case SignatureAlgorithm::Secp256k1_ECDSA:
+      return Secp256k1Verify(public_key, public_key_size, data, data_size, signature, signature_size);
+    case SignatureAlgorithm::P256_ECDSA:
+      return P256Verify(public_key, public_key_size, data, data_size, signature, signature_size);
+    case SignatureAlgorithm::P384_ECDSA:
+      return P384Verify(public_key, public_key_size, data, data_size, signature, signature_size);
+    default: return false;
+  }
+}
+
+#else  // !FLATBUFFERS_USE_CRYPTOPP && !FLATBUFFERS_USE_OPENSSL
 
 // =============================================================================
 // Fallback Implementation - SECURITY HARDENED

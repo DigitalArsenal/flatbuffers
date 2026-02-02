@@ -1,6 +1,6 @@
 {
   "name": "flatc-wasm",
-  "version": "25.12.19-wasm.6",
+  "version": "25.12.19-wasm.7",
   "description": "FlatBuffers compiler (flatc) as a WebAssembly module - schema management, JSON/binary conversion, and code generation",
   "type": "module",
   "main": "src/index.mjs",
@@ -32,16 +32,20 @@
     "src/index.d.ts",
     "src/runner.mjs",
     "src/runner.d.ts",
+    "src/aligned-codegen.mjs",
+    "src/aligned-codegen.d.ts",
     "src/hd-keys.mjs",
     "src/hd-keys.d.ts",
+    "src/streaming-dispatcher.mjs",
     "dist/flatc-wasm.js",
     "dist/flatc-wasm.cjs",
     "dist/flatc-wasm.d.ts",
+    "dist/flatc-encryption.wasm",
     "README.md"
   ],
   "scripts": {
     "build": "cmake --build ../build/wasm --target flatc_wasm_npm -j",
-    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
+    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_aligned.mjs && node test/test_aligned_interop.mjs && node test/test_encryption.mjs && node test/test_webapp_crypto.mjs",
     "test:aligned": "node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
     "prepublishOnly": "npm test",
     "prepare": "cd .. && husky || true"
@@ -71,7 +75,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "hd-wallet-wasm": "0.2.1"
+    "hd-wallet-wasm": "0.3.3"
   },
   "devDependencies": {
     "husky": "^9.1.7"

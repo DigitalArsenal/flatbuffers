@@ -1,0 +1,58 @@
+// EncryptionConfig Schema
+//
+// Configuration for per-field encryption of FlatBuffer data.
+// Used to set up encryption sessions for both one-shot and streaming paths.
+
+include "encryption_header.fbs";
+
+namespace flatbuffers.encryption;
+
+// Input/output format for streaming conversion
+enum DataFormat : byte {
+  FlatBuffer = 0,   // Binary FlatBuffer
+  JSON = 1          // JSON text
+}
+
+// Encryption direction
+enum EncryptionDirection : byte {
+  Encrypt = 0,      // Plaintext → ciphertext
+  Decrypt = 1       // Ciphertext → plaintext
+}
+
+// Configuration for an encryption session
+table EncryptionConfig {
+  // Recipient's public key (required for encryption, not needed for decryption)
+  recipient_public_key: [ubyte];
+
+  // Key exchange algorithm
+  algorithm: KeyExchangeAlgorithm = X25519;
+
+  // Field names to encrypt (matches fields with (encrypted) attribute if empty)
+  field_names: [string];
+
+  // Field indices to encrypt (alternative to field_names)
+  field_indices: [ushort];
+
+  // HKDF context/info string for domain separation
+  context: string;
+
+  // Enable FIPS mode (use OpenSSL path instead of Crypto++)
+  fips_mode: bool = false;
+
+  // Input format
+  input_format: DataFormat = FlatBuffer;
+
+  // Output format
+  output_format: DataFormat = FlatBuffer;
+
+  // Encryption direction
+  direction: EncryptionDirection = Encrypt;
+
+  // Schema name (for looking up registered schema)
+  schema_name: string;
+
+  // Private key (required for decryption)
+  private_key: [ubyte];
+}
+
+root_type EncryptionConfig;

@@ -1006,10 +1006,15 @@ class KotlinGenerator : public BaseGenerator {
         } else {
           GenerateGetter(writer, field_name, return_type, [&]() {
             writer += "val o = __offset({{offset}})";
-            writer +=
-                "return if(o != 0) {{bbgetter}}"
-                "(o + bb_pos){{ucast}} else "
-                "{{field_default}}";
+            if (field.attributes.Lookup("encrypted") != nullptr) {
+              writer += "val rawValue = {{bbgetter}}(o + bb_pos){{ucast}}";
+              writer += "return if(o != 0) FlatbuffersEncryption.decryptScalar(rawValue, this.encryptionCtx, " + NumToString(field.value.offset) + ") else {{field_default}}";
+            } else {
+              writer +=
+                  "return if(o != 0) {{bbgetter}}"
+                  "(o + bb_pos){{ucast}} else "
+                  "{{field_default}}";
+            }
           });
         }
       } else {
@@ -1072,7 +1077,12 @@ class KotlinGenerator : public BaseGenerator {
               writer += "val o = __offset({{offset}})";
               writer += "return if (o != 0) {";
               writer.IncrementIdentLevel();
-              writer += "__string(o + bb_pos)";
+              if (field.attributes.Lookup("encrypted") != nullptr) {
+                writer += "val rawValue = __string(o + bb_pos)";
+                writer += "if (this.encryptionCtx == null) rawValue else FlatbuffersEncryption.decryptString(rawValue, this.encryptionCtx, " + NumToString(field.value.offset) + ")";
+              } else {
+                writer += "__string(o + bb_pos)";
+              }
               writer.DecrementIdentLevel();
               writer += "} else {";
               writer.IncrementIdentLevel();

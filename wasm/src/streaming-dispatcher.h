@@ -297,12 +297,59 @@ private:
     entry.total_received++;
   }
 
+  // ===========================================================================
+  // Encryption support
+  // ===========================================================================
+
+  /**
+   * Set encryption configuration for the dispatcher.
+   * When active, (encrypted) fields are encrypted/decrypted in stored messages.
+   *
+   * @param key 32-byte symmetric encryption key
+   * @param key_size Must be 32
+   * @param schema_data Binary schema (.bfbs) with (encrypted) annotations
+   * @param schema_size Size of binary schema
+   * @return 0 on success, -1 on error
+   */
+  int set_encryption_config(const uint8_t* key, size_t key_size,
+                            const uint8_t* schema_data, size_t schema_size) {
+    if (!key || key_size != 32) return -1;
+    memcpy(encryption_key_, key, 32);
+    encryption_active_ = true;
+    encryption_schema_data_ = schema_data;
+    encryption_schema_size_ = schema_size;
+    return 0;
+  }
+
+  /**
+   * Clear encryption state, securely zeroing key material.
+   */
+  void clear_encryption() {
+    // Volatile write to prevent compiler optimization
+    volatile uint8_t* p = encryption_key_;
+    for (size_t i = 0; i < 32; i++) p[i] = 0;
+    encryption_active_ = false;
+    encryption_schema_data_ = nullptr;
+    encryption_schema_size_ = 0;
+  }
+
+  /**
+   * Check if encryption is active.
+   */
+  bool is_encryption_active() const { return encryption_active_; }
+
   MessageTypeEntry types_[MAX_MESSAGE_TYPES];
   int type_count_;
 
   uint8_t* input_buffer_;
   size_t input_size_;
   size_t input_capacity_;
+
+  // Encryption state
+  bool encryption_active_ = false;
+  uint8_t encryption_key_[32] = {};
+  const uint8_t* encryption_schema_data_ = nullptr;
+  size_t encryption_schema_size_ = 0;
 };
 
 }  // namespace streaming

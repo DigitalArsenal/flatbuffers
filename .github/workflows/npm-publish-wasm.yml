@@ -47,6 +47,7 @@ jobs:
           ls -la wasm/dist/
           test -f wasm/dist/flatc-wasm.js
           test -f wasm/dist/flatc.wasm
+          test -f wasm/dist/flatc-encryption.wasm
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

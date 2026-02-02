@@ -624,6 +624,14 @@ encryptBytes(data, key, iv);
 <li><a href="README.md#security-considerations">Security Considerations</a></li>
 <li><a href="browser.html">Browser Integration</a> - Similar API for browsers</li>
 </ul>
+<hr>
+<h2>Per-Field Encryption with <code>(encrypted)</code></h2>
+<p>Fields marked with the <code>(encrypted)</code> attribute in your FlatBuffers schema are automatically encrypted and decrypted by the generated accessors when an <code>EncryptionContext</code> is provided. The per-field IV is derived using HKDF from the master key and the field name, ensuring deterministic and consistent behavior across all runtimes.</p>
+<pre><code class="language-javascript">import { createDecipheriv } from 'node:crypto';
+
+const decipher = createDecipheriv('aes-256-ctr', key, iv);
+const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+</code></pre>
 </article>
   </div>
 </body>

@@ -12,7 +12,8 @@ namespace flatbuffers.encryption;
 enum KeyExchangeAlgorithm : byte {
   X25519 = 0,       // Curve25519 ECDH (RFC 7748)
   Secp256k1 = 1,    // Bitcoin/Ethereum curve ECDH
-  P256 = 2          // NIST P-256/secp256r1 ECDH
+  P256 = 2,         // NIST P-256/secp256r1 ECDH
+  P384 = 3          // NIST P-384/secp384r1 ECDH
 }
 
 // Supported symmetric encryption algorithms

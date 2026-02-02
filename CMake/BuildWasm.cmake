@@ -125,6 +125,8 @@ if(EMSCRIPTEN)
     grpc/src/compiler/swift_generator.cc
     grpc/src/compiler/ts_generator.cc
     src/flatc_wasm.cpp
+    src/encryption.cpp
+    src/encryption_emscripten.cpp
   )
 
   # Exported C functions
@@ -161,8 +163,81 @@ if(EMSCRIPTEN)
     "_wasm_generate_code"
     "_wasm_get_supported_languages"
     "_wasm_get_language_id"
+    # Encryption exports (wasm_crypto_* prefix)
+    "_wasm_crypto_get_version"
+    "_wasm_crypto_has_cryptopp"
+    "_wasm_crypto_has_openssl"
+    "_wasm_crypto_inject_entropy"
+    "_wasm_crypto_alloc"
+    "_wasm_crypto_dealloc"
+    "_wasm_crypto_encryption_create"
+    "_wasm_crypto_encryption_destroy"
+    "_wasm_crypto_encrypt_bytes"
+    "_wasm_crypto_decrypt_bytes"
+    "_wasm_crypto_derive_field_key"
+    "_wasm_crypto_derive_field_iv"
+    "_wasm_crypto_encrypt_buffer"
+    "_wasm_crypto_decrypt_buffer"
+    "_wasm_crypto_sha256"
+    "_wasm_crypto_hkdf"
+    "_wasm_crypto_x25519_generate_keypair"
+    "_wasm_crypto_x25519_shared_secret"
+    "_wasm_crypto_secp256k1_generate_keypair"
+    "_wasm_crypto_secp256k1_shared_secret"
+    "_wasm_crypto_secp256k1_sign"
+    "_wasm_crypto_secp256k1_verify"
+    "_wasm_crypto_p256_generate_keypair"
+    "_wasm_crypto_p256_shared_secret"
+    "_wasm_crypto_p256_sign"
+    "_wasm_crypto_p256_verify"
+    "_wasm_crypto_p384_generate_keypair"
+    "_wasm_crypto_p384_shared_secret"
+    "_wasm_crypto_p384_sign"
+    "_wasm_crypto_p384_verify"
+    "_wasm_crypto_ed25519_generate_keypair"
+    "_wasm_crypto_ed25519_sign"
+    "_wasm_crypto_ed25519_verify"
+    "_wasm_crypto_derive_symmetric_key"
+    # Encrypted conversion exports
+    "_wasm_json_to_binary_encrypted"
+    "_wasm_binary_to_json_decrypted"
+    "_wasm_convert_auto_encrypted"
+    "_wasm_stream_set_encryption"
+    "_wasm_stream_clear_encryption"
   )
   string(JOIN "," EXPORTED_FUNCS_STR ${WASM_EXPORTED_FUNCTIONS})
+
+  # Fetch Crypto++ for encryption support (used by flatc_wasm and flatc_wasm_wasi)
+  if(NOT TARGET cryptopp)
+    message(STATUS "Fetching Crypto++ for WASM build...")
+    FetchContent_Declare(
+      cryptopp-cmake
+      GIT_REPOSITORY https://github.com/abdes/cryptopp-cmake.git
+      GIT_TAG        CRYPTOPP_8_9_0
+    )
+    set(CRYPTOPP_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(CRYPTOPP_INSTALL OFF CACHE BOOL "" FORCE)
+    set(CRYPTOPP_USE_INTERMEDIATE_OBJECTS_TARGET OFF CACHE BOOL "" FORCE)
+    set(CRYPTOPP_DISABLE_ASM ON CACHE BOOL "" FORCE)
+    set(CRYPTOPP_DISABLE_SSSE3 ON CACHE BOOL "" FORCE)
+    set(CRYPTOPP_DISABLE_AESNI ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(cryptopp-cmake)
+  endif()
+
+  # Optional: OpenSSL for FIPS compliance (alternative to Crypto++)
+  option(FLATBUFFERS_WASM_USE_OPENSSL "Use OpenSSL instead of Crypto++ for FIPS compliance" OFF)
+  if(FLATBUFFERS_WASM_USE_OPENSSL)
+    # Emscripten-compatible OpenSSL build
+    if(NOT TARGET ssl)
+      message(STATUS "Fetching OpenSSL for WASM FIPS build...")
+      FetchContent_Declare(
+        openssl
+        GIT_REPOSITORY https://github.com/nicedoc/openssl-wasm.git
+        GIT_TAG        main
+      )
+      FetchContent_MakeAvailable(openssl)
+    endif()
+  endif()
 
   # Common compile options
   set(WASM_COMPILE_OPTIONS
@@ -189,6 +264,8 @@ if(EMSCRIPTEN)
     -sINVOKE_RUN=0
     $<$<CONFIG:Release>:-O3>
     $<$<CONFIG:Release>:-flto>
+    $<$<CONFIG:Release>:--strip-debug>
+    $<$<CONFIG:Release>:-sSTRIP=1>
     $<$<CONFIG:Debug>:-g>
     $<$<CONFIG:Debug>:-sASSERTIONS=2>
   )
@@ -209,8 +286,15 @@ if(EMSCRIPTEN)
     ${CMAKE_SOURCE_DIR}/grpc
     ${CMAKE_SOURCE_DIR}/src
   )
-  target_compile_options(flatc_wasm PRIVATE ${WASM_COMPILE_OPTIONS})
-  target_link_options(flatc_wasm PRIVATE ${WASM_COMMON_LINK_OPTIONS} -sEXPORT_ES6=1)
+  target_compile_options(flatc_wasm PRIVATE ${WASM_COMPILE_OPTIONS} -fexceptions)
+  if(FLATBUFFERS_WASM_USE_OPENSSL)
+    target_compile_definitions(flatc_wasm PRIVATE FLATBUFFERS_USE_OPENSSL=1)
+    target_link_libraries(flatc_wasm PRIVATE ssl crypto)
+  else()
+    target_compile_definitions(flatc_wasm PRIVATE FLATBUFFERS_USE_CRYPTOPP=1)
+    target_link_libraries(flatc_wasm PRIVATE cryptopp)
+  endif()
+  target_link_options(flatc_wasm PRIVATE ${WASM_COMMON_LINK_OPTIONS} -sEXPORT_ES6=1 -fexceptions -sDISABLE_EXCEPTION_THROWING=0)
 
   # Copy TypeScript definitions
   set(TS_TYPES_SRC "${CMAKE_SOURCE_DIR}/ts/flatc-wasm.d.ts")
@@ -237,8 +321,15 @@ if(EMSCRIPTEN)
     ${CMAKE_SOURCE_DIR}/grpc
     ${CMAKE_SOURCE_DIR}/src
   )
-  target_compile_options(flatc_wasm_inline PRIVATE ${WASM_COMPILE_OPTIONS})
-  target_link_options(flatc_wasm_inline PRIVATE ${WASM_COMMON_LINK_OPTIONS} -sEXPORT_ES6=1 -sSINGLE_FILE=1)
+  target_compile_options(flatc_wasm_inline PRIVATE ${WASM_COMPILE_OPTIONS} -fexceptions)
+  if(FLATBUFFERS_WASM_USE_OPENSSL)
+    target_compile_definitions(flatc_wasm_inline PRIVATE FLATBUFFERS_USE_OPENSSL=1)
+    target_link_libraries(flatc_wasm_inline PRIVATE ssl crypto)
+  else()
+    target_compile_definitions(flatc_wasm_inline PRIVATE FLATBUFFERS_USE_CRYPTOPP=1)
+    target_link_libraries(flatc_wasm_inline PRIVATE cryptopp)
+  endif()
+  target_link_options(flatc_wasm_inline PRIVATE ${WASM_COMMON_LINK_OPTIONS} -sEXPORT_ES6=1 -sSINGLE_FILE=1 -fexceptions -sDISABLE_EXCEPTION_THROWING=0)
 
   # Target: flatc_wasm_npm (build npm package)
   set(CJS_WRAPPER_CONTENT
@@ -363,26 +454,6 @@ module.exports.default = createModule;
   )
   string(JOIN "," WASI_EXPORTED_FUNCS_STR ${WASI_EXPORTED_FUNCTIONS})
 
-  # Check if Crypto++ is available for WASM build
-  # For WASM builds, we need to fetch cryptopp-cmake ourselves if not already done
-  if(NOT TARGET cryptopp)
-    message(STATUS "Fetching Crypto++ for WASM build...")
-    include(FetchContent)
-    FetchContent_Declare(
-      cryptopp-cmake
-      GIT_REPOSITORY https://github.com/abdes/cryptopp-cmake.git
-      GIT_TAG        CRYPTOPP_8_9_0
-    )
-    set(CRYPTOPP_BUILD_TESTING OFF CACHE BOOL "" FORCE)
-    set(CRYPTOPP_INSTALL OFF CACHE BOOL "" FORCE)
-    set(CRYPTOPP_USE_INTERMEDIATE_OBJECTS_TARGET OFF CACHE BOOL "" FORCE)
-    # Disable assembly for WASM
-    set(CRYPTOPP_DISABLE_ASM ON CACHE BOOL "" FORCE)
-    set(CRYPTOPP_DISABLE_SSSE3 ON CACHE BOOL "" FORCE)
-    set(CRYPTOPP_DISABLE_AESNI ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(cryptopp-cmake)
-  endif()
-
   # Target: flatc_wasm_wasi (standalone WASI module)
   add_executable(flatc_wasm_wasi ${FlatBuffers_WASI_SRCS})
   target_compile_features(flatc_wasm_wasi PRIVATE cxx_std_17)
@@ -422,6 +493,8 @@ module.exports.default = createModule;
     --no-entry
     $<$<CONFIG:Release>:-O3>
     $<$<CONFIG:Release>:-flto>
+    $<$<CONFIG:Release>:--strip-debug>
+    $<$<CONFIG:Release>:-sSTRIP=1>
     $<$<CONFIG:Debug>:-g>
   )
 

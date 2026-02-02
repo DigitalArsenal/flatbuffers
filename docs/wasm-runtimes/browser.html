@@ -718,6 +718,15 @@ Content-Type: application/wasm
 <li><a href="nodejs.html">Node.js Integration</a> - Same API for server-side</li>
 <li><a href="README.md#api-reference">API Reference</a></li>
 </ul>
+<hr>
+<h2>Per-Field Encryption with <code>(encrypted)</code></h2>
+<p>Fields marked with the <code>(encrypted)</code> attribute in your FlatBuffers schema are automatically encrypted and decrypted by the generated accessors when an <code>EncryptionContext</code> is provided. The per-field IV is derived using HKDF from the master key and the field name, ensuring deterministic and consistent behavior across all runtimes.</p>
+<pre><code class="language-javascript">const cryptoKey = await crypto.subtle.importKey('raw', key, { name: 'AES-CTR' }, false, ['decrypt']);
+const plaintext = await crypto.subtle.decrypt(
+  { name: 'AES-CTR', counter: iv, length: 128 },
+  cryptoKey, ciphertext
+);
+</code></pre>
 </article>
   </div>
 </body>

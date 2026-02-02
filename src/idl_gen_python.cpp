@@ -867,6 +867,14 @@ class PythonGenerator : public BaseGenerator {
     code += "(self):";
     code += OffsetPrefix(field);
     getter += "o + self._tab.Pos)";
+    
+    // Check if field has encryption attribute and wrap with decryption
+    if (field.attributes.Lookup("encrypted") != nullptr) {
+      getter = "FlatbuffersEncryption.decrypt_scalar(" + getter + 
+               ", self._encryption_ctx, " + 
+               NumToString(field.value.offset) + ")";
+    }
+
     auto is_bool = IsBool(field.value.type.base_type);
     if (is_bool) {
       getter = "bool(" + getter + ")";
@@ -1013,8 +1021,16 @@ class PythonGenerator : public BaseGenerator {
     }
 
     code += OffsetPrefix(field);
-    code += Indent + Indent + Indent + "return " + GenGetter(field.value.type);
-    code += "o + self._tab.Pos)\n";
+    
+    // Check if field has encryption attribute and wrap with decryption
+    if (field.attributes.Lookup("encrypted") != nullptr) {
+      code += Indent + Indent + Indent + "return FlatbuffersEncryption.decrypt_string(";
+      code += GenGetter(field.value.type) + "o + self._tab.Pos), self._encryption_ctx, ";
+      code += NumToString(field.value.offset) + ")\n";
+    } else {
+      code += Indent + Indent + Indent + "return " + GenGetter(field.value.type);
+      code += "o + self._tab.Pos)\n";
+    }
     code += Indent + Indent + "return None\n\n";
   }
 

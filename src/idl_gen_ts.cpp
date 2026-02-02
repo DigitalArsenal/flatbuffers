@@ -1704,18 +1704,41 @@ class TsGenerator : public BaseGenerator {
         }
 
         if (struct_def.fixed) {
-          code +=
-              "  return " +
-              GenGetter(field.value.type,
-                        "(this.bb_pos" + MaybeAdd(field.value.offset) + ")") +
-              ";\n";
+          std::string getter_result = GenGetter(field.value.type,
+                        "(this.bb_pos" + MaybeAdd(field.value.offset) + ")");
+          
+          if (field.attributes.Lookup("encrypted") != nullptr) {
+            std::string field_id = NumToString(field.value.offset);
+            if (is_string) {
+              getter_result = "FlatbuffersEncryption.decryptString(" + getter_result + 
+                            ", this.encryptionCtx, " + field_id + ")";
+            } else {
+              getter_result = "FlatbuffersEncryption.decryptScalar(" + getter_result + 
+                            ", this.encryptionCtx, " + field_id + ")";
+            }
+          }
+          
+          code += "  return " + getter_result + ";\n";
         } else {
           std::string index = "this.bb_pos + offset";
           if (is_string) {
             index += ", optionalEncoding";
           }
-          code +=
-              offset_prefix + GenGetter(field.value.type, "(" + index + ")");
+          
+          std::string getter_result = GenGetter(field.value.type, "(" + index + ")");
+          
+          if (field.attributes.Lookup("encrypted") != nullptr) {
+            std::string field_id = NumToString(field.value.offset);
+            if (is_string) {
+              getter_result = "FlatbuffersEncryption.decryptString(" + getter_result + 
+                            ", this.encryptionCtx, " + field_id + ")";
+            } else {
+              getter_result = "FlatbuffersEncryption.decryptScalar(" + getter_result + 
+                            ", this.encryptionCtx, " + field_id + ")";
+            }
+          }
+          
+          code += offset_prefix + getter_result;
           if (field.value.type.base_type != BASE_TYPE_ARRAY) {
             code += " : " + GenDefaultValue(field, imports);
           }

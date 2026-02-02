@@ -196,4 +196,41 @@ size_t dispatcher_get_type_capacity(int type_index) {
   return entry ? entry->capacity : 0;
 }
 
+// ============================================================================
+// Encryption support
+// ============================================================================
+
+/**
+ * Set encryption configuration for the dispatcher
+ *
+ * @param key_ptr Pointer to 32-byte encryption key
+ * @param key_size Must be 32
+ * @param schema_ptr Pointer to binary schema (.bfbs) data
+ * @param schema_size Size of binary schema
+ * @return 0 on success, -1 on error
+ */
+__attribute__((export_name("dispatcher_set_encryption")))
+int dispatcher_set_encryption(const uint8_t* key_ptr, size_t key_size,
+                              const uint8_t* schema_ptr, size_t schema_size) {
+  return g_dispatcher.set_encryption_config(key_ptr, key_size,
+                                             schema_ptr, schema_size);
+}
+
+/**
+ * Clear encryption state, securely zeroing key material
+ */
+__attribute__((export_name("dispatcher_clear_encryption")))
+void dispatcher_clear_encryption() {
+  g_dispatcher.clear_encryption();
+}
+
+/**
+ * Check if encryption is currently active
+ * @return 1 if active, 0 if not
+ */
+__attribute__((export_name("dispatcher_is_encryption_active")))
+int dispatcher_is_encryption_active() {
+  return g_dispatcher.is_encryption_active() ? 1 : 0;
+}
+
 }  // extern "C"

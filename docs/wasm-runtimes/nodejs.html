@@ -255,7 +255,7 @@
   ed25519Verify,
   KEY_SIZE,
   IV_SIZE
-} from &#39;flatc-wasm/encryption&#39;;
+} from &#39;flatc-wasm&#39;;
 
 import { randomBytes } from &#39;crypto&#39;;
 
@@ -275,7 +275,7 @@ console.log(&#39;Decrypted:&#39;, new TextDecoder().decode(data));
 </code></pre>
 <h2>API Reference</h2>
 <h3>Symmetric Encryption</h3>
-<pre><code class="language-javascript">import { encryptBytes, decryptBytes, KEY_SIZE, IV_SIZE } from &#39;flatc-wasm/encryption&#39;;
+<pre><code class="language-javascript">import { encryptBytes, decryptBytes, KEY_SIZE, IV_SIZE } from &#39;flatc-wasm&#39;;
 
 // Key: 32 bytes, IV: 16 bytes
 const key = new Uint8Array(32);
@@ -293,7 +293,7 @@ decryptBytes(data, key, iv);
 // data is back to original
 </code></pre>
 <h3>Hash Functions</h3>
-<pre><code class="language-javascript">import { sha256, hkdf } from &#39;flatc-wasm/encryption&#39;;
+<pre><code class="language-javascript">import { sha256, hkdf } from &#39;flatc-wasm&#39;;
 
 // SHA-256
 const hash = sha256(new TextEncoder().encode(&#39;Hello&#39;));
@@ -309,7 +309,7 @@ const derivedKey = hkdf(
 // derivedKey: Uint8Array(32)
 </code></pre>
 <h3>X25519 Key Exchange</h3>
-<pre><code class="language-javascript">import { x25519GenerateKeyPair, x25519SharedSecret } from &#39;flatc-wasm/encryption&#39;;
+<pre><code class="language-javascript">import { x25519GenerateKeyPair, x25519SharedSecret } from &#39;flatc-wasm&#39;;
 
 // Generate key pair
 const alice = x25519GenerateKeyPair();
@@ -330,7 +330,7 @@ const bobShared = x25519SharedSecret(bob.privateKey, alice.publicKey);
   secp256k1Sign,
   secp256k1Verify,
   sha256
-} from &#39;flatc-wasm/encryption&#39;;
+} from &#39;flatc-wasm&#39;;
 
 // Generate key pair
 const keypair = secp256k1GenerateKeyPair();
@@ -356,7 +356,7 @@ const isValid = secp256k1Verify(keypair.publicKey, messageHash, signature);
   p256SharedSecret,
   p256Sign,
   p256Verify
-} from &#39;flatc-wasm/encryption&#39;;
+} from &#39;flatc-wasm&#39;;
 
 // Same API as secp256k1
 const keypair = p256GenerateKeyPair();
@@ -369,7 +369,7 @@ const isValid = p256Verify(keypair.publicKey, messageHash, signature);
   ed25519GenerateKeyPair,
   ed25519Sign,
   ed25519Verify
-} from &#39;flatc-wasm/encryption&#39;;
+} from &#39;flatc-wasm&#39;;
 
 // Generate key pair
 const keypair = ed25519GenerateKeyPair();
@@ -395,7 +395,7 @@ import {
   decryptBytes,
   KEY_SIZE,
   IV_SIZE
-} from &#39;flatc-wasm/encryption&#39;;
+} from &#39;flatc-wasm&#39;;
 import { randomBytes } from &#39;crypto&#39;;
 
 // Initialize FlatcRunner
@@ -514,7 +514,7 @@ console.log(&#39;Decrypted message:&#39;, content.text);
   KeyPair,
   KEY_SIZE,
   IV_SIZE
-} from &#39;flatc-wasm/encryption&#39;;
+} from &#39;flatc-wasm&#39;;
 
 // Types are inferred
 const keypair: KeyPair = x25519GenerateKeyPair();
@@ -526,7 +526,7 @@ function encrypt(plaintext: Uint8Array, key: Uint8Array, iv: Uint8Array): Uint8A
 }
 </code></pre>
 <h2>CommonJS Support</h2>
-<pre><code class="language-javascript">const { encryptBytes, x25519GenerateKeyPair } = require(&#39;flatc-wasm/encryption&#39;);
+<pre><code class="language-javascript">const { encryptBytes, x25519GenerateKeyPair } = require(&#39;flatc-wasm&#39;);
 
 const keypair = x25519GenerateKeyPair();
 console.log(&#39;Public key:&#39;, Buffer.from(keypair.publicKey).toString(&#39;hex&#39;));
@@ -534,7 +534,7 @@ console.log(&#39;Public key:&#39;, Buffer.from(keypair.publicKey).toString(&#39;
 <h2>Performance Tips</h2>
 <h3>1. Initialize Once</h3>
 <pre><code class="language-javascript">// Good: Initialize at startup
-import { initEncryption } from &#39;flatc-wasm/encryption&#39;;
+import { initEncryption } from &#39;flatc-wasm&#39;;
 await initEncryption();  // Loads WASM once
 
 // Then use throughout your app
@@ -557,7 +557,7 @@ for (const chunk of chunks) {
 <h3>3. Use Worker Threads for Heavy Loads</h3>
 <pre><code class="language-javascript">// worker.js
 import { parentPort } from &#39;worker_threads&#39;;
-import { encryptBytes } from &#39;flatc-wasm/encryption&#39;;
+import { encryptBytes } from &#39;flatc-wasm&#39;;
 
 parentPort.on(&#39;message&#39;, ({ data, key, iv }) =&gt; {
   const buffer = new Uint8Array(data);
@@ -599,11 +599,7 @@ for (let i = 0; i &lt; 32; i++) {
 <h2>Troubleshooting</h2>
 <h3>&quot;Module not found&quot;</h3>
 <p>Ensure you&#39;re importing from the correct path:</p>
-<pre><code class="language-javascript">// Correct
-import { encryptBytes } from &#39;flatc-wasm/encryption&#39;;
-
-// Wrong
-import { encryptBytes } from &#39;flatc-wasm&#39;;  // Main module, not encryption
+<pre><code class="language-javascript">import { encryptBytes } from &#39;flatc-wasm&#39;;
 </code></pre>
 <h3>&quot;Invalid key/IV size&quot;</h3>
 <p>Check your buffer sizes:</p>
@@ -612,7 +608,7 @@ console.log(&#39;IV size:&#39;, iv.length);    // Should be 16
 </code></pre>
 <h3>&quot;WASM module not initialized&quot;</h3>
 <p>Call init before using:</p>
-<pre><code class="language-javascript">import { initEncryption, encryptBytes } from &#39;flatc-wasm/encryption&#39;;
+<pre><code class="language-javascript">import { initEncryption, encryptBytes } from &#39;flatc-wasm&#39;;
 
 await initEncryption();  // Must call first!
 encryptBytes(data, key, iv);

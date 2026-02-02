@@ -95,6 +95,17 @@ void wasm_crypto_dealloc(void* ptr) {
   free(ptr);
 }
 
+// Secure deallocation: zero memory before freeing (Task 27)
+// Use for buffers that held key material
+EMSCRIPTEN_KEEPALIVE
+void wasm_crypto_dealloc_secure(void* ptr, uint32_t size) {
+  if (ptr) {
+    volatile uint8_t* p = static_cast<volatile uint8_t*>(ptr);
+    for (uint32_t i = 0; i < size; i++) p[i] = 0;
+    free(ptr);
+  }
+}
+
 // =============================================================================
 // Symmetric Encryption (AES-256-CTR)
 // =============================================================================
@@ -138,23 +149,25 @@ int32_t wasm_crypto_decrypt_bytes(const uint8_t* key, const uint8_t* iv,
 
 EMSCRIPTEN_KEEPALIVE
 int32_t wasm_crypto_derive_field_key(void* ctx, uint16_t field_id,
-                                      uint8_t* out_key) {
+                                      uint8_t* out_key,
+                                      uint32_t record_index) {
   if (!ctx || !out_key) {
     return -1;
   }
   auto* enc_ctx = static_cast<flatbuffers::EncryptionContext*>(ctx);
-  enc_ctx->DeriveFieldKey(field_id, out_key);
+  enc_ctx->DeriveFieldKey(field_id, out_key, record_index);
   return 0;
 }
 
 EMSCRIPTEN_KEEPALIVE
 int32_t wasm_crypto_derive_field_iv(void* ctx, uint16_t field_id,
-                                     uint8_t* out_iv) {
+                                     uint8_t* out_iv,
+                                     uint32_t record_index) {
   if (!ctx || !out_iv) {
     return -1;
   }
   auto* enc_ctx = static_cast<flatbuffers::EncryptionContext*>(ctx);
-  enc_ctx->DeriveFieldIV(field_id, out_iv);
+  enc_ctx->DeriveFieldIV(field_id, out_iv, record_index);
   return 0;
 }
 
@@ -502,10 +515,12 @@ int32_t wasm_crypto_ed25519_verify(const uint8_t* public_key,
 EMSCRIPTEN_KEEPALIVE
 void wasm_crypto_derive_symmetric_key(const uint8_t* shared_secret,
                                        const uint8_t* context,
-                                       uint32_t context_size, uint8_t* key) {
+                                       uint32_t context_size, uint8_t* key,
+                                       const uint8_t* salt,
+                                       uint32_t salt_size) {
   if (shared_secret && key) {
     flatbuffers::DeriveSymmetricKey(shared_secret, 32, context, context_size,
-                                     key);
+                                     key, salt, salt_size);
   }
 }
 

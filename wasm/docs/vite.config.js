@@ -274,11 +274,13 @@ export default defineConfig({
     alias: {
       // Allow importing from wasm/src
       '@flatbuffers': resolve(__dirname, '../../src'),
+      // Stub out @sds/lib (not needed for FlatBuffers demo, used by hd-wallet-ui internally)
+      '@sds/lib/js/ts/EME/EME.js': resolve(__dirname, 'sds-stub.mjs'),
     },
   },
   optimizeDeps: {
     include: ['qrcode', 'buffer', 'vcard-cryptoperson'],
-    exclude: ['@anthropic-ai/claude-code', 'hd-wallet-wasm'],
+    exclude: ['@anthropic-ai/claude-code', 'hd-wallet-wasm', 'hd-wallet-ui'],
   },
   build: {
     outDir: 'dist',
@@ -293,7 +295,7 @@ export default defineConfig({
         inlineDynamicImports: true,
       },
       // Node.js built-ins are externalized for browser builds (expected for Emscripten code)
-      external: ['fs', 'url', 'path', 'module', 'crypto'],
+      external: ['fs', 'url', 'path', 'module', 'crypto', '@sds/lib/js/ts/EME/EME.js'],
       onwarn(warning, warn) {
         // Suppress warnings about Node.js modules being externalized for browser
         // These are expected for WASM/Emscripten files that have Node.js detection

@@ -9,6 +9,8 @@
  * 5. Streaming demo with message routing by type
  */
 
+import 'hd-wallet-ui/styles';
+import { createWalletUI } from 'hd-wallet-ui';
 import initHDWallet, { Curve } from 'hd-wallet-wasm';
 import { x25519, ed25519 } from '@noble/curves/ed25519';
 import { secp256k1 } from '@noble/curves/secp256k1';
@@ -74,7 +76,6 @@ async function p384GenerateKeyPairAsync() {
 import { FlatcRunner } from '../src/runner.mjs';
 import { generateAlignedCode, parseSchema } from '../src/aligned-codegen.mjs';
 import { FlatBufferParser, parseWithSchema, Schemas, toHex, toHexCompact } from './flatbuffer-parser.mjs';
-import WalletStorage, { StorageMethod } from './wallet-storage.mjs';
 import { PaginatedTable } from './virtual-scroller.mjs';
 import { StreamingDemo, MessageTypes, formatBytes, formatThroughput } from './streaming-demo.mjs';
 import { Builder } from 'flatbuffers';
@@ -108,6 +109,7 @@ const state = {
   },
   // HD wallet state
   hdWalletModule: null, // hd-wallet-wasm module
+  walletUI: null, // hd-wallet-ui instance
   masterSeed: null,
   hdRoot: null,
   // FlatBuffer state
@@ -404,509 +406,11 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// =============================================================================
-// Entropy Calculation
-// =============================================================================
 
-function calculateEntropy(password) {
-  if (!password) return 0;
 
-  let charsetSize = 0;
-  if (/[a-z]/.test(password)) charsetSize += 26;
-  if (/[A-Z]/.test(password)) charsetSize += 26;
-  if (/[0-9]/.test(password)) charsetSize += 10;
-  if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(password)) charsetSize += 32;
-  if (/\s/.test(password)) charsetSize += 1;
-  if (/[^\x00-\x7F]/.test(password)) charsetSize += 100;
 
-  if (charsetSize === 0) return 0;
-  return Math.round(password.length * Math.log2(charsetSize));
-}
 
-function updatePasswordStrength(password) {
-  const entropy = calculateEntropy(password);
-  const fill = $('strength-fill');
-  const bits = $('entropy-bits');
-  const btn = $('derive-from-password');
 
-  if (bits) bits.textContent = `${entropy}`;
-
-  // Minimum recommended entropy: 128 bits for cryptographic security
-  // But we require 24 chars minimum which is ~112-157 bits depending on charset
-  const MIN_SAFE_ENTROPY = 112;
-
-  let strength, percentage;
-
-  if (entropy < 40) {
-    strength = 'weak';
-    percentage = Math.min(25, (entropy / 40) * 25);
-  } else if (entropy < 80) {
-    strength = 'fair';
-    percentage = 25 + ((entropy - 40) / 40) * 25;
-  } else if (entropy < MIN_SAFE_ENTROPY) {
-    strength = 'good';
-    percentage = 50 + ((entropy - 80) / (MIN_SAFE_ENTROPY - 80)) * 25;
-  } else {
-    strength = 'strong';
-    percentage = 75 + Math.min(25, ((entropy - MIN_SAFE_ENTROPY) / 50) * 25);
-  }
-
-  if (fill) {
-    fill.dataset.strength = strength;
-    fill.style.width = `${percentage}%`;
-  }
-
-  const username = $('wallet-username').value;
-  if (btn) btn.disabled = !username || password.length < 24;
-}
-
-// =============================================================================
-// Key Derivation
-// =============================================================================
-
-async function deriveKeysFromPassword(username, password) {
-  const encoder = new TextEncoder();
-  const usernameSalt = encoder.encode(username);
-  const passwordBytes = encoder.encode(password);
-
-  const initialHash = await sha256(new Uint8Array([...usernameSalt, ...passwordBytes]));
-  const masterKey = await hkdf(initialHash, usernameSalt, encoder.encode('master-key'), 32);
-
-  state.encryptionKey = await hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-key'), 32);
-  state.encryptionIV = await hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-iv'), 16);
-
-  // Create 64-byte seed for HD wallet (password-based, not BIP39)
-  const hdSeed = await hkdf(masterKey, new Uint8Array(0), encoder.encode('hd-wallet-seed'), 64);
-  state.masterSeed = hdSeed;
-  state.hdRoot = state.hdWalletModule.hdkey.fromSeed(hdSeed);
-  console.log('HD wallet initialized from password, hdRoot:', !!state.hdRoot);
-
-  // Derive deterministic seeds for each curve
-  const ed25519Seed = await hkdf(masterKey, new Uint8Array(0), encoder.encode('ed25519-seed'), 32);
-
-  const keys = {
-    x25519: generateKeyPair(Curve.X25519),
-    // Use @noble/curves ed25519 directly (hd-wallet-wasm Ed25519 not implemented)
-    ed25519: {
-      privateKey: ed25519Seed,
-      publicKey: ed25519.getPublicKey(ed25519Seed),
-    },
-    secp256k1: generateKeyPair(Curve.SECP256K1),
-    // P-256 and P-384 require async crypto.subtle
-    p256: await p256GenerateKeyPairAsync(),
-    p384: await p384GenerateKeyPairAsync(),
-  };
-
-  return keys;
-}
-
-async function deriveKeysFromSeed(seedPhrase) {
-  // Use hd-wallet-wasm for mnemonic to seed conversion
-  const seed = state.hdWalletModule.mnemonic.toSeed(seedPhrase);
-  const encoder = new TextEncoder();
-
-  const masterKey = await hkdf(
-    new Uint8Array(seed.slice(0, 32)),
-    new Uint8Array(0),
-    encoder.encode('flatbuffers-wallet'),
-    32
-  );
-
-  state.encryptionKey = await hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-key'), 32);
-  state.encryptionIV = await hkdf(masterKey, new Uint8Array(0), encoder.encode('buffer-encryption-iv'), 16);
-
-  // Store seed for HD wallet derivation (BIP39 standard)
-  state.masterSeed = new Uint8Array(seed);
-  state.hdRoot = state.hdWalletModule.hdkey.fromSeed(new Uint8Array(seed));
-  console.log('HD wallet initialized from seed phrase, hdRoot:', !!state.hdRoot);
-
-  // Derive deterministic seeds for each curve
-  const ed25519Seed = await hkdf(masterKey, new Uint8Array(0), encoder.encode('ed25519-seed'), 32);
-
-  const keys = {
-    x25519: generateKeyPair(Curve.X25519),
-    // Use @noble/curves ed25519 directly (hd-wallet-wasm Ed25519 not implemented)
-    ed25519: {
-      privateKey: ed25519Seed,
-      publicKey: ed25519.getPublicKey(ed25519Seed),
-    },
-    secp256k1: generateKeyPair(Curve.SECP256K1),
-    // P-256 and P-384 require async crypto.subtle
-    p256: await p256GenerateKeyPairAsync(),
-    p384: await p384GenerateKeyPairAsync(),
-  };
-
-  return keys;
-}
-
-function generateSeedPhrase() {
-  // Use hd-wallet-wasm for mnemonic generation (24 words = 256 bits entropy)
-  return state.hdWalletModule.mnemonic.generate(24);
-}
-
-function validateSeedPhrase(phrase) {
-  // Use hd-wallet-wasm for mnemonic validation
-  return state.hdWalletModule.mnemonic.validate(phrase.trim().toLowerCase());
-}
-
-// =============================================================================
-// PIN-Encrypted Wallet Storage
-// =============================================================================
-
-const STORED_WALLET_KEY = 'encrypted_wallet';
-
-/**
- * Derive an encryption key from a 6-digit PIN using HKDF
- */
-async function deriveKeyFromPIN(pin) {
-  const encoder = new TextEncoder();
-  const pinBytes = encoder.encode(pin);
-  // Use a fixed salt for PIN derivation (since PIN is low entropy, we rely on the
-  // encryption being local-only and rate-limited by user interaction)
-  const salt = encoder.encode('flatbuffers-wallet-pin-v1');
-  const pinHash = await sha256(new Uint8Array([...salt, ...pinBytes]));
-  const encryptionKey = await hkdf(pinHash, salt, encoder.encode('pin-encryption-key'), 32);
-  const iv = await hkdf(pinHash, salt, encoder.encode('pin-encryption-iv'), 16);
-  return { encryptionKey, iv };
-}
-
-/**
- * Encrypt wallet data with a 6-digit PIN and store in localStorage
- */
-async function storeWalletWithPIN(pin, walletData) {
-  if (!/^\d{6}$/.test(pin)) {
-    throw new Error('PIN must be exactly 6 digits');
-  }
-
-  const { encryptionKey, iv } = await deriveKeyFromPIN(pin);
-
-  // Serialize wallet data to JSON, then to bytes
-  const encoder = new TextEncoder();
-  const plaintext = encoder.encode(JSON.stringify(walletData));
-
-  // Encrypt using AES-256-GCM via Web Crypto API
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    encryptionKey,
-    { name: 'AES-GCM' },
-    false,
-    ['encrypt']
-  );
-
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    cryptoKey,
-    plaintext
-  );
-
-  // Store as base64
-  const stored = {
-    ciphertext: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
-    timestamp: Date.now(),
-    version: 1
-  };
-
-  localStorage.setItem(STORED_WALLET_KEY, JSON.stringify(stored));
-  return true;
-}
-
-/**
- * Retrieve and decrypt wallet data from localStorage using PIN
- */
-async function retrieveWalletWithPIN(pin) {
-  if (!/^\d{6}$/.test(pin)) {
-    throw new Error('PIN must be exactly 6 digits');
-  }
-
-  const storedJson = localStorage.getItem(STORED_WALLET_KEY);
-  if (!storedJson) {
-    throw new Error('No stored wallet found');
-  }
-
-  const stored = JSON.parse(storedJson);
-  const { encryptionKey, iv } = await deriveKeyFromPIN(pin);
-
-  // Decode base64 ciphertext
-  const ciphertext = Uint8Array.from(atob(stored.ciphertext), c => c.charCodeAt(0));
-
-  // Decrypt using AES-256-GCM via Web Crypto API
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    encryptionKey,
-    { name: 'AES-GCM' },
-    false,
-    ['decrypt']
-  );
-
-  try {
-    const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      cryptoKey,
-      ciphertext
-    );
-
-    const decoder = new TextDecoder();
-    const walletData = JSON.parse(decoder.decode(plaintext));
-    return walletData;
-  } catch (e) {
-    throw new Error('Invalid PIN or corrupted data');
-  }
-}
-
-/**
- * Check if there's a stored wallet in localStorage
- */
-function hasStoredWallet() {
-  const stored = localStorage.getItem(STORED_WALLET_KEY);
-  if (!stored) return null;
-  try {
-    const data = JSON.parse(stored);
-    return {
-      exists: true,
-      timestamp: data.timestamp,
-      date: new Date(data.timestamp).toLocaleDateString()
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Remove stored wallet from localStorage
- */
-function forgetStoredWallet() {
-  localStorage.removeItem(STORED_WALLET_KEY);
-  localStorage.removeItem(PASSKEY_CREDENTIAL_KEY);
-}
-
-// =============================================================================
-// Passkey (WebAuthn) Wallet Storage
-// =============================================================================
-
-const PASSKEY_CREDENTIAL_KEY = 'passkey_credential';
-const PASSKEY_WALLET_KEY = 'passkey_wallet';
-
-/**
- * Check if WebAuthn/Passkeys are supported
- */
-function isPasskeySupported() {
-  return window.PublicKeyCredential !== undefined &&
-    typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function';
-}
-
-/**
- * Check if a passkey is registered for this wallet
- */
-function hasPasskey() {
-  return localStorage.getItem(PASSKEY_CREDENTIAL_KEY) !== null;
-}
-
-/**
- * Generate a random challenge for WebAuthn
- */
-function generateChallenge() {
-  const challenge = new Uint8Array(32);
-  crypto.getRandomValues(challenge);
-  return challenge;
-}
-
-/**
- * Register a passkey and store wallet data encrypted with the PRF extension
- * Falls back to storing with credential ID as key material if PRF not supported
- */
-async function registerPasskeyAndStoreWallet(walletData) {
-  if (!isPasskeySupported()) {
-    throw new Error('Passkeys are not supported on this device');
-  }
-
-  const challenge = generateChallenge();
-  const userId = new Uint8Array(16);
-  crypto.getRandomValues(userId);
-
-  const publicKeyCredentialCreationOptions = {
-    challenge,
-    rp: {
-      name: 'FlatBuffers Wallet',
-      id: window.location.hostname
-    },
-    user: {
-      id: userId,
-      name: 'wallet-user',
-      displayName: 'Wallet User'
-    },
-    pubKeyCredParams: [
-      { alg: -7, type: 'public-key' },   // ES256
-      { alg: -257, type: 'public-key' }  // RS256
-    ],
-    authenticatorSelection: {
-      authenticatorAttachment: 'platform',
-      userVerification: 'required',
-      residentKey: 'required'
-    },
-    timeout: 60000,
-    attestation: 'none',
-    extensions: {
-      prf: {
-        eval: {
-          first: new TextEncoder().encode('flatbuffers-wallet-encryption-key')
-        }
-      }
-    }
-  };
-
-  try {
-    console.log('Starting passkey registration...');
-    const credential = await navigator.credentials.create({
-      publicKey: publicKeyCredentialCreationOptions
-    });
-    console.log('Passkey registration successful, processing credential...');
-
-    // Get PRF result if available, otherwise use credential ID
-    const prfResult = credential.getClientExtensionResults()?.prf?.results?.first;
-    let encryptionKeyMaterial;
-
-    if (prfResult) {
-      encryptionKeyMaterial = new Uint8Array(prfResult);
-    } else {
-      // Fallback: use credential ID + rawId as key material
-      encryptionKeyMaterial = new Uint8Array(credential.rawId);
-    }
-
-    // Derive encryption key from the key material
-    const encoder = new TextEncoder();
-    const salt = encoder.encode('flatbuffers-passkey-v1');
-    const keyHash = await sha256(new Uint8Array([...salt, ...encryptionKeyMaterial]));
-    const encryptionKey = await hkdf(keyHash, salt, encoder.encode('passkey-encryption-key'), 32);
-    const iv = await hkdf(keyHash, salt, encoder.encode('passkey-encryption-iv'), 16);
-
-    // Encrypt wallet data
-    const plaintext = encoder.encode(JSON.stringify(walletData));
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      encryptionKey,
-      { name: 'AES-GCM' },
-      false,
-      ['encrypt']
-    );
-
-    const ciphertext = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      cryptoKey,
-      plaintext
-    );
-
-    // Store credential info and encrypted wallet
-    const credentialData = {
-      id: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
-      hasPRF: !!prfResult,
-      timestamp: Date.now()
-    };
-
-    const encryptedWallet = {
-      ciphertext: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
-      timestamp: Date.now(),
-      version: 1
-    };
-
-    localStorage.setItem(PASSKEY_CREDENTIAL_KEY, JSON.stringify(credentialData));
-    localStorage.setItem(PASSKEY_WALLET_KEY, JSON.stringify(encryptedWallet));
-
-    return true;
-  } catch (err) {
-    if (err.name === 'NotAllowedError') {
-      throw new Error('Passkey registration was cancelled');
-    }
-    throw err;
-  }
-}
-
-/**
- * Authenticate with passkey and retrieve wallet data
- */
-async function authenticatePasskeyAndRetrieveWallet() {
-  if (!isPasskeySupported()) {
-    throw new Error('Passkeys are not supported on this device');
-  }
-
-  const credentialJson = localStorage.getItem(PASSKEY_CREDENTIAL_KEY);
-  const walletJson = localStorage.getItem(PASSKEY_WALLET_KEY);
-
-  if (!credentialJson || !walletJson) {
-    throw new Error('No passkey wallet found');
-  }
-
-  const credentialData = JSON.parse(credentialJson);
-  const encryptedWallet = JSON.parse(walletJson);
-  const credentialId = Uint8Array.from(atob(credentialData.id), c => c.charCodeAt(0));
-
-  const challenge = generateChallenge();
-
-  const publicKeyCredentialRequestOptions = {
-    challenge,
-    allowCredentials: [{
-      id: credentialId,
-      type: 'public-key',
-      transports: ['internal']
-    }],
-    userVerification: 'required',
-    timeout: 60000,
-    extensions: {
-      prf: {
-        eval: {
-          first: new TextEncoder().encode('flatbuffers-wallet-encryption-key')
-        }
-      }
-    }
-  };
-
-  try {
-    const assertion = await navigator.credentials.get({
-      publicKey: publicKeyCredentialRequestOptions
-    });
-
-    // Get PRF result if available, otherwise use credential ID
-    const prfResult = assertion.getClientExtensionResults()?.prf?.results?.first;
-    let encryptionKeyMaterial;
-
-    if (prfResult) {
-      encryptionKeyMaterial = new Uint8Array(prfResult);
-    } else {
-      // Fallback: use credential ID as key material
-      encryptionKeyMaterial = new Uint8Array(assertion.rawId);
-    }
-
-    // Derive encryption key from the key material
-    const encoder = new TextEncoder();
-    const salt = encoder.encode('flatbuffers-passkey-v1');
-    const keyHash = await sha256(new Uint8Array([...salt, ...encryptionKeyMaterial]));
-    const encryptionKey = await hkdf(keyHash, salt, encoder.encode('passkey-encryption-key'), 32);
-    const iv = await hkdf(keyHash, salt, encoder.encode('passkey-encryption-iv'), 16);
-
-    // Decrypt wallet data
-    const ciphertext = Uint8Array.from(atob(encryptedWallet.ciphertext), c => c.charCodeAt(0));
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      encryptionKey,
-      { name: 'AES-GCM' },
-      false,
-      ['decrypt']
-    );
-
-    const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      cryptoKey,
-      ciphertext
-    );
-
-    const decoder = new TextDecoder();
-    return JSON.parse(decoder.decode(plaintext));
-  } catch (err) {
-    if (err.name === 'NotAllowedError') {
-      throw new Error('Passkey authentication was cancelled');
-    }
-    throw new Error('Passkey authentication failed');
-  }
-}
 
 // =============================================================================
 // HD Wallet Derivation
@@ -1104,62 +608,17 @@ function login(keys) {
   state.addresses = generateAddresses(keys);
   state.selectedCrypto = 'btc';
 
-  // Close login modal if open
-  $('login-modal')?.classList.remove('active');
-
-  // Update hero stats display
-  $('hero-wallet-type').textContent = cryptoConfig[state.selectedCrypto].name;
-  $('hero-address').textContent = truncateAddress(state.addresses[state.selectedCrypto]);
-  $('hero-stats').classList.remove('hidden');
-
-  // Show nav action buttons, hide login button
-  $('nav-login').style.display = 'none';
-  $('nav-keys').style.display = 'flex';
-  $('nav-logout').style.display = 'flex';
-
-  // Update mobile menu buttons
-  const mobileLogin = $('mobile-login');
-  const mobileLogout = $('mobile-logout');
-  if (mobileLogin) mobileLogin.style.display = 'none';
-  if (mobileLogout) mobileLogout.style.display = 'block';
-
-  // Update HD wallet root keys display
-  if (state.hdRoot) {
-    const xpubEl = $('wallet-xpub');
-    const xprvEl = $('wallet-xprv');
-    const seedEl = $('wallet-seed-phrase');
-
-    if (xpubEl) {
-      // Get xpub from HD root
-      const xpub = state.hdRoot.publicExtendedKey || 'N/A';
-      xpubEl.textContent = xpub;
+  // Derive PKI keys if not already loaded
+  if (!state.pki.alice || !state.pki.bob) {
+    if (!loadPKIKeys()) {
+      generatePKIKeyPairs();
     }
-    if (xprvEl) {
-      // Get xprv from HD root (keep blurred by default)
-      const xprv = state.hdRoot.privateExtendedKey || 'N/A';
-      xprvEl.textContent = xprv;
-      xprvEl.dataset.revealed = 'false';
-    }
-    if (seedEl && state.mnemonic) {
-      seedEl.textContent = state.mnemonic;
-      seedEl.dataset.revealed = 'false';
-    } else if (seedEl) {
-      seedEl.textContent = 'Not available (derived from password)';
-    }
-  }
-
-  // Always derive PKI keys from HD wallet if available
-  // This ensures Alice/Bob keys are deterministically derived from the user's seed
-  if (state.hdRoot) {
-    generatePKIKeyPairs(); // This will use derivePKIKeysFromHD internally
-  } else if (state.pki.alice && state.pki.bob) {
-    // Just update the UI since keys are already in state
-    // Just update the UI since keys are already in state
+  } else {
+    // Update the PKI UI since keys are already in state
     $('alice-public-key').textContent = toHexCompact(state.pki.alice.publicKey);
     $('alice-private-key').textContent = toHexCompact(state.pki.alice.privateKey);
     $('bob-public-key').textContent = toHexCompact(state.pki.bob.publicKey);
     $('bob-private-key').textContent = toHexCompact(state.pki.bob.privateKey);
-    // Display algorithm
     const algorithmNames = {
       x25519: 'X25519 (Curve25519)',
       secp256k1: 'secp256k1 (Bitcoin)',
@@ -1170,12 +629,9 @@ function login(keys) {
     $('pki-login-prompt').style.display = 'none';
     $('pki-controls').style.display = 'flex';
     $('pki-parties').style.display = 'grid';
-    // encryption-explainer is always visible (educational content)
     $('pki-demo').style.display = 'block';
     $('pki-security').style.display = 'block';
     $('pki-clear-keys').style.display = 'inline-flex';
-  } else if (!loadPKIKeys()) {
-    generatePKIKeyPairs();
   }
 
   // Initialize schema viewer
@@ -1183,10 +639,6 @@ function login(keys) {
 
   // Update adversarial security section (wallet addresses and balances)
   updateAdversarialSecurity();
-
-  // Open Account modal so user can see the wallet they just loaded
-  $('keys-modal')?.classList.add('active');
-  deriveAndDisplayAddress();
 }
 
 function logout() {
@@ -1198,42 +650,11 @@ function logout() {
   state.encryptionIV = null;
   state.currentFieldData = null;
   state.showFieldDecrypted = false;
-  // Clear HD wallet state
   state.masterSeed = null;
   state.hdRoot = null;
-  // Don't clear localStorage completely - keep stored wallet
-  // Only clear session-specific data
   localStorage.removeItem('flatbuffers-pki-keys');
-  // Update hero stats to show logged out state
-  $('hero-wallet-type').textContent = '--';
-  $('hero-address').textContent = '--';
-  $('hero-stats').classList.add('hidden');
-
-  // Show login button, hide other nav action buttons
-  $('nav-login').style.display = 'flex';
-  $('nav-keys').style.display = 'none';
-  $('nav-logout').style.display = 'none';
-
-  // Update mobile menu buttons
-  const mobileLogin = $('mobile-login');
-  const mobileLogout = $('mobile-logout');
-  if (mobileLogin) mobileLogin.style.display = 'block';
-  if (mobileLogout) mobileLogout.style.display = 'none';
-
-  // Clear form inputs
-  const usernameEl = $('wallet-username');
-  const passwordEl = $('wallet-password');
-  const seedEl = $('seed-phrase');
-  if (usernameEl) usernameEl.value = '';
-  if (passwordEl) passwordEl.value = '';
-  if (seedEl) seedEl.value = '';
-  updatePasswordStrength('');
   clearBufferDisplay();
   clearFieldDisplay();
-
-  // Clear HD wallet UI
-  const derivedResult = $('derived-result');
-  if (derivedResult) derivedResult.style.display = 'none';
 }
 
 /**
@@ -4074,385 +3495,16 @@ const helpContent = {
 // UI Event Handlers
 // =============================================================================
 
-// Track selected remember method (pin or passkey) for each login type
-const rememberMethod = {
-  password: 'passkey',
-  seed: 'passkey'
-};
 
-function setupLoginHandlers() {
-  // Migrate from old storage format if needed
-  WalletStorage.migrateStorage();
-
-  // Check for stored wallet using new module
-  const storageMetadata = WalletStorage.getStorageMetadata();
-  const storageMethod = storageMetadata?.method || StorageMethod.NONE;
-
-  if (storageMethod !== StorageMethod.NONE) {
-    const storedTab = $('stored-tab');
-    if (storedTab) storedTab.style.display = '';
-
-    const dateEl = $('stored-wallet-date');
-    if (dateEl && storageMetadata?.date) {
-      dateEl.textContent = `Saved on ${storageMetadata.date}`;
-    }
-
-    // Show ONLY the appropriate unlock section based on storage method
-    const pinSection = $('stored-pin-section');
-    const passkeySection = $('stored-passkey-section');
-    const divider = $('stored-divider');
-
-    // Hide divider - we only show one method now
-    if (divider) divider.style.display = 'none';
-
-    if (storageMethod === StorageMethod.PIN) {
-      if (pinSection) pinSection.style.display = 'block';
-      if (passkeySection) passkeySection.style.display = 'none';
-    } else if (storageMethod === StorageMethod.PASSKEY) {
-      if (pinSection) pinSection.style.display = 'none';
-      if (passkeySection) passkeySection.style.display = 'block';
-    }
-
-    // Auto-switch to stored tab and open modal when a saved wallet exists
-    document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.method-content').forEach(c => c.classList.remove('active'));
-    if (storedTab) storedTab.classList.add('active');
-    const storedMethod = $('stored-method');
-    if (storedMethod) storedMethod.classList.add('active');
-
-    // Auto-open login modal when there's a stored wallet
-    const loginModal = $('login-modal');
-    if (loginModal) loginModal.classList.add('active');
-  }
-
-  // Hide passkey buttons if not supported
-  if (!isPasskeySupported()) {
-    $('passkey-btn-password')?.style && ($('passkey-btn-password').style.display = 'none');
-    $('passkey-btn-seed')?.style && ($('passkey-btn-seed').style.display = 'none');
-  }
-
-  document.querySelectorAll('.method-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.method-content').forEach(c => c.classList.remove('active'));
-      tab.classList.add('active');
-      $(`${tab.dataset.method}-method`).classList.add('active');
-    });
-  });
-
-  // Remember method selector (PIN vs Passkey)
-  document.querySelectorAll('.remember-method-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const target = btn.dataset.target; // 'password' or 'seed'
-      const method = btn.dataset.method; // 'pin' or 'passkey'
-      rememberMethod[target] = method;
-
-      // Update active state
-      document.querySelectorAll(`.remember-method-btn[data-target="${target}"]`).forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-
-      // Toggle visibility
-      $(`pin-group-${target}`).style.display = method === 'pin' ? 'block' : 'none';
-      $(`passkey-info-${target}`).style.display = method === 'passkey' ? 'flex' : 'none';
-    });
-  });
-
-  // Remember wallet checkbox handlers - show/hide options
-  $('remember-wallet-password')?.addEventListener('change', (e) => {
-    $('remember-options-password').style.display = e.target.checked ? 'block' : 'none';
-    if (e.target.checked && rememberMethod.password === 'pin') {
-      $('pin-input-password').focus();
-    }
-  });
-
-  $('remember-wallet-seed')?.addEventListener('change', (e) => {
-    $('remember-options-seed').style.display = e.target.checked ? 'block' : 'none';
-    if (e.target.checked && rememberMethod.seed === 'pin') {
-      $('pin-input-seed').focus();
-    }
-  });
-
-  // PIN input validation - only allow digits
-  ['pin-input-password', 'pin-input-seed', 'pin-input-unlock'].forEach(id => {
-    $(id)?.addEventListener('input', (e) => {
-      e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
-      // Enable unlock button when PIN is 6 digits
-      if (id === 'pin-input-unlock') {
-        $('unlock-stored-wallet').disabled = e.target.value.length !== 6;
-      }
-    });
-  });
-
-  $('wallet-password').addEventListener('input', (e) => {
-    updatePasswordStrength(e.target.value);
-  });
-
-  $('wallet-username').addEventListener('input', () => {
-    updatePasswordStrength($('wallet-password').value);
-  });
-
-  $('derive-from-password').addEventListener('click', async () => {
-    const username = $('wallet-username').value;
-    const password = $('wallet-password').value;
-    const rememberWallet = $('remember-wallet-password')?.checked;
-    const usePasskey = rememberMethod.password === 'passkey';
-    const pin = $('pin-input-password')?.value;
-
-    console.log('Login clicked, username:', username, 'password length:', password.length);
-    if (!username || password.length < 24) {
-      console.log('Login validation failed');
-      return;
-    }
-
-    if (rememberWallet && !usePasskey && (!pin || pin.length !== 6)) {
-      alert('Please enter a 6-digit PIN to store your wallet');
-      return;
-    }
-
-    const btn = $('derive-from-password');
-    btn.disabled = true;
-    btn.textContent = 'Logging in...';
-
-    try {
-      console.log('Calling deriveKeysFromPassword...');
-      const keys = await deriveKeysFromPassword(username, password);
-      console.log('Keys derived, hdRoot after derivation:', !!state.hdRoot);
-
-      // Store wallet if remember is checked
-      if (rememberWallet) {
-        const walletData = {
-          type: 'password',
-          username,
-          password,
-          masterSeed: Array.from(state.masterSeed)
-        };
-
-        if (usePasskey) {
-          await WalletStorage.storeWithPasskey(walletData, {
-            rpName: 'FlatBuffers Wallet Demo',
-            userName: username,
-            userDisplayName: username
-          });
-          // Show only passkey unlock for next time
-          $('stored-pin-section').style.display = 'none';
-          $('stored-passkey-section').style.display = 'block';
-        } else {
-          await WalletStorage.storeWithPIN(pin, walletData);
-          // Show only PIN unlock for next time
-          $('stored-pin-section').style.display = 'block';
-          $('stored-passkey-section').style.display = 'none';
-        }
-        // Show stored tab for next time
-        $('stored-tab').style.display = '';
-        $('stored-divider').style.display = 'none';
-        $('stored-wallet-date').textContent = `Saved on ${new Date().toLocaleDateString()}`;
-      }
-
-      login(keys);
-      console.log('Login complete, hdRoot:', !!state.hdRoot);
-    } catch (err) {
-      console.error('Login error:', err);
-      alert('Error: ' + err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Login';
-    }
-  });
-
-  $('generate-seed').addEventListener('click', () => {
-    $('seed-phrase').value = generateSeedPhrase();
-    $('derive-from-seed').disabled = false;
-  });
-
-  $('validate-seed').addEventListener('click', () => {
-    const valid = validateSeedPhrase($('seed-phrase').value);
-    if (valid) {
-      alert('Valid BIP39 seed phrase!');
-      $('derive-from-seed').disabled = false;
-    } else {
-      alert('Invalid seed phrase');
-      $('derive-from-seed').disabled = true;
-    }
-  });
-
-  $('seed-phrase').addEventListener('input', () => {
-    const phrase = $('seed-phrase').value.trim();
-    if (phrase.split(/\s+/).length >= 12) {
-      $('derive-from-seed').disabled = !validateSeedPhrase(phrase);
-    } else {
-      $('derive-from-seed').disabled = true;
-    }
-  });
-
-  $('derive-from-seed').addEventListener('click', async () => {
-    const phrase = $('seed-phrase').value;
-    if (!validateSeedPhrase(phrase)) return;
-
-    const rememberWallet = $('remember-wallet-seed')?.checked;
-    const usePasskey = rememberMethod.seed === 'passkey';
-    const pin = $('pin-input-seed')?.value;
-
-    if (rememberWallet && !usePasskey && (!pin || pin.length !== 6)) {
-      alert('Please enter a 6-digit PIN to store your wallet');
-      return;
-    }
-
-    const btn = $('derive-from-seed');
-    btn.disabled = true;
-    btn.textContent = 'Logging in...';
-
-    try {
-      const keys = await deriveKeysFromSeed(phrase);
-
-      // Store wallet if remember is checked
-      if (rememberWallet) {
-        const walletData = {
-          type: 'seed',
-          seedPhrase: phrase,
-          masterSeed: Array.from(state.masterSeed)
-        };
-
-        if (usePasskey) {
-          await WalletStorage.storeWithPasskey(walletData, {
-            rpName: 'FlatBuffers Wallet Demo',
-            userName: 'seed-wallet',
-            userDisplayName: 'Seed Phrase Wallet'
-          });
-          // Show only passkey unlock for next time
-          $('stored-pin-section').style.display = 'none';
-          $('stored-passkey-section').style.display = 'block';
-        } else {
-          await WalletStorage.storeWithPIN(pin, walletData);
-          // Show only PIN unlock for next time
-          $('stored-pin-section').style.display = 'block';
-          $('stored-passkey-section').style.display = 'none';
-        }
-        // Show stored tab for next time
-        $('stored-tab').style.display = '';
-        $('stored-divider').style.display = 'none';
-        $('stored-wallet-date').textContent = `Saved on ${new Date().toLocaleDateString()}`;
-      }
-
-      login(keys);
-    } catch (err) {
-      alert('Error: ' + err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Login';
-    }
-  });
-
-  // Unlock stored wallet with PIN handler
-  $('unlock-stored-wallet')?.addEventListener('click', async () => {
-    const pin = $('pin-input-unlock')?.value;
-    if (!pin || pin.length !== 6) {
-      alert('Please enter a 6-digit PIN');
-      return;
-    }
-
-    const btn = $('unlock-stored-wallet');
-    btn.disabled = true;
-    btn.textContent = 'Unlocking...';
-
-    try {
-      const walletData = await WalletStorage.retrieveWithPIN(pin);
-
-      // Restore wallet based on type
-      let keys;
-      if (walletData.type === 'password') {
-        keys = await deriveKeysFromPassword(walletData.username, walletData.password);
-      } else if (walletData.type === 'seed') {
-        keys = await deriveKeysFromSeed(walletData.seedPhrase);
-      } else {
-        throw new Error('Unknown wallet type');
-      }
-
-      login(keys);
-    } catch (err) {
-      alert('Error: ' + err.message);
-      $('pin-input-unlock').value = '';
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Unlock with PIN';
-    }
-  });
-
-  // Unlock stored wallet with Passkey handler
-  $('unlock-with-passkey')?.addEventListener('click', async () => {
-    const btn = $('unlock-with-passkey');
-    btn.disabled = true;
-    btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v3H7V7a5 5 0 0 1 5-5z"/><rect x="3" y="10" width="18" height="12" rx="2"/><circle cx="12" cy="16" r="1"/></svg> Authenticating...';
-
-    try {
-      const walletData = await WalletStorage.retrieveWithPasskey();
-
-      // Restore wallet based on type
-      let keys;
-      if (walletData.type === 'password') {
-        keys = await deriveKeysFromPassword(walletData.username, walletData.password);
-      } else if (walletData.type === 'seed') {
-        keys = await deriveKeysFromSeed(walletData.seedPhrase);
-      } else {
-        throw new Error('Unknown wallet type');
-      }
-
-      login(keys);
-    } catch (err) {
-      alert('Error: ' + err.message);
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a5 5 0 0 1 5 5v3H7V7a5 5 0 0 1 5-5z"/><rect x="3" y="10" width="18" height="12" rx="2"/><circle cx="12" cy="16" r="1"/></svg> Unlock with Passkey';
-    }
-  });
-
-  // Forget stored wallet handler
-  $('forget-stored-wallet')?.addEventListener('click', () => {
-    if (confirm('Are you sure you want to forget your stored wallet? You will need to enter your password or seed phrase again.')) {
-      WalletStorage.clearStorage();
-      $('stored-tab').style.display = 'none';
-      $('stored-pin-section').style.display = 'block';
-      $('stored-passkey-section').style.display = 'none';
-      $('stored-divider').style.display = 'none';
-      // Switch to password tab
-      document.querySelectorAll('.method-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.method-content').forEach(c => c.classList.remove('active'));
-      $('password-method').classList.add('active');
-      document.querySelector('.method-tab[data-method="password"]').classList.add('active');
-    }
-  });
-
-}
 
 function setupMainAppHandlers() {
-  // Nav actions
+  // Nav actions - delegate login/keys modals to hd-wallet-ui
   $('nav-login')?.addEventListener('click', () => {
-    $('login-modal').classList.add('active');
+    state.walletUI?.openLogin();
   });
-  $('nav-logout').addEventListener('click', logout);
-  $('nav-keys').addEventListener('click', () => {
-    $('keys-modal').classList.add('active');
-    // Always call deriveAndDisplayAddress - it will show appropriate message if not initialized
-    deriveAndDisplayAddress();
-  });
-
-  // Modal close handlers
-  document.querySelectorAll('.modal').forEach(modal => {
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal || e.target.classList.contains('modal-close')) {
-        modal.classList.remove('active');
-      }
-    });
-  });
-
-  // Account modal tab switching
-  document.querySelectorAll('.modal-tab[data-modal-tab]').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.modal-tab[data-modal-tab]').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.modal-tab-content').forEach(c => c.classList.remove('active'));
-      tab.classList.add('active');
-      const target = $(tab.dataset.modalTab);
-      if (target) target.classList.add('active');
-    });
+  $('nav-logout')?.addEventListener('click', logout);
+  $('nav-keys')?.addEventListener('click', () => {
+    state.walletUI?.openAccount();
   });
 
   // Photo upload handler
@@ -4780,7 +3832,7 @@ function setupMainAppHandlers() {
 
     if (mobileLogin) {
       mobileLogin.addEventListener('click', () => {
-        $('login-modal').classList.add('active');
+        state.walletUI?.openLogin();
         mobileMenu.classList.remove('open');
         mobileMenuBtn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
       });
@@ -5312,9 +4364,6 @@ function initGridAnimation() {
 // =============================================================================
 
 async function init() {
-  const status = $('status');
-  const loadingOverlay = $('loading-overlay');
-
   // Initialize video background immediately
   initVideoBackground();
 
@@ -5322,16 +4371,19 @@ async function init() {
   initGridAnimation();
 
   try {
-    // Load encryption WASM
-    status.textContent = 'Loading encryption module...';
-    await loadEncryptionWasm(ENCRYPTION_WASM_PATH);
-
-    // Load HD wallet WASM
-    status.textContent = 'Loading HD wallet module...';
+    // Initialize hd-wallet-ui first (injects modal HTML + loading overlay into DOM)
+    state.walletUI = await createWalletUI({ autoOpenWallet: true });
     state.hdWalletModule = await initHDWallet();
 
+    const status = $('status');
+    const loadingOverlay = $('loading-overlay');
+
+    // Load encryption WASM
+    if (status) status.textContent = 'Loading encryption module...';
+    await loadEncryptionWasm(ENCRYPTION_WASM_PATH);
+
     // Initialize FlatcRunner
-    status.textContent = 'Loading FlatBuffers compiler...';
+    if (status) status.textContent = 'Loading FlatBuffers compiler...';
     state.flatcRunner = await FlatcRunner.init();
 
     // Display flatc version
@@ -5361,13 +4413,13 @@ async function init() {
       navStatus.className = 'nav-status ready';
     }
 
-    // Hide loading overlay with fade
-    loadingOverlay.classList.add('hidden');
-    setTimeout(() => {
-      loadingOverlay.style.display = 'none';
-    }, 500);
-
-    setupLoginHandlers();
+    // Hide loading overlay with fade (hd-wallet-ui may have already hidden it)
+    if (loadingOverlay) {
+      loadingOverlay.classList.add('hidden');
+      setTimeout(() => {
+        loadingOverlay.style.display = 'none';
+      }, 500);
+    }
 
     setupMainAppHandlers();
     setupHelpModals();
@@ -5393,26 +4445,17 @@ async function init() {
       setTimeout(() => window.dispatchEvent(new Event('scroll')), 200);
     }
 
-    // Check if there's a stored wallet that requires re-authentication
-    const storageMetadata = WalletStorage.getStorageMetadata();
-    const hasStoredWallet = storageMetadata?.method && storageMetadata.method !== StorageMethod.NONE;
-
-    // Only auto-login if we have saved PKI keys AND no stored wallet requiring authentication
-    // If there's a stored wallet, let the user authenticate through the login modal
-    if (hasSavedKeys && !hasStoredWallet) {
-      // Generate temporary wallet keys for the session
-      // Generate random ed25519 seed for session keys
+    // Auto-login with temporary session keys if PKI keys are available
+    if (hasSavedKeys) {
       const tempEd25519Seed = new Uint8Array(32);
       crypto.getRandomValues(tempEd25519Seed);
       const tempKeys = {
         x25519: generateKeyPair(Curve.X25519),
-        // Use @noble/curves ed25519 directly (hd-wallet-wasm Ed25519 not implemented)
         ed25519: {
           privateKey: tempEd25519Seed,
           publicKey: ed25519.getPublicKey(tempEd25519Seed),
         },
         secp256k1: generateKeyPair(Curve.SECP256K1),
-        // P-256 and P-384 require async crypto.subtle
         p256: await p256GenerateKeyPairAsync(),
         p384: await p384GenerateKeyPairAsync(),
       };
@@ -5420,12 +4463,10 @@ async function init() {
       // Generate encryption key and IV if not loaded from storage
       if (!state.encryptionKey || !state.encryptionIV) {
         const encoder = new TextEncoder();
-        // Use a random seed for session-based encryption
         const randomSeed = new Uint8Array(32);
         crypto.getRandomValues(randomSeed);
         state.encryptionKey = await hkdf(randomSeed, new Uint8Array(0), encoder.encode('buffer-encryption-key'), 32);
         state.encryptionIV = await hkdf(randomSeed, new Uint8Array(0), encoder.encode('buffer-encryption-iv'), 16);
-        // Save the keys so they persist
         savePKIKeys();
       }
 
@@ -5434,10 +4475,10 @@ async function init() {
 
   } catch (err) {
     console.error('Init failed:', err);
-    status.textContent = `Failed to load: ${err.message}`;
-
-    // Show error state in loading overlay
-    loadingOverlay.classList.add('error');
+    const status = $('status');
+    const loadingOverlay = $('loading-overlay');
+    if (status) status.textContent = `Failed to load: ${err.message}`;
+    if (loadingOverlay) loadingOverlay.classList.add('error');
   }
 
   // Initialize Studio functionality

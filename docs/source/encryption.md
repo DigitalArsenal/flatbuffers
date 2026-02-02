@@ -154,7 +154,7 @@ const encrypted = flatc.encrypt(buffer, schemaInput, key);
 const decrypted = flatc.decrypt(encrypted, schemaInput, key);
 
 // Or with the low-level API
-import { encryptBuffer, decryptBuffer } from 'flatc-wasm/encryption';
+import { encryptBuffer, decryptBuffer } from 'flatc-wasm';
 
 const encrypted = encryptBuffer(buffer, compiledSchema, key);
 ```
@@ -265,7 +265,7 @@ root_type SensorReading;
 
 ```javascript
 import { FlatcRunner } from 'flatc-wasm';
-import { encryptBuffer, decryptBuffer } from 'flatc-wasm/encryption';
+import { encryptBuffer, decryptBuffer } from 'flatc-wasm';
 
 const flatc = await FlatcRunner.init();
 

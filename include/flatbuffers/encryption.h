@@ -183,15 +183,19 @@ class EncryptionContext {
    * Derive a field-specific key using HKDF
    * @param field_id The field's ID from the schema
    * @param out_key Output buffer for the derived key (32 bytes)
+   * @param record_index Per-record index for unique derivation (default 0)
    */
-  void DeriveFieldKey(uint16_t field_id, uint8_t* out_key) const;
+  void DeriveFieldKey(uint16_t field_id, uint8_t* out_key,
+                      uint32_t record_index = 0) const;
 
   /**
    * Derive a field-specific IV using HKDF
    * @param field_id The field's ID from the schema
    * @param out_iv Output buffer for the derived IV (16 bytes)
+   * @param record_index Per-record index for unique derivation (default 0)
    */
-  void DeriveFieldIV(uint16_t field_id, uint8_t* out_iv) const;
+  void DeriveFieldIV(uint16_t field_id, uint8_t* out_iv,
+                     uint32_t record_index = 0) const;
 
   /**
    * Get the raw key (for internal use)
@@ -266,21 +270,62 @@ inline void DecryptBytes(uint8_t* data, size_t size,
 
 /**
  * Encrypt a single scalar value
+ * @param record_index Per-record index for unique key/IV derivation (default 0)
  */
 void EncryptScalar(uint8_t* value, size_t size,
-                   const EncryptionContext& ctx, uint16_t field_id);
+                   const EncryptionContext& ctx, uint16_t field_id,
+                   uint32_t record_index = 0);
+
+/**
+ * Decrypt a single scalar value (AES-CTR is symmetric)
+ */
+inline void DecryptScalar(uint8_t* value, size_t size,
+                          const EncryptionContext& ctx, uint16_t field_id,
+                          uint32_t record_index = 0) {
+  EncryptScalar(value, size, ctx, field_id, record_index);
+}
 
 /**
  * Encrypt a string value (the content, not the length prefix)
+ * @param record_index Per-record index for unique key/IV derivation (default 0)
  */
 void EncryptString(uint8_t* str, size_t length,
-                   const EncryptionContext& ctx, uint16_t field_id);
+                   const EncryptionContext& ctx, uint16_t field_id,
+                   uint32_t record_index = 0);
+
+/**
+ * Decrypt a string value (AES-CTR is symmetric)
+ */
+inline void DecryptString(uint8_t* str, size_t length,
+                          const EncryptionContext& ctx, uint16_t field_id,
+                          uint32_t record_index = 0) {
+  EncryptString(str, length, ctx, field_id, record_index);
+}
 
 /**
  * Encrypt a vector of scalars
+ * @param record_index Per-record index for unique key/IV derivation (default 0)
  */
 void EncryptVector(uint8_t* data, size_t element_size, size_t count,
-                   const EncryptionContext& ctx, uint16_t field_id);
+                   const EncryptionContext& ctx, uint16_t field_id,
+                   uint32_t record_index = 0);
+
+/**
+ * Compute HMAC-SHA256 over a buffer for authentication (Task 23).
+ * @param buffer The FlatBuffer data
+ * @param buffer_size Size of buffer
+ * @param ctx Encryption context (MAC key is derived from it)
+ * @param out_mac Output buffer for 32-byte MAC
+ */
+void ComputeBufferMAC(const uint8_t* buffer, size_t buffer_size,
+                      const EncryptionContext& ctx, uint8_t* out_mac);
+
+/**
+ * Verify HMAC-SHA256 over a buffer (Task 23).
+ * @returns true if MAC is valid
+ */
+bool VerifyBufferMAC(const uint8_t* buffer, size_t buffer_size,
+                     const EncryptionContext& ctx, const uint8_t* mac);
 
 // =============================================================================
 // Key Exchange (ECDH)
@@ -492,11 +537,28 @@ void HKDF(const uint8_t* ikm, size_t ikm_size,
 
 /**
  * Derive symmetric key from shared secret
+ * @param salt Optional salt for HKDF (e.g. ephemeral public key) (Task 30)
+ * @param salt_size Size of salt (0 for no salt)
  */
 void DeriveSymmetricKey(
     const uint8_t* shared_secret, size_t shared_secret_size,
     const uint8_t* context, size_t context_size,
-    uint8_t* key);
+    uint8_t* key,
+    const uint8_t* salt = nullptr, size_t salt_size = 0);
+
+/**
+ * HMAC-SHA256
+ */
+void HMACSha256(const uint8_t* key, size_t key_size,
+                const uint8_t* data, size_t data_size,
+                uint8_t* mac);
+
+/**
+ * HMAC-SHA256 verify (constant-time comparison)
+ */
+bool HMACSha256Verify(const uint8_t* key, size_t key_size,
+                      const uint8_t* data, size_t data_size,
+                      const uint8_t* mac);
 
 /**
  * Check if a field has the "encrypted" attribute
@@ -548,6 +610,22 @@ EncryptionResult ProcessTable(
     bool encrypt);
 
 }  // namespace internal
+
+// =============================================================================
+// FIPS Mode (Task 34)
+// =============================================================================
+
+/**
+ * Enable FIPS mode. Only available with OpenSSL backend.
+ * When active, X25519 and secp256k1 are rejected (use P-256/P-384 instead).
+ * @return true if FIPS mode was successfully enabled
+ */
+bool EnableFIPSMode();
+
+/**
+ * Check if FIPS mode is active
+ */
+bool IsFIPSMode();
 
 }  // namespace flatbuffers
 

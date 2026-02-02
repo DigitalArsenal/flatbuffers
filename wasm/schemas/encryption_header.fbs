@@ -60,6 +60,12 @@ table EncryptionHeader {
 
   // Timestamp when encryption was performed (Unix epoch milliseconds)
   timestamp: ulong;
+
+  // Monotonic sequence number for replay protection (Task 38)
+  sequence_number: ulong;
+
+  // Session identifier for multiplexed streams (Task 39)
+  session_id: [ubyte];
 }
 
 root_type EncryptionHeader;

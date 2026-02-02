@@ -1165,8 +1165,8 @@ export class FlatcRunner {
       }
     }
 
-    // Fallback: return unencrypted with warning
-    return { header: new Uint8Array(0), data: binary };
+    // No silent fallback — encryption must succeed or throw (Task 26)
+    throw new Error('Encryption unavailable: WASM crypto exports not found');
   }
 
   /**
@@ -1231,8 +1231,8 @@ export class FlatcRunner {
       }
     }
 
-    // Fallback: try normal JSON generation
-    return this.generateJSON(schemaInput, binaryInput, options);
+    // No silent fallback — decryption must succeed or throw (Task 26)
+    throw new Error('Decryption unavailable: WASM crypto exports not found');
   }
 
   /**

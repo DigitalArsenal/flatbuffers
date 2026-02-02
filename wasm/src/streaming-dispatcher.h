@@ -226,6 +226,12 @@ public:
   void clear_messages(int type_index) {
     if (type_index < 0 || type_index >= type_count_) return;
     MessageTypeEntry& entry = types_[type_index];
+    // Zero buffer before clearing to prevent key material leakage (Task 27)
+    if (entry.buffer && entry.capacity > 0 && entry.message_size > 0) {
+      volatile uint8_t* p = reinterpret_cast<volatile uint8_t*>(entry.buffer);
+      size_t total = entry.capacity * entry.message_size;
+      for (size_t i = 0; i < total; i++) p[i] = 0;
+    }
     entry.head = 0;
     entry.count = 0;
   }

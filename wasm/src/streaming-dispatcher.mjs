@@ -36,6 +36,8 @@ export class StreamingDispatcher {
     this._wasm = wasmModule;
     this._types = new Map(); // fileId -> MessageTypeInfo
     this._typesByIndex = new Map(); // typeIndex -> MessageTypeInfo
+    this._encryptionContexts = new Map(); // fileId -> EncryptionContext (Task 45)
+    this._sequenceCounter = 0n; // Monotonic counter for replay protection (Task 38)
     this._textEncoder = new TextEncoder();
     this._textDecoder = new TextDecoder();
 
@@ -98,6 +100,33 @@ export class StreamingDispatcher {
     this._typesByIndex.set(typeIndex, info);
 
     return info;
+  }
+
+  /**
+   * Set an EncryptionContext for a specific message type (Task 45).
+   * Enables per-type encryption keys for stream multiplexing.
+   * @param {string} fileId - 4-character file identifier
+   * @param {Object} ctx - EncryptionContext instance
+   */
+  setEncryptionContext(fileId, ctx) {
+    this._encryptionContexts.set(fileId, ctx);
+  }
+
+  /**
+   * Get the EncryptionContext for a specific message type.
+   * @param {string} fileId
+   * @returns {Object|undefined}
+   */
+  getEncryptionContext(fileId) {
+    return this._encryptionContexts.get(fileId);
+  }
+
+  /**
+   * Get and increment the monotonic sequence counter (Task 38).
+   * @returns {bigint}
+   */
+  nextSequenceNumber() {
+    return ++this._sequenceCounter;
   }
 
   /**

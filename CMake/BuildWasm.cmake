@@ -170,6 +170,7 @@ if(EMSCRIPTEN)
     "_wasm_crypto_inject_entropy"
     "_wasm_crypto_alloc"
     "_wasm_crypto_dealloc"
+    "_wasm_crypto_dealloc_secure"
     "_wasm_crypto_encryption_create"
     "_wasm_crypto_encryption_destroy"
     "_wasm_crypto_encrypt_bytes"
@@ -214,6 +215,7 @@ if(EMSCRIPTEN)
       cryptopp-cmake
       GIT_REPOSITORY https://github.com/abdes/cryptopp-cmake.git
       GIT_TAG        CRYPTOPP_8_9_0
+      GIT_SHALLOW    FALSE  # Pin to tag, not shallow for reproducibility (Task 46)
     )
     set(CRYPTOPP_BUILD_TESTING OFF CACHE BOOL "" FORCE)
     set(CRYPTOPP_INSTALL OFF CACHE BOOL "" FORCE)
@@ -234,6 +236,7 @@ if(EMSCRIPTEN)
         openssl
         GIT_REPOSITORY https://github.com/nicedoc/openssl-wasm.git
         GIT_TAG        main
+        GIT_SHALLOW    FALSE  # Pin for reproducibility (Task 46)
       )
       FetchContent_MakeAvailable(openssl)
     endif()

@@ -50,9 +50,6 @@ table EncryptionConfig {
 
   // Schema name (for looking up registered schema)
   schema_name: string;
-
-  // Private key (required for decryption)
-  private_key: [ubyte];
 }
 
 root_type EncryptionConfig;

@@ -17,6 +17,7 @@
 #include "flatbuffers/encryption.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 
 #ifdef FLATBUFFERS_USE_CRYPTOPP
@@ -25,6 +26,7 @@
 #include <cryptopp/modes.h>
 #include <cryptopp/hkdf.h>
 #include <cryptopp/sha.h>
+#include <cryptopp/hmac.h>
 #include <cryptopp/xed25519.h>
 #include <cryptopp/eccrypto.h>
 #include <cryptopp/oids.h>
@@ -35,22 +37,28 @@
 
 namespace flatbuffers {
 
-#ifdef FLATBUFFERS_USE_CRYPTOPP
-
 // =============================================================================
 // Secure Memory Clearing (VULN-NEW-002 fix)
 // =============================================================================
 
-// Secure memory clear that resists compiler optimization
-// Uses volatile to prevent dead-store elimination
+// Secure memory clear that resists compiler optimization.
+// Uses platform-specific guaranteed-not-optimized-away primitives (Task 46).
 static void SecureClear(void* ptr, size_t size) {
   if (ptr && size > 0) {
+#if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 25))
+    explicit_bzero(ptr, size);
+#elif defined(__OpenBSD__)
+    explicit_bzero(ptr, size);
+#else
     volatile uint8_t* p = static_cast<volatile uint8_t*>(ptr);
     for (size_t i = 0; i < size; i++) {
       p[i] = 0;
     }
+#endif
   }
 }
+
+#ifdef FLATBUFFERS_USE_CRYPTOPP
 
 // RAII wrapper for secure clearing of std::vector
 template<typename T>
@@ -150,14 +158,32 @@ void HKDF(const uint8_t* ikm, size_t ikm_size,
 }
 
 // Derive symmetric key from shared secret
+// Salt parameter (Task 30): use ephemeral public key as salt for better key separation
 void DeriveSymmetricKey(
     const uint8_t* shared_secret, size_t shared_secret_size,
     const uint8_t* context, size_t context_size,
-    uint8_t* key) {
+    uint8_t* key,
+    const uint8_t* salt, size_t salt_size) {
   HKDF(shared_secret, shared_secret_size,
-       nullptr, 0,
+       salt, salt_size,
        context, context_size,
        key, kEncryptionKeySize);
+}
+
+// HMAC-SHA256
+void HMACSha256(const uint8_t* key, size_t key_size,
+                const uint8_t* data, size_t data_size,
+                uint8_t* mac) {
+  CryptoPP::HMAC<CryptoPP::SHA256> hmac(key, key_size);
+  hmac.CalculateDigest(mac, data, data_size);
+}
+
+// HMAC-SHA256 verify (constant-time)
+bool HMACSha256Verify(const uint8_t* key, size_t key_size,
+                      const uint8_t* data, size_t data_size,
+                      const uint8_t* mac) {
+  CryptoPP::HMAC<CryptoPP::SHA256> hmac(key, key_size);
+  return hmac.VerifyDigest(mac, data, data_size);
 }
 
 // AES-256-CTR encryption
@@ -219,6 +245,9 @@ KeyPair Secp256k1GenerateKeyPair() {
     q.x.Encode(kp.public_key.data() + 1, 32);
 
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in key generation\n");
+#endif
     kp.private_key.clear();
     kp.public_key.clear();
   }
@@ -284,6 +313,9 @@ bool Secp256k1SharedSecret(
 
     return ecdh.Agree(shared_secret, priv_full.get(), pub_full.get());
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in operation\n");
+#endif
     return false;
   }
 }
@@ -330,6 +362,9 @@ Signature Secp256k1Sign(
     const CryptoPP::Integer& order = key.GetGroupParameters().GetSubgroupOrder();
     NormalizeLowS(sig.data, order);
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in signing\n");
+#endif
     sig.data.clear();
   }
 
@@ -369,6 +404,9 @@ bool Secp256k1Verify(
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::Verifier verifier(key);
     return verifier.VerifyMessage(data, data_size, signature, signature_size);
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in operation\n");
+#endif
     return false;
   }
 }
@@ -398,6 +436,9 @@ KeyPair P256GenerateKeyPair() {
     q.x.Encode(kp.public_key.data() + 1, 32);
 
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in key generation\n");
+#endif
     kp.private_key.clear();
     kp.public_key.clear();
   }
@@ -460,6 +501,9 @@ bool P256SharedSecret(
 
     return ecdh.Agree(shared_secret, priv_full.get(), pub_full.get());
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in operation\n");
+#endif
     return false;
   }
 }
@@ -484,6 +528,9 @@ Signature P256Sign(
     const CryptoPP::Integer& order = key.GetGroupParameters().GetSubgroupOrder();
     NormalizeLowS(sig.data, order);
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in signing\n");
+#endif
     sig.data.clear();
   }
 
@@ -524,6 +571,9 @@ bool P256Verify(
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA256>::Verifier verifier(key);
     return verifier.VerifyMessage(data, data_size, signature, signature_size);
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in operation\n");
+#endif
     return false;
   }
 }
@@ -553,6 +603,9 @@ KeyPair P384GenerateKeyPair() {
     q.x.Encode(kp.public_key.data() + 1, 48);
 
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in key generation\n");
+#endif
     kp.private_key.clear();
     kp.public_key.clear();
   }
@@ -622,6 +675,9 @@ bool P384SharedSecret(
     SHA256(raw_secret.get(), raw_secret.size(), shared_secret);
     return true;
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in operation\n");
+#endif
     return false;
   }
 }
@@ -646,6 +702,9 @@ Signature P384Sign(
     const CryptoPP::Integer& order = key.GetGroupParameters().GetSubgroupOrder();
     NormalizeLowS(sig.data, order);
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in signing\n");
+#endif
     sig.data.clear();
   }
 
@@ -686,6 +745,9 @@ bool P384Verify(
     CryptoPP::ECDSA<CryptoPP::ECP, CryptoPP::SHA384>::Verifier verifier(key);
     return verifier.VerifyMessage(data, data_size, signature, signature_size);
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in operation\n");
+#endif
     return false;
   }
 }
@@ -735,6 +797,9 @@ Signature Ed25519Sign(
     sig.data.resize(kEd25519SignatureSize);
     signer.SignMessage(CryptoPP::NullRNG(), data, data_size, sig.data.data());
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in signing\n");
+#endif
     sig.data.clear();
   }
 
@@ -749,9 +814,16 @@ bool Ed25519Verify(
     CryptoPP::ed25519::Verifier verifier(public_key);
     return verifier.VerifyMessage(data, data_size, signature, kEd25519SignatureSize);
   } catch (...) {
+#ifdef FLATBUFFERS_DEBUG
+    fprintf(stderr, "[flatbuffers] crypto exception in operation\n");
+#endif
     return false;
   }
 }
+
+// FIPS mode not available with Crypto++ backend
+bool EnableFIPSMode() { return false; }
+bool IsFIPSMode() { return false; }
 
 #elif defined(FLATBUFFERS_USE_OPENSSL)
 
@@ -773,12 +845,26 @@ bool Ed25519Verify(
 #include <openssl/err.h>
 #include <openssl/core_names.h>
 #include <openssl/param_build.h>
+#include <openssl/hmac.h>
+#include <openssl/provider.h>
 
-// Secure memory clear
-static void SecureClear(void* ptr, size_t size) {
-  if (ptr && size > 0) {
-    OPENSSL_cleanse(ptr, size);
+// FIPS mode initialization (Task 34)
+static bool g_fips_mode = false;
+
+bool EnableFIPSMode() {
+  OSSL_PROVIDER* fips = OSSL_PROVIDER_load(NULL, "fips");
+  if (!fips) return false;
+  OSSL_PROVIDER* base = OSSL_PROVIDER_load(NULL, "base");
+  if (!base) {
+    OSSL_PROVIDER_unload(fips);
+    return false;
   }
+  g_fips_mode = true;
+  return true;
+}
+
+bool IsFIPSMode() {
+  return g_fips_mode;
 }
 
 // Secure clear for vectors
@@ -857,9 +943,30 @@ void HKDF(const uint8_t* ikm, size_t ikm_size,
 void DeriveSymmetricKey(
     const uint8_t* shared_secret, size_t shared_secret_size,
     const uint8_t* context, size_t context_size,
-    uint8_t* key) {
-  HKDF(shared_secret, shared_secret_size, nullptr, 0,
+    uint8_t* key,
+    const uint8_t* salt, size_t salt_size) {
+  HKDF(shared_secret, shared_secret_size, salt, salt_size,
        context, context_size, key, kEncryptionKeySize);
+}
+
+void HMACSha256(const uint8_t* key, size_t key_size,
+                const uint8_t* data, size_t data_size,
+                uint8_t* mac) {
+  unsigned int mac_len = 32;
+  HMAC(EVP_sha256(), key, static_cast<int>(key_size),
+       data, data_size, mac, &mac_len);
+}
+
+bool HMACSha256Verify(const uint8_t* key, size_t key_size,
+                      const uint8_t* data, size_t data_size,
+                      const uint8_t* mac) {
+  uint8_t computed[32];
+  HMACSha256(key, key_size, data, data_size, computed);
+  // Constant-time comparison
+  uint8_t diff = 0;
+  for (size_t i = 0; i < 32; i++) diff |= computed[i] ^ mac[i];
+  SecureClear(computed, 32);
+  return diff == 0;
 }
 
 namespace internal {
@@ -1550,10 +1657,28 @@ void HKDF(const uint8_t* ikm, size_t ikm_size,
 void DeriveSymmetricKey(
     const uint8_t* shared_secret, size_t shared_secret_size,
     const uint8_t* context, size_t context_size,
-    uint8_t* key) {
+    uint8_t* key,
+    const uint8_t* salt, size_t salt_size) {
+  // Fallback HKDF ignores salt (no salt support in basic HKDF)
+  (void)salt;
+  (void)salt_size;
   internal::DeriveKey(shared_secret, shared_secret_size,
                       context, context_size,
                       key, kEncryptionKeySize);
+}
+
+// Fallback HMAC-SHA256 not available without crypto library
+void HMACSha256(const uint8_t* key, size_t key_size,
+                const uint8_t* data, size_t data_size,
+                uint8_t* mac) {
+  (void)key; (void)key_size; (void)data; (void)data_size;
+  fprintf(stderr, "[flatbuffers] ERROR: HMAC-SHA256 requires Crypto++ or OpenSSL\n");
+  memset(mac, 0, 32);
+}
+
+bool HMACSha256Verify(const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*) {
+  fprintf(stderr, "[flatbuffers] ERROR: HMAC-SHA256 requires Crypto++ or OpenSSL\n");
+  return false;
 }
 
 void EncryptBytes(uint8_t* data, size_t size,
@@ -1676,6 +1801,10 @@ bool Ed25519Verify(const uint8_t*, const uint8_t*, size_t, const uint8_t*) {
   return false;
 }
 
+// FIPS mode not available without crypto library
+bool EnableFIPSMode() { return false; }
+bool IsFIPSMode() { return false; }
+
 #endif  // FLATBUFFERS_USE_CRYPTOPP
 
 // =============================================================================
@@ -1788,8 +1917,8 @@ EncryptionContext::~EncryptionContext() {
 EncryptionContext::EncryptionContext(EncryptionContext&& other) noexcept
     : valid_(other.valid_) {
   std::memcpy(key_, other.key_, kEncryptionKeySize);
-  // Clear the source
-  std::memset(other.key_, 0, kEncryptionKeySize);
+  // Clear the source using volatile write to prevent optimization (Task 29)
+  SecureClear(other.key_, kEncryptionKeySize);
   other.valid_ = false;
 }
 
@@ -1801,25 +1930,37 @@ EncryptionContext& EncryptionContext::operator=(EncryptionContext&& other) noexc
     // Move from other
     std::memcpy(key_, other.key_, kEncryptionKeySize);
     valid_ = other.valid_;
-    // Clear the source
-    std::memset(other.key_, 0, kEncryptionKeySize);
+    // Clear the source using volatile write to prevent optimization (Task 29)
+    SecureClear(other.key_, kEncryptionKeySize);
     other.valid_ = false;
   }
   return *this;
 }
 
-void EncryptionContext::DeriveFieldKey(uint16_t field_id, uint8_t* out_key) const {
+void EncryptionContext::DeriveFieldKey(uint16_t field_id, uint8_t* out_key,
+                                       uint32_t record_index) const {
+  // Binary info: "flatbuffers-field" + BE(field_id) + BE(record_index)
   uint8_t info[32] = "flatbuffers-field";
   info[17] = static_cast<uint8_t>(field_id >> 8);
   info[18] = static_cast<uint8_t>(field_id & 0xFF);
-  internal::DeriveKey(key_, kEncryptionKeySize, info, 19, out_key, kEncryptionKeySize);
+  info[19] = static_cast<uint8_t>((record_index >> 24) & 0xFF);
+  info[20] = static_cast<uint8_t>((record_index >> 16) & 0xFF);
+  info[21] = static_cast<uint8_t>((record_index >> 8) & 0xFF);
+  info[22] = static_cast<uint8_t>(record_index & 0xFF);
+  internal::DeriveKey(key_, kEncryptionKeySize, info, 23, out_key, kEncryptionKeySize);
 }
 
-void EncryptionContext::DeriveFieldIV(uint16_t field_id, uint8_t* out_iv) const {
+void EncryptionContext::DeriveFieldIV(uint16_t field_id, uint8_t* out_iv,
+                                      uint32_t record_index) const {
+  // Binary info: "flatbuffers-iv" + BE(field_id) + BE(record_index)
   uint8_t info[32] = "flatbuffers-iv";
   info[14] = static_cast<uint8_t>(field_id >> 8);
   info[15] = static_cast<uint8_t>(field_id & 0xFF);
-  internal::DeriveKey(key_, kEncryptionKeySize, info, 16, out_iv, kEncryptionIVSize);
+  info[16] = static_cast<uint8_t>((record_index >> 24) & 0xFF);
+  info[17] = static_cast<uint8_t>((record_index >> 16) & 0xFF);
+  info[18] = static_cast<uint8_t>((record_index >> 8) & 0xFF);
+  info[19] = static_cast<uint8_t>(record_index & 0xFF);
+  internal::DeriveKey(key_, kEncryptionKeySize, info, 20, out_iv, kEncryptionIVSize);
 }
 
 // =============================================================================
@@ -1827,30 +1968,68 @@ void EncryptionContext::DeriveFieldIV(uint16_t field_id, uint8_t* out_iv) const 
 // =============================================================================
 
 void EncryptScalar(uint8_t* value, size_t size,
-                   const EncryptionContext& ctx, uint16_t field_id) {
+                   const EncryptionContext& ctx, uint16_t field_id,
+                   uint32_t record_index) {
   uint8_t field_key[kEncryptionKeySize];
   uint8_t field_iv[kEncryptionIVSize];
-  ctx.DeriveFieldKey(field_id, field_key);
-  ctx.DeriveFieldIV(field_id, field_iv);
+  ctx.DeriveFieldKey(field_id, field_key, record_index);
+  ctx.DeriveFieldIV(field_id, field_iv, record_index);
   EncryptBytes(value, size, field_key, field_iv);
+  SecureClear(field_key, kEncryptionKeySize);
+  SecureClear(field_iv, kEncryptionIVSize);
 }
 
 void EncryptString(uint8_t* str, size_t length,
-                   const EncryptionContext& ctx, uint16_t field_id) {
+                   const EncryptionContext& ctx, uint16_t field_id,
+                   uint32_t record_index) {
   uint8_t field_key[kEncryptionKeySize];
   uint8_t field_iv[kEncryptionIVSize];
-  ctx.DeriveFieldKey(field_id, field_key);
-  ctx.DeriveFieldIV(field_id, field_iv);
+  ctx.DeriveFieldKey(field_id, field_key, record_index);
+  ctx.DeriveFieldIV(field_id, field_iv, record_index);
   EncryptBytes(str, length, field_key, field_iv);
+  SecureClear(field_key, kEncryptionKeySize);
+  SecureClear(field_iv, kEncryptionIVSize);
 }
 
 void EncryptVector(uint8_t* data, size_t element_size, size_t count,
-                   const EncryptionContext& ctx, uint16_t field_id) {
+                   const EncryptionContext& ctx, uint16_t field_id,
+                   uint32_t record_index) {
   uint8_t field_key[kEncryptionKeySize];
   uint8_t field_iv[kEncryptionIVSize];
-  ctx.DeriveFieldKey(field_id, field_key);
-  ctx.DeriveFieldIV(field_id, field_iv);
+  ctx.DeriveFieldKey(field_id, field_key, record_index);
+  ctx.DeriveFieldIV(field_id, field_iv, record_index);
   EncryptBytes(data, element_size * count, field_key, field_iv);
+  SecureClear(field_key, kEncryptionKeySize);
+  SecureClear(field_iv, kEncryptionIVSize);
+}
+
+// =============================================================================
+// Buffer MAC (Task 23)
+// =============================================================================
+
+void ComputeBufferMAC(const uint8_t* buffer, size_t buffer_size,
+                      const EncryptionContext& ctx, uint8_t* out_mac) {
+  // Derive MAC key from context key
+  uint8_t mac_key[kEncryptionKeySize];
+  const char* info = "flatbuffers-mac-key";
+  internal::DeriveKey(ctx.GetKey(), kEncryptionKeySize,
+                      reinterpret_cast<const uint8_t*>(info), strlen(info),
+                      mac_key, kEncryptionKeySize);
+  HMACSha256(mac_key, kEncryptionKeySize, buffer, buffer_size, out_mac);
+  SecureClear(mac_key, kEncryptionKeySize);
+}
+
+bool VerifyBufferMAC(const uint8_t* buffer, size_t buffer_size,
+                     const EncryptionContext& ctx, const uint8_t* mac) {
+  uint8_t mac_key[kEncryptionKeySize];
+  const char* info = "flatbuffers-mac-key";
+  internal::DeriveKey(ctx.GetKey(), kEncryptionKeySize,
+                      reinterpret_cast<const uint8_t*>(info), strlen(info),
+                      mac_key, kEncryptionKeySize);
+  bool result = HMACSha256Verify(mac_key, kEncryptionKeySize,
+                                  buffer, buffer_size, mac);
+  SecureClear(mac_key, kEncryptionKeySize);
+  return result;
 }
 
 // =============================================================================

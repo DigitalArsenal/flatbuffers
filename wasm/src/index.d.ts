@@ -78,10 +78,10 @@ export {
 
 // Encryption types
 export interface EncryptionOptions {
-  /** Recipient's public key (32 bytes for X25519, 33 for secp256k1/P-256/P-384) */
+  /** Recipient's public key (32 bytes for X25519, 33 for secp256k1) */
   publicKey: Uint8Array;
-  /** Key exchange algorithm (default: "x25519") */
-  algorithm?: "x25519" | "secp256k1" | "p256" | "p384";
+  /** Key exchange algorithm (default: "x25519"). p256/p384 require async forEncryptionAsync. */
+  algorithm?: "x25519" | "secp256k1";
   /** Field names to encrypt (if empty, uses (encrypted) attribute from schema) */
   fields?: string[];
   /** HKDF context string for domain separation */
@@ -242,6 +242,7 @@ export declare const KeyExchangeAlgorithm: Readonly<{
 
 export declare function loadEncryptionWasm(): Promise<void>;
 export declare function isInitialized(): boolean;
+export declare function getInitError(): Error | null;
 export declare function hasCryptopp(): boolean;
 export declare function getVersion(): string;
 
@@ -333,6 +334,8 @@ export interface EncryptionHeader {
   recipientKeyId: Uint8Array;
   iv: Uint8Array;
   context: string;
+  sequenceNumber?: bigint;
+  sessionId?: Uint8Array;
 }
 
 export interface CreateEncryptionHeaderOptions {
@@ -356,12 +359,26 @@ export declare function encryptAuthenticated(plaintext: Uint8Array, key: Uint8Ar
 export declare function decryptAuthenticated(data: Uint8Array, key: Uint8Array, aad?: Uint8Array): Uint8Array;
 
 // =============================================================================
-// Encryption — Buffer Encryption (stubs)
+// Encryption — Buffer Encryption
 // =============================================================================
 
-export declare function encryptBuffer(buffer: Uint8Array, schema: any, ctx: any): Uint8Array;
-export declare function decryptBuffer(buffer: Uint8Array, schema: any, ctx: any): Uint8Array;
-export declare function parseSchemaForEncryption(schema: string, rootType?: string): { rootType: string; fields: any[]; enums: Record<string, any> };
+export interface EncryptedFieldInfo {
+  id: number;
+  name: string;
+  offset: number;
+  size: number;
+  type: string;
+}
+
+export interface ParsedEncryptionSchema {
+  rootType: string;
+  fields: EncryptedFieldInfo[];
+  enums: Record<string, any>;
+}
+
+export declare function encryptBuffer(buffer: Uint8Array, schema: ParsedEncryptionSchema, ctx: EncryptionContext, recordIndex?: number): Uint8Array;
+export declare function decryptBuffer(buffer: Uint8Array, schema: ParsedEncryptionSchema, ctx: EncryptionContext, recordIndex?: number): Uint8Array;
+export declare function parseSchemaForEncryption(schema: Uint8Array, rootType?: string): ParsedEncryptionSchema;
 
 // =============================================================================
 // Encryption — EncryptionContext
@@ -387,11 +404,58 @@ export declare class EncryptionContext {
   getHeader(): EncryptionHeader;
   getHeaderJSON(): string;
 
-  deriveFieldKey(fieldId: number): Uint8Array;
-  deriveFieldIV(fieldId: number): Uint8Array;
+  deriveFieldKey(fieldId: number, recordIndex?: number): Uint8Array;
+  deriveFieldIV(fieldId: number, recordIndex?: number): Uint8Array;
 
-  encryptScalar(buffer: Uint8Array, offset: number, length: number, fieldId: number): void;
-  decryptScalar(buffer: Uint8Array, offset: number, length: number, fieldId: number): void;
+  encryptScalar(buffer: Uint8Array, offset: number, length: number, fieldId: number, recordIndex?: number): void;
+  decryptScalar(buffer: Uint8Array, offset: number, length: number, fieldId: number, recordIndex?: number): void;
   encryptBuffer(buffer: Uint8Array, recordIndex: number): void;
   decryptBuffer(buffer: Uint8Array, recordIndex: number): void;
+
+  computeBufferMAC(buffer: Uint8Array, fieldIds?: number[]): Uint8Array;
+  verifyBufferMAC(buffer: Uint8Array, mac: Uint8Array, fieldIds?: number[]): boolean;
+  destroy(): void;
+  ratchetKey(): EncryptionContext;
 }
+
+// =============================================================================
+// Encryption — Wire Format
+// =============================================================================
+
+export declare const WIRE_FORMAT_MAGIC: Uint8Array;
+export declare function serializeEncryptionHeader(header: EncryptionHeader, payload: Uint8Array): Uint8Array;
+export declare function deserializeEncryptionHeader(data: Uint8Array): { header: EncryptionHeader; payload: Uint8Array };
+
+// =============================================================================
+// Encryption — Replay Protection
+// =============================================================================
+
+export declare class SequenceValidator {
+  validate(sequenceNumber: bigint | number): boolean;
+  getHighest(): bigint;
+  reset(): void;
+}
+
+// =============================================================================
+// Encryption — Observability
+// =============================================================================
+
+export interface CryptoEvent {
+  operation: string;
+  fieldId?: number;
+  timestamp: number;
+  keyId?: string;
+  size?: number;
+}
+
+export declare function onCryptoEvent(callback: ((event: CryptoEvent) => void) | null): void;
+
+// =============================================================================
+// Encryption — Key Management
+// =============================================================================
+
+export interface KeyLookupOptions extends EncryptionContextOptions {
+  lookupRecipientKey: (keyId: Uint8Array) => Uint8Array | Promise<Uint8Array>;
+}
+
+export declare function createContextWithKeyLookup(recipientKeyId: Uint8Array, options: KeyLookupOptions): Promise<EncryptionContext>;

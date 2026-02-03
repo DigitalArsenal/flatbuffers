@@ -803,10 +803,6 @@ func verifyPythonSignature(publicKey, message, signature []byte) bool {
 <li><a href="nodejs.html">Node.js Integration</a> - Native V8 WASM support</li>
 <li><a href="browser.html">Browser Integration</a> - All modern browsers</li>
 </ul>
-<hr>
-<h2>Per-Field Encryption with <code>(encrypted)</code></h2>
-<p>FlatBuffers supports per-field AES-256-CTR encryption using the <code>(encrypted)</code> attribute in your schema. When a field is annotated with <code>(encrypted)</code>, the generated code for each language runtime automatically encrypts the field value during serialization and decrypts it during deserialization, provided an <code>EncryptionContext</code> is supplied. This ensures that sensitive fields remain encrypted at rest within the FlatBuffer binary, while non-sensitive fields stay in plaintext for efficient access. The per-field IV is derived deterministically using HKDF-SHA256 from the master key and the field name, ensuring consistent encryption and decryption across all supported runtimes.</p>
-<p>See the language-specific guides above for code examples demonstrating how to use the <code>(encrypted)</code> attribute with each runtime.</p>
 </article>
   </div>
 </body>

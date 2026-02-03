@@ -264,7 +264,7 @@
 <p>Works with Vite, Webpack, Rollup, Parcel, and other bundlers.</p>
 <h3>Option 2: CDN</h3>
 <pre><code class="language-html">&lt;script type=&quot;module&quot;&gt;
-  import { initEncryption, encryptBytes } from &#39;https://esm.sh/flatc-wasm&#39;;
+  import { initEncryption, encryptBytes } from &#39;https://esm.sh/flatc-wasm/encryption&#39;;
 &lt;/script&gt;
 </code></pre>
 <h3>Option 3: Direct WASM Loading</h3>
@@ -291,7 +291,7 @@
       hkdf,
       KEY_SIZE,
       IV_SIZE
-    } from &#39;https://esm.sh/flatc-wasm&#39;;
+    } from &#39;https://esm.sh/flatc-wasm/encryption&#39;;
 
     // Initialize the WASM module
     await initEncryption();
@@ -330,7 +330,7 @@ export default {
 };
 </code></pre>
 <pre><code class="language-javascript">// main.js
-import { initEncryption, encryptBytes } from &#39;flatc-wasm&#39;;
+import { initEncryption, encryptBytes } from &#39;flatc-wasm/encryption&#39;;
 
 await initEncryption();
 // Use encryption functions...
@@ -346,13 +346,13 @@ module.exports = {
 <h2>API Reference</h2>
 <p>The browser API is identical to Node.js:</p>
 <h3>Initialization</h3>
-<pre><code class="language-javascript">import { initEncryption } from &#39;flatc-wasm&#39;;
+<pre><code class="language-javascript">import { initEncryption } from &#39;flatc-wasm/encryption&#39;;
 
 // Must call before using any other functions
 await initEncryption();
 </code></pre>
 <h3>Symmetric Encryption</h3>
-<pre><code class="language-javascript">import { encryptBytes, decryptBytes, KEY_SIZE, IV_SIZE } from &#39;flatc-wasm&#39;;
+<pre><code class="language-javascript">import { encryptBytes, decryptBytes, KEY_SIZE, IV_SIZE } from &#39;flatc-wasm/encryption&#39;;
 
 const key = crypto.getRandomValues(new Uint8Array(KEY_SIZE));  // 32 bytes
 const iv = crypto.getRandomValues(new Uint8Array(IV_SIZE));    // 16 bytes
@@ -369,7 +369,7 @@ decryptBytes(data, key, iv);
   x25519GenerateKeyPair,
   x25519SharedSecret,
   hkdf
-} from &#39;flatc-wasm&#39;;
+} from &#39;flatc-wasm/encryption&#39;;
 
 // Generate key pair
 const alice = x25519GenerateKeyPair();
@@ -391,7 +391,7 @@ const encryptionKey = hkdf(
   ed25519GenerateKeyPair,
   ed25519Sign,
   ed25519Verify
-} from &#39;flatc-wasm&#39;;
+} from &#39;flatc-wasm/encryption&#39;;
 
 const keypair = ed25519GenerateKeyPair();
 const message = new TextEncoder().encode(&#39;Sign this&#39;);
@@ -456,7 +456,7 @@ const isValid = ed25519Verify(keypair.publicKey, message, signature);
       hkdf,
       KEY_SIZE,
       IV_SIZE
-    } from &#39;https://esm.sh/flatc-wasm&#39;;
+    } from &#39;https://esm.sh/flatc-wasm/encryption&#39;;
 
     // Store keypair globally
     let myKeypair;
@@ -578,7 +578,7 @@ const isValid = ed25519Verify(keypair.publicKey, message, signature);
 <h2>Web Workers</h2>
 <p>For heavy encryption workloads, use Web Workers to avoid blocking the main thread:</p>
 <p><strong>worker.js:</strong></p>
-<pre><code class="language-javascript">import { initEncryption, encryptBytes } from &#39;flatc-wasm&#39;;
+<pre><code class="language-javascript">import { initEncryption, encryptBytes } from &#39;flatc-wasm/encryption&#39;;
 
 let initialized = false;
 
@@ -718,15 +718,6 @@ Content-Type: application/wasm
 <li><a href="nodejs.html">Node.js Integration</a> - Same API for server-side</li>
 <li><a href="README.md#api-reference">API Reference</a></li>
 </ul>
-<hr>
-<h2>Per-Field Encryption with <code>(encrypted)</code></h2>
-<p>Fields marked with the <code>(encrypted)</code> attribute in your FlatBuffers schema are automatically encrypted and decrypted by the generated accessors when an <code>EncryptionContext</code> is provided. The per-field IV is derived using HKDF from the master key and the field name, ensuring deterministic and consistent behavior across all runtimes.</p>
-<pre><code class="language-javascript">const cryptoKey = await crypto.subtle.importKey('raw', key, { name: 'AES-CTR' }, false, ['decrypt']);
-const plaintext = await crypto.subtle.decrypt(
-  { name: 'AES-CTR', counter: iv, length: 128 },
-  cryptoKey, ciphertext
-);
-</code></pre>
 </article>
   </div>
 </body>

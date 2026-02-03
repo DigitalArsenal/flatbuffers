@@ -163,8 +163,20 @@ const schemaConfig = {
       mana: 100 + Math.floor(Math.random() * 100),
       hp: 50 + Math.floor(Math.random() * 150),
       name: `Monster_${index}`,
+      friendly: index % 2 === 0,
       inventory: Array.from({ length: 3 + Math.floor(Math.random() * 5) }, () => Math.floor(Math.random() * 256)),
       color: Math.floor(Math.random() * 3),
+      weapons: [
+        { name: 'Sword', damage: 10 + Math.floor(Math.random() * 40) },
+        { name: 'Axe', damage: 15 + Math.floor(Math.random() * 35) },
+      ],
+      equipped_type: 'Weapon',
+      equipped: { name: 'Shield', damage: 5 },
+      path: [
+        { x: 0, y: 0, z: 0 },
+        { x: 10, y: 5, z: 2 },
+        { x: 20, y: 10, z: 4 },
+      ],
     }),
     parserSchema: Schemas.monster,
   },
@@ -602,7 +614,7 @@ function quickDerive(coinType) {
 // Login / Logout
 // =============================================================================
 
-function login(keys) {
+async function login(keys) {
   state.loggedIn = true;
   state.wallet = keys;
   state.addresses = generateAddresses(keys);
@@ -611,7 +623,7 @@ function login(keys) {
   // Derive PKI keys if not already loaded
   if (!state.pki.alice || !state.pki.bob) {
     if (!loadPKIKeys()) {
-      generatePKIKeyPairs();
+      await generatePKIKeyPairs();
     }
   } else {
     // Update the PKI UI since keys are already in state
@@ -916,7 +928,7 @@ function downloadData(data, filename, mimeType) {
  * This is ~100x faster than the CLI-based approach.
  */
 function buildMonster(data) {
-  const builder = new Builder(256);
+  const builder = new Builder(512);
 
   // Create strings/vectors BEFORE starting table (FlatBuffers requirement)
   const nameOffset = builder.createString(data.name);
@@ -928,6 +940,37 @@ function buildMonster(data) {
       builder.addInt8(data.inventory[i]);
     }
     inventoryOffset = builder.endVector();
+  }
+
+  // Create weapon tables and collect their offsets
+  let weaponsOffset = 0;
+  if (data.weapons?.length > 0) {
+    const weaponOffsets = [];
+    for (const weapon of data.weapons) {
+      const weaponNameOffset = builder.createString(weapon.name);
+      builder.startObject(2);
+      builder.addFieldOffset(0, weaponNameOffset, 0);
+      builder.addFieldInt16(1, weapon.damage, 0);
+      weaponOffsets.push(builder.endObject());
+    }
+    // Create vector of weapon offsets (in reverse order)
+    builder.startVector(4, weaponOffsets.length, 4);
+    for (let i = weaponOffsets.length - 1; i >= 0; i--) {
+      builder.addOffset(weaponOffsets[i]);
+    }
+    weaponsOffset = builder.endVector();
+  }
+
+  // Create path vector (Vec3 structs)
+  let pathOffset = 0;
+  if (data.path?.length > 0) {
+    builder.startVector(12, data.path.length, 4);
+    for (let i = data.path.length - 1; i >= 0; i--) {
+      builder.writeFloat32(data.path[i].z);
+      builder.writeFloat32(data.path[i].y);
+      builder.writeFloat32(data.path[i].x);
+    }
+    pathOffset = builder.endVector();
   }
 
   // Monster table: 10 fields (pos, mana, hp, name, friendly, inventory, color, weapons, equipped, path)
@@ -951,11 +994,24 @@ function buildMonster(data) {
   // Field 3: name (string offset)
   builder.addFieldOffset(3, nameOffset, 0);
 
-  // Field 5: inventory (vector offset) - field 4 is deprecated 'friendly'
+  // Field 4: friendly (bool)
+  if (data.friendly !== undefined) {
+    builder.addFieldInt8(4, data.friendly ? 1 : 0, 0);
+  }
+
+  // Field 5: inventory (vector offset)
   if (inventoryOffset) builder.addFieldOffset(5, inventoryOffset, 0);
 
   // Field 6: color (byte enum, default 2=Blue)
   builder.addFieldInt8(6, data.color, 2);
+
+  // Field 7: weapons (vector of table offsets)
+  if (weaponsOffset) builder.addFieldOffset(7, weaponsOffset, 0);
+
+  // Field 8: equipped (union) - skip for now, requires union type handling
+
+  // Field 9: path (vector of Vec3 structs)
+  if (pathOffset) builder.addFieldOffset(9, pathOffset, 0);
 
   const monster = builder.endObject();
   builder.finishSizePrefixed(monster, 'MONS');
@@ -1037,6 +1093,7 @@ async function generateFlatBuffer(schemaType, data) {
     typeof value === 'bigint' ? value.toString() : value
   );
 
+  // Generate with size prefix for streaming compatibility
   const binary = state.flatcRunner.generateBinary(
     { entry: config.entry, files: config.files },
     jsonData
@@ -1114,38 +1171,106 @@ function decryptFieldBytesWithPKI(encrypted, headerJSON, fieldId = 0) {
 // Field-Level Encryption Display
 // =============================================================================
 
+/**
+ * Populate the field checkboxes based on the selected schema
+ */
+function populateFieldCheckboxes() {
+  const schemaType = $('schema-select')?.value || 'monster';
+  const schema = Schemas[schemaType];
+  const container = $('field-checkboxes');
+
+  if (!container || !schema) return;
+
+  container.innerHTML = '';
+
+  schema.fields.forEach((field, index) => {
+    const label = document.createElement('label');
+    label.className = 'field-checkbox-label';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = false; // Default to plaintext, user selects fields to encrypt
+    checkbox.dataset.fieldName = field.name;
+    checkbox.dataset.fieldIndex = index;
+    checkbox.className = 'field-checkbox';
+
+    const span = document.createElement('span');
+    span.className = 'field-checkbox-text';
+    span.innerHTML = `<strong>${field.name}</strong> <span class="field-type-badge">${field.type}</span>`;
+
+    label.appendChild(checkbox);
+    label.appendChild(span);
+    container.appendChild(label);
+  });
+}
+
+/**
+ * Select all or none of the field checkboxes
+ */
+function selectAllFields(selectAll) {
+  const checkboxes = document.querySelectorAll('#field-checkboxes .field-checkbox');
+  checkboxes.forEach(cb => {
+    cb.checked = selectAll;
+  });
+}
+
+/**
+ * Get the list of field names that should be encrypted
+ */
+function getSelectedFieldsToEncrypt() {
+  const checkboxes = document.querySelectorAll('#field-checkboxes .field-checkbox:checked');
+  return Array.from(checkboxes).map(cb => cb.dataset.fieldName);
+}
+
 async function generateSingleRecord() {
   const schemaType = $('schema-select').value;
   const config = schemaConfig[schemaType];
 
-  // Check if PKI keys are available
+  // Auto-generate PKI keys if not available
   if (!state.pki.bob || !state.pki.bob.publicKey) {
-    alert('Please generate PKI key pairs first (in the PKI section above)');
-    return;
+    await generatePKIKeyPairs();
+    // If still no keys after generation attempt, show error
+    if (!state.pki.bob || !state.pki.bob.publicKey) {
+      alert('Failed to generate PKI key pairs. Please try again.');
+      return;
+    }
   }
 
   try {
     const data = config.sampleData(0);
     const binary = await generateFlatBuffer(schemaType, data);
 
-    const parser = new FlatBufferParser(binary);
-    const parsed = parseWithSchema(parser, config.parserSchema.fields);
+    // Binary format: [4-byte size prefix][FlatBuffer data]
+    // Extract size prefix and parse the FlatBuffer portion
+    const sizePrefix = new DataView(binary.buffer, binary.byteOffset, 4).getUint32(0, true);
+    const flatbufferData = binary.slice(4);
 
-    // Encrypt each field using Bob's public key (ECIES)
+    const parser = new FlatBufferParser(flatbufferData);
+    const parsed = parseWithSchema(parser, config.parserSchema.fields);
+    parsed.sizePrefix = sizePrefix;
+
+    // Get the list of fields to encrypt
+    const fieldsToEncrypt = getSelectedFieldsToEncrypt();
+
+    // Encrypt only selected fields using Bob's public key (ECIES)
     const encryptedFields = parsed.fields.map(field => {
-      if (field.bytes && field.bytes.length > 0) {
+      const shouldEncrypt = fieldsToEncrypt.includes(field.name);
+      if (shouldEncrypt && field.bytes && field.bytes.length > 0) {
         const { encrypted, header } = encryptFieldBytesWithPKI(field.bytes);
         return {
           ...field,
           encryptedBytes: encrypted,
           encryptionHeader: header,
+          isEncrypted: true,
         };
       }
-      return field;
+      return { ...field, isEncrypted: false };
     });
 
     state.currentFieldData = {
-      binary,
+      binary,                    // Full binary with size prefix
+      flatbufferData,            // FlatBuffer data without size prefix
+      sizePrefix,                // Size prefix value
       header: parsed.header,
       vtable: parsed.vtable,
       fields: encryptedFields,
@@ -1169,6 +1294,12 @@ function renderFieldDisplay() {
 
   // Show header section
   $('fb-header').style.display = 'block';
+
+  // Display size prefix (first 4 bytes of the full binary)
+  const sizePrefixHex = toHex(data.binary.slice(0, 4));
+  $('size-prefix-hex').textContent = sizePrefixHex;
+  $('size-prefix-val').textContent = `(${data.sizePrefix} bytes)`;
+
   $('root-offset-hex').textContent = data.header.rootOffsetHex;
   $('root-offset-val').textContent = `(${data.header.rootOffset})`;
   $('file-id-hex').textContent = data.header.fileIdHex;
@@ -1212,24 +1343,42 @@ function renderFieldDisplay() {
     typeTd.className = 'field-type';
     tr.appendChild(typeTd);
 
+    // Value (plaintext, always visible)
+    const plainValueTd = document.createElement('td');
+    plainValueTd.className = 'field-value';
+    if (field.present && !field.isEncrypted) {
+      plainValueTd.textContent = formatFieldValue(field.value, field.type);
+    } else if (field.isEncrypted) {
+      plainValueTd.innerHTML = '<span class="encrypted-value">encrypted</span>';
+    } else {
+      plainValueTd.textContent = '--';
+    }
+    tr.appendChild(plainValueTd);
+
     // Offset
     const offsetTd = document.createElement('td');
     offsetTd.textContent = field.present ? `0x${field.vtableOffset.toString(16).padStart(2, '0').toUpperCase()}` : '--';
     offsetTd.className = 'field-offset';
     tr.appendChild(offsetTd);
 
-    // Encrypted hex
+    // Encrypted hex (or plaintext hex if not encrypted)
     const encTd = document.createElement('td');
     if (field.encryptedBytes) {
       encTd.textContent = toHex(field.encryptedBytes);
       encTd.title = `${field.encryptedBytes.length} bytes encrypted`;
+    } else if (field.bytes && field.bytes.length > 0 && !field.isEncrypted) {
+      encTd.textContent = toHex(field.bytes);
+      encTd.title = `${field.bytes.length} bytes (plaintext)`;
+      encTd.className = 'hex plaintext-hex';
     } else if (!field.present) {
       encTd.textContent = '(not present)';
       encTd.className = 'not-present';
     } else {
       encTd.textContent = '--';
     }
-    encTd.className = 'hex encrypted-hex';
+    if (!encTd.className.includes('plaintext-hex') && !encTd.className.includes('not-present')) {
+      encTd.className = 'hex encrypted-hex';
+    }
     tr.appendChild(encTd);
 
     // Decrypted hex (decrypt-col) - decrypt using Bob's private key
@@ -1248,15 +1397,18 @@ function renderFieldDisplay() {
     }
     tr.appendChild(decHexTd);
 
-    // Value (decrypt-col)
-    const valueTd = document.createElement('td');
-    valueTd.className = 'decrypt-col';
-    if (state.showFieldDecrypted && field.present) {
-      valueTd.textContent = formatFieldValue(field.value, field.type);
+    // Decrypted Value (decrypt-col) - shows value after decryption
+    const decValueTd = document.createElement('td');
+    decValueTd.className = 'decrypt-col';
+    if (state.showFieldDecrypted && field.present && field.isEncrypted) {
+      // Show the original value (which we preserved during encryption)
+      decValueTd.textContent = formatFieldValue(field.value, field.type);
+    } else if (state.showFieldDecrypted && field.present) {
+      decValueTd.textContent = formatFieldValue(field.value, field.type);
     } else {
-      valueTd.textContent = '--';
+      decValueTd.textContent = '--';
     }
-    tr.appendChild(valueTd);
+    tr.appendChild(decValueTd);
 
     tbody.appendChild(tr);
   }
@@ -1267,8 +1419,16 @@ function formatFieldValue(value, type) {
 
   if (type === 'string') return `"${value}"`;
   if (Array.isArray(value)) {
-    if (value.length <= 8) return `[${value.join(', ')}]`;
-    return `[${value.slice(0, 5).join(', ')}... (${value.length} items)]`;
+    // Format each element (handles arrays of objects/structs/tables)
+    const formatted = value.map(v => {
+      if (typeof v === 'object' && v !== null) {
+        const entries = Object.entries(v);
+        return `{${entries.map(([k, val]) => `${k}:${typeof val === 'number' ? (Number.isInteger(val) ? val : val.toFixed(2)) : JSON.stringify(val)}`).join(', ')}}`;
+      }
+      return String(v);
+    });
+    if (formatted.length <= 8) return `[${formatted.join(', ')}]`;
+    return `[${formatted.slice(0, 5).join(', ')}... (${value.length} items)]`;
   }
   if (typeof value === 'object') {
     // Struct display
@@ -1320,10 +1480,13 @@ async function generateBulkBuffers() {
   const config = schemaConfig[schemaType];
   const encrypt = state.encryptionEnabled;
 
-  // Check if PKI keys are available when encryption is enabled
+  // Auto-generate PKI keys if not available when encryption is enabled
   if (encrypt && (!state.pki.bob || !state.pki.bob.publicKey)) {
-    alert('Please generate PKI key pairs first (in the PKI section above)');
-    return;
+    await generatePKIKeyPairs();
+    if (!state.pki.bob || !state.pki.bob.publicKey) {
+      alert('Failed to generate PKI key pairs. Please try again.');
+      return;
+    }
   }
 
   const btn = $('generate-buffers');
@@ -1464,10 +1627,13 @@ async function generateAndDownload(encrypt) {
   const count = parseInt($('buffer-count').value);
   const config = schemaConfig[schemaType];
 
-  // Check if PKI keys are available when encryption is enabled
+  // Auto-generate PKI keys if not available when encryption is enabled
   if (encrypt && (!state.pki.bob || !state.pki.bob.publicKey)) {
-    alert('Please generate PKI key pairs first (in the PKI section above)');
-    return;
+    await generatePKIKeyPairs();
+    if (!state.pki.bob || !state.pki.bob.publicKey) {
+      alert('Failed to generate PKI key pairs. Please try again.');
+      return;
+    }
   }
 
   const btn = encrypt ? $('download-encrypted') : $('download-plain');
@@ -2140,7 +2306,16 @@ function convertFlatBufferToJson() {
 
   try {
     // Parse hex to bytes
-    const bytes = new Uint8Array(hexInput.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+    let bytes = new Uint8Array(hexInput.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+
+    // Check if this is size-prefixed data by comparing first 4 bytes (size) with remaining length
+    if (bytes.length >= 8) {
+      const potentialSize = new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0, true);
+      if (potentialSize === bytes.length - 4) {
+        // This is size-prefixed, strip the prefix
+        bytes = bytes.slice(4);
+      }
+    }
 
     // Parse using schema
     const config = schemaConfig[schemaType];
@@ -4015,6 +4190,12 @@ function setupMainAppHandlers() {
   $('generate-single')?.addEventListener('click', generateSingleRecord);
   $('toggle-field-decrypt')?.addEventListener('click', toggleFieldDecrypt);
 
+  // Field selection checkboxes
+  $('schema-select')?.addEventListener('change', populateFieldCheckboxes);
+  $('select-all-fields')?.addEventListener('click', () => selectAllFields(true));
+  $('select-none-fields')?.addEventListener('click', () => selectAllFields(false));
+  populateFieldCheckboxes(); // Initialize on page load
+
   // Bulk Generation Tab - Download buttons (memory efficient)
   $('download-encrypted')?.addEventListener('click', () => generateAndDownload(true));
   $('download-plain')?.addEventListener('click', () => generateAndDownload(false));
@@ -4470,7 +4651,7 @@ async function init() {
         savePKIKeys();
       }
 
-      login(tempKeys);
+      await login(tempKeys);
     }
 
   } catch (err) {

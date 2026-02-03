@@ -16,6 +16,7 @@
     "test": "tests"
   },
   "scripts": {
+    "dev": "npm run dev --prefix wasm/docs",
     "test": "npm run compile && cd tests/ts && python3 ./TypeScriptTest.py",
     "lint": "eslint ts",
     "compile": "tsc && tsc -p tsconfig.mjs.json && esbuild js/flatbuffers.js --minify --global-name=flatbuffers --bundle --outfile=js/flatbuffers.min.js",

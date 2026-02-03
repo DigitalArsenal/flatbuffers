@@ -552,402 +552,11 @@
       </div>
     </section>
 
-    <!-- Adversarial Security Section - Blockchain-based key integrity verification -->
-    <section id="adversarial-tab" class="content-section">
-      <div class="section-header">
-        <h2 class="section-title">Adversarial Security</h2>
-        <p class="section-desc">Cryptographic keys derive blockchain addresses. Value at an address proves key integrity.</p>
-      </div>
-
-      <!-- Always-visible explanation card -->
-      <div class="glass-card adversarial-intro-card">
-        <div class="adversarial-intro">
-          <div class="intro-icon">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="white" stroke="white" stroke-width="1.5"/>
-              <path d="M9 12l2 2 4-4" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </div>
-          <div class="intro-content">
-            <h3>What is Adversarial Security?</h3>
-            <p>A novel trust mechanism where <strong>cryptocurrency value acts as a security bond</strong> for cryptographic keys. The same public key used for encryption can derive addresses on blockchain networks. If significant value remains at those addresses without being drained, it provides strong evidence that the private key hasn't been compromised.</p>
-          </div>
-        </div>
-
-        <div class="adversarial-principles">
-          <div class="principle">
-            <div class="principle-number">1</div>
-            <div class="principle-content">
-              <h4>Key Derivation</h4>
-              <p>Any cryptographic public key (secp256k1, Ed25519) can mathematically derive addresses on cryptocurrency networks like SUI and Monad. This is a one-way function &mdash; the address is uniquely tied to that key.</p>
-            </div>
-          </div>
-          <div class="principle">
-            <div class="principle-number">2</div>
-            <div class="principle-content">
-              <h4>Value as Trust Signal</h4>
-              <p>Anyone can send cryptocurrency to an address <em>without permission</em>. If you rely on a key being secure, you can deposit funds as a "security bond." The more value at stake, the higher the trust signal.</p>
-            </div>
-          </div>
-          <div class="principle">
-            <div class="principle-number">3</div>
-            <div class="principle-content">
-              <h4>Adversarial Assumption</h4>
-              <p>If a private key is compromised, a rational attacker drains the funds immediately. <strong>Undrained value = uncompromised key.</strong> Data signed by that key, or encrypted for it, can be trusted.</p>
-            </div>
-          </div>
-          <div class="principle">
-            <div class="principle-number">4</div>
-            <div class="principle-content">
-              <h4>Real-Time Proof</h4>
-              <p>Blockchain explorers show balances updated every block. This provides <strong>continuous, verifiable proof</strong> of key integrity &mdash; not a point-in-time certificate, but live security monitoring.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="glass-card">
-        <!-- Concept Explainer with Animation -->
-        <div class="adversarial-concept" id="adversarial-concept">
-          <h3 class="card-subtitle">Trust Through Value</h3>
-          <p class="concept-intro">The flow below shows how a public key transforms into verifiable trust through blockchain-secured value.</p>
-
-          <!-- Animated Flow Diagram -->
-          <div class="adversarial-flow">
-            <svg class="flow-diagram" viewBox="0 0 800 120" preserveAspectRatio="xMidYMid meet">
-              <!-- Key Icon -->
-              <g class="flow-step" transform="translate(50, 20)">
-                <circle cx="40" cy="40" r="35" fill="none" stroke="var(--white-30)" stroke-width="2"/>
-                <g transform="translate(24, 24)" stroke="var(--white-60)" stroke-width="2" fill="none">
-                  <circle cx="10" cy="8" r="6"/>
-                  <path d="M14 12 L26 24 M22 20 L26 24 L22 28"/>
-                </g>
-                <text x="40" y="95" text-anchor="middle" fill="var(--white-60)" font-size="11">Public Key</text>
-              </g>
-
-              <!-- Arrow 1 -->
-              <g class="flow-arrow arrow-1" transform="translate(130, 40)">
-                <line x1="0" y1="20" x2="80" y2="20" stroke="var(--white-20)" stroke-width="2" stroke-dasharray="4,4"/>
-                <polygon points="80,20 70,15 70,25" fill="var(--white-30)"/>
-                <text x="40" y="50" text-anchor="middle" fill="var(--white-40)" font-size="9">derives</text>
-              </g>
-
-              <!-- Address Icon (Hexagon) -->
-              <g class="flow-step" transform="translate(220, 20)">
-                <polygon points="40,5 70,22 70,58 40,75 10,58 10,22" fill="none" stroke="var(--white-30)" stroke-width="2"/>
-                <text x="40" y="45" text-anchor="middle" fill="var(--white-50)" font-size="10" font-family="var(--font-mono)">0x...</text>
-                <text x="40" y="95" text-anchor="middle" fill="var(--white-60)" font-size="11">Address</text>
-              </g>
-
-              <!-- Arrow 2 -->
-              <g class="flow-arrow arrow-2" transform="translate(300, 40)">
-                <line x1="0" y1="20" x2="80" y2="20" stroke="var(--white-20)" stroke-width="2" stroke-dasharray="4,4"/>
-                <polygon points="80,20 70,15 70,25" fill="var(--white-30)"/>
-                <text x="40" y="50" text-anchor="middle" fill="var(--white-40)" font-size="9">holds</text>
-              </g>
-
-              <!-- Value Icon (Money/Dollar) -->
-              <g class="flow-step" transform="translate(390, 20)">
-                <circle cx="40" cy="40" r="28" fill="none" stroke="var(--white-30)" stroke-width="2"/>
-                <text x="40" y="52" text-anchor="middle" fill="var(--white-50)" font-size="32" font-weight="bold">$</text>
-                <text x="40" y="95" text-anchor="middle" fill="var(--white-60)" font-size="11">Value</text>
-              </g>
-
-              <!-- Arrow 3 -->
-              <g class="flow-arrow arrow-3" transform="translate(470, 40)">
-                <line x1="0" y1="20" x2="80" y2="20" stroke="var(--white-20)" stroke-width="2" stroke-dasharray="4,4"/>
-                <polygon points="80,20 70,15 70,25" fill="var(--white-30)"/>
-                <text x="40" y="50" text-anchor="middle" fill="var(--white-40)" font-size="9">proves</text>
-              </g>
-
-              <!-- Shield Icon (Trust) -->
-              <g class="flow-step trust-icon" transform="translate(560, 20)">
-                <path d="M40 10 L65 20 L65 45 Q65 65 40 75 Q15 65 15 45 L15 20 Z" fill="none" stroke="var(--success)" stroke-width="2"/>
-                <polyline points="28,42 36,50 52,34" fill="none" stroke="var(--success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                <text x="40" y="95" text-anchor="middle" fill="var(--success)" font-size="11">Trust</text>
-              </g>
-            </svg>
-          </div>
-
-          <div class="concept-details">
-            <div class="concept-card">
-              <div class="concept-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M12 6v6l4 2"/>
-                </svg>
-              </div>
-              <div class="concept-text">
-                <h4>Real-Time Verification</h4>
-                <p>Chain monitoring shows whether funds remain per block &mdash; live proof of key security.</p>
-              </div>
-            </div>
-            <div class="concept-card">
-              <div class="concept-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                  <circle cx="9" cy="7" r="4"/>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
-              </div>
-              <div class="concept-text">
-                <h4>Permissionless Trust</h4>
-                <p>Anyone can increase trust by sending funds to a key they rely on.</p>
-              </div>
-            </div>
-            <div class="concept-card">
-              <div class="concept-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
-              </div>
-              <div class="concept-text">
-                <h4>Adversarial Assumption</h4>
-                <p>If key is compromised, rational attacker drains funds immediately.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Login Required State -->
-        <div class="adversarial-login-required" id="adversarial-login-required">
-          <div class="login-prompt">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--white-40)" stroke-width="1.5">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-            <p>Login to derive addresses from your keys and check live balances across multiple blockchain networks.</p>
-          </div>
-        </div>
-
-        <!-- Your Wallet Addresses (shown after login) -->
-        <div class="adversarial-balances" id="adversarial-balances" style="display: none;">
-          <div class="balances-header">
-            <h3 class="card-subtitle">Your Derived Addresses</h3>
-            <button id="refresh-balances" class="glass-btn small">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="23 4 23 10 17 10"/>
-                <polyline points="1 20 1 14 7 14"/>
-                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-              </svg>
-              Refresh
-            </button>
-          </div>
-          <p class="balances-intro">These addresses are mathematically derived from your HD wallet keys. Anyone can verify the derivation and send funds to increase trust in your keys.</p>
-
-          <div class="wallet-networks-grid" id="wallet-networks-grid">
-            <!-- Bitcoin -->
-            <div class="wallet-network-card" id="wallet-btc-card">
-              <div class="network-icon btc">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-1.67v-1.89c-1.05-.1-2.07-.45-2.81-.95l.47-1.84c.82.43 1.82.79 2.75.79.82 0 1.42-.29 1.42-.95 0-.63-.52-.97-1.73-1.39-1.73-.6-2.92-1.43-2.92-3.07 0-1.48 1.08-2.64 2.82-2.98V6h1.67v1.69c.82.08 1.59.29 2.22.59l-.43 1.77c-.63-.26-1.43-.55-2.32-.55-.92 0-1.24.38-1.24.83 0 .53.5.87 1.9 1.39 1.92.7 2.76 1.63 2.76 3.17-.01 1.53-1.12 2.72-2.89 3.1z"/>
-                </svg>
-              </div>
-              <div class="network-info">
-                <div class="network-name-row">
-                  <span class="network-name">Bitcoin</span>
-                  <span class="derivation-path">m/44'/0'/0'/0/0</span>
-                </div>
-                <a href="#" id="wallet-btc-explorer" class="network-address-link" target="_blank" rel="noopener">
-                  <code id="wallet-btc-address">--</code>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                    <polyline points="15 3 21 3 21 9"/>
-                    <line x1="10" y1="14" x2="21" y2="3"/>
-                  </svg>
-                </a>
-                <div class="network-balance-row">
-                  <span class="balance-value" id="wallet-btc-balance">--</span>
-                  <span class="balance-unit">BTC</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Ethereum -->
-            <div class="wallet-network-card" id="wallet-eth-card">
-              <div class="network-icon eth">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 1.5l-7 10.8 7 4.2 7-4.2-7-10.8zm0 15.6l-7-4.2 7 9.6 7-9.6-7 4.2z"/>
-                </svg>
-              </div>
-              <div class="network-info">
-                <div class="network-name-row">
-                  <span class="network-name">Ethereum</span>
-                  <span class="derivation-path">m/44'/60'/0'/0/0</span>
-                </div>
-                <a href="#" id="wallet-eth-explorer" class="network-address-link" target="_blank" rel="noopener">
-                  <code id="wallet-eth-address">--</code>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                    <polyline points="15 3 21 3 21 9"/>
-                    <line x1="10" y1="14" x2="21" y2="3"/>
-                  </svg>
-                </a>
-                <div class="network-balance-row">
-                  <span class="balance-value" id="wallet-eth-balance">--</span>
-                  <span class="balance-unit">ETH</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Solana -->
-            <div class="wallet-network-card" id="wallet-sol-card">
-              <div class="network-icon sol">
-                <svg width="24" height="24" viewBox="0 0 397.7 311.7" fill="currentColor">
-                  <linearGradient id="sol-grad-a" x1="360.88" y1="351.46" x2="141.21" y2="-69.29" gradientTransform="matrix(1 0 0 -1 0 314)" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#00ffa3"/><stop offset="1" stop-color="#dc1fff"/></linearGradient>
-                  <linearGradient id="sol-grad-b" x1="264.83" y1="401.6" x2="45.16" y2="-19.14" gradientTransform="matrix(1 0 0 -1 0 314)" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#00ffa3"/><stop offset="1" stop-color="#dc1fff"/></linearGradient>
-                  <linearGradient id="sol-grad-c" x1="312.55" y1="376.69" x2="92.88" y2="-44.09" gradientTransform="matrix(1 0 0 -1 0 314)" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#00ffa3"/><stop offset="1" stop-color="#dc1fff"/></linearGradient>
-                  <path fill="url(#sol-grad-a)" d="M64.6 237.9c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1l62.7-62.7z"/>
-                  <path fill="url(#sol-grad-b)" d="M64.6 3.8C67.1 1.4 70.4 0 73.8 0h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1L64.6 3.8z"/>
-                  <path fill="url(#sol-grad-c)" d="M333.1 120.1c-2.4-2.4-5.7-3.8-9.2-3.8H6.5c-5.8 0-8.7 7-4.6 11.1l62.7 62.7c2.4 2.4 5.7 3.8 9.2 3.8h317.4c5.8 0 8.7-7 4.6-11.1l-62.7-62.7z"/>
-                </svg>
-              </div>
-              <div class="network-info">
-                <div class="network-name-row">
-                  <span class="network-name">Solana</span>
-                  <span class="derivation-path">m/44'/501'/0'/0'</span>
-                </div>
-                <a href="#" id="wallet-sol-explorer" class="network-address-link" target="_blank" rel="noopener">
-                  <code id="wallet-sol-address">--</code>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                    <polyline points="15 3 21 3 21 9"/>
-                    <line x1="10" y1="14" x2="21" y2="3"/>
-                  </svg>
-                </a>
-                <div class="network-balance-row">
-                  <span class="balance-value" id="wallet-sol-balance">--</span>
-                  <span class="balance-unit">SOL</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- SUI -->
-            <div class="wallet-network-card" id="wallet-sui-card">
-              <div class="network-icon sui">
-                <svg width="24" height="24" viewBox="0 0 32 32" fill="currentColor">
-                  <path d="M21.63 10.26a8.3 8.3 0 0 0-1.45-1.65l-6.6 7.24a.84.84 0 0 1-1.26 0 .89.89 0 0 1 0-1.24l6.45-7.1a8.7 8.7 0 0 0-2.68-1.3 8.6 8.6 0 0 0-5.15.18l7.7 8.46a.89.89 0 0 1 0 1.24.84.84 0 0 1-1.26 0L9.7 8.64A8.6 8.6 0 0 0 7.4 11a8.4 8.4 0 0 0-1.15 6.92 8.5 8.5 0 0 0 4.28 5.5 8.6 8.6 0 0 0 6.94.5 8.5 8.5 0 0 0 5.08-4.72 8.4 8.4 0 0 0-.92-8.94z" fill="#4DA2FF"/>
-                  <path d="M16.09 2c-1.89 0-3.75.38-5.49 1.12a14.3 14.3 0 0 0-4.65 3.2 14.1 14.1 0 0 0-3.1 4.73A14 14 0 0 0 1.7 16.5c0 1.92.38 3.82 1.11 5.59a14.2 14.2 0 0 0 3.17 4.74 14.3 14.3 0 0 0 4.73 3.15 14.5 14.5 0 0 0 11.08-.04 14.3 14.3 0 0 0 4.69-3.2 14.1 14.1 0 0 0 3.1-4.73 14 14 0 0 0 1.12-5.49c0-7.77-6.38-14.52-14.61-14.52zm5.54 22.74a10.8 10.8 0 0 1-5.54 1.54c-5.93 0-10.73-4.8-10.73-10.76S10.16 4.74 16.09 4.74c5.93 0 10.73 4.82 10.73 10.78a10.7 10.7 0 0 1-5.19 9.22z" fill="#4DA2FF"/>
-                </svg>
-              </div>
-              <div class="network-info">
-                <div class="network-name-row">
-                  <span class="network-name">SUI</span>
-                  <span class="derivation-path">m/44'/784'/0'/0'/0'</span>
-                </div>
-                <a href="#" id="wallet-sui-explorer" class="network-address-link" target="_blank" rel="noopener">
-                  <code id="wallet-sui-address">--</code>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                    <polyline points="15 3 21 3 21 9"/>
-                    <line x1="10" y1="14" x2="21" y2="3"/>
-                  </svg>
-                </a>
-                <div class="network-balance-row">
-                  <span class="balance-value" id="wallet-sui-balance">--</span>
-                  <span class="balance-unit">SUI</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Monad -->
-            <div class="wallet-network-card" id="wallet-monad-card">
-              <div class="network-icon monad">
-                <svg width="24" height="24" viewBox="0 0 200 200" fill="none">
-                  <circle cx="100" cy="100" r="100" fill="#836EF9"/>
-                  <path d="M100 30c-38.66 0-70 31.34-70 70s31.34 70 70 70 70-31.34 70-70-31.34-70-70-70zm0 120c-27.61 0-50-22.39-50-50s22.39-50 50-50 50 22.39 50 50-22.39 50-50 50z" fill="white"/>
-                  <circle cx="100" cy="100" r="25" fill="white"/>
-                </svg>
-              </div>
-              <div class="network-info">
-                <div class="network-name-row">
-                  <span class="network-name">Monad</span>
-                  <span class="derivation-path">m/44'/60'/0'/0/0</span>
-                </div>
-                <a href="#" id="wallet-monad-explorer" class="network-address-link" target="_blank" rel="noopener">
-                  <code id="wallet-monad-address">--</code>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                    <polyline points="15 3 21 3 21 9"/>
-                    <line x1="10" y1="14" x2="21" y2="3"/>
-                  </svg>
-                </a>
-                <div class="network-balance-row">
-                  <span class="balance-value" id="wallet-monad-balance">--</span>
-                  <span class="balance-unit">MON</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Cardano -->
-            <div class="wallet-network-card" id="wallet-ada-card">
-              <div class="network-icon ada">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="12" cy="12" r="10"/>
-                  <circle cx="12" cy="12" r="3" fill="var(--black)"/>
-                </svg>
-              </div>
-              <div class="network-info">
-                <div class="network-name-row">
-                  <span class="network-name">Cardano</span>
-                  <span class="derivation-path">m/1852'/1815'/0'/0/0</span>
-                </div>
-                <a href="#" id="wallet-ada-explorer" class="network-address-link" target="_blank" rel="noopener">
-                  <code id="wallet-ada-address">--</code>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                    <polyline points="15 3 21 3 21 9"/>
-                    <line x1="10" y1="14" x2="21" y2="3"/>
-                  </svg>
-                </a>
-                <div class="network-balance-row">
-                  <span class="balance-value" id="wallet-ada-balance">--</span>
-                  <span class="balance-unit">ADA</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Trust Summary -->
-          <div class="trust-summary" id="trust-summary">
-            <div class="trust-meter">
-              <div class="trust-meter-label">
-                <span>Aggregate Security Bond</span>
-                <span class="trust-total" id="trust-total-value">$0.00</span>
-              </div>
-              <div class="trust-meter-bar">
-                <div class="trust-meter-fill" id="trust-meter-fill"></div>
-              </div>
-              <p class="trust-note" id="trust-note">Value at these addresses acts as collateral proving key security.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Keep old elements for backwards compatibility but hidden -->
-      <div style="display: none;">
-        <span id="alice-sui-address"></span>
-        <span id="alice-sui-balance"></span>
-        <a id="alice-sui-explorer"></a>
-        <span id="alice-monad-address"></span>
-        <span id="alice-monad-balance"></span>
-        <a id="alice-monad-explorer"></a>
-        <span id="bob-sui-address"></span>
-        <span id="bob-sui-balance"></span>
-        <a id="bob-sui-explorer"></a>
-        <span id="bob-monad-address"></span>
-        <span id="bob-monad-balance"></span>
-        <a id="bob-monad-explorer"></a>
-      </div>
-    </section>
-
     <!-- Field Encryption Section - Second, shows field-level detail -->
     <section id="fields-tab" class="content-section">
       <div class="section-header">
         <h2 class="section-title">Field-Level Encryption</h2>
-        <p class="section-desc">Generate FlatBuffer records and visualize individual field encryption using Alice/Bob keys</p>
+        <p class="section-desc">Select which fields to encrypt, generate a record, and visualize the encryption</p>
       </div>
 
       <div class="glass-card">
@@ -961,10 +570,28 @@
           <button id="toggle-field-decrypt" class="glass-btn" disabled>Decrypt</button>
         </div>
 
+        <!-- Field Selection -->
+        <div class="field-selection" id="field-selection">
+          <h3 class="card-subtitle">Select Fields to Encrypt</h3>
+          <p class="field-selection-desc">Check the fields you want to encrypt. Unselected fields will remain in plaintext.</p>
+          <div class="field-checkboxes" id="field-checkboxes">
+            <!-- Populated dynamically based on selected schema -->
+          </div>
+          <div class="field-selection-actions">
+            <button id="select-all-fields" class="glass-btn small">Select All</button>
+            <button id="select-none-fields" class="glass-btn small">Select None</button>
+          </div>
+        </div>
+
         <!-- FlatBuffer Header -->
         <div class="fb-header-display" id="fb-header" style="display: none;">
           <h3 class="card-subtitle">Binary Structure</h3>
           <div class="header-grid">
+            <div class="header-cell">
+              <span class="header-label">Size Prefix</span>
+              <code class="header-hex" id="size-prefix-hex">--</code>
+              <span class="header-value" id="size-prefix-val">--</span>
+            </div>
             <div class="header-cell">
               <span class="header-label">Root Offset</span>
               <code class="header-hex" id="root-offset-hex">--</code>
@@ -995,10 +622,11 @@
               <tr>
                 <th>Field</th>
                 <th>Type</th>
+                <th>Value</th>
                 <th>Offset</th>
-                <th>Encrypted</th>
-                <th class="decrypt-col">Decrypted</th>
-                <th class="decrypt-col">Value</th>
+                <th>Hex</th>
+                <th class="decrypt-col">Decrypted Hex</th>
+                <th class="decrypt-col">Decrypted Value</th>
               </tr>
             </thead>
             <tbody id="field-body"></tbody>
@@ -1007,16 +635,6 @@
       </div>
     </section>
 
-    <!-- Identity Section (vCard generator moved to Account modal) -->
-    <section id="identity-tab" class="content-section">
-      <div class="section-header">
-        <h2 class="section-title">Cryptographic Identity</h2>
-        <p class="section-desc">Generate a vCard with your public keys for secure sharing</p>
-      </div>
-      <div class="glass-card">
-        <p>Your cryptographic identity and vCard generator are available in the <strong>Account</strong> modal. Click the user icon in the top navigation bar to access your keys and generate vCards.</p>
-      </div>
-    </section>
 
     <!-- Schema Viewer Section -->
     <section id="schema-tab" class="content-section">
@@ -2623,6 +2241,408 @@ class EphemerisReader {
             </div>
             <code class="install-cmd">npm install flatc-wasm</code>
           </div>
+        </div>
+      </div>
+
+      <!-- Streaming API Examples -->
+      <div class="glass-card">
+        <h3 class="card-subtitle">Streaming API Examples</h3>
+        <p class="card-desc">FlatBuffers supports streaming multiple messages in a single buffer. Here's how to read them in each language:</p>
+
+        <div class="streaming-examples">
+          <!-- TypeScript/JavaScript -->
+          <div class="streaming-example">
+            <div class="streaming-lang-header">
+              <span class="lang-badge ts">TypeScript / JavaScript</span>
+            </div>
+            <pre class="code-block"><code>import { ByteBuffer } from 'flatbuffers';
+import { Monster } from './monster_generated';
+
+// Assume `buffer` contains multiple size-prefixed FlatBuffer messages
+const data = new Uint8Array(buffer);
+const messages: Monster[] = [];
+let offset = 0;
+
+// Read entire buffer of messages
+while (offset &lt; data.length) {
+  const size = new DataView(data.buffer, offset).getUint32(0, true);
+  const bb = new ByteBuffer(data.slice(offset + 4, offset + 4 + size));
+  messages.push(Monster.getRootAsMonster(bb));
+  offset += 4 + size;
+}
+
+// Read latest message (last in buffer)
+function getLatestMessage(data: Uint8Array): Monster {
+  let offset = 0;
+  let lastOffset = 0;
+  while (offset &lt; data.length) {
+    lastOffset = offset;
+    const size = new DataView(data.buffer, offset).getUint32(0, true);
+    offset += 4 + size;
+  }
+  const size = new DataView(data.buffer, lastOffset).getUint32(0, true);
+  const bb = new ByteBuffer(data.slice(lastOffset + 4, lastOffset + 4 + size));
+  return Monster.getRootAsMonster(bb);
+}
+
+// Read arbitrary indexed message
+function getMessageAtIndex(data: Uint8Array, index: number): Monster | null {
+  let offset = 0;
+  let currentIndex = 0;
+  while (offset &lt; data.length) {
+    const size = new DataView(data.buffer, offset).getUint32(0, true);
+    if (currentIndex === index) {
+      const bb = new ByteBuffer(data.slice(offset + 4, offset + 4 + size));
+      return Monster.getRootAsMonster(bb);
+    }
+    offset += 4 + size;
+    currentIndex++;
+  }
+  return null;
+}</code></pre>
+          </div>
+
+          <!-- Go -->
+          <div class="streaming-example">
+            <div class="streaming-lang-header">
+              <span class="lang-badge go">Go</span>
+            </div>
+            <pre class="code-block"><code>import (
+    "encoding/binary"
+    flatbuffers "github.com/google/flatbuffers/go"
+    "myapp/Monster"
+)
+
+// Read entire buffer of messages
+func ReadAllMessages(data []byte) []*Monster.Monster {
+    var messages []*Monster.Monster
+    offset := 0
+    for offset &lt; len(data) {
+        size := binary.LittleEndian.Uint32(data[offset:])
+        msg := Monster.GetRootAsMonster(data[offset+4:offset+4+int(size)], 0)
+        messages = append(messages, msg)
+        offset += 4 + int(size)
+    }
+    return messages
+}
+
+// Read latest message
+func GetLatestMessage(data []byte) *Monster.Monster {
+    offset := 0
+    lastOffset := 0
+    for offset &lt; len(data) {
+        lastOffset = offset
+        size := binary.LittleEndian.Uint32(data[offset:])
+        offset += 4 + int(size)
+    }
+    size := binary.LittleEndian.Uint32(data[lastOffset:])
+    return Monster.GetRootAsMonster(data[lastOffset+4:lastOffset+4+int(size)], 0)
+}
+
+// Read arbitrary indexed message
+func GetMessageAtIndex(data []byte, index int) *Monster.Monster {
+    offset := 0
+    currentIndex := 0
+    for offset &lt; len(data) {
+        size := binary.LittleEndian.Uint32(data[offset:])
+        if currentIndex == index {
+            return Monster.GetRootAsMonster(data[offset+4:offset+4+int(size)], 0)
+        }
+        offset += 4 + int(size)
+        currentIndex++
+    }
+    return nil
+}</code></pre>
+          </div>
+
+          <!-- Python -->
+          <div class="streaming-example">
+            <div class="streaming-lang-header">
+              <span class="lang-badge py">Python</span>
+            </div>
+            <pre class="code-block"><code>import struct
+from Monster import Monster
+
+def read_all_messages(data: bytes) -> list:
+    """Read entire buffer of messages."""
+    messages = []
+    offset = 0
+    while offset &lt; len(data):
+        size = struct.unpack('&lt;I', data[offset:offset+4])[0]
+        msg = Monster.Monster.GetRootAs(data[offset+4:offset+4+size], 0)
+        messages.append(msg)
+        offset += 4 + size
+    return messages
+
+def get_latest_message(data: bytes):
+    """Read the latest (last) message in the buffer."""
+    offset = 0
+    last_offset = 0
+    while offset &lt; len(data):
+        last_offset = offset
+        size = struct.unpack('&lt;I', data[offset:offset+4])[0]
+        offset += 4 + size
+    size = struct.unpack('&lt;I', data[last_offset:last_offset+4])[0]
+    return Monster.Monster.GetRootAs(data[last_offset+4:last_offset+4+size], 0)
+
+def get_message_at_index(data: bytes, index: int):
+    """Read arbitrary indexed message."""
+    offset = 0
+    current_index = 0
+    while offset &lt; len(data):
+        size = struct.unpack('&lt;I', data[offset:offset+4])[0]
+        if current_index == index:
+            return Monster.Monster.GetRootAs(data[offset+4:offset+4+size], 0)
+        offset += 4 + size
+        current_index += 1
+    return None</code></pre>
+          </div>
+
+          <!-- Rust -->
+          <div class="streaming-example">
+            <div class="streaming-lang-header">
+              <span class="lang-badge rs">Rust</span>
+            </div>
+            <pre class="code-block"><code>use flatbuffers;
+use crate::monster_generated::Monster;
+
+/// Read entire buffer of messages
+fn read_all_messages(data: &amp;[u8]) -&gt; Vec&lt;Monster&gt; {
+    let mut messages = Vec::new();
+    let mut offset = 0;
+    while offset &lt; data.len() {
+        let size = u32::from_le_bytes(data[offset..offset+4].try_into().unwrap()) as usize;
+        let msg = flatbuffers::root::&lt;Monster&gt;(&amp;data[offset+4..offset+4+size]).unwrap();
+        messages.push(msg);
+        offset += 4 + size;
+    }
+    messages
+}
+
+/// Read latest message
+fn get_latest_message(data: &amp;[u8]) -&gt; Option&lt;Monster&gt; {
+    let mut offset = 0;
+    let mut last_offset = 0;
+    while offset &lt; data.len() {
+        last_offset = offset;
+        let size = u32::from_le_bytes(data[offset..offset+4].try_into().unwrap()) as usize;
+        offset += 4 + size;
+    }
+    let size = u32::from_le_bytes(data[last_offset..last_offset+4].try_into().unwrap()) as usize;
+    flatbuffers::root::&lt;Monster&gt;(&amp;data[last_offset+4..last_offset+4+size]).ok()
+}
+
+/// Read arbitrary indexed message
+fn get_message_at_index(data: &amp;[u8], index: usize) -&gt; Option&lt;Monster&gt; {
+    let mut offset = 0;
+    let mut current_index = 0;
+    while offset &lt; data.len() {
+        let size = u32::from_le_bytes(data[offset..offset+4].try_into().unwrap()) as usize;
+        if current_index == index {
+            return flatbuffers::root::&lt;Monster&gt;(&amp;data[offset+4..offset+4+size]).ok();
+        }
+        offset += 4 + size;
+        current_index += 1;
+    }
+    None
+}</code></pre>
+          </div>
+
+          <!-- Java -->
+          <div class="streaming-example">
+            <div class="streaming-lang-header">
+              <span class="lang-badge java">Java</span>
+            </div>
+            <pre class="code-block"><code>import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.List;
+import Monster;
+
+public class StreamingReader {
+    // Read entire buffer of messages
+    public static List&lt;Monster&gt; readAllMessages(byte[] data) {
+        List&lt;Monster&gt; messages = new ArrayList&lt;&gt;();
+        int offset = 0;
+        while (offset &lt; data.length) {
+            int size = ByteBuffer.wrap(data, offset, 4)
+                .order(ByteOrder.LITTLE_ENDIAN).getInt();
+            ByteBuffer bb = ByteBuffer.wrap(data, offset + 4, size);
+            messages.add(Monster.getRootAsMonster(bb));
+            offset += 4 + size;
+        }
+        return messages;
+    }
+
+    // Read latest message
+    public static Monster getLatestMessage(byte[] data) {
+        int offset = 0;
+        int lastOffset = 0;
+        while (offset &lt; data.length) {
+            lastOffset = offset;
+            int size = ByteBuffer.wrap(data, offset, 4)
+                .order(ByteOrder.LITTLE_ENDIAN).getInt();
+            offset += 4 + size;
+        }
+        int size = ByteBuffer.wrap(data, lastOffset, 4)
+            .order(ByteOrder.LITTLE_ENDIAN).getInt();
+        ByteBuffer bb = ByteBuffer.wrap(data, lastOffset + 4, size);
+        return Monster.getRootAsMonster(bb);
+    }
+
+    // Read arbitrary indexed message
+    public static Monster getMessageAtIndex(byte[] data, int index) {
+        int offset = 0;
+        int currentIndex = 0;
+        while (offset &lt; data.length) {
+            int size = ByteBuffer.wrap(data, offset, 4)
+                .order(ByteOrder.LITTLE_ENDIAN).getInt();
+            if (currentIndex == index) {
+                ByteBuffer bb = ByteBuffer.wrap(data, offset + 4, size);
+                return Monster.getRootAsMonster(bb);
+            }
+            offset += 4 + size;
+            currentIndex++;
+        }
+        return null;
+    }
+}</code></pre>
+          </div>
+
+          <!-- C# -->
+          <div class="streaming-example">
+            <div class="streaming-lang-header">
+              <span class="lang-badge cs">C#</span>
+            </div>
+            <pre class="code-block"><code>using FlatBuffers;
+using System;
+using System.Collections.Generic;
+
+public static class StreamingReader
+{
+    // Read entire buffer of messages
+    public static List&lt;Monster&gt; ReadAllMessages(byte[] data)
+    {
+        var messages = new List&lt;Monster&gt;();
+        int offset = 0;
+        while (offset &lt; data.Length)
+        {
+            int size = BitConverter.ToInt32(data, offset);
+            var bb = new ByteBuffer(data, offset + 4);
+            messages.Add(Monster.GetRootAsMonster(bb));
+            offset += 4 + size;
+        }
+        return messages;
+    }
+
+    // Read latest message
+    public static Monster GetLatestMessage(byte[] data)
+    {
+        int offset = 0;
+        int lastOffset = 0;
+        while (offset &lt; data.Length)
+        {
+            lastOffset = offset;
+            int size = BitConverter.ToInt32(data, offset);
+            offset += 4 + size;
+        }
+        int lastSize = BitConverter.ToInt32(data, lastOffset);
+        var bb = new ByteBuffer(data, lastOffset + 4);
+        return Monster.GetRootAsMonster(bb);
+    }
+
+    // Read arbitrary indexed message
+    public static Monster? GetMessageAtIndex(byte[] data, int index)
+    {
+        int offset = 0;
+        int currentIndex = 0;
+        while (offset &lt; data.Length)
+        {
+            int size = BitConverter.ToInt32(data, offset);
+            if (currentIndex == index)
+            {
+                var bb = new ByteBuffer(data, offset + 4);
+                return Monster.GetRootAsMonster(bb);
+            }
+            offset += 4 + size;
+            currentIndex++;
+        }
+        return null;
+    }
+}</code></pre>
+          </div>
+
+          <!-- Swift -->
+          <div class="streaming-example">
+            <div class="streaming-lang-header">
+              <span class="lang-badge swift">Swift</span>
+            </div>
+            <pre class="code-block"><code>import FlatBuffers
+
+class StreamingReader {
+    // Read entire buffer of messages
+    static func readAllMessages(data: Data) -&gt; [Monster] {
+        var messages: [Monster] = []
+        var offset = 0
+        while offset &lt; data.count {
+            let size = data.withUnsafeBytes { ptr in
+                ptr.load(fromByteOffset: offset, as: UInt32.self).littleEndian
+            }
+            let slice = data[offset+4..&lt;offset+4+Int(size)]
+            var bb = ByteBuffer(data: slice)
+            messages.append(Monster.getRootAsMonster(bb: &amp;bb))
+            offset += 4 + Int(size)
+        }
+        return messages
+    }
+
+    // Read latest message
+    static func getLatestMessage(data: Data) -&gt; Monster? {
+        var offset = 0
+        var lastOffset = 0
+        while offset &lt; data.count {
+            lastOffset = offset
+            let size = data.withUnsafeBytes { ptr in
+                ptr.load(fromByteOffset: offset, as: UInt32.self).littleEndian
+            }
+            offset += 4 + Int(size)
+        }
+        let size = data.withUnsafeBytes { ptr in
+            ptr.load(fromByteOffset: lastOffset, as: UInt32.self).littleEndian
+        }
+        let slice = data[lastOffset+4..&lt;lastOffset+4+Int(size)]
+        var bb = ByteBuffer(data: slice)
+        return Monster.getRootAsMonster(bb: &amp;bb)
+    }
+
+    // Read arbitrary indexed message
+    static func getMessageAtIndex(data: Data, index: Int) -&gt; Monster? {
+        var offset = 0
+        var currentIndex = 0
+        while offset &lt; data.count {
+            let size = data.withUnsafeBytes { ptr in
+                ptr.load(fromByteOffset: offset, as: UInt32.self).littleEndian
+            }
+            if currentIndex == index {
+                let slice = data[offset+4..&lt;offset+4+Int(size)]
+                var bb = ByteBuffer(data: slice)
+                return Monster.getRootAsMonster(bb: &amp;bb)
+            }
+            offset += 4 + Int(size)
+            currentIndex += 1
+        }
+        return nil
+    }
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="compliance-note" style="margin-top: 1rem;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+          <span><strong>Size-Prefixed Format:</strong> Each message is prefixed with a 4-byte little-endian size. Use <code>FinishSizePrefixed</code> when building to create streamable buffers.</span>
         </div>
       </div>
 

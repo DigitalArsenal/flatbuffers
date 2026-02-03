@@ -40,6 +40,8 @@ export const FieldTypes = {
   double: { size: 8, read: (view, offset) => view.getFloat64(offset, true) },
   // Offsets (for strings, vectors, tables)
   offset: { size: 4, read: (view, offset) => view.getUint32(offset, true) },
+  // Structs - size varies, default to 12 (Vec3)
+  struct: { size: 12, read: (view, offset) => view.getUint32(offset, true) },
 };
 
 /**
@@ -59,6 +61,11 @@ export class FlatBufferParser {
    * @returns {{ rootOffset: number, rootOffsetHex: string, fileId: string|null, fileIdHex: string, headerBytes: Uint8Array }}
    */
   parseHeader() {
+    // Bounds check - need at least 4 bytes for root offset
+    if (this.buffer.length < 4) {
+      throw new Error(`Buffer too small for FlatBuffer header (length ${this.buffer.length})`);
+    }
+
     const rootOffset = this.view.getUint32(0, true);
 
     // File identifier is at bytes 4-7 (after root offset)
@@ -91,9 +98,19 @@ export class FlatBufferParser {
    * @returns {{ vtablePos: number, vtableSize: number, tableSize: number, fieldOffsets: number[], vtableBytes: Uint8Array }}
    */
   parseVTable(tablePos) {
+    // Bounds check
+    if (tablePos + 4 > this.buffer.length) {
+      throw new Error(`Table position ${tablePos} is outside buffer (length ${this.buffer.length})`);
+    }
+
     // Read the signed offset to the vtable (negative, pointing backward)
     const vtableOffset = this.view.getInt32(tablePos, true);
     const vtablePos = tablePos - vtableOffset;
+
+    // Bounds check for vtable
+    if (vtablePos < 0 || vtablePos + 4 > this.buffer.length) {
+      throw new Error(`VTable position ${vtablePos} is outside buffer (length ${this.buffer.length})`);
+    }
 
     // VTable structure:
     // [0-1]: vtable size (uint16)
@@ -101,6 +118,11 @@ export class FlatBufferParser {
     // [4+]:  field offsets (uint16 each)
     const vtableSize = this.view.getUint16(vtablePos, true);
     const tableSize = this.view.getUint16(vtablePos + 2, true);
+
+    // Bounds check for full vtable
+    if (vtablePos + vtableSize > this.buffer.length) {
+      throw new Error(`VTable extends beyond buffer (vtable at ${vtablePos}, size ${vtableSize}, buffer length ${this.buffer.length})`);
+    }
 
     // Calculate number of fields from vtable size
     const fieldCount = (vtableSize - 4) / 2;
@@ -130,6 +152,8 @@ export class FlatBufferParser {
   extractFieldBytes(tablePos, fieldOffset, fieldSize) {
     if (fieldOffset === 0) return null;
     const start = tablePos + fieldOffset;
+    // Bounds check
+    if (start + fieldSize > this.buffer.length) return null;
     return this.buffer.slice(start, start + fieldSize);
   }
 
@@ -144,11 +168,21 @@ export class FlatBufferParser {
 
     // Field contains offset to string
     const stringOffsetPos = tablePos + fieldOffset;
+    // Bounds check
+    if (stringOffsetPos + 4 > this.buffer.length) return null;
+
     const stringOffset = this.view.getUint32(stringOffsetPos, true);
     const stringStart = stringOffsetPos + stringOffset;
 
+    // Bounds check for string length
+    if (stringStart + 4 > this.buffer.length) return null;
+
     // String structure: [length:uint32][chars...][null]
     const length = this.view.getUint32(stringStart, true);
+
+    // Bounds check for string data
+    if (stringStart + 4 + length > this.buffer.length) return null;
+
     const stringBytes = this.buffer.slice(stringStart + 4, stringStart + 4 + length);
     const value = new TextDecoder().decode(stringBytes);
 
@@ -165,24 +199,63 @@ export class FlatBufferParser {
    * @param {number} tablePos - Table position
    * @param {number} fieldOffset - Field offset from vtable
    * @param {string} elementType - Type of vector elements
+   * @param {number} [elementSize] - Optional element size override (for structs)
    * @returns {{ length: number, elements: any[], bytes: Uint8Array, offset: number }|null}
    */
-  readVector(tablePos, fieldOffset, elementType) {
+  readVector(tablePos, fieldOffset, elementType, elementSize) {
     if (fieldOffset === 0) return null;
 
     const vectorOffsetPos = tablePos + fieldOffset;
+
+    // Bounds check
+    if (vectorOffsetPos + 4 > this.buffer.length) return null;
+
     const vectorOffset = this.view.getUint32(vectorOffsetPos, true);
     const vectorStart = vectorOffsetPos + vectorOffset;
 
+    // Bounds check for vector length
+    if (vectorStart + 4 > this.buffer.length) return null;
+
     // Vector structure: [length:uint32][elements...]
     const length = this.view.getUint32(vectorStart, true);
-    const typeInfo = FieldTypes[elementType] || FieldTypes.ubyte;
+    // Use provided elementSize for structs, otherwise lookup in FieldTypes
+    const baseTypeInfo = FieldTypes[elementType] || FieldTypes.ubyte;
+    const typeInfo = elementSize
+      ? { size: elementSize, read: baseTypeInfo.read }
+      : baseTypeInfo;
     const elementsStart = vectorStart + 4;
     const totalSize = length * typeInfo.size;
 
+    // Sanity check - if length seems unreasonable (> 10000 or extends past buffer), return empty
+    if (length > 10000 || elementsStart + totalSize > this.buffer.length) {
+      return {
+        length: 0,
+        elements: [],
+        bytes: this.buffer.slice(vectorStart, Math.min(vectorStart + 4, this.buffer.length)),
+        elementBytes: new Uint8Array(0),
+        offset: vectorStart,
+      };
+    }
+
+    // Bounds check for elements
+    if (elementsStart + totalSize > this.buffer.length) {
+      // Return only the valid portion
+      const validSize = this.buffer.length - elementsStart;
+      return {
+        length,
+        elements: [],
+        bytes: this.buffer.slice(vectorStart, vectorStart + 4 + validSize),
+        elementBytes: this.buffer.slice(elementsStart, elementsStart + validSize),
+        offset: vectorStart,
+      };
+    }
+
     const elements = [];
     for (let i = 0; i < length; i++) {
-      elements.push(typeInfo.read(this.view, elementsStart + i * typeInfo.size));
+      const elemOffset = elementsStart + i * typeInfo.size;
+      if (elemOffset + typeInfo.size <= this.buffer.length) {
+        elements.push(typeInfo.read(this.view, elemOffset));
+      }
     }
 
     return {
@@ -205,10 +278,56 @@ export class FlatBufferParser {
     if (fieldOffset === 0) return null;
 
     const structStart = tablePos + fieldOffset;
+    // Bounds check
+    if (structStart + structSize > this.buffer.length) return null;
+
     return {
       bytes: this.buffer.slice(structStart, structStart + structSize),
       offset: structStart,
     };
+  }
+
+  /**
+   * Read a nested table from the buffer given an absolute position
+   * @param {number} tablePos - Absolute position of the nested table
+   * @param {Array} tableSchema - Schema fields for the nested table
+   * @returns {Object|null} Parsed table with field values
+   */
+  readNestedTable(tablePos, tableSchema) {
+    // Bounds check
+    if (tablePos + 4 > this.buffer.length) return null;
+
+    try {
+      const vtable = this.parseVTable(tablePos);
+      const result = {};
+
+      for (let i = 0; i < tableSchema.length; i++) {
+        const fieldDef = tableSchema[i];
+        const fieldOffset = vtable.fieldOffsets[i] || 0;
+
+        if (fieldOffset === 0) {
+          result[fieldDef.name] = fieldDef.defaultValue ?? null;
+          continue;
+        }
+
+        if (fieldDef.type === 'string') {
+          const stringData = this.readString(tablePos, fieldOffset);
+          result[fieldDef.name] = stringData ? stringData.value : null;
+        } else {
+          const typeInfo = FieldTypes[fieldDef.type];
+          if (typeInfo) {
+            const bytes = this.extractFieldBytes(tablePos, fieldOffset, typeInfo.size);
+            if (bytes) {
+              result[fieldDef.name] = this.interpretValue(bytes, fieldDef.type);
+            }
+          }
+        }
+      }
+
+      return result;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -286,11 +405,40 @@ export function parseWithSchema(parser, schema) {
           absoluteOffset = stringData.offset;
         }
       } else if (fieldDef.isVector) {
-        const vectorData = parser.readVector(tablePos, fieldOffset, fieldDef.elementType || 'ubyte');
+        const vectorData = parser.readVector(tablePos, fieldOffset, fieldDef.elementType || 'ubyte', fieldDef.elementSize);
         if (vectorData) {
           bytes = vectorData.elementBytes;
           value = vectorData.elements;
           absoluteOffset = vectorData.offset;
+          // For struct vectors, parse each struct
+          if (fieldDef.elementType === 'struct' && fieldDef.structFields && vectorData.length > 0) {
+            const parsedStructs = [];
+            const elemSize = fieldDef.elementSize || 12;
+            for (let j = 0; j < vectorData.length; j++) {
+              const structBytes = bytes.slice(j * elemSize, (j + 1) * elemSize);
+              if (structBytes.length === elemSize) {
+                parsedStructs.push(parseStructBytes(structBytes, fieldDef.structFields));
+              }
+            }
+            value = parsedStructs;
+          }
+          // For table vectors (offset elements), dereference and parse each nested table
+          else if (fieldDef.elementType === 'offset' && fieldDef.tableSchema && vectorData.length > 0) {
+            const parsedTables = [];
+            const elementsStart = vectorData.offset + 4; // Skip length field
+            for (let j = 0; j < vectorData.length; j++) {
+              const offsetPos = elementsStart + j * 4;
+              const relativeOffset = vectorData.elements[j];
+              if (relativeOffset) {
+                const tableAbsPos = offsetPos + relativeOffset;
+                const parsed = parser.readNestedTable(tableAbsPos, fieldDef.tableSchema);
+                if (parsed) {
+                  parsedTables.push(parsed);
+                }
+              }
+            }
+            value = parsedTables;
+          }
         }
       } else if (fieldDef.isStruct) {
         const structData = parser.readStruct(tablePos, fieldOffset, fieldDef.structSize);
@@ -365,9 +513,16 @@ export const Schemas = {
       { name: 'friendly', type: 'bool', defaultValue: false },
       { name: 'inventory', type: 'vector', isVector: true, elementType: 'ubyte' },
       { name: 'color', type: 'byte', defaultValue: 2 }, // Blue = 2
-      { name: 'weapons', type: 'vector', isVector: true, elementType: 'offset' },
+      { name: 'weapons', type: 'vector', isVector: true, elementType: 'offset', tableSchema: [
+        { name: 'name', type: 'string' },
+        { name: 'damage', type: 'short' },
+      ]},
       { name: 'equipped', type: 'union' },
-      { name: 'path', type: 'vector', isVector: true, elementType: 'struct' },
+      { name: 'path', type: 'vector', isVector: true, elementType: 'struct', elementSize: 12, structFields: [
+        { name: 'x', type: 'float', offset: 0 },
+        { name: 'y', type: 'float', offset: 4 },
+        { name: 'z', type: 'float', offset: 8 },
+      ]},
     ],
   },
 

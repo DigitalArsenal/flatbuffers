@@ -240,10 +240,35 @@ export declare const KeyExchangeAlgorithm: Readonly<{
 // Encryption — Module Loading & Info
 // =============================================================================
 
+/**
+ * Load the encryption WASM module. Called automatically on first use,
+ * but can be called explicitly to pre-warm the module.
+ * @returns Promise that resolves when the module is loaded.
+ */
 export declare function loadEncryptionWasm(): Promise<void>;
+
+/**
+ * Check if the encryption WASM module is initialized.
+ * @returns true if the module is ready for use.
+ */
 export declare function isInitialized(): boolean;
+
+/**
+ * Get any initialization error that occurred during module loading.
+ * @returns The error, or null if initialization succeeded.
+ */
 export declare function getInitError(): Error | null;
+
+/**
+ * Check if Crypto++ is available (WASM encryption module).
+ * @returns true if Crypto++ WASM is loaded.
+ */
 export declare function hasCryptopp(): boolean;
+
+/**
+ * Get the version string of the encryption module.
+ * @returns Version string.
+ */
 export declare function getVersion(): string;
 
 // =============================================================================
@@ -257,9 +282,38 @@ export declare function clearAllIVTracking(): void;
 // Encryption — Hashing & KDF
 // =============================================================================
 
+/**
+ * Compute SHA-256 hash of data.
+ * @param data - Input data to hash.
+ * @returns 32-byte hash.
+ */
 export declare function sha256(data: Uint8Array): Uint8Array;
+
+/**
+ * Derive a key using HKDF-SHA256 (RFC 5869).
+ * @param ikm - Input key material.
+ * @param salt - Optional salt (null for no salt).
+ * @param info - Optional context info (null for no info).
+ * @param length - Desired output length in bytes.
+ * @returns Derived key of the specified length.
+ */
 export declare function hkdf(ikm: Uint8Array, salt: Uint8Array | null, info: Uint8Array | null, length: number): Uint8Array;
+
+/**
+ * Compute HMAC-SHA256 message authentication code.
+ * @param key - HMAC key.
+ * @param data - Data to authenticate.
+ * @returns 32-byte MAC.
+ */
 export declare function hmacSha256(key: Uint8Array, data: Uint8Array): Uint8Array;
+
+/**
+ * Verify HMAC-SHA256 in constant time.
+ * @param key - HMAC key.
+ * @param data - Data that was authenticated.
+ * @param mac - MAC to verify.
+ * @returns true if MAC is valid.
+ */
 export declare function hmacSha256Verify(key: Uint8Array, data: Uint8Array, mac: Uint8Array): boolean;
 
 // =============================================================================
@@ -276,13 +330,35 @@ export declare function decryptBytesCopy(ciphertext: Uint8Array, key: Uint8Array
 // Encryption — X25519
 // =============================================================================
 
+/** Key pair with private and public keys. */
 export interface KeyPair {
+  /** Private key bytes. */
   privateKey: Uint8Array;
+  /** Public key bytes. */
   publicKey: Uint8Array;
 }
 
+/**
+ * Generate an X25519 key pair for ECDH key exchange.
+ * @param existingPrivateKey - Optional existing private key (32 bytes).
+ * @returns Key pair with 32-byte private and public keys.
+ */
 export declare function x25519GenerateKeyPair(existingPrivateKey?: Uint8Array): KeyPair;
+
+/**
+ * Compute X25519 shared secret for ECDH key agreement.
+ * @param privateKey - Own private key (32 bytes).
+ * @param publicKey - Peer's public key (32 bytes).
+ * @returns 32-byte shared secret.
+ */
 export declare function x25519SharedSecret(privateKey: Uint8Array, publicKey: Uint8Array): Uint8Array;
+
+/**
+ * Derive an encryption key from X25519 shared secret using HKDF.
+ * @param sharedSecret - Shared secret from x25519SharedSecret.
+ * @param context - Optional context string for domain separation.
+ * @returns 32-byte derived key suitable for AES-256.
+ */
 export declare function x25519DeriveKey(sharedSecret: Uint8Array, context?: string | Uint8Array): Uint8Array;
 
 // =============================================================================
@@ -296,23 +372,90 @@ export declare function secp256k1Sign(privateKey: Uint8Array, data: Uint8Array):
 export declare function secp256k1Verify(publicKey: Uint8Array, data: Uint8Array, signature: Uint8Array): boolean;
 
 // =============================================================================
-// Encryption — P-256
+// Encryption — P-256 (NIST secp256r1) — Async via Web Crypto API
 // =============================================================================
 
+/**
+ * Generate a P-256 key pair for ECDH/ECDSA. Uses Web Crypto API (async).
+ * @returns Promise resolving to key pair (privateKey: PKCS8, publicKey: raw 65 bytes).
+ */
 export declare function p256GenerateKeyPairAsync(): Promise<KeyPair>;
+
+/**
+ * Compute P-256 shared secret. Uses Web Crypto API (async).
+ * @param privateKeyPkcs8 - Private key in PKCS8 format.
+ * @param publicKeyRaw - Public key in raw format (65 bytes uncompressed).
+ * @returns Promise resolving to 32-byte shared secret.
+ */
 export declare function p256SharedSecretAsync(privateKeyPkcs8: Uint8Array, publicKeyRaw: Uint8Array): Promise<Uint8Array>;
+
+/**
+ * Derive encryption key from P-256 shared secret using HKDF. Synchronous.
+ * @param sharedSecret - Shared secret from p256SharedSecretAsync.
+ * @param context - Optional context string for domain separation.
+ * @returns 32-byte derived key.
+ */
 export declare function p256DeriveKey(sharedSecret: Uint8Array, context?: string | Uint8Array): Uint8Array;
+
+/**
+ * Sign data with P-256 ECDSA (SHA-256). Uses Web Crypto API (async).
+ * @param privateKeyPkcs8 - Private key in PKCS8 format.
+ * @param data - Data to sign.
+ * @returns Promise resolving to signature bytes.
+ */
 export declare function p256SignAsync(privateKeyPkcs8: Uint8Array, data: Uint8Array): Promise<Uint8Array>;
+
+/**
+ * Verify P-256 ECDSA signature. Uses Web Crypto API (async).
+ * @param publicKeyRaw - Public key in raw format (65 bytes).
+ * @param data - Original data that was signed.
+ * @param signature - Signature to verify.
+ * @returns Promise resolving to true if valid.
+ */
 export declare function p256VerifyAsync(publicKeyRaw: Uint8Array, data: Uint8Array, signature: Uint8Array): Promise<boolean>;
 
 // =============================================================================
-// Encryption — P-384
+// Encryption — P-384 (NIST secp384r1) — Async via Web Crypto API
 // =============================================================================
 
+/**
+ * Generate a P-384 key pair for ECDH/ECDSA. Uses Web Crypto API (async).
+ * Provides 192-bit security level.
+ * @returns Promise resolving to key pair (privateKey: PKCS8, publicKey: raw 97 bytes).
+ */
 export declare function p384GenerateKeyPairAsync(): Promise<KeyPair>;
+
+/**
+ * Compute P-384 shared secret. Uses Web Crypto API (async).
+ * @param privateKeyPkcs8 - Private key in PKCS8 format.
+ * @param publicKeyRaw - Public key in raw format (97 bytes uncompressed).
+ * @returns Promise resolving to 48-byte shared secret.
+ */
 export declare function p384SharedSecretAsync(privateKeyPkcs8: Uint8Array, publicKeyRaw: Uint8Array): Promise<Uint8Array>;
+
+/**
+ * Derive encryption key from P-384 shared secret using HKDF. Synchronous.
+ * @param sharedSecret - Shared secret from p384SharedSecretAsync.
+ * @param context - Optional context string for domain separation.
+ * @returns 32-byte derived key.
+ */
 export declare function p384DeriveKey(sharedSecret: Uint8Array, context?: string | Uint8Array): Uint8Array;
+
+/**
+ * Sign data with P-384 ECDSA (SHA-384). Uses Web Crypto API (async).
+ * @param privateKeyPkcs8 - Private key in PKCS8 format.
+ * @param data - Data to sign.
+ * @returns Promise resolving to signature bytes.
+ */
 export declare function p384SignAsync(privateKeyPkcs8: Uint8Array, data: Uint8Array): Promise<Uint8Array>;
+
+/**
+ * Verify P-384 ECDSA signature. Uses Web Crypto API (async).
+ * @param publicKeyRaw - Public key in raw format (97 bytes).
+ * @param data - Original data that was signed.
+ * @param signature - Signature to verify.
+ * @returns Promise resolving to true if valid.
+ */
 export declare function p384VerifyAsync(publicKeyRaw: Uint8Array, data: Uint8Array, signature: Uint8Array): Promise<boolean>;
 
 // =============================================================================

@@ -45,6 +45,27 @@ npm install flatc-wasm
 
 ---
 
+## Requirements
+
+| Platform | Minimum Version |
+|----------|-----------------|
+| Node.js | 18.0.0 or higher |
+| Chrome | 57+ |
+| Firefox | 52+ |
+| Safari | 11+ |
+| Edge | 79+ |
+
+**Dependencies:**
+- No native dependencies required (self-contained WASM)
+- Optional: `hd-wallet-wasm` (included) for HD key derivation
+
+**For building from source:**
+- Emscripten SDK (emsdk)
+- CMake 3.16+
+- Python 3.8+
+
+---
+
 ## Table of Contents
 
 - [Quick Start](#quick-start)

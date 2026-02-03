@@ -42,6 +42,106 @@ export async function initAlignedCodegen() {
 const ALIGNED_LANGUAGE_ID = 13;
 
 /**
+ * Parse a FlatBuffers schema and extract struct/table/enum definitions.
+ * This is a JavaScript-based parser for extracting schema structure info.
+ * @param {string} schemaContent - The .fbs schema content
+ * @param {Object} [options={}] - Parse options (reserved for future use)
+ * @returns {{ namespace: string|null, structs: Array, tables: Array, enums: Array }}
+ */
+export function parseSchema(schemaContent, options = {}) {
+  const result = {
+    namespace: null,
+    structs: [],
+    tables: [],
+    enums: [],
+  };
+
+  // Extract namespace
+  const namespaceMatch = schemaContent.match(/namespace\s+([\w.]+)\s*;/);
+  if (namespaceMatch) {
+    result.namespace = namespaceMatch[1];
+  }
+
+  // Extract enums
+  const enumRegex = /enum\s+(\w+)\s*:\s*(\w+)\s*\{([^}]*)\}/g;
+  let match;
+  while ((match = enumRegex.exec(schemaContent)) !== null) {
+    const [, name, baseType, body] = match;
+    const values = [];
+    const valueMatches = body.matchAll(/(\w+)(?:\s*=\s*(-?\d+|0x[0-9a-fA-F]+))?/g);
+    for (const vm of valueMatches) {
+      values.push({
+        name: vm[1],
+        value: vm[2] ? parseInt(vm[2], vm[2].startsWith('0x') ? 16 : 10) : null,
+      });
+    }
+    result.enums.push({ name, baseType, values });
+  }
+
+  // Extract structs
+  const structRegex = /struct\s+(\w+)\s*\{([^}]*)\}/g;
+  while ((match = structRegex.exec(schemaContent)) !== null) {
+    const [, name, body] = match;
+    const fields = parseFields(body, result.enums);
+    result.structs.push({ name, fields, isStruct: true });
+  }
+
+  // Extract tables (for info purposes - aligned codegen focuses on structs)
+  const tableRegex = /table\s+(\w+)\s*\{([^}]*)\}/g;
+  while ((match = tableRegex.exec(schemaContent)) !== null) {
+    const [, name, body] = match;
+    const fields = parseFields(body, result.enums);
+    result.tables.push({ name, fields, isStruct: false });
+  }
+
+  return result;
+}
+
+/**
+ * Parse field definitions from a struct/table body
+ * @param {string} body - The body content inside braces
+ * @param {Array} enums - Known enum definitions for type resolution
+ * @returns {Array} Array of field definitions
+ */
+function parseFields(body, enums) {
+  const fields = [];
+  const lines = body.split(/[;\n]/).map(l => l.trim()).filter(l => l && !l.startsWith('//'));
+
+  for (const line of lines) {
+    // Match: fieldName:type or fieldName:[type:N] (fixed array)
+    const fieldMatch = line.match(/^(\w+)\s*:\s*(.+?)(?:\s*=\s*[^;]+)?$/);
+    if (!fieldMatch) continue;
+
+    const [, name, typeStr] = fieldMatch;
+    let type = typeStr.trim();
+    let isArray = false;
+    let arraySize = 0;
+
+    // Check for fixed-length array: [type:N]
+    const arrayMatch = type.match(/^\[(\w+):(\d+)\]$/);
+    if (arrayMatch) {
+      type = arrayMatch[1];
+      isArray = true;
+      arraySize = parseInt(arrayMatch[2], 10);
+    }
+
+    // Check if this is an enum type
+    const enumDef = enums.find(e => e.name === type);
+
+    fields.push({
+      name,
+      type,
+      isArray,
+      arraySize,
+      isEnum: !!enumDef,
+      enumDef: enumDef || undefined,
+    });
+  }
+
+  return fields;
+}
+
+/**
  * Generate aligned code from a FlatBuffers schema using the C++ code generator.
  * @param {string} schemaContent - The .fbs schema content
  * @param {Object} options - Generation options (currently unused, reserved for future use)
@@ -110,4 +210,5 @@ export async function generateAlignedCode(schemaContent, options = {}) {
 export default {
   initAlignedCodegen,
   generateAlignedCode,
+  parseSchema,
 };

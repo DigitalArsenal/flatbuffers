@@ -911,13 +911,23 @@ export class FlatcRunner {
       if (options.keepPrefix) args.push("--keep-prefix");
       if (options.noWarnings) args.push("--no-warnings");
       if (options.genAll) args.push("--gen-all");
+      if (options.preserveCase) args.push("--preserve-case");
+      if (options.noPrefix) args.push("--no-prefix");
+      if (options.scopedEnums) args.push("--scoped-enums");
+      if (options.genNullable) args.push("--gen-nullable");
 
       // Language-specific options
       if (options.pythonTyping) args.push("--python-typing");
       if (options.tsFlexBuffers) args.push("--ts-flexbuffers");
       if (options.tsNoImportExt) args.push("--ts-no-import-ext");
+      if (options.tsOmitEntrypoint) args.push("--ts-omit-entrypoint");
       if (options.goModule) args.push("--go-module", options.goModule);
       if (options.goPackagePrefix) args.push("--go-package-prefix", options.goPackagePrefix);
+      if (options.rustSerialize) args.push("--rust-serialize");
+      if (options.rustModuleRootFile) args.push("--rust-module-root-file");
+      if (options.javaPackagePrefix) args.push("--java-package-prefix", options.javaPackagePrefix);
+      if (options.csGlobalAlias) args.push("--cs-global-alias");
+      if (options.genJvmStatic) args.push("--gen-jvmstatic");
 
       args.push(schemaInput.entry);
 

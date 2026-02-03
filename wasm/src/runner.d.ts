@@ -118,6 +118,14 @@ export interface GenerateCodeOptions {
   noWarnings?: boolean;
   /** Generate code for all schemas, not just the entry point */
   genAll?: boolean;
+  /** Preserve field name casing from schema (don't convert to language convention) */
+  preserveCase?: boolean;
+  /** Don't prefix enum values with enum type name */
+  noPrefix?: boolean;
+  /** Use C++11 scoped enums (enum class) instead of plain enums */
+  scopedEnums?: boolean;
+  /** Add Clang _Nullable/_Nonnull annotations (C++/ObjC) */
+  genNullable?: boolean;
 
   // Language-specific options
   /** Python: Generate type hints */
@@ -126,10 +134,22 @@ export interface GenerateCodeOptions {
   tsFlexBuffers?: boolean;
   /** TypeScript: Don't add .js extension to imports */
   tsNoImportExt?: boolean;
+  /** TypeScript: Omit namespace entrypoint file */
+  tsOmitEntrypoint?: boolean;
   /** Go: Module path for generated code */
   goModule?: string;
   /** Go: Package prefix */
   goPackagePrefix?: string;
+  /** Rust: Implement serde::Serialize trait */
+  rustSerialize?: boolean;
+  /** Rust: Generate mod.rs module root file */
+  rustModuleRootFile?: boolean;
+  /** Java: Add package prefix to generated code */
+  javaPackagePrefix?: string;
+  /** C#: Add global:: prefix to type references */
+  csGlobalAlias?: boolean;
+  /** Kotlin: Add @JvmStatic annotation to companion object methods */
+  genJvmStatic?: boolean;
 }
 
 /**

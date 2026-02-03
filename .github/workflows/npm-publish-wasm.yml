@@ -97,6 +97,7 @@ jobs:
     name: Publish to NPM
     needs: [build, test]
     runs-on: ubuntu-latest
+    environment: npm
     permissions:
       contents: read
       id-token: write

@@ -138,10 +138,10 @@ jobs:
 
       - name: Publish to NPM (dry run)
         if: github.event.inputs.dry_run == 'true'
-        run: npm publish --dry-run
+        run: npm publish --dry-run --tag wasm
         working-directory: wasm
 
       - name: Publish to NPM with provenance
         if: github.event.inputs.dry_run != 'true'
-        run: npm publish --access public --provenance
+        run: npm publish --access public --provenance --tag wasm
         working-directory: wasm

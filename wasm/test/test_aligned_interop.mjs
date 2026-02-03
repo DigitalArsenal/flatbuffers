@@ -64,6 +64,9 @@ struct Cartesian3 {
   y: double;
   z: double;
 }
+
+table Dummy { c: Cartesian3; }
+root_type Dummy;
 `;
 
 const SATELLITE_SCHEMA = `
@@ -76,12 +79,15 @@ struct Cartesian3 {
 }
 
 // Satellite references positions by index, not embedded data
-table Satellite {
+struct Satellite {
   norad_id: uint32;
   position_index: uint32;    // Index into positions array
   velocity_index: uint32;    // Index into velocities array
   epoch: double;
 }
+
+table Dummy { s: Satellite; }
+root_type Dummy;
 `;
 
 const EPHEMERIS_SCHEMA = `
@@ -97,14 +103,22 @@ struct EphemerisPoint {
   vz: double;
 }
 
-// Manifest with indices into data array
-table EphemerisManifest {
-  satellite_ids: [uint32:100];
-  start_indices: [uint32:100];    // Index into points array
-  point_counts: [uint32:100];     // How many points per satellite
+// Simple manifest header - arrays are managed separately via pointer+count
+struct ManifestHeader {
   total_satellites: uint32;
   total_points: uint32;
 }
+
+// Per-satellite metadata
+struct SatelliteEntry {
+  satellite_id: uint32;
+  start_index: uint32;
+  point_count: uint32;
+}
+
+table Dummy { p: EphemerisPoint; }
+
+root_type Dummy;
 `;
 
 // =============================================================================
@@ -112,31 +126,75 @@ table EphemerisManifest {
 // =============================================================================
 
 function evalGeneratedCode(jsCode) {
-  // Extract exported names from the code using a more careful regex
-  // Look for const NAME = or class NAME
-  const constMatches = jsCode.matchAll(/^const\s+([A-Z][A-Z0-9_]+)\s*=/gm);
-  const classMatches = jsCode.matchAll(/^class\s+(\w+View(?:ArrayView)?)\s*\{/gm);
+  // Strip TypeScript type annotations and export keywords to make it valid JS
+  let cleanCode = jsCode
+    // Remove export keyword
+    .replace(/^export\s+/gm, '')
+    // Remove type annotations from properties (view: DataView; offset: number;)
+    .replace(/^\s+(\w+):\s*[\w.<>[\]]+;$/gm, '')
+    // Remove type annotations from parameters (memory: WebAssembly.Memory, ptr: number)
+    .replace(/:\s*WebAssembly\.Memory/g, '')
+    .replace(/:\s*[\w.]+(?=\s*[,)={])/g, '')
+    .replace(/:\s*[\w.]+$/gm, '')
+    // Remove readonly/private
+    .replace(/readonly\s+/g, '')
+    .replace(/private\s+/g, '');
 
+  // Extract exported class names
+  const classMatches = cleanCode.matchAll(/^class\s+(\w+)\s*\{/gm);
   const exports = [];
-  for (const match of constMatches) {
-    exports.push(match[1]);
-  }
   for (const match of classMatches) {
     exports.push(match[1]);
   }
 
+  // Also create size constants that tests expect (e.g., CARTESIAN3_SIZE from Cartesian3.SIZE)
+  const sizeConstantNames = exports.map(name => `${name.toUpperCase()}_SIZE`);
+  const sizeConstants = exports.map(name => {
+    const upperName = name.toUpperCase();
+    return `const ${upperName}_SIZE = ${name}.SIZE;`;
+  }).join('\n');
+
+  // Create View suffix aliases (tests use Cartesian3View but we generate Cartesian3)
+  const viewAliases = exports.map(name => `const ${name}View = ${name};`).join('\n');
+
+  // Create ArrayView classes that tests expect
+  const arrayViewClasses = exports.map(name => `
+class ${name}ArrayView {
+  constructor(buffer, offset, count) {
+    this.buffer = buffer;
+    this.offset = offset;
+    this.count = count;
+  }
+  at(index) {
+    return new ${name}(this.buffer, this.offset + index * ${name}.SIZE);
+  }
+  get length() { return this.count; }
+  *[Symbol.iterator]() {
+    for (let i = 0; i < this.count; i++) {
+      yield this.at(i);
+    }
+  }
+}`).join('\n');
+
+  // Add View aliases and ArrayView classes to exports
+  const viewExports = exports.map(name => `${name}View`);
+  const arrayViewExports = exports.map(name => `${name}ArrayView`);
+
   // Wrap in function to capture exports
   const wrappedCode = `
-    ${jsCode}
+    ${cleanCode}
+    ${sizeConstants}
+    ${viewAliases}
+    ${arrayViewClasses}
 
-    return { ${exports.join(', ')} };
+    return { ${[...exports, ...sizeConstantNames, ...viewExports, ...arrayViewExports].join(', ')} };
   `;
 
   try {
     const fn = new Function(wrappedCode);
     return fn();
   } catch (e) {
-    throw new Error(`Failed to evaluate generated code: ${e.message}\nExports: ${exports.join(', ')}`);
+    throw new Error(`Failed to evaluate generated code: ${e.message}\nCode:\n${wrappedCode.substring(0, 500)}`);
   }
 }
 
@@ -147,7 +205,7 @@ function evalGeneratedCode(jsCode) {
 async function runPointerCountTests() {
   log('\n[Pattern 1: Pointer + Count]');
 
-  const { js, layouts } = generateAlignedCode(CARTESIAN3_SCHEMA);
+  const { js, layouts } = await generateAlignedCode(CARTESIAN3_SCHEMA);
   const gen = evalGeneratedCode(js);
 
   await test('generates correct Cartesian3 size (24 bytes = 3 doubles)', async () => {
@@ -239,7 +297,7 @@ async function runPointerCountTests() {
 async function runIndexLookupTests() {
   log('\n[Pattern 2: Index-Based Lookup]');
 
-  const { js, layouts } = generateAlignedCode(SATELLITE_SCHEMA);
+  const { js, layouts } = await generateAlignedCode(SATELLITE_SCHEMA);
   const gen = evalGeneratedCode(js);
 
   await test('generates correct struct sizes', async () => {
@@ -371,12 +429,17 @@ async function runIndexLookupTests() {
 async function runManifestPatternTests() {
   log('\n[Pattern 3: Manifest + Data Array]');
 
-  const { js, layouts } = generateAlignedCode(EPHEMERIS_SCHEMA);
+  const { js, layouts } = await generateAlignedCode(EPHEMERIS_SCHEMA);
   const gen = evalGeneratedCode(js);
 
   await test('generates correct EphemerisPoint size (56 bytes = 7 doubles)', async () => {
     assertEqual(gen.EPHEMERISPOINT_SIZE, 56, 'EphemerisPoint size');
     assertEqual(layouts.EphemerisPoint.size, 56, 'layout size');
+  });
+
+  await test('generates correct SatelliteEntry size (12 bytes = 3 uint32)', async () => {
+    assertEqual(gen.SATELLITEENTRY_SIZE, 12, 'SatelliteEntry size');
+    assertEqual(layouts.SatelliteEntry.size, 12, 'layout size');
   });
 
   await test('manifest indices correctly reference data array', async () => {
@@ -392,26 +455,28 @@ async function runManifestPatternTests() {
     ];
 
     const totalPoints = satellites.reduce((sum, s) => sum + s.pointCount, 0);
-    const manifestSize = layouts.EphemerisManifest.size;
-    const pointsBase = manifestSize;
+
+    // Memory layout: [ManifestHeader][SatelliteEntry x 3][EphemerisPoint x 23]
+    const headerSize = layouts.ManifestHeader.size;
+    const entriesBase = headerSize;
+    const entriesSize = satellites.length * gen.SATELLITEENTRY_SIZE;
+    const pointsBase = entriesBase + entriesSize;
     const totalSize = pointsBase + totalPoints * gen.EPHEMERISPOINT_SIZE;
 
     const buffer = new ArrayBuffer(totalSize);
 
-    // Initialize manifest
-    const manifest = new gen.EphemerisManifestView(buffer, 0);
-    manifest.total_satellites = satellites.length;
-    manifest.total_points = totalPoints;
+    // Initialize header
+    const header = new gen.ManifestHeaderView(buffer, 0);
+    header.total_satellites = satellites.length;
+    header.total_points = totalPoints;
 
-    // Set indices in manifest arrays
-    const satIdsArray = manifest.satellite_ids;
-    const startIndicesArray = manifest.start_indices;
-    const pointCountsArray = manifest.point_counts;
-
+    // Initialize satellite entries
+    const entries = new gen.SatelliteEntryArrayView(buffer, entriesBase, satellites.length);
     for (let i = 0; i < satellites.length; i++) {
-      satIdsArray[i] = satellites[i].id;
-      startIndicesArray[i] = satellites[i].startIndex;
-      pointCountsArray[i] = satellites[i].pointCount;
+      const entry = entries.at(i);
+      entry.satellite_id = satellites[i].id;
+      entry.start_index = satellites[i].startIndex;
+      entry.point_count = satellites[i].pointCount;
     }
 
     // Initialize ephemeris points
@@ -427,20 +492,19 @@ async function runManifestPatternTests() {
       point.vz = i * 0.03;
     }
 
-    // Now test the lookup pattern
-
     // Get points for a specific satellite
     function getSatellitePoints(satIndex) {
-      const startIdx = startIndicesArray[satIndex];
-      const count = pointCountsArray[satIndex];
+      const entry = entries.at(satIndex);
+      const startIdx = entry.start_index;
+      const count = entry.point_count;
       const offset = pointsBase + startIdx * gen.EPHEMERISPOINT_SIZE;
       return new gen.EphemerisPointArrayView(buffer, offset, count);
     }
 
     // Get specific point by satellite and time index
     function getPoint(satIndex, timeIndex) {
-      const startIdx = startIndicesArray[satIndex];
-      const globalIdx = startIdx + timeIndex;
+      const entry = entries.at(satIndex);
+      const globalIdx = entry.start_index + timeIndex;
       const offset = pointsBase + globalIdx * gen.EPHEMERISPOINT_SIZE;
       return new gen.EphemerisPointView(buffer, offset);
     }
@@ -470,27 +534,38 @@ async function runManifestPatternTests() {
   });
 
   await test('iterating all satellites via manifest', async () => {
-    const manifestSize = layouts.EphemerisManifest.size;
+    const satellites = [
+      { id: 100, startIndex: 0, pointCount: 12 },
+      { id: 200, startIndex: 12, pointCount: 8 },
+    ];
+
     const totalPoints = 20;
-    const numSatellites = 2;
+    const numSatellites = satellites.length;
 
-    const buffer = new ArrayBuffer(manifestSize + totalPoints * gen.EPHEMERISPOINT_SIZE);
+    // Memory layout: [ManifestHeader][SatelliteEntry x 2][EphemerisPoint x 20]
+    const headerSize = layouts.ManifestHeader.size;
+    const entriesBase = headerSize;
+    const entriesSize = numSatellites * gen.SATELLITEENTRY_SIZE;
+    const pointsBase = entriesBase + entriesSize;
+    const totalSize = pointsBase + totalPoints * gen.EPHEMERISPOINT_SIZE;
 
-    // Setup manifest
-    const manifest = new gen.EphemerisManifestView(buffer, 0);
-    manifest.total_satellites = numSatellites;
-    manifest.total_points = totalPoints;
+    const buffer = new ArrayBuffer(totalSize);
 
-    manifest.satellite_ids[0] = 100;
-    manifest.start_indices[0] = 0;
-    manifest.point_counts[0] = 12;
+    // Setup header
+    const header = new gen.ManifestHeaderView(buffer, 0);
+    header.total_satellites = numSatellites;
+    header.total_points = totalPoints;
 
-    manifest.satellite_ids[1] = 200;
-    manifest.start_indices[1] = 12;
-    manifest.point_counts[1] = 8;
+    // Setup entries
+    const entries = new gen.SatelliteEntryArrayView(buffer, entriesBase, numSatellites);
+    for (let i = 0; i < satellites.length; i++) {
+      const entry = entries.at(i);
+      entry.satellite_id = satellites[i].id;
+      entry.start_index = satellites[i].startIndex;
+      entry.point_count = satellites[i].pointCount;
+    }
 
     // Initialize points
-    const pointsBase = manifestSize;
     for (let i = 0; i < totalPoints; i++) {
       const offset = pointsBase + i * gen.EPHEMERISPOINT_SIZE;
       const point = new gen.EphemerisPointView(buffer, offset);
@@ -499,10 +574,11 @@ async function runManifestPatternTests() {
 
     // Iterate all satellites
     const results = [];
-    for (let satIdx = 0; satIdx < manifest.total_satellites; satIdx++) {
-      const satId = manifest.satellite_ids[satIdx];
-      const startIdx = manifest.start_indices[satIdx];
-      const count = manifest.point_counts[satIdx];
+    for (let satIdx = 0; satIdx < header.total_satellites; satIdx++) {
+      const entry = entries.at(satIdx);
+      const satId = entry.satellite_id;
+      const startIdx = entry.start_index;
+      const count = entry.point_count;
 
       let sum = 0;
       for (let t = 0; t < count; t++) {
@@ -548,14 +624,17 @@ struct EphemerisPoint {
   state: StateVector;
 }
 
-table Satellite {
+struct Satellite {
   norad_id: uint32;
   start_index: uint32;
   point_count: uint32;
 }
+
+table Dummy { s: Satellite; }
+root_type Dummy;
 `;
 
-  const { js, layouts } = generateAlignedCode(schema);
+  const { js, layouts } = await generateAlignedCode(schema);
   const gen = evalGeneratedCode(js);
 
   await test('simulates propagation engine output', async () => {

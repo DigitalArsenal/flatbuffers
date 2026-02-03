@@ -24,11 +24,7 @@ try {
 
 // Aligned codegen exports (zero-copy WASM interop)
 export {
-  parseSchema,
-  computeLayout,
-  generateCppHeader,
-  generateTypeScript,
-  generateJavaScript,
+  initAlignedCodegen,
   generateAlignedCode,
 } from "./aligned-codegen.mjs";
 

@@ -107,6 +107,7 @@ if(EMSCRIPTEN)
     src/idl_gen_rust.cpp
     src/idl_gen_fbs.cpp
     src/idl_gen_json_schema.cpp
+    src/idl_gen_aligned.cpp
     src/idl_gen_swift.cpp
     src/idl_gen_grpc.cpp
     src/idl_gen_sql.cpp
@@ -258,7 +259,7 @@ if(EMSCRIPTEN)
     -sMAXIMUM_MEMORY=256MB
     -sSTACK_SIZE=1MB
     "-sEXPORTED_FUNCTIONS=[${EXPORTED_FUNCS_STR},_main]"
-    -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8,FS,PATH,callMain
+    -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8,FS,PATH,callMain,HEAPU8
     --bind
     -sENVIRONMENT=web,node
     -sFILESYSTEM=1

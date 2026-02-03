@@ -151,7 +151,7 @@ async function runE2ETests() {
   fs.mkdirSync(TEST_DIR, { recursive: true });
 
   await test('generates code from alignment_test.fbs', async () => {
-    const result = generateAlignedCode(ALIGNMENT_SCHEMA);
+    const result = await generateAlignedCode(ALIGNMENT_SCHEMA);
 
     assert(result.cpp.length > 0, 'should generate C++ code');
     assert(result.ts.length > 0, 'should generate TypeScript code');
@@ -172,7 +172,7 @@ async function runE2ETests() {
   });
 
   await test('generates code from arrays_test.fbs', async () => {
-    const result = generateAlignedCode(ARRAYS_SCHEMA);
+    const result = await generateAlignedCode(ARRAYS_SCHEMA);
 
     assert(result.cpp.length > 0, 'should generate C++ code');
     assert(result.ts.length > 0, 'should generate TypeScript code');
@@ -199,7 +199,7 @@ async function runE2ETests() {
       }
     `;
 
-    const result = generateAlignedCode(simpleSchema);
+    const result = await generateAlignedCode(simpleSchema);
 
     // Write generated header
     const headerPath = path.join(TEST_DIR, 'aligned.h');

@@ -37,6 +37,7 @@
 #include "idl_gen_swift.h"
 #include "idl_gen_ts.h"
 #include "idl_gen_php.h"
+#include "idl_gen_aligned.h"
 
 // Note: LogCompilerWarn/LogCompilerError and GRPC generators are provided
 // by flatc_main.cpp and grpc/src/compiler/*.cc which are linked into WASM.
@@ -68,6 +69,7 @@ enum class Language : int32_t {
   PHP = 10,
   JSON_SCHEMA = 11,
   FBS = 12,  // Regenerate .fbs from parsed schema
+  ALIGNED = 13,  // Aligned structs for zero-copy WASM interop
 };
 
 // Create code generator for specified language
@@ -86,6 +88,7 @@ static std::unique_ptr<CodeGenerator> CreateGenerator(Language lang) {
     case Language::PHP: return NewPhpCodeGenerator();
     case Language::JSON_SCHEMA: return NewJsonSchemaCodeGenerator();
     case Language::FBS: return NewFBSCodeGenerator(true);
+    case Language::ALIGNED: return NewAlignedCodeGenerator();
     default: return nullptr;
   }
 }
@@ -106,6 +109,7 @@ static const char* GetLanguageName(Language lang) {
     case Language::PHP: return "PHP";
     case Language::JSON_SCHEMA: return "JSON Schema";
     case Language::FBS: return "FlatBuffers IDL";
+    case Language::ALIGNED: return "Aligned Structs";
     default: return "Unknown";
   }
 }
@@ -745,7 +749,7 @@ const char* wasm_generate_code(int32_t schema_id, int32_t language,
 EMSCRIPTEN_KEEPALIVE
 const char* wasm_get_supported_languages() {
   static const char* languages =
-      "cpp,csharp,dart,go,java,kotlin,python,rust,swift,typescript,php,jsonschema,fbs";
+      "cpp,csharp,dart,go,java,kotlin,python,rust,swift,typescript,php,jsonschema,fbs,aligned";
   return languages;
 }
 
@@ -773,6 +777,8 @@ int32_t wasm_get_language_id(const char* name) {
   if (lang == "jsonschema" || lang == "json-schema" || lang == "json_schema")
     return static_cast<int32_t>(Language::JSON_SCHEMA);
   if (lang == "fbs" || lang == "flatbuffers") return static_cast<int32_t>(Language::FBS);
+  if (lang == "aligned" || lang == "aligned-structs")
+    return static_cast<int32_t>(Language::ALIGNED);
 
   return -1;
 }

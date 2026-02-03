@@ -32,6 +32,7 @@
 #include "idl_gen_go.h"
 #include "idl_gen_java.h"
 #include "idl_gen_json_schema.h"
+#include "idl_gen_aligned.h"
 #include "idl_gen_sql.h"
 #include "idl_gen_kotlin.h"
 #include "idl_gen_lobster.h"
@@ -125,6 +126,12 @@ int main(int argc, const char* argv[]) {
   flatc.RegisterCodeGenerator(
       flatbuffers::FlatCOption{"", "jsonschema", "", "Generate Json schema"},
       flatbuffers::NewJsonSchemaCodeGenerator());
+
+  flatc.RegisterCodeGenerator(
+      flatbuffers::FlatCOption{
+          "", "aligned", "",
+          "Generate aligned C++ headers and TypeScript for zero-copy WASM interop"},
+      flatbuffers::NewAlignedCodeGenerator());
 
   flatc.RegisterCodeGenerator(
       flatbuffers::FlatCOption{"", "sql", "",

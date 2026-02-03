@@ -1040,7 +1040,7 @@ export class FlatcRunner {
    * @param {Object} [options={}] - Generation options
    * @param {boolean} [options.pragmaOnce=true] - Use #pragma once in C++ header
    * @param {boolean} [options.includeGuard=true] - Include traditional #ifndef guard
-   * @returns {{ cpp: string, ts: string, layouts: Object }} Generated code and layout info
+   * @returns {Promise<{ cpp: string, ts: string, layouts: Object }>} Generated code and layout info
    *
    * @example
    * const flatc = await FlatcRunner.init();
@@ -1054,12 +1054,12 @@ export class FlatcRunner {
    *     `
    *   }
    * };
-   * const { cpp, ts, layouts } = flatc.generateAlignedCode(schema);
+   * const { cpp, ts, layouts } = await flatc.generateAlignedCode(schema);
    * // cpp: C++ header with aligned structs
    * // ts: TypeScript with DataView-based accessors
    * // layouts: computed sizes/offsets for each struct
    */
-  generateAlignedCode(schemaInput, options = {}) {
+  async generateAlignedCode(schemaInput, options = {}) {
     validateSchemaInput(schemaInput);
 
     // Get the schema content from the entry file

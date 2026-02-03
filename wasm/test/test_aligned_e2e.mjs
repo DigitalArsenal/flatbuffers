@@ -197,6 +197,9 @@ async function runE2ETests() {
         value: double;
         flags: ubyte;
       }
+
+      table Dummy { d: TestData; }
+      root_type Dummy;
     `;
 
     const result = await generateAlignedCode(simpleSchema);
@@ -211,7 +214,7 @@ async function runE2ETests() {
 #include <emscripten.h>
 #include <cstring>
 
-using namespace Test::Aligned;
+using namespace Test;
 
 // Exported buffer for JS to read
 static TestData g_testData;
@@ -243,9 +246,9 @@ size_t get_vec3_size() {
 EMSCRIPTEN_KEEPALIVE
 void populate_test_data() {
   g_testData.id = 12345;
-  g_testData.pos_x = 1.5f;
-  g_testData.pos_y = 2.5f;
-  g_testData.pos_z = 3.5f;
+  g_testData.pos.x = 1.5f;
+  g_testData.pos.y = 2.5f;
+  g_testData.pos.z = 3.5f;
   g_testData.value = 3.14159265358979;
   g_testData.flags = 0xAB;
 }
@@ -255,9 +258,9 @@ EMSCRIPTEN_KEEPALIVE
 uint32_t verify_test_data(uint32_t expected_id, float expected_x, float expected_y, float expected_z) {
   uint32_t errors = 0;
   if (g_testData.id != expected_id) errors |= 1;
-  if (g_testData.pos_x != expected_x) errors |= 2;
-  if (g_testData.pos_y != expected_y) errors |= 4;
-  if (g_testData.pos_z != expected_z) errors |= 8;
+  if (g_testData.pos.x != expected_x) errors |= 2;
+  if (g_testData.pos.y != expected_y) errors |= 4;
+  if (g_testData.pos.z != expected_z) errors |= 8;
   return errors;
 }
 
@@ -324,17 +327,17 @@ async function runTest() {
   const dataSize = Module._get_test_data_size();
 
   // Verify size matches
-  if (dataSize !== TESTDATA_SIZE) {
-    throw new Error(\`Size mismatch: C++=$\{dataSize}, JS=$\{TESTDATA_SIZE}\`);
+  if (dataSize !== TestData.SIZE) {
+    throw new Error(\`Size mismatch: C++=$\{dataSize}, JS=$\{TestData.SIZE}\`);
   }
 
   // Read using our generated view
-  const view = TestDataView.fromMemory({ buffer: Module.HEAPU8.buffer }, dataPtr);
+  const view = new TestData(Module.HEAPU8.buffer, dataPtr);
 
   if (view.id !== 12345) throw new Error(\`id mismatch: \${view.id}\`);
-  if (Math.abs(view.pos_x - 1.5) > 0.0001) throw new Error(\`pos_x mismatch: \${view.pos_x}\`);
-  if (Math.abs(view.pos_y - 2.5) > 0.0001) throw new Error(\`pos_y mismatch: \${view.pos_y}\`);
-  if (Math.abs(view.pos_z - 3.5) > 0.0001) throw new Error(\`pos_z mismatch: \${view.pos_z}\`);
+  if (Math.abs(view.pos.x - 1.5) > 0.0001) throw new Error(\`pos.x mismatch: \${view.pos.x}\`);
+  if (Math.abs(view.pos.y - 2.5) > 0.0001) throw new Error(\`pos.y mismatch: \${view.pos.y}\`);
+  if (Math.abs(view.pos.z - 3.5) > 0.0001) throw new Error(\`pos.z mismatch: \${view.pos.z}\`);
   if (Math.abs(view.value - 3.14159265358979) > 0.0000001) throw new Error(\`value mismatch: \${view.value}\`);
   if (view.flags !== 0xAB) throw new Error(\`flags mismatch: \${view.flags}\`);
 
@@ -342,9 +345,9 @@ async function runTest() {
 
   // Test 2: JS writes, C++ reads
   view.id = 99999;
-  view.pos_x = 100.5;
-  view.pos_y = 200.5;
-  view.pos_z = 300.5;
+  view.pos.x = 100.5;
+  view.pos.y = 200.5;
+  view.pos.z = 300.5;
 
   const errors = Module._verify_test_data(99999, 100.5, 200.5, 300.5);
   if (errors !== 0) {
@@ -359,14 +362,13 @@ async function runTest() {
   const arrayPtr = Module._get_vec3_array();
   const vec3Size = Module._get_vec3_size();
 
-  if (vec3Size !== VEC3_SIZE) {
-    throw new Error(\`Vec3 size mismatch: C++=$\{vec3Size}, JS=$\{VEC3_SIZE}\`);
+  if (vec3Size !== Vec3.SIZE) {
+    throw new Error(\`Vec3 size mismatch: C++=$\{vec3Size}, JS=$\{Vec3.SIZE}\`);
   }
 
-  const arrayView = Vec3ArrayView.fromMemory({ buffer: Module.HEAPU8.buffer }, arrayPtr, 4);
-
+  // Access array elements using offset calculation
   for (let i = 0; i < 4; i++) {
-    const v = arrayView.at(i);
+    const v = new Vec3(Module.HEAPU8.buffer, arrayPtr + i * Vec3.SIZE);
     if (Math.abs(v.x - (i * 10)) > 0.0001) throw new Error(\`array[\${i}].x mismatch\`);
     if (Math.abs(v.y - (i * 10 + 1)) > 0.0001) throw new Error(\`array[\${i}].y mismatch\`);
     if (Math.abs(v.z - (i * 10 + 2)) > 0.0001) throw new Error(\`array[\${i}].z mismatch\`);
@@ -376,7 +378,7 @@ async function runTest() {
 
   // Test 4: JS writes array, C++ reads
   for (let i = 0; i < 4; i++) {
-    const v = arrayView.at(i);
+    const v = new Vec3(Module.HEAPU8.buffer, arrayPtr + i * Vec3.SIZE);
     v.x = i * 100;
     v.y = i * 100 + 10;
     v.z = i * 100 + 20;

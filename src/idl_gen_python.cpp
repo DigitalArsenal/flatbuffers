@@ -722,11 +722,26 @@ class PythonGenerator : public BaseGenerator {
            Indent + Indent + "if o != 0:" + (new_line ? "\n" : "");
   }
 
+  // Check if a struct has any encrypted fields.
+  bool HasEncryptedFields(const StructDef& struct_def) const {
+    for (auto it = struct_def.fields.vec.begin();
+         it != struct_def.fields.vec.end(); ++it) {
+      if ((*it)->attributes.Lookup("encrypted") != nullptr) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // Begin a class declaration.
   void BeginClass(const StructDef& struct_def, std::string* code_ptr) const {
     auto& code = *code_ptr;
     code += "class " + namer_.Type(struct_def) + "(object):\n";
-    code += Indent + "__slots__ = ['_tab']";
+    if (HasEncryptedFields(struct_def)) {
+      code += Indent + "__slots__ = ['_tab', '_encryption_ctx']";
+    } else {
+      code += Indent + "__slots__ = ['_tab']";
+    }
     code += "\n\n";
   }
 
@@ -756,32 +771,52 @@ class PythonGenerator : public BaseGenerator {
                              std::string* code_ptr) const {
     auto& code = *code_ptr;
     const std::string struct_type = namer_.Type(struct_def);
+    bool has_encrypted = HasEncryptedFields(struct_def);
 
     code += Indent + "@classmethod\n";
     code += Indent + "def GetRootAs";
     if (parser_.opts.python_typing) {
-      code += "(cls, buf, offset: int = 0):";
+      if (has_encrypted) {
+        code += "(cls, buf, offset: int = 0, encryption_ctx: bytes = None):";
+      } else {
+        code += "(cls, buf, offset: int = 0):";
+      }
     } else {
-      code += "(cls, buf, offset=0):";
+      if (has_encrypted) {
+        code += "(cls, buf, offset=0, encryption_ctx=None):";
+      } else {
+        code += "(cls, buf, offset=0):";
+      }
     }
     code += "\n";
     code += Indent + Indent;
     code += "n = flatbuffers.encode.Get";
     code += "(flatbuffers.packer.uoffset, buf, offset)\n";
     code += Indent + Indent + "x = " + struct_type + "()\n";
-    code += Indent + Indent + "x.Init(buf, n + offset)\n";
+    if (has_encrypted) {
+      code += Indent + Indent + "x.Init(buf, n + offset, encryption_ctx)\n";
+    } else {
+      code += Indent + Indent + "x.Init(buf, n + offset)\n";
+    }
     code += Indent + Indent + "return x\n";
     code += "\n";
 
     if (!parser_.opts.python_no_type_prefix_suffix) {
       // Add an alias with the old name
       code += Indent + "@classmethod\n";
-      code +=
-          Indent + "def GetRootAs" + struct_type + "(cls, buf, offset=0):\n";
+      if (has_encrypted) {
+        code += Indent + "def GetRootAs" + struct_type + "(cls, buf, offset=0, encryption_ctx=None):\n";
+      } else {
+        code += Indent + "def GetRootAs" + struct_type + "(cls, buf, offset=0):\n";
+      }
       code += Indent + Indent +
               "\"\"\"This method is deprecated. Please switch to "
               "GetRootAs.\"\"\"\n";
-      code += Indent + Indent + "return cls.GetRootAs(buf, offset)\n";
+      if (has_encrypted) {
+        code += Indent + Indent + "return cls.GetRootAs(buf, offset, encryption_ctx)\n";
+      } else {
+        code += Indent + Indent + "return cls.GetRootAs(buf, offset)\n";
+      }
     }
   }
 
@@ -789,14 +824,26 @@ class PythonGenerator : public BaseGenerator {
   void InitializeExisting(const StructDef& struct_def,
                           std::string* code_ptr) const {
     auto& code = *code_ptr;
+    bool has_encrypted = HasEncryptedFields(struct_def);
 
     GenReceiver(struct_def, code_ptr);
     if (parser_.opts.python_typing) {
-      code += "Init(self, buf: bytes, pos: int):\n";
+      if (has_encrypted) {
+        code += "Init(self, buf: bytes, pos: int, encryption_ctx: bytes = None):\n";
+      } else {
+        code += "Init(self, buf: bytes, pos: int):\n";
+      }
     } else {
-      code += "Init(self, buf, pos):\n";
+      if (has_encrypted) {
+        code += "Init(self, buf, pos, encryption_ctx=None):\n";
+      } else {
+        code += "Init(self, buf, pos):\n";
+      }
     }
     code += Indent + Indent + "self._tab = flatbuffers.table.Table(buf, pos)\n";
+    if (has_encrypted) {
+      code += Indent + Indent + "self._encryption_ctx = encryption_ctx\n";
+    }
     code += "\n";
   }
 
@@ -1747,6 +1794,11 @@ class PythonGenerator : public BaseGenerator {
   void GenStruct(const StructDef& struct_def, std::string* code_ptr,
                  ImportMap& imports) const {
     if (struct_def.generated) return;
+
+    // Add import for FlatbuffersEncryption if struct has encrypted fields
+    if (HasEncryptedFields(struct_def)) {
+      imports.insert(ImportMapEntry{".FlatbuffersEncryption", "FlatbuffersEncryption"});
+    }
 
     GenComment(struct_def.doc_comment, code_ptr, &def_comment);
     BeginClass(struct_def, code_ptr);
@@ -2866,9 +2918,87 @@ class PythonGenerator : public BaseGenerator {
     EndBuilderBody(code_ptr);
   }
 
+  // Check if any struct in the schema has encrypted fields.
+  bool HasAnyEncryptedFields() const {
+    for (auto it = parser_.structs_.vec.begin();
+         it != parser_.structs_.vec.end(); ++it) {
+      if (HasEncryptedFields(**it)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Get the FlatbuffersEncryption module code.
+  std::string GetEncryptionModuleCode() const {
+    std::string code;
+    code += std::string("# ") + FlatBuffersGeneratedWarning() + "\n\n";
+    code += "\"\"\"FlatBuffers field-level encryption support using AES-256-CTR.\"\"\"\n\n";
+    code += "import struct\n";
+    code += "from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes\n\n";
+    code += "class FlatbuffersEncryption:\n";
+    code += "    \"\"\"Handles decryption of encrypted FlatBuffer fields.\"\"\"\n\n";
+    code += "    @staticmethod\n";
+    code += "    def _derive_nonce(ctx: bytes, field_offset: int) -> bytes:\n";
+    code += "        \"\"\"Derive a 16-byte nonce from encryption context and field offset.\"\"\"\n";
+    code += "        # Use first 12 bytes of context + 4-byte field offset as nonce\n";
+    code += "        if ctx is None or len(ctx) < 12:\n";
+    code += "            raise ValueError(\"Encryption context must be at least 12 bytes\")\n";
+    code += "        return ctx[:12] + struct.pack('<I', field_offset)\n\n";
+    code += "    @staticmethod\n";
+    code += "    def _decrypt_bytes(data: bytes, ctx: bytes, field_offset: int) -> bytes:\n";
+    code += "        \"\"\"Decrypt bytes using AES-256-CTR.\"\"\"\n";
+    code += "        if ctx is None:\n";
+    code += "            raise ValueError(\"Encryption context required for encrypted field\")\n";
+    code += "        if len(ctx) < 32:\n";
+    code += "            raise ValueError(\"Encryption context must be at least 32 bytes (256-bit key)\")\n";
+    code += "        key = ctx[:32]\n";
+    code += "        nonce = FlatbuffersEncryption._derive_nonce(ctx, field_offset)\n";
+    code += "        cipher = Cipher(algorithms.AES(key), modes.CTR(nonce))\n";
+    code += "        decryptor = cipher.decryptor()\n";
+    code += "        return decryptor.update(data) + decryptor.finalize()\n\n";
+    code += "    @staticmethod\n";
+    code += "    def decrypt_scalar(value, ctx: bytes, field_offset: int):\n";
+    code += "        \"\"\"Decrypt a scalar value (int, float, etc.).\n\n";
+    code += "        For AES-CTR, we encrypt the bytes representation of the scalar.\n";
+    code += "        This preserves the length and allows in-place decryption.\n";
+    code += "        \"\"\"\n";
+    code += "        if ctx is None:\n";
+    code += "            return value  # No encryption context, return as-is\n";
+    code += "        # Determine the byte representation based on type\n";
+    code += "        if isinstance(value, float):\n";
+    code += "            # Float32 - 4 bytes\n";
+    code += "            data = struct.pack('<f', value)\n";
+    code += "            decrypted = FlatbuffersEncryption._decrypt_bytes(data, ctx, field_offset)\n";
+    code += "            return struct.unpack('<f', decrypted)[0]\n";
+    code += "        elif isinstance(value, int):\n";
+    code += "            # Determine size based on value range (assume 4 bytes for now)\n";
+    code += "            data = struct.pack('<i', value)\n";
+    code += "            decrypted = FlatbuffersEncryption._decrypt_bytes(data, ctx, field_offset)\n";
+    code += "            return struct.unpack('<i', decrypted)[0]\n";
+    code += "        return value\n\n";
+    code += "    @staticmethod\n";
+    code += "    def decrypt_string(data: bytes, ctx: bytes, field_offset: int) -> bytes:\n";
+    code += "        \"\"\"Decrypt a string/byte vector field.\"\"\"\n";
+    code += "        if ctx is None or data is None:\n";
+    code += "            return data  # No encryption context, return as-is\n";
+    code += "        return FlatbuffersEncryption._decrypt_bytes(data, ctx, field_offset)\n";
+    return code;
+  }
+
+  // Generate the FlatbuffersEncryption module in a namespace directory.
+  bool GenerateEncryptionModule(const Namespace& ns) const {
+    const std::string code = GetEncryptionModuleCode();
+    const std::string directories = namer_.Directories(ns.components);
+    EnsureDirExists(directories);
+    const std::string filename = directories + "FlatbuffersEncryption.py";
+    return parser_.opts.file_saver->SaveFile(filename.c_str(), code, false);
+  }
+
   bool generate() {
     std::string one_file_code;
     ImportMap one_file_imports;
+
     if (!generateEnums(&one_file_code)) return false;
     if (!generateStructs(&one_file_code, one_file_imports)) return false;
 
@@ -2912,6 +3042,9 @@ class PythonGenerator : public BaseGenerator {
 
   bool generateStructs(std::string* one_file_code,
                        ImportMap& one_file_imports) const {
+    // Track namespaces that need encryption module
+    std::set<std::string> encryption_namespaces;
+
     for (auto it = parser_.structs_.vec.begin();
          it != parser_.structs_.vec.end(); ++it) {
       auto& struct_def = **it;
@@ -2920,6 +3053,18 @@ class PythonGenerator : public BaseGenerator {
       GenStruct(struct_def, &declcode, imports);
       if (parser_.opts.generate_object_based_api) {
         GenStructForObjectAPI(struct_def, &declcode);
+      }
+
+      // Generate encryption module for this namespace if needed
+      if (HasEncryptedFields(struct_def) && !parser_.opts.one_file) {
+        const std::string ns_key = namer_.Directories(
+            struct_def.defined_namespace->components);
+        if (encryption_namespaces.find(ns_key) == encryption_namespaces.end()) {
+          encryption_namespaces.insert(ns_key);
+          if (!GenerateEncryptionModule(*struct_def.defined_namespace)) {
+            return false;
+          }
+        }
       }
 
       if (parser_.opts.one_file) {
@@ -2935,8 +3080,9 @@ class PythonGenerator : public BaseGenerator {
             namer_.File(struct_def, SkipFile::SuffixAndExtension);
         if (!SaveType(namer_.File(struct_def, SkipFile::Suffix),
                       *struct_def.defined_namespace, declcode, imports, mod,
-                      true))
+                      true)) {
           return false;
+        }
       }
     }
     return true;
@@ -2957,10 +3103,21 @@ class PythonGenerator : public BaseGenerator {
       if (parser_.opts.python_gen_numpy) {
         code += "from flatbuffers.compat import import_numpy\n";
       }
+
+      // Always check for FlatbuffersEncryption import (needed for encrypted fields)
+      for (auto import_entry : imports) {
+        if (import_entry.second == "FlatbuffersEncryption") {
+          code += "from " + import_entry.first + " import " +
+                  import_entry.second + "\n";
+        }
+      }
+
       if (parser_.opts.python_typing) {
         code += "from typing import Any\n";
 
         for (auto import_entry : imports) {
+          // Skip FlatbuffersEncryption (already handled above)
+          if (import_entry.second == "FlatbuffersEncryption") continue;
           // If we have a file called, say, "MyType.py" and in it we have a
           // class "MyType", we can generate imports -- usually when we
           // have a type that contains arrays of itself -- of the type

@@ -1,0 +1,15 @@
+{
+  "name": "flatbuffers-tests",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test:encryption": "npx tsx encryption_test.ts"
+  },
+  "dependencies": {
+    "flatbuffers": "^24.3.25"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "tsx": "^4.7.0"
+  }
+}

@@ -97,6 +97,7 @@ jobs:
     name: Publish to NPM
     needs: [build, test]
     runs-on: ubuntu-latest
+    environment: npm
     permissions:
       contents: read
       id-token: write
@@ -137,10 +138,10 @@ jobs:
 
       - name: Publish to NPM (dry run)
         if: github.event.inputs.dry_run == 'true'
-        run: npm publish --dry-run --tag wasm
+        run: npm publish --dry-run
         working-directory: wasm
 
       - name: Publish to NPM with provenance
         if: github.event.inputs.dry_run != 'true'
-        run: npm publish --access public --provenance --tag wasm
+        run: npm publish --access public --provenance
         working-directory: wasm

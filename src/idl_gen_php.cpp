@@ -34,9 +34,33 @@ class PhpGenerator : public BaseGenerator {
   PhpGenerator(const Parser& parser, const std::string& path,
                const std::string& file_name)
       : BaseGenerator(parser, path, file_name, "\\", "\\", "php") {}
+
+  // Check if a struct has any encrypted fields
+  bool HasEncryptedFields(const StructDef& struct_def) const {
+    for (auto it = struct_def.fields.vec.begin();
+         it != struct_def.fields.vec.end(); ++it) {
+      if ((*it)->attributes.Lookup("encrypted") != nullptr) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   bool generate() {
     if (!GenerateEnums()) return false;
     if (!GenerateStructs()) return false;
+    // Generate encryption class if any struct has encrypted fields
+    bool needs_encryption = false;
+    for (auto it = parser_.structs_.vec.begin();
+         it != parser_.structs_.vec.end(); ++it) {
+      if (HasEncryptedFields(**it)) {
+        needs_encryption = true;
+        break;
+      }
+    }
+    if (needs_encryption) {
+      if (!GenerateEncryptionClass()) return false;
+    }
     return true;
   }
 
@@ -61,6 +85,120 @@ class PhpGenerator : public BaseGenerator {
       if (!SaveType(struct_def, declcode, true)) return false;
     }
     return true;
+  }
+
+  bool GenerateEncryptionClass() {
+    std::string code;
+    code += "<?php\n";
+    code += "// " + std::string(FlatBuffersGeneratedWarning()) + "\n\n";
+
+    std::string namespace_name = FullNamespace("\\", *parser_.current_namespace_);
+    if (!namespace_name.empty()) {
+      code += "namespace " + namespace_name + ";\n\n";
+    }
+
+    code += "/**\n";
+    code += " * FlatBuffers field-level encryption support using AES-256-CTR.\n";
+    code += " */\n";
+    code += "class FlatbuffersEncryption\n";
+    code += "{\n";
+    code += Indent + "/**\n";
+    code += Indent + " * Derive a 16-byte nonce from encryption context and field offset.\n";
+    code += Indent + " */\n";
+    code += Indent + "private static function deriveNonce($ctx, $fieldOffset)\n";
+    code += Indent + "{\n";
+    code += Indent + Indent + "if (strlen($ctx) < 12) {\n";
+    code += Indent + Indent + Indent + "throw new \\Exception('Encryption context must be at least 12 bytes');\n";
+    code += Indent + Indent + "}\n";
+    code += Indent + Indent + "$nonce = substr($ctx, 0, 12);\n";
+    code += Indent + Indent + "$nonce .= pack('V', $fieldOffset); // Little-endian 4-byte int\n";
+    code += Indent + Indent + "return $nonce;\n";
+    code += Indent + "}\n\n";
+
+    code += Indent + "/**\n";
+    code += Indent + " * Decrypt bytes using AES-256-CTR.\n";
+    code += Indent + " */\n";
+    code += Indent + "private static function decryptBytes($data, $ctx, $fieldOffset)\n";
+    code += Indent + "{\n";
+    code += Indent + Indent + "if (strlen($ctx) < 32) {\n";
+    code += Indent + Indent + Indent + "throw new \\Exception('Encryption context must be at least 32 bytes');\n";
+    code += Indent + Indent + "}\n";
+    code += Indent + Indent + "$key = substr($ctx, 0, 32);\n";
+    code += Indent + Indent + "$nonce = self::deriveNonce($ctx, $fieldOffset);\n";
+    code += Indent + Indent + "return openssl_decrypt($data, 'aes-256-ctr', $key, OPENSSL_RAW_DATA, $nonce);\n";
+    code += Indent + "}\n\n";
+
+    code += Indent + "/**\n";
+    code += Indent + " * Decrypt a scalar value.\n";
+    code += Indent + " */\n";
+    code += Indent + "public static function decryptScalar($value, $ctx, $fieldOffset, $type)\n";
+    code += Indent + "{\n";
+    code += Indent + Indent + "if ($ctx === null) return $value;\n";
+    code += Indent + Indent + "switch ($type) {\n";
+    code += Indent + Indent + Indent + "case 'bool':\n";
+    code += Indent + Indent + Indent + Indent + "$data = pack('C', $value ? 1 : 0);\n";
+    code += Indent + Indent + Indent + Indent + "$decrypted = self::decryptBytes($data, $ctx, $fieldOffset);\n";
+    code += Indent + Indent + Indent + Indent + "return unpack('C', $decrypted)[1] !== 0;\n";
+    code += Indent + Indent + Indent + "case 'byte': case 'sbyte':\n";
+    code += Indent + Indent + Indent + Indent + "$data = pack('c', $value);\n";
+    code += Indent + Indent + Indent + Indent + "$decrypted = self::decryptBytes($data, $ctx, $fieldOffset);\n";
+    code += Indent + Indent + Indent + Indent + "return unpack('c', $decrypted)[1];\n";
+    code += Indent + Indent + Indent + "case 'ubyte':\n";
+    code += Indent + Indent + Indent + Indent + "$data = pack('C', $value);\n";
+    code += Indent + Indent + Indent + Indent + "$decrypted = self::decryptBytes($data, $ctx, $fieldOffset);\n";
+    code += Indent + Indent + Indent + Indent + "return unpack('C', $decrypted)[1];\n";
+    code += Indent + Indent + Indent + "case 'short':\n";
+    code += Indent + Indent + Indent + Indent + "$data = pack('v', $value & 0xFFFF);\n";
+    code += Indent + Indent + Indent + Indent + "$decrypted = self::decryptBytes($data, $ctx, $fieldOffset);\n";
+    code += Indent + Indent + Indent + Indent + "$unsigned = unpack('v', $decrypted)[1];\n";
+    code += Indent + Indent + Indent + Indent + "return $unsigned >= 0x8000 ? $unsigned - 0x10000 : $unsigned;\n";
+    code += Indent + Indent + Indent + "case 'ushort':\n";
+    code += Indent + Indent + Indent + Indent + "$data = pack('v', $value);\n";
+    code += Indent + Indent + Indent + Indent + "$decrypted = self::decryptBytes($data, $ctx, $fieldOffset);\n";
+    code += Indent + Indent + Indent + Indent + "return unpack('v', $decrypted)[1];\n";
+    code += Indent + Indent + Indent + "case 'int':\n";
+    code += Indent + Indent + Indent + Indent + "$data = pack('V', $value & 0xFFFFFFFF);\n";
+    code += Indent + Indent + Indent + Indent + "$decrypted = self::decryptBytes($data, $ctx, $fieldOffset);\n";
+    code += Indent + Indent + Indent + Indent + "$unsigned = unpack('V', $decrypted)[1];\n";
+    code += Indent + Indent + Indent + Indent + "return $unsigned >= 0x80000000 ? $unsigned - 0x100000000 : $unsigned;\n";
+    code += Indent + Indent + Indent + "case 'uint':\n";
+    code += Indent + Indent + Indent + Indent + "$data = pack('V', $value);\n";
+    code += Indent + Indent + Indent + Indent + "$decrypted = self::decryptBytes($data, $ctx, $fieldOffset);\n";
+    code += Indent + Indent + Indent + Indent + "return unpack('V', $decrypted)[1];\n";
+    code += Indent + Indent + Indent + "case 'long':\n";
+    code += Indent + Indent + Indent + Indent + "$data = pack('P', $value);\n";
+    code += Indent + Indent + Indent + Indent + "$decrypted = self::decryptBytes($data, $ctx, $fieldOffset);\n";
+    code += Indent + Indent + Indent + Indent + "return unpack('P', $decrypted)[1];\n";
+    code += Indent + Indent + Indent + "case 'ulong':\n";
+    code += Indent + Indent + Indent + Indent + "$data = pack('P', $value);\n";
+    code += Indent + Indent + Indent + Indent + "$decrypted = self::decryptBytes($data, $ctx, $fieldOffset);\n";
+    code += Indent + Indent + Indent + Indent + "return unpack('P', $decrypted)[1];\n";
+    code += Indent + Indent + Indent + "case 'float':\n";
+    code += Indent + Indent + Indent + Indent + "$data = pack('g', $value);\n";
+    code += Indent + Indent + Indent + Indent + "$decrypted = self::decryptBytes($data, $ctx, $fieldOffset);\n";
+    code += Indent + Indent + Indent + Indent + "return unpack('g', $decrypted)[1];\n";
+    code += Indent + Indent + Indent + "case 'double':\n";
+    code += Indent + Indent + Indent + Indent + "$data = pack('e', $value);\n";
+    code += Indent + Indent + Indent + Indent + "$decrypted = self::decryptBytes($data, $ctx, $fieldOffset);\n";
+    code += Indent + Indent + Indent + Indent + "return unpack('e', $decrypted)[1];\n";
+    code += Indent + Indent + Indent + "default:\n";
+    code += Indent + Indent + Indent + Indent + "throw new \\Exception('Unknown scalar type: ' . $type);\n";
+    code += Indent + Indent + "}\n";
+    code += Indent + "}\n\n";
+
+    code += Indent + "/**\n";
+    code += Indent + " * Decrypt a string value.\n";
+    code += Indent + " */\n";
+    code += Indent + "public static function decryptString($value, $ctx, $fieldOffset)\n";
+    code += Indent + "{\n";
+    code += Indent + Indent + "if ($value === null || $ctx === null) return $value;\n";
+    code += Indent + Indent + "$decrypted = self::decryptBytes($value, $ctx, $fieldOffset);\n";
+    code += Indent + Indent + "return $decrypted;\n";
+    code += Indent + "}\n";
+    code += "}\n";
+
+    std::string filename = NamespaceDir(*parser_.current_namespace_) + "FlatbuffersEncryption.php";
+    return parser_.opts.file_saver->SaveFile(filename.c_str(), code, false);
   }
 
   // Begin by declaring namespace and imports.
@@ -157,6 +295,28 @@ class PhpGenerator : public BaseGenerator {
     code += Indent + "}\n\n";
   }
 
+  // Initialize a new struct or table from existing data with encryption context.
+  static void NewRootTypeFromBufferWithEncryption(const StructDef& struct_def,
+                                                  std::string* code_ptr) {
+    std::string& code = *code_ptr;
+
+    code += Indent + "/**\n";
+    code += Indent + " * @param ByteBuffer $bb\n";
+    code += Indent + " * @param string|null $encryptionCtx\n";
+    code += Indent + " * @return " + struct_def.name + "\n";
+    code += Indent + " */\n";
+    code += Indent + "public static function getRootAs";
+    code += struct_def.name;
+    code += "WithEncryption(ByteBuffer $bb, $encryptionCtx)\n";
+    code += Indent + "{\n";
+
+    code += Indent + Indent + "$obj = new " + struct_def.name + "();\n";
+    code += Indent + Indent;
+    code += "return ($obj->initWithEncryption($bb->getInt($bb->getPosition())";
+    code += " + $bb->getPosition(), $bb, $encryptionCtx));\n";
+    code += Indent + "}\n\n";
+  }
+
   // Initialize an existing object with other data, to avoid an allocation.
   static void InitializeExisting(const StructDef& struct_def,
                                  std::string* code_ptr) {
@@ -171,6 +331,26 @@ class PhpGenerator : public BaseGenerator {
     code += Indent + "{\n";
     code += Indent + Indent + "$this->bb_pos = $_i;\n";
     code += Indent + Indent + "$this->bb = $_bb;\n";
+    code += Indent + Indent + "return $this;\n";
+    code += Indent + "}\n\n";
+  }
+
+  // Initialize an existing object with encryption context.
+  static void InitializeExistingWithEncryption(const StructDef& struct_def,
+                                               std::string* code_ptr) {
+    std::string& code = *code_ptr;
+
+    code += Indent + "/**\n";
+    code += Indent + " * @param int $_i offset\n";
+    code += Indent + " * @param ByteBuffer $_bb\n";
+    code += Indent + " * @param string|null $_encryptionCtx\n";
+    code += Indent + " * @return " + struct_def.name + "\n";
+    code += Indent + " **/\n";
+    code += Indent + "public function initWithEncryption($_i, ByteBuffer $_bb, $_encryptionCtx)\n";
+    code += Indent + "{\n";
+    code += Indent + Indent + "$this->bb_pos = $_i;\n";
+    code += Indent + Indent + "$this->bb = $_bb;\n";
+    code += Indent + Indent + "$this->encryptionCtx = $_encryptionCtx;\n";
     code += Indent + Indent + "return $this;\n";
     code += Indent + "}\n\n";
   }
@@ -234,6 +414,7 @@ class PhpGenerator : public BaseGenerator {
   // Get the value of a table's scalar.
   void GetScalarFieldOfTable(const FieldDef& field, std::string* code_ptr) {
     std::string& code = *code_ptr;
+    bool encrypted = field.attributes.Lookup("encrypted") != nullptr;
 
     code += Indent + "/**\n";
     code += Indent + " * @return " + GenTypeGet(field.value.type) + "\n";
@@ -243,24 +424,25 @@ class PhpGenerator : public BaseGenerator {
     code += "()\n";
     code += Indent + "{\n";
     code += Indent + Indent + "$o = $this->__offset(" +
-            NumToString(field.value.offset) + ");\n" + Indent + Indent +
-            "return $o != 0 ? ";
-    
-    // Check if field has encryption attribute and wrap with decryption
-    if (field.attributes.Lookup("encrypted") != nullptr) {
-      code += "FlatbuffersEncryption::decryptScalar(";
+            NumToString(field.value.offset) + ");\n";
+
+    if (encrypted) {
+      code += Indent + Indent + "if ($o == 0) return " +
+              GenDefaultValue(field.value) + ";\n";
+      code += Indent + Indent + "$raw = $this->bb->get";
+      code += ConvertCase(GenTypeGet(field.value.type), Case::kUpperCamel) +
+              "($o + $this->bb_pos);\n";
+      code += Indent + Indent +
+              "return FlatbuffersEncryption::decryptScalar($raw, " +
+              "$this->encryptionCtx, " + NumToString(field.value.offset) +
+              ", '" + GenTypeGet(field.value.type) + "');\n";
+    } else {
+      code += Indent + Indent + "return $o != 0 ? $this->bb->get";
+      code += ConvertCase(GenTypeGet(field.value.type), Case::kUpperCamel) +
+              "($o + $this->bb_pos)";
+      code += " : " + GenDefaultValue(field.value) + ";\n";
     }
-    
-    code += "$this->bb->get";
-    code += ConvertCase(GenTypeGet(field.value.type), Case::kUpperCamel) +
-            "($o + $this->bb_pos)";
-    
-    // Close encryption wrapper if needed
-    if (field.attributes.Lookup("encrypted") != nullptr) {
-      code += ")";
-    }
-    
-    code += " : " + GenDefaultValue(field.value) + ";\n";
+
     code += Indent + "}\n\n";
   }
 
@@ -791,13 +973,27 @@ class PhpGenerator : public BaseGenerator {
     GenComment(struct_def.doc_comment, code_ptr, nullptr);
     BeginClass(struct_def, code_ptr);
 
+    bool has_encrypted = HasEncryptedFields(struct_def);
+    std::string& code = *code_ptr;
+
+    // Add encryptionCtx property for tables with encrypted fields
+    if (has_encrypted && !struct_def.fixed) {
+      code += Indent + "/**\n";
+      code += Indent + " * @var string|null Encryption context for decrypting encrypted fields\n";
+      code += Indent + " */\n";
+      code += Indent + "protected $encryptionCtx = null;\n\n";
+    }
+
     if (!struct_def.fixed) {
       // Generate a special accessor for the table that has been declared as
       // the root type.
       NewRootTypeFromBuffer(struct_def, code_ptr);
+      // Generate accessor with encryption context for tables with encrypted fields
+      if (has_encrypted) {
+        NewRootTypeFromBufferWithEncryption(struct_def, code_ptr);
+      }
     }
 
-    std::string& code = *code_ptr;
     if (!struct_def.fixed) {
       if (parser_.file_identifier_.length()) {
         // Return the identifier
@@ -832,6 +1028,10 @@ class PhpGenerator : public BaseGenerator {
     // Generate the Init method that sets the field in a pre-existing
     // accessor object. This is to allow object reuse.
     InitializeExisting(struct_def, code_ptr);
+    // For tables with encrypted fields, also generate init with encryption context
+    if (has_encrypted && !struct_def.fixed) {
+      InitializeExistingWithEncryption(struct_def, code_ptr);
+    }
     for (auto it = struct_def.fields.vec.begin();
          it != struct_def.fields.vec.end(); ++it) {
       auto& field = **it;

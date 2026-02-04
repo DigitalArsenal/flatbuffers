@@ -198,6 +198,36 @@ const aesKey = hkdf(shared, null, new TextEncoder().encode('my-app'), 32);
 encryptBytes(flatbufferData, aesKey, iv);
 ```
 
+### Generated Code Encryption
+
+All code generators now support field-level encryption. Mark fields with `(encrypted)` in your schema:
+
+```fbs
+table UserRecord {
+  id: uint64;
+  name: string;
+  ssn: string (encrypted);
+  credit_card: string (encrypted);
+}
+```
+
+Generated code includes transparent encryption/decryption:
+
+| Language | Encryption Library | Status |
+|----------|-------------------|--------|
+| C++ | `flatbuffers/encryption.h` | ✓ |
+| TypeScript | Pure TS AES-256-CTR | ✓ |
+| Python | `cryptography` | ✓ |
+| Go | `crypto/aes` + `crypto/cipher` | ✓ |
+| Rust | Pure Rust AES-256-CTR | ✓ |
+| Java | `javax.crypto.Cipher` | ✓ |
+| C# | `System.Security.Cryptography` | ✓ |
+| Swift | Pure Swift AES-256-CTR | ✓ |
+| Kotlin | `javax.crypto.Cipher` | ✓ |
+| PHP | `openssl_encrypt/decrypt` | ✓ |
+| Dart | `pointycastle` | ✓ |
+| Lobster | Placeholder (no crypto lib) | ✓ |
+
 ### Supported Blockchains
 
 | Chain | Curve | Signature |

@@ -2122,6 +2122,31 @@ class EphemerisVisualizer {
 
 flatc-wasm supports per-field AES-256-CTR encryption for FlatBuffer data. Fields marked with the `(encrypted)` attribute are transparently encrypted and decrypted, with key derivation via HKDF so each field gets a unique key/IV pair.
 
+### Generated Code Encryption Support
+
+All 12 code generators now emit encryption support automatically when your schema contains `(encrypted)` fields:
+
+| Language | Library/Implementation | Notes |
+|----------|----------------------|-------|
+| C++ | `flatbuffers/encryption.h` | Inline helpers in `encryption` namespace |
+| TypeScript | Pure TypeScript AES-256-CTR | No external dependencies |
+| Python | `cryptography` library | Uses Fernet-compatible primitives |
+| Go | `crypto/aes` + `crypto/cipher` | Standard library only |
+| Rust | Pure Rust AES-256-CTR | No external crates required |
+| Java | `javax.crypto.Cipher` | Standard JCE APIs |
+| C# | `System.Security.Cryptography` | .NET built-in crypto |
+| Swift | Pure Swift AES-256-CTR | No Foundation dependencies |
+| Kotlin | `javax.crypto.Cipher` | Android/JVM compatible |
+| PHP | `openssl_encrypt/decrypt` | OpenSSL extension |
+| Dart | `pointycastle` library | Pure Dart implementation |
+| Lobster | Placeholder | Language lacks crypto library |
+
+The generated code automatically:
+- Adds an `encryptionCtx` field to tables with encrypted fields
+- Generates `withEncryption()` factory constructors
+- Transparently decrypts fields when accessed with a valid context
+- Returns raw (encrypted) bytes when accessed without context
+
 ### Per-Field Encryption
 
 Mark fields in your schema with the `(encrypted)` attribute:

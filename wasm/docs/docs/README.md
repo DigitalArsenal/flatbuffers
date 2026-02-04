@@ -51,6 +51,40 @@ All implementations use the same:
 - Key derivation (HKDF-SHA256)
 - Signature formats (DER-encoded ECDSA, raw Ed25519)
 
+### Generated Code Encryption
+
+All 12 FlatBuffers code generators now emit encryption support when your schema contains `(encrypted)` fields:
+
+```fbs
+table UserRecord {
+  id: uint64;
+  name: string;
+  ssn: string (encrypted);        // Encrypted at rest
+  credit_card: string (encrypted); // Encrypted at rest
+}
+```
+
+Generated code automatically includes:
+- `FlatbuffersEncryption` class/module with AES-256-CTR implementation
+- `encryptionCtx` field on tables with encrypted fields
+- `withEncryption()` factory for creating decryption-enabled readers
+- Transparent field decryption when encryption context is provided
+
+| Language | Encryption Library |
+|----------|-------------------|
+| C++ | `flatbuffers/encryption.h` inline helpers |
+| TypeScript | Pure TypeScript AES-256-CTR |
+| Python | `cryptography` library |
+| Go | `crypto/aes` + `crypto/cipher` |
+| Rust | Pure Rust AES-256-CTR |
+| Java | `javax.crypto.Cipher` |
+| C# | `System.Security.Cryptography` |
+| Swift | Pure Swift AES-256-CTR |
+| Kotlin | `javax.crypto.Cipher` |
+| PHP | `openssl_encrypt/decrypt` |
+| Dart | `pointycastle` library |
+| Lobster | Placeholder (no crypto library) |
+
 ---
 
 ## Supported Runtimes

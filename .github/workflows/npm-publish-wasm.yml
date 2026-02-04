@@ -55,5 +55,5 @@ jobs:
         working-directory: wasm
 
       - name: Publish
-        run: npm publish --access public --provenance
+        run: npm publish --access public --provenance --tag latest
         working-directory: wasm

@@ -1,0 +1,11 @@
+[package]
+name = "rust_encryption_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+flatbuffers = { path = "../../rust/flatbuffers", default-features = false }
+
+[[bin]]
+name = "encryption_test"
+path = "src/main.rs"

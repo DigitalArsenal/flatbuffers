@@ -2166,9 +2166,152 @@ When encryption is active, only the `ssn` and `credit_card` fields are encrypted
 
 **How it works:**
 - A shared secret is derived via ECDH (X25519, secp256k1, P-256, or P-384)
-- HKDF derives a unique AES-256 key and IV per field using the field name as context
+- HKDF derives a unique AES-256 key per session using the context string
+- Each field gets a unique nonce via 96-bit addition: `nonceStart + (recordIndex * 65536 + fieldId)`
 - Each field is encrypted independently with AES-256-CTR
-- An `EncryptionHeader` FlatBuffer stores the ephemeral public key and algorithm metadata
+- An `EncryptionHeader` FlatBuffer stores the ephemeral public key, algorithm metadata, and starting nonce
+
+### Encryption Sessions & Nonce Management
+
+flatc-wasm uses a **nonce incrementor** system to ensure cryptographic security when encrypting multiple fields or records. This prevents nonce reuse, which would compromise AES-CTR mode security.
+
+#### Starting an Encrypted Session
+
+To decrypt data, the recipient must first receive the `EncryptionHeader`. This header contains:
+
+1. **Ephemeral public key** - For ECDH key derivation
+2. **Starting nonce (`nonceStart`)** - 12-byte random value generated via CSPRNG
+3. **Algorithm metadata** - Key exchange, symmetric cipher, and KDF identifiers
+4. **Optional context** - Domain separation string for HKDF
+
+```javascript
+import { EncryptionContext, generateNonceStart } from 'flatc-wasm';
+
+// === Sender establishes session ===
+const ctx = EncryptionContext.forEncryption(recipientPublicKey, {
+  algorithm: 'x25519',
+  context: 'my-app-v1',
+  // nonceStart auto-generated if not provided
+});
+
+// Get the header to send to recipient FIRST
+const header = ctx.getHeader();
+const headerJSON = ctx.getHeaderJSON();
+
+// Send header before any encrypted data
+await sendToRecipient(header);
+
+// Now encrypt records
+for (let i = 0; i < records.length; i++) {
+  ctx.setRecordIndex(i);
+  const encrypted = encryptRecord(records[i], ctx);
+  await sendToRecipient(encrypted);
+}
+```
+
+#### Nonce Derivation Algorithm
+
+Each field in each record gets a unique 96-bit nonce derived via big-endian addition:
+
+```
+derived_nonce = nonceStart + (recordIndex × 65536 + fieldId)
+```
+
+This ensures:
+
+- **No nonce reuse** - Every (recordIndex, fieldId) pair produces a unique nonce
+- **Deterministic derivation** - Same inputs always produce the same nonce
+- **Efficient computation** - Simple 96-bit addition with carry
+
+```javascript
+import { deriveNonce, generateNonceStart, NONCE_SIZE } from 'flatc-wasm';
+
+// Generate random starting nonce (12 bytes)
+const nonceStart = generateNonceStart();
+
+// Derive nonce for record 0, field 0
+const nonce0 = deriveNonce(nonceStart, 0);
+
+// Derive nonce for record 5, field 3
+// Combined index = 5 * 65536 + 3 = 327683
+const nonce5_3 = deriveNonce(nonceStart, 5 * 65536 + 3);
+
+// Using EncryptionContext (recommended)
+const ctx = new EncryptionContext(key, nonceStart);
+const fieldNonce = ctx.deriveFieldNonce(fieldId, recordIndex);
+```
+
+#### Offline & Out-of-Order Decryption
+
+Because nonce derivation is deterministic, encrypted records can be decrypted:
+
+1. **Offline** - No connection to the sender required after receiving the header
+2. **Out of order** - Records can arrive or be processed in any sequence
+3. **Partially** - Only specific records/fields need to be decrypted
+4. **In parallel** - Multiple workers can decrypt different records simultaneously
+
+```javascript
+// === Recipient receives header first ===
+const ctx = EncryptionContext.forDecryption(
+  myPrivateKey,
+  receivedHeader,
+  'my-app-v1'
+);
+
+// Records can arrive out of order - just set the correct index
+ctx.setRecordIndex(42);  // Decrypt record 42 first
+const record42 = decryptRecord(encryptedData42, ctx);
+
+ctx.setRecordIndex(7);   // Then decrypt record 7
+const record7 = decryptRecord(encryptedData7, ctx);
+
+// Or decrypt in parallel with separate contexts
+const workers = records.map((data, index) => {
+  return decryptInWorker(data, index, receivedHeader, myPrivateKey);
+});
+await Promise.all(workers);
+```
+
+#### Unknown Record Index Recovery
+
+If the record index is lost (e.g., packet loss without sequence numbers), the recipient can still decrypt by trying sequential indices:
+
+```javascript
+async function recoverAndDecrypt(encryptedData, ctx, maxAttempts = 1000) {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      ctx.setRecordIndex(i);
+      const decrypted = await tryDecrypt(encryptedData, ctx);
+      // Validate decrypted data (e.g., check FlatBuffer structure)
+      if (isValidFlatBuffer(decrypted)) {
+        console.log(`Recovered at recordIndex ${i}`);
+        return { data: decrypted, recordIndex: i };
+      }
+    } catch {
+      // Wrong index, try next
+    }
+  }
+  throw new Error('Could not recover record index');
+}
+```
+
+**Note:** For production use, include the record index in your message framing or use authenticated encryption (AEAD) to detect incorrect indices immediately.
+
+#### Security: Why Nonce Incrementing Matters
+
+AES-CTR mode generates a keystream by encrypting a counter with the key. The ciphertext is `plaintext XOR keystream`. If the same (key, nonce) pair is used twice:
+
+```text
+ciphertext1 XOR ciphertext2 = plaintext1 XOR plaintext2
+```
+
+This leaks information about both plaintexts. An attacker with two ciphertexts encrypted with the same nonce can:
+
+- Recover plaintext if one message is known
+- Perform statistical analysis on the XOR of plaintexts
+- Potentially recover both plaintexts with enough ciphertext pairs
+
+The nonce incrementor guarantees a unique nonce for every field in every record, preventing this attack class entirely.
 
 ### FlatcRunner Encryption API
 
@@ -2281,11 +2424,12 @@ The `EncryptionHeader` stored with encrypted data:
 enum KeyExchangeAlgorithm : byte { X25519, Secp256k1, P256, P384 }
 
 table EncryptionHeader {
-  version: uint8 = 1;
-  algorithm: KeyExchangeAlgorithm;
-  ephemeral_public_key: [ubyte];
-  encrypted_field_indices: [uint16];
+  version: ubyte = 2;                    // Version 2 requires nonce_start
+  key_exchange: KeyExchangeAlgorithm;
+  ephemeral_public_key: [ubyte] (required);
+  nonce_start: [ubyte] (required);       // 12-byte starting nonce (CSPRNG)
   context: string;
+  timestamp: ulong;                      // Unix epoch milliseconds
 }
 ```
 

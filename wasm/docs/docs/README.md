@@ -40,16 +40,35 @@ built-in OpenSSL FIPS support. Enable it with `wallet.initFips()`:
 
 Data encrypted in one language can be decrypted in any other:
 
-```
+```text
 Go ↔ Python ↔ Rust ↔ Java ↔ C# ↔ Swift ↔ Node.js ↔ Browser
 ```
 
 All implementations use the same:
+
 - Key formats (raw bytes)
-- IV/nonce handling
+- Nonce derivation (96-bit addition from `nonceStart`)
 - Encryption algorithms (AES-256-CTR)
 - Key derivation (HKDF-SHA256)
 - Signature formats (DER-encoded ECDSA, raw Ed25519)
+
+### Nonce-Based Session Security
+
+flatc-wasm uses a **nonce incrementor** to prevent nonce reuse attacks in AES-CTR mode:
+
+1. **Session establishment**: Sender generates random 12-byte `nonceStart` via CSPRNG
+2. **Header transmission**: `EncryptionHeader` (containing `nonceStart`) sent before encrypted data
+3. **Nonce derivation**: Each field gets unique nonce via `nonceStart + (recordIndex × 65536 + fieldId)`
+4. **Offline decryption**: Recipients can decrypt any record in any order using just the header
+
+This enables:
+
+- **Out-of-order decryption** - Records can arrive or be processed in any sequence
+- **Parallel decryption** - Multiple workers can decrypt different records simultaneously
+- **Offline operation** - No connection to sender required after receiving header
+- **Index recovery** - If record index is lost, try sequential indices until decryption succeeds
+
+See [Encryption Sessions & Nonce Management](encryption.md) for detailed documentation.
 
 ### Generated Code Encryption
 
@@ -431,6 +450,7 @@ func verifyPythonSignature(publicKey, message, signature []byte) bool {
 
 For detailed integration instructions, see:
 
+- [Encryption Sessions](encryption.md) - Nonce management, session establishment, offline decryption
 - [Go Integration](go.md) - wazero runtime, pure Go
 - [Python Integration](python.md) - wasmer with Cranelift
 - [Rust Integration](rust.md) - wasmer crate

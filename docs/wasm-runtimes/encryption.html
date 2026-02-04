@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Encryption - DA FlatBuffers</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #000000;
+      --bg-secondary: rgba(42, 42, 45, 0.72);
+      --bg-tertiary: rgba(66, 66, 69, 0.72);
+      --accent-primary: #3b82f6;
+      --accent-secondary: #60a5fa;
+      --text-primary: #F5F5F7;
+      --text-secondary: rgba(255, 255, 255, 0.6);
+      --border-color: rgba(59, 130, 246, 0.3);
+      --glow-color: rgba(59, 130, 246, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(59, 130, 246, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(59, 130, 246, 0.04) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(59, 130, 246, 0.03) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Grid pattern overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        linear-gradient(rgba(59, 130, 246, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59, 130, 246, 0.02) 1px, transparent 1px);
+      background-size: 50px 50px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .page-container {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      margin-bottom: 30px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--accent-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .back-link:hover {
+      background: var(--bg-tertiary);
+      border-color: var(--accent-primary);
+      transform: translateY(-1px);
+    }
+
+    .markdown-body {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 48px;
+    }
+
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3,
+    .markdown-body h4 {
+      color: var(--text-primary);
+      border-bottom-color: var(--border-color);
+      font-weight: 600;
+    }
+
+    .markdown-body h1 {
+      background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-size: 2.2em;
+      margin-bottom: 24px;
+    }
+
+    .markdown-body a {
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body a:hover {
+      color: var(--accent-primary);
+    }
+
+    .markdown-body code {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9em;
+    }
+
+    .markdown-body pre {
+      background: var(--bg-primary) !important;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+    }
+
+    .markdown-body pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-size: 0.85em;
+      line-height: 1.6;
+    }
+
+    .markdown-body table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 20px 0;
+    }
+
+    .markdown-body table th,
+    .markdown-body table td {
+      border: 1px solid var(--border-color);
+      padding: 12px 16px;
+      text-align: left;
+    }
+
+    .markdown-body table th {
+      background: var(--bg-tertiary);
+      font-weight: 600;
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body table tr:nth-child(even) {
+      background: rgba(59, 130, 246, 0.03);
+    }
+
+    .markdown-body blockquote {
+      border-left: 4px solid var(--accent-primary);
+      background: var(--bg-tertiary);
+      padding: 16px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .markdown-body hr {
+      border: none;
+      height: 1px;
+      background: var(--border-color);
+      margin: 32px 0;
+    }
+
+    .markdown-body ul, .markdown-body ol {
+      padding-left: 24px;
+    }
+
+    .markdown-body li {
+      margin: 8px 0;
+    }
+
+    @media (max-width: 768px) {
+      .page-container {
+        padding: 20px 16px;
+      }
+      .markdown-body {
+        padding: 24px;
+        border-radius: 12px;
+      }
+      .markdown-body h1 {
+        font-size: 1.8em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <a href="https://digitalarsenal.github.io/flatbuffers/" class="back-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Back to DA FlatBuffers
+    </a>
+    <article class="markdown-body"><h1>Encryption Sessions &amp; Nonce Management</h1>
+<p>This guide explains how to establish encrypted sessions using flatc-wasm&#39;s per-field encryption system, including the critical nonce management that ensures cryptographic security.</p>
+<h2>Overview</h2>
+<p>flatc-wasm uses <strong>AES-256-CTR</strong> for per-field encryption. CTR (Counter) mode requires a unique nonce for every encryption operation with the same key. Reusing a nonce catastrophically compromises security.</p>
+<p>To solve this, flatc-wasm implements a <strong>nonce incrementor</strong> system:</p>
+<ol>
+<li>Generate a random 12-byte <code>nonceStart</code> using CSPRNG</li>
+<li>Derive unique nonces for each field via: <code>nonceStart + (recordIndex × 65536 + fieldId)</code></li>
+<li>Send the <code>EncryptionHeader</code> (containing <code>nonceStart</code>) before any encrypted data</li>
+<li>Recipients use the same derivation to decrypt any record in any order</li>
+</ol>
+<h2>Establishing an Encrypted Session</h2>
+<h3>Step 1: Sender Creates Encryption Context</h3>
+<pre><code class="language-javascript">import { EncryptionContext, generateNonceStart } from &#39;flatc-wasm&#39;;
+
+// Create context for encrypting to a recipient
+const ctx = EncryptionContext.forEncryption(recipientPublicKey, {
+  algorithm: &#39;x25519&#39;,           // Key exchange algorithm
+  context: &#39;my-application-v1&#39;,  // Domain separation for HKDF
+  // nonceStart is auto-generated via CSPRNG if not provided
+});
+
+// Get the encryption header
+const header = ctx.getHeader();
+</code></pre>
+<h3>Step 2: Send Header First</h3>
+<p>The <code>EncryptionHeader</code> MUST be transmitted before any encrypted data. It contains:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Size</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>version</code></td>
+<td>1 byte</td>
+<td>Header format version (2 = nonce_start required)</td>
+</tr>
+<tr>
+<td><code>key_exchange</code></td>
+<td>1 byte</td>
+<td>Algorithm enum (X25519, Secp256k1, P256, P384)</td>
+</tr>
+<tr>
+<td><code>ephemeral_public_key</code></td>
+<td>32-65 bytes</td>
+<td>Sender&#39;s ephemeral ECDH public key</td>
+</tr>
+<tr>
+<td><code>nonce_start</code></td>
+<td>12 bytes</td>
+<td>Random starting nonce from CSPRNG</td>
+</tr>
+<tr>
+<td><code>context</code></td>
+<td>variable</td>
+<td>Optional HKDF domain separation string</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td>8 bytes</td>
+<td>Optional Unix epoch milliseconds</td>
+</tr>
+</tbody></table>
+<pre><code class="language-javascript">// Serialize header as JSON or FlatBuffer
+const headerJSON = ctx.getHeaderJSON();
+
+// Send to recipient via your transport layer
+await transport.send({
+  type: &#39;encryption_header&#39;,
+  payload: headerJSON
+});
+</code></pre>
+<h3>Step 3: Encrypt and Send Records</h3>
+<pre><code class="language-javascript">// Encrypt multiple records
+for (let recordIndex = 0; recordIndex &lt; records.length; recordIndex++) {
+  ctx.setRecordIndex(recordIndex);
+
+  // Encrypt each field
+  for (const field of encryptedFields) {
+    const nonce = ctx.deriveFieldNonce(field.id, recordIndex);
+    ctx.encryptScalar(buffer, field.offset, field.length, field.id, recordIndex);
+  }
+
+  // Send encrypted record with its index
+  await transport.send({
+    type: &#39;encrypted_record&#39;,
+    recordIndex: recordIndex,
+    payload: buffer
+  });
+}
+</code></pre>
+<h3>Step 4: Recipient Establishes Decryption Context</h3>
+<pre><code class="language-javascript">// Receive and parse the header first
+const headerJSON = await transport.receive(&#39;encryption_header&#39;);
+const header = encryptionHeaderFromJSON(headerJSON);
+
+// Create decryption context using recipient&#39;s private key
+const ctx = EncryptionContext.forDecryption(
+  myPrivateKey,
+  header,
+  &#39;my-application-v1&#39;  // Must match sender&#39;s context
+);
+</code></pre>
+<h3>Step 5: Decrypt Records (Any Order)</h3>
+<pre><code class="language-javascript">// Records can be decrypted in any order
+while (const msg = await transport.receive(&#39;encrypted_record&#39;)) {
+  ctx.setRecordIndex(msg.recordIndex);
+
+  for (const field of encryptedFields) {
+    ctx.decryptScalar(msg.payload, field.offset, field.length, field.id, msg.recordIndex);
+  }
+
+  // Process decrypted record
+  processRecord(msg.payload);
+}
+</code></pre>
+<h2>Nonce Derivation Deep Dive</h2>
+<h3>The Algorithm</h3>
+<p>Each field gets a unique 96-bit (12-byte) nonce derived via big-endian addition:</p>
+<pre><code class="language-text">derived_nonce = nonceStart + combined_index
+combined_index = recordIndex × 65536 + fieldId
+</code></pre>
+<p>This provides:</p>
+<ul>
+<li><strong>2^16 (65,536) unique field IDs per record</strong></li>
+<li><strong>2^80 unique record indices</strong> before the combined index could theoretically wrap</li>
+<li><strong>Deterministic derivation</strong> - same inputs always produce the same nonce</li>
+</ul>
+<h3>Implementation</h3>
+<pre><code class="language-javascript">import { deriveNonce, generateNonceStart } from &#39;flatc-wasm&#39;;
+
+// Generate cryptographically secure starting nonce
+const nonceStart = generateNonceStart();  // 12 bytes from CSPRNG
+
+// Derive nonces for different fields
+const nonce_r0_f0 = deriveNonce(nonceStart, 0);           // record 0, field 0
+const nonce_r0_f1 = deriveNonce(nonceStart, 1);           // record 0, field 1
+const nonce_r1_f0 = deriveNonce(nonceStart, 65536);       // record 1, field 0
+const nonce_r5_f3 = deriveNonce(nonceStart, 5 * 65536 + 3); // record 5, field 3
+</code></pre>
+<h3>96-Bit Addition with Carry</h3>
+<p>The nonce is treated as a big-endian 96-bit integer. Addition wraps around at 2^96:</p>
+<pre><code class="language-javascript">// Internal implementation (simplified)
+function deriveNonce(nonceStart, recordIndex) {
+  // Convert nonceStart to BigInt (big-endian)
+  let value = 0n;
+  for (let i = 0; i &lt; 12; i++) {
+    value = (value &lt;&lt; 8n) | BigInt(nonceStart[i]);
+  }
+
+  // Add index with 96-bit wraparound
+  const mask96 = (1n &lt;&lt; 96n) - 1n;
+  value = (value + BigInt(recordIndex)) &amp; mask96;
+
+  // Convert back to bytes (big-endian)
+  const result = new Uint8Array(12);
+  for (let i = 11; i &gt;= 0; i--) {
+    result[i] = Number(value &amp; 0xFFn);
+    value &gt;&gt;= 8n;
+  }
+  return result;
+}
+</code></pre>
+<h2>Offline Decryption</h2>
+<p>Once the <code>EncryptionHeader</code> is received, decryption requires no further communication with the sender:</p>
+<pre><code class="language-javascript">// Store header for later use
+localStorage.setItem(&#39;session_header&#39;, ctx.getHeaderJSON());
+
+// ... Later, even offline ...
+
+// Restore session
+const savedHeader = localStorage.getItem(&#39;session_header&#39;);
+const header = encryptionHeaderFromJSON(savedHeader);
+const ctx = EncryptionContext.forDecryption(myPrivateKey, header, &#39;my-app&#39;);
+
+// Decrypt any record using just its index
+ctx.setRecordIndex(42);
+ctx.decryptScalar(encryptedData, offset, length, fieldId);
+</code></pre>
+<h2>Out-of-Order Decryption</h2>
+<p>Records can arrive or be processed in any sequence:</p>
+<pre><code class="language-javascript">const ctx = EncryptionContext.forDecryption(privateKey, header, context);
+
+// Process records as they arrive (not necessarily in order)
+websocket.onmessage = (event) =&gt; {
+  const { recordIndex, data } = parseMessage(event.data);
+
+  // Set index for this specific record
+  ctx.setRecordIndex(recordIndex);
+
+  // Decrypt - nonce is derived from recordIndex
+  ctx.decryptScalar(data, offset, length, fieldId, recordIndex);
+
+  processDecryptedRecord(recordIndex, data);
+};
+</code></pre>
+<h2>Parallel Decryption</h2>
+<p>Different records can be decrypted simultaneously in separate workers:</p>
+<pre><code class="language-javascript">// Main thread
+const header = ctx.getHeader();
+
+// Spawn workers for parallel decryption
+const workers = encryptedRecords.map((record, index) =&gt; {
+  return new Promise((resolve) =&gt; {
+    const worker = new Worker(&#39;decrypt-worker.js&#39;);
+    worker.postMessage({
+      privateKey: myPrivateKey,
+      header: header,
+      context: &#39;my-app&#39;,
+      recordIndex: index,
+      encryptedData: record
+    });
+    worker.onmessage = (e) =&gt; resolve(e.data);
+  });
+});
+
+const decryptedRecords = await Promise.all(workers);
+</code></pre>
+<pre><code class="language-javascript">// decrypt-worker.js
+import { EncryptionContext, encryptionHeaderFromJSON } from &#39;flatc-wasm&#39;;
+
+self.onmessage = (event) =&gt; {
+  const { privateKey, header, context, recordIndex, encryptedData } = event.data;
+
+  // Each worker creates its own context
+  const ctx = EncryptionContext.forDecryption(
+    new Uint8Array(privateKey),
+    encryptionHeaderFromJSON(header),
+    context
+  );
+
+  ctx.setRecordIndex(recordIndex);
+  const decrypted = new Uint8Array(encryptedData);
+  ctx.decryptScalar(decrypted, 0, decrypted.length, 0, recordIndex);
+
+  self.postMessage(decrypted);
+};
+</code></pre>
+<h2>Recovering Unknown Record Index</h2>
+<p>If the record index is lost (e.g., corrupted metadata), you can brute-force recovery:</p>
+<pre><code class="language-javascript">async function recoverRecordIndex(encryptedData, ctx, validator, maxAttempts = 10000) {
+  for (let i = 0; i &lt; maxAttempts; i++) {
+    try {
+      // Make a copy to test decryption
+      const testData = new Uint8Array(encryptedData);
+      ctx.setRecordIndex(i);
+      ctx.decryptScalar(testData, 0, testData.length, 0, i);
+
+      // Validate the decrypted data
+      if (validator(testData)) {
+        return { recordIndex: i, data: testData };
+      }
+    } catch {
+      // Invalid decryption, try next index
+    }
+  }
+  throw new Error(&#39;Could not recover record index within max attempts&#39;);
+}
+
+// Usage with FlatBuffer validation
+const result = await recoverRecordIndex(encrypted, ctx, (data) =&gt; {
+  try {
+    // Try to read as FlatBuffer - invalid data will throw
+    const fb = MyTable.getRootAsMyTable(new ByteBuffer(data));
+    return fb.someRequiredField() !== null;
+  } catch {
+    return false;
+  }
+});
+</code></pre>
+<p><strong>Performance note:</strong> This approach is O(n) where n is the unknown range. For production systems, always include the record index in your message framing.</p>
+<h2>Security Considerations</h2>
+<h3>Why Nonce Reuse is Catastrophic</h3>
+<p>AES-CTR encrypts by XORing plaintext with a keystream generated from the key and nonce:</p>
+<pre><code class="language-text">ciphertext = plaintext XOR AES_CTR(key, nonce)
+</code></pre>
+<p>If the same (key, nonce) pair encrypts two different plaintexts:</p>
+<pre><code class="language-text">C1 = P1 XOR keystream
+C2 = P2 XOR keystream
+
+C1 XOR C2 = P1 XOR P2  // Keystream cancels out!
+</code></pre>
+<p>This reveals:</p>
+<ol>
+<li><strong>XOR of plaintexts</strong> - Statistical analysis can recover both</li>
+<li><strong>Partial plaintext recovery</strong> - If P1 is known, P2 = C1 XOR C2 XOR P1</li>
+<li><strong>Crib dragging</strong> - Guess parts of one plaintext to reveal the other</li>
+</ol>
+<h3>How Nonce Incrementing Prevents This</h3>
+<p>The nonce incrementor guarantees:</p>
+<ul>
+<li>Every (recordIndex, fieldId) pair produces a unique nonce</li>
+<li>Even if you encrypt billions of records, no nonce is ever reused</li>
+<li>The starting nonce is random (CSPRNG), so it&#39;s unpredictable</li>
+</ul>
+<h3>Additional Recommendations</h3>
+<ol>
+<li><strong>Always send header first</strong> - Don&#39;t encrypt until recipient confirms header receipt</li>
+<li><strong>Validate record indices</strong> - Ensure indices are within expected range</li>
+<li><strong>Use authenticated encryption</strong> - Consider adding HMAC for integrity verification</li>
+<li><strong>Rotate sessions</strong> - Start new sessions periodically with fresh nonceStart values</li>
+<li><strong>Secure key storage</strong> - The recipient&#39;s private key must be protected</li>
+</ol>
+<h2>API Reference</h2>
+<h3>generateNonceStart()</h3>
+<p>Generate a cryptographically secure 12-byte starting nonce.</p>
+<pre><code class="language-typescript">function generateNonceStart(): Uint8Array;  // Returns 12 bytes
+</code></pre>
+<h3>deriveNonce(nonceStart, recordIndex)</h3>
+<p>Derive a unique nonce for a specific record/field combination.</p>
+<pre><code class="language-typescript">function deriveNonce(
+  nonceStart: Uint8Array,      // 12-byte starting nonce
+  recordIndex: number | bigint  // Combined index (recordIndex * 65536 + fieldId)
+): Uint8Array;                  // Returns 12-byte derived nonce
+</code></pre>
+<h3>EncryptionContext</h3>
+<pre><code class="language-typescript">class EncryptionContext {
+  constructor(key: Uint8Array | string, nonceStart?: Uint8Array);
+
+  static forEncryption(recipientPublicKey: Uint8Array, options?: {
+    algorithm?: &#39;x25519&#39; | &#39;secp256k1&#39;;
+    context?: string;
+    nonceStart?: Uint8Array;
+  }): EncryptionContext;
+
+  static forDecryption(
+    privateKey: Uint8Array,
+    header: EncryptionHeader,
+    context?: string
+  ): EncryptionContext;
+
+  // Nonce management
+  getNonceStart(): Uint8Array;
+  getRecordIndex(): number;
+  setRecordIndex(index: number): void;
+  nextRecordIndex(): number;
+  deriveFieldNonce(fieldId: number, recordIndex?: number): Uint8Array;
+
+  // Encryption operations
+  encryptScalar(buffer: Uint8Array, offset: number, length: number, fieldId: number, recordIndex?: number): void;
+  decryptScalar(buffer: Uint8Array, offset: number, length: number, fieldId: number, recordIndex?: number): void;
+
+  // Header management
+  getHeader(): EncryptionHeader;
+  getHeaderJSON(): string;
+}
+</code></pre>
+<h3>EncryptionHeader</h3>
+<pre><code class="language-typescript">interface EncryptionHeader {
+  version: number;              // 2 = nonce_start required
+  algorithm: string;            // &#39;x25519&#39;, &#39;secp256k1&#39;, etc.
+  senderPublicKey: Uint8Array;  // Ephemeral public key
+  recipientKeyId: Uint8Array;   // Optional recipient key identifier
+  nonceStart: Uint8Array;       // 12-byte starting nonce
+  context: string;              // HKDF domain separation
+  sequenceNumber?: bigint;      // Optional replay protection
+  sessionId?: Uint8Array;       // Optional session identifier
+}
+</code></pre>
+<h2>See Also</h2>
+<ul>
+<li><a href="nodejs.html">Node.js Integration</a> - Using encryption in Node.js</li>
+<li><a href="browser.html">Browser Integration</a> - Using encryption in browsers</li>
+<li><a href="README.md#security-considerations">Security Considerations</a> - General security guidance</li>
+</ul>
+</article>
+  </div>
+</body>
+</html>

@@ -266,6 +266,78 @@ built-in OpenSSL FIPS support. Enable it with <code>wallet.initFips()</code>:</p
 <li>Key derivation (HKDF-SHA256)</li>
 <li>Signature formats (DER-encoded ECDSA, raw Ed25519)</li>
 </ul>
+<h3>Generated Code Encryption</h3>
+<p>All 12 FlatBuffers code generators now emit encryption support when your schema contains <code>(encrypted)</code> fields:</p>
+<pre><code class="language-fbs">table UserRecord {
+  id: uint64;
+  name: string;
+  ssn: string (encrypted);        // Encrypted at rest
+  credit_card: string (encrypted); // Encrypted at rest
+}
+</code></pre>
+<p>Generated code automatically includes:</p>
+<ul>
+<li><code>FlatbuffersEncryption</code> class/module with AES-256-CTR implementation</li>
+<li><code>encryptionCtx</code> field on tables with encrypted fields</li>
+<li><code>withEncryption()</code> factory for creating decryption-enabled readers</li>
+<li>Transparent field decryption when encryption context is provided</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Language</th>
+<th>Encryption Library</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>C++</td>
+<td><code>flatbuffers/encryption.h</code> inline helpers</td>
+</tr>
+<tr>
+<td>TypeScript</td>
+<td>Pure TypeScript AES-256-CTR</td>
+</tr>
+<tr>
+<td>Python</td>
+<td><code>cryptography</code> library</td>
+</tr>
+<tr>
+<td>Go</td>
+<td><code>crypto/aes</code> + <code>crypto/cipher</code></td>
+</tr>
+<tr>
+<td>Rust</td>
+<td>Pure Rust AES-256-CTR</td>
+</tr>
+<tr>
+<td>Java</td>
+<td><code>javax.crypto.Cipher</code></td>
+</tr>
+<tr>
+<td>C#</td>
+<td><code>System.Security.Cryptography</code></td>
+</tr>
+<tr>
+<td>Swift</td>
+<td>Pure Swift AES-256-CTR</td>
+</tr>
+<tr>
+<td>Kotlin</td>
+<td><code>javax.crypto.Cipher</code></td>
+</tr>
+<tr>
+<td>PHP</td>
+<td><code>openssl_encrypt/decrypt</code></td>
+</tr>
+<tr>
+<td>Dart</td>
+<td><code>pointycastle</code> library</td>
+</tr>
+<tr>
+<td>Lobster</td>
+<td>Placeholder (no crypto library)</td>
+</tr>
+</tbody></table>
 <hr>
 <h2>Supported Runtimes</h2>
 <table>

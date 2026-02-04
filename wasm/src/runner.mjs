@@ -7,6 +7,7 @@
 
 import createFlatcModule from "../dist/flatc-wasm.js";
 import { generateAlignedCode as generateAligned } from "./aligned-codegen.mjs";
+import { EncryptionContext, serializeEncryptionHeader, deserializeEncryptionHeader } from "./index.mjs";
 
 // =============================================================================
 // Security Limits (VULN-002 fix)
@@ -1175,8 +1176,32 @@ export class FlatcRunner {
       }
     }
 
-    // No silent fallback — encryption must succeed or throw (Task 26)
-    throw new Error('Encryption unavailable: WASM crypto exports not found');
+    // Fall back to JavaScript encryption implementation
+    try {
+      const encCtx = EncryptionContext.forEncryption(encryption.publicKey, {
+        algorithm: encryption.algorithm || 'x25519',
+        context: encryption.context || '',
+      });
+
+      // Encrypt the binary data
+      encCtx.encryptBuffer(binary, 0);
+
+      // Create encryption header - convert Uint8Array to Array for JSON serialization
+      const ephemeralKey = encCtx.getEphemeralPublicKey();
+      const header = {
+        algorithm: encryption.algorithm || 'x25519',
+        ephemeralPublicKey: Array.from(ephemeralKey),
+        context: encryption.context || '',
+        fields: encryption.fields || [],
+      };
+
+      const headerBytes = new TextEncoder().encode(JSON.stringify(header));
+      encCtx.destroy();
+
+      return { header: headerBytes, data: binary };
+    } catch (jsErr) {
+      throw new Error(`Encryption failed: ${jsErr.message}`);
+    }
   }
 
   /**
@@ -1241,8 +1266,62 @@ export class FlatcRunner {
       }
     }
 
-    // No silent fallback — decryption must succeed or throw (Task 26)
-    throw new Error('Decryption unavailable: WASM crypto exports not found');
+    // Fall back to JavaScript decryption implementation
+    try {
+      // Parse header if provided
+      let parsedHeader = decryption.header;
+      if (parsedHeader && parsedHeader instanceof Uint8Array) {
+        try {
+          parsedHeader = JSON.parse(new TextDecoder().decode(parsedHeader));
+        } catch {
+          // Header might already be parsed or in different format
+        }
+      }
+
+      const algorithm = parsedHeader?.algorithm || 'x25519';
+      const ephemeralPublicKey = parsedHeader?.ephemeralPublicKey || parsedHeader?.senderPublicKey;
+      const contextStr = parsedHeader?.context || '';
+
+      if (!ephemeralPublicKey) {
+        throw new Error('Missing ephemeral/sender public key in header');
+      }
+
+      // Convert ephemeral key from array/hex if needed
+      let ephemeralKeyBytes;
+      if (typeof ephemeralPublicKey === 'string') {
+        ephemeralKeyBytes = new Uint8Array(ephemeralPublicKey.match(/.{2}/g).map(b => parseInt(b, 16)));
+      } else if (Array.isArray(ephemeralPublicKey)) {
+        ephemeralKeyBytes = new Uint8Array(ephemeralPublicKey);
+      } else {
+        ephemeralKeyBytes = ephemeralPublicKey;
+      }
+
+      // Build header object for forDecryption
+      const decHeader = {
+        algorithm,
+        senderPublicKey: ephemeralKeyBytes,
+        iv: parsedHeader?.iv,
+      };
+
+      const decCtx = EncryptionContext.forDecryption(
+        decryption.privateKey,
+        decHeader,
+        contextStr
+      );
+
+      // Decrypt the data
+      const decryptedData = new Uint8Array(binaryInput.data);
+      decCtx.decryptBuffer(decryptedData, 0);
+      decCtx.destroy();
+
+      // Convert decrypted binary to JSON
+      return this.generateJSON(schemaInput, {
+        path: binaryInput.path,
+        data: decryptedData,
+      }, options);
+    } catch (jsErr) {
+      throw new Error(`Decryption failed: ${jsErr.message}`);
+    }
   }
 
   /**

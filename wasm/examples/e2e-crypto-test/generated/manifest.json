@@ -90,6 +90,19 @@
       "files": [
         "message_generated.swift"
       ]
+    },
+    {
+      "lang": "kotlin",
+      "success": true,
+      "files": [
+        "E2E/Crypto/Curve.kt",
+        "E2E/Crypto/KeyExchangeAlgorithm.kt",
+        "E2E/Crypto/EncryptionAlgorithm.kt",
+        "E2E/Crypto/PublicKey.kt",
+        "E2E/Crypto/EncryptionHeader.kt",
+        "E2E/Crypto/Payload.kt",
+        "E2E/Crypto/SecureMessage.kt"
+      ]
     }
   ]
 }

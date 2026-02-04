@@ -648,7 +648,7 @@ inline T DecryptScalar(T value, const EncryptionContext* ctx, uint16_t field_id)
  * Decrypt a string value and return it.
  * For FlatBuffers strings, this operates on a copy.
  */
-inline const String* DecryptString(const String* str, const EncryptionContext* ctx, uint16_t field_id) {
+inline const String* DecryptString(const String* str, const EncryptionContext* ctx, uint16_t /*field_id*/) {
   if (str == nullptr || ctx == nullptr) return str;
   // Note: For zero-copy semantics, the caller should decrypt the buffer once
   // rather than per-access. This returns the string as-is since we can't

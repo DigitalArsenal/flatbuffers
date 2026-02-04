@@ -18,6 +18,7 @@
 
 #include "idl_gen_csharp.h"
 
+#include <set>
 #include <unordered_set>
 
 #include "flatbuffers/code_generators.h"
@@ -143,6 +144,195 @@ class CSharpGenerator : public BaseGenerator {
 
   CSharpGenerator& operator=(const CSharpGenerator&);
 
+  // Check if a struct has any encrypted fields
+  bool HasEncryptedFields(const StructDef& struct_def) const {
+    for (auto it = struct_def.fields.vec.begin();
+         it != struct_def.fields.vec.end(); ++it) {
+      if ((*it)->attributes.Lookup("encrypted") != nullptr) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Generate the FlatbuffersEncryption class for a namespace
+  bool GenerateEncryptionModule(const Namespace& ns) const {
+    std::string code;
+    code += "// " + std::string(FlatBuffersGeneratedWarning()) + "\n\n";
+
+    if (!ns.components.empty()) {
+      code += "namespace " + FullNamespace(".", ns) + "\n{\n\n";
+    }
+
+    code += "using System;\n";
+    code += "using System.Security.Cryptography;\n";
+    code += "using System.Text;\n\n";
+
+    code += "/// <summary>\n";
+    code += "/// FlatBuffers field-level encryption support using AES-256-CTR.\n";
+    code += "/// </summary>\n";
+    code += "public static class FlatbuffersEncryption\n{\n";
+
+    // DeriveNonce helper
+    code += "  private static byte[] DeriveNonce(byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    if (ctx == null || ctx.Length < 12)\n";
+    code += "      throw new ArgumentException(\"Encryption context must be at least 12 bytes\");\n";
+    code += "    var nonce = new byte[16];\n";
+    code += "    Array.Copy(ctx, 0, nonce, 0, 12);\n";
+    code += "    nonce[12] = (byte)(fieldOffset & 0xFF);\n";
+    code += "    nonce[13] = (byte)((fieldOffset >> 8) & 0xFF);\n";
+    code += "    nonce[14] = (byte)((fieldOffset >> 16) & 0xFF);\n";
+    code += "    nonce[15] = (byte)((fieldOffset >> 24) & 0xFF);\n";
+    code += "    return nonce;\n";
+    code += "  }\n\n";
+
+    // DecryptBytes helper using AES-CTR
+    code += "  private static byte[] DecryptBytes(byte[] data, byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    if (ctx == null || ctx.Length < 32)\n";
+    code += "      throw new ArgumentException(\"Encryption context must be at least 32 bytes\");\n";
+    code += "    var key = new byte[32];\n";
+    code += "    Array.Copy(ctx, 0, key, 0, 32);\n";
+    code += "    var nonce = DeriveNonce(ctx, fieldOffset);\n";
+    code += "    using (var aes = Aes.Create())\n";
+    code += "    {\n";
+    code += "      aes.Key = key;\n";
+    code += "      aes.Mode = CipherMode.ECB;\n";
+    code += "      aes.Padding = PaddingMode.None;\n";
+    code += "      var result = new byte[data.Length];\n";
+    code += "      var counter = (byte[])nonce.Clone();\n";
+    code += "      var encryptor = aes.CreateEncryptor();\n";
+    code += "      for (int i = 0; i < data.Length; i += 16)\n";
+    code += "      {\n";
+    code += "        var keystream = new byte[16];\n";
+    code += "        encryptor.TransformBlock(counter, 0, 16, keystream, 0);\n";
+    code += "        int blockLen = Math.Min(16, data.Length - i);\n";
+    code += "        for (int j = 0; j < blockLen; j++)\n";
+    code += "          result[i + j] = (byte)(data[i + j] ^ keystream[j]);\n";
+    code += "        // Increment counter\n";
+    code += "        for (int k = 15; k >= 0; k--)\n";
+    code += "          if (++counter[k] != 0) break;\n";
+    code += "      }\n";
+    code += "      return result;\n";
+    code += "    }\n";
+    code += "  }\n\n";
+
+    // DecryptScalar overloads for various types
+    code += "  public static bool DecryptScalar(bool value, byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    if (ctx == null) return value;\n";
+    code += "    var data = new byte[] { (byte)(value ? 1 : 0) };\n";
+    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
+    code += "    return decrypted[0] != 0;\n";
+    code += "  }\n\n";
+
+    code += "  public static sbyte DecryptScalar(sbyte value, byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    if (ctx == null) return value;\n";
+    code += "    var data = new byte[] { (byte)value };\n";
+    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
+    code += "    return (sbyte)decrypted[0];\n";
+    code += "  }\n\n";
+
+    code += "  public static byte DecryptScalar(byte value, byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    if (ctx == null) return value;\n";
+    code += "    var data = new byte[] { value };\n";
+    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
+    code += "    return decrypted[0];\n";
+    code += "  }\n\n";
+
+    code += "  public static short DecryptScalar(short value, byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    if (ctx == null) return value;\n";
+    code += "    var data = BitConverter.GetBytes(value);\n";
+    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
+    code += "    return BitConverter.ToInt16(decrypted, 0);\n";
+    code += "  }\n\n";
+
+    code += "  public static ushort DecryptScalar(ushort value, byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    if (ctx == null) return value;\n";
+    code += "    var data = BitConverter.GetBytes(value);\n";
+    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
+    code += "    return BitConverter.ToUInt16(decrypted, 0);\n";
+    code += "  }\n\n";
+
+    code += "  public static int DecryptScalar(int value, byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    if (ctx == null) return value;\n";
+    code += "    var data = BitConverter.GetBytes(value);\n";
+    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
+    code += "    return BitConverter.ToInt32(decrypted, 0);\n";
+    code += "  }\n\n";
+
+    code += "  public static uint DecryptScalar(uint value, byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    if (ctx == null) return value;\n";
+    code += "    var data = BitConverter.GetBytes(value);\n";
+    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
+    code += "    return BitConverter.ToUInt32(decrypted, 0);\n";
+    code += "  }\n\n";
+
+    code += "  public static long DecryptScalar(long value, byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    if (ctx == null) return value;\n";
+    code += "    var data = BitConverter.GetBytes(value);\n";
+    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
+    code += "    return BitConverter.ToInt64(decrypted, 0);\n";
+    code += "  }\n\n";
+
+    code += "  public static ulong DecryptScalar(ulong value, byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    if (ctx == null) return value;\n";
+    code += "    var data = BitConverter.GetBytes(value);\n";
+    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
+    code += "    return BitConverter.ToUInt64(decrypted, 0);\n";
+    code += "  }\n\n";
+
+    code += "  public static float DecryptScalar(float value, byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    if (ctx == null) return value;\n";
+    code += "    var data = BitConverter.GetBytes(value);\n";
+    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
+    code += "    return BitConverter.ToSingle(decrypted, 0);\n";
+    code += "  }\n\n";
+
+    code += "  public static double DecryptScalar(double value, byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    if (ctx == null) return value;\n";
+    code += "    var data = BitConverter.GetBytes(value);\n";
+    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
+    code += "    return BitConverter.ToDouble(decrypted, 0);\n";
+    code += "  }\n\n";
+
+    // DecryptString - takes raw bytes from buffer, decrypts, returns string
+    code += "  public static string DecryptString(Google.FlatBuffers.ByteBuffer bb, int offset, byte[] ctx, int fieldOffset)\n";
+    code += "  {\n";
+    code += "    int pos = offset + bb.GetInt(offset);\n";
+    code += "    int len = bb.GetInt(pos);\n";
+    code += "    var data = new byte[len];\n";
+    code += "    for (int i = 0; i < len; i++)\n";
+    code += "      data[i] = bb.Get(pos + 4 + i);\n";
+    code += "    if (ctx == null)\n";
+    code += "      return Encoding.UTF8.GetString(data);\n";
+    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
+    code += "    return Encoding.UTF8.GetString(decrypted);\n";
+    code += "  }\n";
+
+    code += "}\n";
+
+    if (!ns.components.empty()) {
+      code += "\n}\n";
+    }
+
+    std::string directory = NamespaceDir(ns);
+    EnsureDirExists(directory);
+    std::string filename = directory + "FlatbuffersEncryption.cs";
+    return parser_.opts.file_saver->SaveFile(filename.c_str(), code, false);
+  }
+
   bool generate() {
     std::string one_file_code;
     cur_name_space_ = parser_.current_namespace_;
@@ -162,6 +352,9 @@ class CSharpGenerator : public BaseGenerator {
       }
     }
 
+    // Track namespaces that need encryption module
+    std::set<std::string> encryption_namespaces;
+
     for (auto it = parser_.structs_.vec.begin();
          it != parser_.structs_.vec.end(); ++it) {
       std::string declcode;
@@ -170,6 +363,18 @@ class CSharpGenerator : public BaseGenerator {
         cur_name_space_ = struct_def.defined_namespace;
       GenStruct(struct_def, &declcode, parser_.opts);
       GenStructVerifier(struct_def, &declcode);
+
+      // Generate encryption module for this namespace if needed
+      if (HasEncryptedFields(struct_def) && !parser_.opts.one_file) {
+        std::string ns_key = NamespaceDir(*struct_def.defined_namespace);
+        if (encryption_namespaces.find(ns_key) == encryption_namespaces.end()) {
+          encryption_namespaces.insert(ns_key);
+          if (!GenerateEncryptionModule(*struct_def.defined_namespace)) {
+            return false;
+          }
+        }
+      }
+
       if (parser_.opts.one_file) {
         one_file_code += declcode;
       } else {
@@ -887,6 +1092,12 @@ class CSharpGenerator : public BaseGenerator {
     code += struct_def.fixed ? "Struct" : "Table";
     code += " __p;\n";
 
+    // Add encryption context field if struct has encrypted fields
+    bool has_encrypted = HasEncryptedFields(struct_def);
+    if (has_encrypted) {
+      code += "  public byte[] EncryptionCtx;\n";
+    }
+
     code += "  public ByteBuffer ByteBuffer { get { return __p.bb; } }\n";
 
     if (!struct_def.fixed) {
@@ -914,6 +1125,18 @@ class CSharpGenerator : public BaseGenerator {
       code += "return (obj.__assign(_bb.GetInt(_bb.Position";
       code += ") + _bb.Position";
       code += ", _bb)); }\n";
+
+      // Add overloaded methods with encryption context if needed
+      if (has_encrypted) {
+        code += method_signature + "(ByteBuffer _bb, byte[] encryptionCtx) ";
+        code += "{ return " + method_name + "(_bb, new " + struct_def.name +
+                "(), encryptionCtx); }\n";
+        code += method_signature + "(ByteBuffer _bb, " + struct_def.name +
+                " obj, byte[] encryptionCtx) { ";
+        code += "return (obj.__assign(_bb.GetInt(_bb.Position";
+        code += ") + _bb.Position";
+        code += ", _bb, encryptionCtx)); }\n";
+      }
       if (parser_.root_struct_def_ == &struct_def) {
         if (parser_.file_identifier_.length()) {
           // Check if a buffer has the identifier.
@@ -945,10 +1168,34 @@ class CSharpGenerator : public BaseGenerator {
     code += "__p = new ";
     code += struct_def.fixed ? "Struct" : "Table";
     code += "(_i, _bb); ";
+    if (has_encrypted) {
+      code += "this.EncryptionCtx = null; ";
+    }
     code += "}\n";
+
+    // Add overloaded __init with encryption context if needed
+    if (has_encrypted) {
+      code += "  public void __init(int _i, ByteBuffer _bb, byte[] encryptionCtx) ";
+      code += "{ ";
+      code += "__p = new ";
+      code += struct_def.fixed ? "Struct" : "Table";
+      code += "(_i, _bb); ";
+      code += "this.EncryptionCtx = encryptionCtx; ";
+      code += "}\n";
+    }
+
     code +=
         "  public " + struct_def.name + " __assign(int _i, ByteBuffer _bb) ";
-    code += "{ __init(_i, _bb); return this; }\n\n";
+    code += "{ __init(_i, _bb); return this; }\n";
+
+    // Add overloaded __assign with encryption context if needed
+    if (has_encrypted) {
+      code += "  public " + struct_def.name +
+              " __assign(int _i, ByteBuffer _bb, byte[] encryptionCtx) ";
+      code += "{ __init(_i, _bb, encryptionCtx); return this; }\n";
+    }
+
+    code += "\n";
     for (auto it = struct_def.fields.vec.begin();
          it != struct_def.fields.vec.end(); ++it) {
       auto& field = **it;
@@ -1063,8 +1310,7 @@ class CSharpGenerator : public BaseGenerator {
             if (field.attributes.Lookup("encrypted") != nullptr) {
               code += " { int o = __p.__offset(" + NumToString(field.value.offset) + "); ";
               code += "if (o == 0) return null; ";
-              code += "var rawValue = " + getter + "(o + __p.bb_pos); ";
-              code += "return FlatbuffersEncryption.DecryptString(rawValue, this.EncryptionCtx, " + NumToString(field.value.offset) + ")";
+              code += "return FlatbuffersEncryption.DecryptString(__p.bb, o + __p.bb_pos, this.EncryptionCtx, " + NumToString(field.value.offset) + ")";
             } else {
               code += offset_prefix + getter + "(o + " + "__p.";
               code += "bb_pos) : null";

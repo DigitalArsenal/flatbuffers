@@ -10,16 +10,26 @@
 
 export { FlatcRunner } from "./runner.mjs";
 import createFlatcModule from "../dist/flatc-wasm.js";
-// Node.js crypto import with browser compatibility (Task 35).
-// Top-level await ensures module is resolved before any exports are used.
-// In browser environments, bundlers should either polyfill or handle the import error.
+// Node.js crypto lazy initialization (no top-level await for browser compatibility).
+// The promise is started immediately but not awaited, allowing module to load in browsers.
 let nodeCrypto = null;
-try {
-  const mod = await import('node:crypto');
-  nodeCrypto = mod.default || mod;
-} catch {
-  // Not in Node.js environment — crypto operations will need Web Crypto API fallback
-  nodeCrypto = null;
+let _cryptoReady = (async () => {
+  try {
+    const mod = await import('node:crypto');
+    nodeCrypto = mod.default || mod;
+  } catch {
+    // Not in Node.js environment — crypto operations will use Web Crypto API fallback
+    nodeCrypto = null;
+  }
+})();
+
+/**
+ * Ensure Node.js crypto module is loaded. Call this before using crypto functions.
+ * In browser environments, this resolves immediately with nodeCrypto remaining null.
+ * @returns {Promise<void>}
+ */
+export async function ensureCryptoReady() {
+  await _cryptoReady;
 }
 
 // Aligned codegen exports (zero-copy WASM interop)

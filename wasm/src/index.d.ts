@@ -187,6 +187,17 @@ export declare function createFlatcModule(options?: CreateModuleOptions): Promis
 export default createFlatcModule;
 
 // =============================================================================
+// Encryption — Initialization
+// =============================================================================
+
+/**
+ * Ensure Node.js crypto module is loaded. Call this before using crypto functions.
+ * In browser environments, this resolves immediately with nodeCrypto remaining null.
+ * @returns Promise that resolves when crypto is ready.
+ */
+export declare function ensureCryptoReady(): Promise<void>;
+
+// =============================================================================
 // Encryption — Constants
 // =============================================================================
 

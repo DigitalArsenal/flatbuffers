@@ -202,13 +202,15 @@ void TestBufferEncryption() {
   )";
 
   flatbuffers::Parser parser;
-  parser.opts.binary_to_compile_output = true;
+  // Enable serialization of builtin attributes (like "encrypted")
+  parser.opts.binary_schema_builtins = true;
   TEST_TRUE(parser.Parse(schema_str));
 
   // Generate binary schema
-  std::string bfbs;
-  parser.Serialize(&bfbs);
-  TEST_TRUE(bfbs.size() > 0);
+  parser.Serialize();
+  auto bfbs_ptr = parser.builder_.GetBufferPointer();
+  auto bfbs_size = parser.builder_.GetSize();
+  TEST_TRUE(bfbs_size > 0);
 
   // Build a FlatBuffer
   flatbuffers::FlatBufferBuilder builder;
@@ -220,7 +222,7 @@ void TestBufferEncryption() {
   builder.AddElement<int32_t>(6, 9999, 0);    // secret_value at field 1
   builder.AddOffset(8, secret_text);           // secret_text at field 2
   auto root = builder.EndTable(start);
-  builder.Finish(root);
+  builder.Finish(flatbuffers::Offset<void>(root));
 
   // Get the buffer
   auto buf = builder.GetBufferPointer();
@@ -238,7 +240,7 @@ void TestBufferEncryption() {
   // Encrypt the buffer
   auto result = flatbuffers::EncryptBuffer(
       buf, size,
-      reinterpret_cast<const uint8_t*>(bfbs.data()), bfbs.size(),
+      bfbs_ptr, bfbs_size,
       ctx);
 
   TEST_TRUE(result.ok());
@@ -250,7 +252,7 @@ void TestBufferEncryption() {
   // Decrypt the buffer
   result = flatbuffers::DecryptBuffer(
       buf, size,
-      reinterpret_cast<const uint8_t*>(bfbs.data()), bfbs.size(),
+      bfbs_ptr, bfbs_size,
       ctx);
 
   TEST_TRUE(result.ok());
@@ -273,14 +275,14 @@ void TestIsFieldEncrypted() {
   )";
 
   flatbuffers::Parser parser;
-  parser.opts.binary_to_compile_output = true;
+  // Enable serialization of builtin attributes (like "encrypted")
+  parser.opts.binary_schema_builtins = true;
   TEST_TRUE(parser.Parse(schema_str));
 
-  std::string bfbs;
-  parser.Serialize(&bfbs);
+  parser.Serialize();
+  auto bfbs_ptr = parser.builder_.GetBufferPointer();
 
-  auto schema = flatbuffers::reflection::GetSchema(
-      reinterpret_cast<const uint8_t*>(bfbs.data()));
+  auto schema = reflection::GetSchema(bfbs_ptr);
   TEST_NOTNULL(schema);
 
   auto root_table = schema->root_table();
@@ -313,14 +315,15 @@ void TestGetEncryptedFieldIds() {
   )";
 
   flatbuffers::Parser parser;
-  parser.opts.binary_to_compile_output = true;
+  // Enable serialization of builtin attributes (like "encrypted")
+  parser.opts.binary_schema_builtins = true;
   TEST_TRUE(parser.Parse(schema_str));
 
-  std::string bfbs;
-  parser.Serialize(&bfbs);
+  parser.Serialize();
+  auto bfbs_ptr = parser.builder_.GetBufferPointer();
+  auto bfbs_size = parser.builder_.GetSize();
 
-  auto ids = flatbuffers::GetEncryptedFieldIds(
-      reinterpret_cast<const uint8_t*>(bfbs.data()), bfbs.size());
+  auto ids = flatbuffers::GetEncryptedFieldIds(bfbs_ptr, bfbs_size);
 
   // Should have 2 encrypted fields
   TEST_EQ(ids.size(), static_cast<size_t>(2));

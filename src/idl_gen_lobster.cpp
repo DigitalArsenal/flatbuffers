@@ -27,6 +27,83 @@
 namespace flatbuffers {
 namespace lobster {
 
+// Check if a struct has any encrypted fields
+static bool HasEncryptedFields(const StructDef &struct_def) {
+  for (auto it = struct_def.fields.vec.begin();
+       it != struct_def.fields.vec.end(); ++it) {
+    const FieldDef &field = **it;
+    if (field.attributes.Lookup("encrypted")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Check if parser has any structs with encrypted fields
+static bool ParserHasEncryptedFields(const Parser &parser) {
+  for (auto it = parser.structs_.vec.begin();
+       it != parser.structs_.vec.end(); ++it) {
+    if (HasEncryptedFields(**it)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Generate the FlatbuffersEncryption module for Lobster
+static std::string GenerateEncryptionModule() {
+  std::string code;
+  code += "// FlatBuffers field-level encryption support using AES-256-CTR.\n";
+  code += "// NOTE: This is a placeholder implementation. In production,\n";
+  code += "// you should use a proper AES library binding for Lobster.\n\n";
+
+  code += "class flatbuffers_encryption_ctx:\n";
+  code += "    key:string  // 32 bytes\n";
+  code += "    nonce_prefix:string  // 12 bytes\n\n";
+
+  code += "// Derive a 16-byte nonce from encryption context and field offset.\n";
+  code += "def flatbuffers_encryption_derive_nonce(ctx:flatbuffers_encryption_ctx, field_offset:int) -> string:\n";
+  code += "    // nonce = first 12 bytes of ctx.nonce_prefix + 4 bytes little-endian field_offset\n";
+  code += "    return ctx.nonce_prefix.substring(0, 12) +\n";
+  code += "           string_from_utf32([field_offset & 0xFF,\n";
+  code += "                              (field_offset >> 8) & 0xFF,\n";
+  code += "                              (field_offset >> 16) & 0xFF,\n";
+  code += "                              (field_offset >> 24) & 0xFF])\n\n";
+
+  code += "// XOR two strings of equal length.\n";
+  code += "def flatbuffers_xor_strings(a:string, b:string) -> string:\n";
+  code += "    assert a.length == b.length\n";
+  code += "    return string_from_utf32(map(a.length) i: a[i] ^^ b[i])\n\n";
+
+  code += "// Placeholder AES-256-CTR decryption (you must implement or bind a real AES library).\n";
+  code += "// This placeholder simply returns the input unchanged.\n";
+  code += "// IMPORTANT: Replace this with actual AES-256-CTR implementation!\n";
+  code += "def flatbuffers_aes256_ctr_decrypt(data:string, key:string, nonce:string) -> string:\n";
+  code += "    // TODO: Implement actual AES-256-CTR decryption here\n";
+  code += "    // For testing, this returns data unchanged (NOT SECURE!)\n";
+  code += "    return data\n\n";
+
+  code += "// Decrypt bytes using AES-256-CTR.\n";
+  code += "def flatbuffers_encryption_decrypt_bytes(data:string, ctx:flatbuffers_encryption_ctx?, field_offset:int) -> string:\n";
+  code += "    if not ctx: return data\n";
+  code += "    let nonce = flatbuffers_encryption_derive_nonce(ctx, field_offset)\n";
+  code += "    return flatbuffers_aes256_ctr_decrypt(data, ctx.key, nonce)\n\n";
+
+  code += "// Decrypt a scalar value.\n";
+  code += "def flatbuffers_encryption_decrypt_scalar(value, ctx:flatbuffers_encryption_ctx?, field_offset:int):\n";
+  code += "    // For scalars, we need to encrypt/decrypt the raw bytes\n";
+  code += "    // This is a placeholder - in practice you'd need type-specific handling\n";
+  code += "    if not ctx: return value\n";
+  code += "    return value  // Placeholder: returns value unchanged\n\n";
+
+  code += "// Decrypt a string value.\n";
+  code += "def flatbuffers_encryption_decrypt_string(value:string, ctx:flatbuffers_encryption_ctx?, field_offset:int) -> string:\n";
+  code += "    if not ctx: return value\n";
+  code += "    return flatbuffers_encryption_decrypt_bytes(value, ctx, field_offset)\n\n";
+
+  return code;
+}
+
 class LobsterGenerator : public BaseGenerator {
  public:
   LobsterGenerator(const Parser& parser, const std::string& path,
@@ -290,7 +367,12 @@ class LobsterGenerator : public BaseGenerator {
     std::string& code = *code_ptr;
     CheckNameSpace(struct_def, &code);
     GenComment(struct_def.doc_comment, code_ptr, nullptr, "");
+    const bool has_encrypted = HasEncryptedFields(struct_def);
+
     code += "class " + NormalizedName(struct_def) + " : flatbuffers.handle\n";
+    if (has_encrypted) {
+      code += "    encryption_ctx:flatbuffers_encryption_ctx? = nil\n";
+    }
     for (auto it = struct_def.fields.vec.begin();
          it != struct_def.fields.vec.end(); ++it) {
       auto& field = **it;
@@ -303,7 +385,16 @@ class LobsterGenerator : public BaseGenerator {
       // the root type.
       code += "def GetRootAs" + NormalizedName(struct_def) +
               "(buf:string): return " + NormalizedName(struct_def) +
-              " { buf, flatbuffers.indirect(buf, 0) }\n\n";
+              " { buf, flatbuffers.indirect(buf, 0) }\n";
+      if (has_encrypted) {
+        code += "def GetRootAs" + NormalizedName(struct_def) +
+                "WithEncryption(buf:string, ctx:flatbuffers_encryption_ctx):\n";
+        code += "    let obj = " + NormalizedName(struct_def) +
+                " { buf, flatbuffers.indirect(buf, 0) }\n";
+        code += "    obj.encryption_ctx = ctx\n";
+        code += "    return obj\n";
+      }
+      code += "\n";
     }
     if (struct_def.fixed) {
       // create a struct constructor function
@@ -398,6 +489,12 @@ class LobsterGenerator : public BaseGenerator {
     std::string code;
     code += std::string("// ") + FlatBuffersGeneratedWarning() +
             "\nimport flatbuffers\n\n";
+
+    // Add encryption support if needed
+    if (ParserHasEncryptedFields(parser_)) {
+      code += GenerateEncryptionModule();
+    }
+
     for (auto it = parser_.enums_.vec.begin(); it != parser_.enums_.vec.end();
          ++it) {
       auto& enum_def = **it;

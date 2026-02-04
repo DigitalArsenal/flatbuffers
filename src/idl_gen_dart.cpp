@@ -80,6 +80,134 @@ static std::set<std::string> DartKeywords() {
 
 const std::string _kFb = "fb";
 
+// Check if a struct has any encrypted fields
+static bool HasEncryptedFields(const StructDef &struct_def) {
+  for (auto it = struct_def.fields.vec.begin();
+       it != struct_def.fields.vec.end(); ++it) {
+    const FieldDef &field = **it;
+    if (field.attributes.Lookup("encrypted")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Check if parser has any structs with encrypted fields
+static bool ParserHasEncryptedFields(const Parser &parser) {
+  for (auto it = parser.structs_.vec.begin();
+       it != parser.structs_.vec.end(); ++it) {
+    if (HasEncryptedFields(**it)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Generate the FlatbuffersEncryption class for Dart using pointycastle
+static std::string GenerateEncryptionClass() {
+  std::string code;
+  code += "/// FlatBuffers field-level encryption support using AES-256-CTR.\n";
+  code += "class FlatbuffersEncryption {\n";
+  code += "  /// Derive a 16-byte nonce from encryption context and field offset.\n";
+  code += "  static Uint8List _deriveNonce(Uint8List ctx, int fieldOffset) {\n";
+  code += "    if (ctx.length < 12) {\n";
+  code += "      throw ArgumentError('Encryption context must be at least 12 bytes');\n";
+  code += "    }\n";
+  code += "    final nonce = Uint8List(16);\n";
+  code += "    nonce.setRange(0, 12, ctx);\n";
+  code += "    // Little-endian field offset\n";
+  code += "    nonce[12] = fieldOffset & 0xFF;\n";
+  code += "    nonce[13] = (fieldOffset >> 8) & 0xFF;\n";
+  code += "    nonce[14] = (fieldOffset >> 16) & 0xFF;\n";
+  code += "    nonce[15] = (fieldOffset >> 24) & 0xFF;\n";
+  code += "    return nonce;\n";
+  code += "  }\n\n";
+  code += "  /// Decrypt bytes using AES-256-CTR.\n";
+  code += "  static Uint8List _decryptBytes(Uint8List data, Uint8List ctx, int fieldOffset) {\n";
+  code += "    if (ctx.length < 32) {\n";
+  code += "      throw ArgumentError('Encryption context must be at least 32 bytes');\n";
+  code += "    }\n";
+  code += "    final key = ctx.sublist(0, 32);\n";
+  code += "    final nonce = _deriveNonce(ctx, fieldOffset);\n";
+  code += "    final cipher = CTRStreamCipher(AESEngine())\n";
+  code += "      ..init(false, ParametersWithIV(KeyParameter(key), nonce));\n";
+  code += "    return cipher.process(data);\n";
+  code += "  }\n\n";
+  code += "  /// Decrypt a boolean value.\n";
+  code += "  static bool decryptScalar(bool value, Uint8List? ctx, int fieldOffset) {\n";
+  code += "    if (ctx == null) return value;\n";
+  code += "    final data = Uint8List(1)..[0] = value ? 1 : 0;\n";
+  code += "    final decrypted = _decryptBytes(data, ctx, fieldOffset);\n";
+  code += "    return decrypted[0] != 0;\n";
+  code += "  }\n\n";
+  code += "  /// Decrypt an int8/uint8 value.\n";
+  code += "  static int decryptInt8(int value, Uint8List? ctx, int fieldOffset) {\n";
+  code += "    if (ctx == null) return value;\n";
+  code += "    final data = Uint8List(1)..[0] = value & 0xFF;\n";
+  code += "    final decrypted = _decryptBytes(data, ctx, fieldOffset);\n";
+  code += "    return decrypted[0];\n";
+  code += "  }\n\n";
+  code += "  /// Decrypt an int16/uint16 value.\n";
+  code += "  static int decryptInt16(int value, Uint8List? ctx, int fieldOffset) {\n";
+  code += "    if (ctx == null) return value;\n";
+  code += "    final data = Uint8List(2);\n";
+  code += "    data.buffer.asByteData().setInt16(0, value, Endian.little);\n";
+  code += "    final decrypted = _decryptBytes(data, ctx, fieldOffset);\n";
+  code += "    return decrypted.buffer.asByteData().getInt16(0, Endian.little);\n";
+  code += "  }\n\n";
+  code += "  /// Decrypt an int32/uint32 value.\n";
+  code += "  static int decryptInt32(int value, Uint8List? ctx, int fieldOffset) {\n";
+  code += "    if (ctx == null) return value;\n";
+  code += "    final data = Uint8List(4);\n";
+  code += "    data.buffer.asByteData().setInt32(0, value, Endian.little);\n";
+  code += "    final decrypted = _decryptBytes(data, ctx, fieldOffset);\n";
+  code += "    return decrypted.buffer.asByteData().getInt32(0, Endian.little);\n";
+  code += "  }\n\n";
+  code += "  /// Decrypt an int64/uint64 value.\n";
+  code += "  static int decryptInt64(int value, Uint8List? ctx, int fieldOffset) {\n";
+  code += "    if (ctx == null) return value;\n";
+  code += "    final data = Uint8List(8);\n";
+  code += "    data.buffer.asByteData().setInt64(0, value, Endian.little);\n";
+  code += "    final decrypted = _decryptBytes(data, ctx, fieldOffset);\n";
+  code += "    return decrypted.buffer.asByteData().getInt64(0, Endian.little);\n";
+  code += "  }\n\n";
+  code += "  /// Decrypt a float32 value.\n";
+  code += "  static double decryptFloat32(double value, Uint8List? ctx, int fieldOffset) {\n";
+  code += "    if (ctx == null) return value;\n";
+  code += "    final data = Uint8List(4);\n";
+  code += "    data.buffer.asByteData().setFloat32(0, value, Endian.little);\n";
+  code += "    final decrypted = _decryptBytes(data, ctx, fieldOffset);\n";
+  code += "    return decrypted.buffer.asByteData().getFloat32(0, Endian.little);\n";
+  code += "  }\n\n";
+  code += "  /// Decrypt a float64 value.\n";
+  code += "  static double decryptFloat64(double value, Uint8List? ctx, int fieldOffset) {\n";
+  code += "    if (ctx == null) return value;\n";
+  code += "    final data = Uint8List(8);\n";
+  code += "    data.buffer.asByteData().setFloat64(0, value, Endian.little);\n";
+  code += "    final decrypted = _decryptBytes(data, ctx, fieldOffset);\n";
+  code += "    return decrypted.buffer.asByteData().getFloat64(0, Endian.little);\n";
+  code += "  }\n\n";
+  code += "  /// Decrypt a string from raw bytes.\n";
+  code += "  static String? decryptString(fb.BufferContext bc, int offset, Uint8List? ctx, int fieldOffset) {\n";
+  code += "    // Read raw bytes from the vector\n";
+  code += "    final vecOffset = bc.derefObject(offset);\n";
+  code += "    final len = bc.buffer.getUint32(vecOffset, Endian.little);\n";
+  code += "    final data = Uint8List(len);\n";
+  code += "    for (var i = 0; i < len; i++) {\n";
+  code += "      data[i] = bc.buffer.getUint8(vecOffset + 4 + i);\n";
+  code += "    }\n";
+  code += "    if (ctx == null) {\n";
+  code += "      // No encryption context, decode as regular string\n";
+  code += "      return String.fromCharCodes(data);\n";
+  code += "    }\n";
+  code += "    // Decrypt and decode\n";
+  code += "    final decrypted = _decryptBytes(data, ctx, fieldOffset);\n";
+  code += "    return String.fromCharCodes(decrypted);\n";
+  code += "  }\n";
+  code += "}\n\n";
+  return code;
+}
+
 // Iterate through all definitions we haven't generate code for (enums, structs,
 // and tables) and output them to a single file.
 class DartGenerator : public BaseGenerator {
@@ -177,7 +305,13 @@ class DartGenerator : public BaseGenerator {
 
       code += "import 'dart:typed_data' show Uint8List;\n";
       code += "import 'package:flat_buffers/flat_buffers.dart' as " + _kFb +
-              ";\n\n";
+              ";\n";
+
+      // Add pointycastle import if encryption is needed
+      if (ParserHasEncryptedFields(parser_)) {
+        code += "import 'package:pointycastle/export.dart';\n";
+      }
+      code += "\n";
 
       for (auto kv2 = namespace_code.begin(); kv2 != namespace_code.end();
            ++kv2) {
@@ -203,6 +337,12 @@ class DartGenerator : public BaseGenerator {
       }
 
       code += "\n";
+
+      // Add the FlatbuffersEncryption class if encryption is needed
+      if (ParserHasEncryptedFields(parser_)) {
+        code += GenerateEncryptionClass();
+      }
+
       code += kv->second;
 
       if (!parser_.opts.file_saver->SaveFile(Filename(kv->first).c_str(), code,
@@ -535,15 +675,28 @@ class DartGenerator : public BaseGenerator {
 
     std::string reader_code, builder_code;
 
+    const bool has_encrypted = HasEncryptedFields(struct_def);
+
     code += "class " + struct_type + " {\n";
 
-    code += "  " + struct_type + "._(this._bc, this._bcOffset);\n";
+    if (has_encrypted) {
+      code += "  " + struct_type + "._(this._bc, this._bcOffset, [this.encryptionCtx]);\n";
+    } else {
+      code += "  " + struct_type + "._(this._bc, this._bcOffset);\n";
+    }
     if (!struct_def.fixed) {
       code += "  factory " + struct_type + "(List<int> bytes) {\n";
       code +=
           "    final rootRef = " + _kFb + ".BufferContext.fromBytes(bytes);\n";
       code += "    return reader.read(rootRef, 0);\n";
       code += "  }\n";
+      if (has_encrypted) {
+        code += "  factory " + struct_type + ".withEncryption(List<int> bytes, Uint8List encryptionCtx) {\n";
+        code += "    final rootRef = " + _kFb + ".BufferContext.fromBytes(bytes);\n";
+        code += "    final obj = reader.read(rootRef, 0);\n";
+        code += "    return " + struct_type + "._(obj._bc, obj._bcOffset, encryptionCtx);\n";
+        code += "  }\n";
+      }
     }
 
     code += "\n";
@@ -551,7 +704,11 @@ class DartGenerator : public BaseGenerator {
             "> reader = " + reader_name + "();\n\n";
 
     code += "  final " + _kFb + ".BufferContext _bc;\n";
-    code += "  final int _bcOffset;\n\n";
+    code += "  final int _bcOffset;\n";
+    if (has_encrypted) {
+      code += "  final Uint8List? encryptionCtx;\n";
+    }
+    code += "\n";
 
     std::vector<std::pair<int, FieldDef*>> non_deprecated_fields;
     for (auto it = struct_def.fields.vec.begin();
@@ -806,50 +963,87 @@ class DartGenerator : public BaseGenerator {
         code += "  }\n";
       } else {
         const bool is_encrypted = field.attributes.Lookup("encrypted") != nullptr;
-        
+
         if (is_encrypted) {
           // Generate block-style getter with encryption support
-          code += " {\n";
-          code += "    final rawValue = ";
-          
-          if (field.value.type.enum_def &&
-              field.value.type.base_type != BASE_TYPE_VECTOR) {
-            code += GenDartTypeName(field.value.type,
-                                    struct_def.defined_namespace, field) +
-                    (isNullable ? "._createOrNull(" : ".fromValue(");
-          }
-          
-          code += GenReaderTypeName(field.value.type,
-                                    struct_def.defined_namespace, field);
-          if (struct_def.fixed) {
-            code +=
-                ".read(_bc, _bcOffset + " + NumToString(field.value.offset) + ")";
-          } else {
-            code += ".vTableGet";
-            std::string offset = NumToString(field.value.offset);
-            if (isNullable) {
-              code += "Nullable(_bc, _bcOffset, " + offset + ")";
-            } else {
-              code += "(_bc, _bcOffset, " + offset + ", " + defaultValue + ")";
-            }
-          }
-          if (field.value.type.enum_def &&
-              field.value.type.base_type != BASE_TYPE_VECTOR) {
-            code += ")";
-          }
-          code += ";\n";
-          
-          // Add decryption call based on type
+          std::string field_offset = NumToString(field.value.offset);
+
           if (IsString(field.value.type)) {
-            code += "    return FlatbuffersEncryption.decryptString(rawValue, encryptionCtx, " +
-                    NumToString(field.value.offset) + ");\n";
+            // For encrypted strings, read raw bytes and decrypt
+            code += " {\n";
+            code += "    final o = " + _kFb + ".Int32Reader().vTableGetNullable(_bc, _bcOffset, " + field_offset + ");\n";
+            code += "    if (o == null) return null;\n";
+            code += "    return FlatbuffersEncryption.decryptString(_bc, _bcOffset + o, encryptionCtx, " + field_offset + ");\n";
+            code += "  }\n";
           } else if (IsScalar(field.value.type.base_type)) {
-            code += "    return FlatbuffersEncryption.decryptScalar(rawValue, encryptionCtx, " +
-                    NumToString(field.value.offset) + ");\n";
+            code += " {\n";
+            code += "    final rawValue = ";
+            code += GenReaderTypeName(field.value.type,
+                                      struct_def.defined_namespace, field);
+            if (struct_def.fixed) {
+              code += ".read(_bc, _bcOffset + " + field_offset + ")";
+            } else {
+              if (isNullable) {
+                code += ".vTableGetNullable(_bc, _bcOffset, " + field_offset + ")";
+              } else {
+                code += ".vTableGet(_bc, _bcOffset, " + field_offset + ", " + defaultValue + ")";
+              }
+            }
+            code += ";\n";
+
+            // Add appropriate decryption call based on scalar type
+            std::string decrypt_func;
+            switch (field.value.type.base_type) {
+              case BASE_TYPE_BOOL:
+                decrypt_func = "decryptScalar";
+                break;
+              case BASE_TYPE_CHAR:
+              case BASE_TYPE_UCHAR:
+                decrypt_func = "decryptInt8";
+                break;
+              case BASE_TYPE_SHORT:
+              case BASE_TYPE_USHORT:
+                decrypt_func = "decryptInt16";
+                break;
+              case BASE_TYPE_INT:
+              case BASE_TYPE_UINT:
+                decrypt_func = "decryptInt32";
+                break;
+              case BASE_TYPE_LONG:
+              case BASE_TYPE_ULONG:
+                decrypt_func = "decryptInt64";
+                break;
+              case BASE_TYPE_FLOAT:
+                decrypt_func = "decryptFloat32";
+                break;
+              case BASE_TYPE_DOUBLE:
+                decrypt_func = "decryptFloat64";
+                break;
+              default:
+                decrypt_func = "decryptInt32";
+                break;
+            }
+            if (isNullable) {
+              code += "    if (rawValue == null) return null;\n";
+            }
+            code += "    return FlatbuffersEncryption." + decrypt_func + "(rawValue, encryptionCtx, " + field_offset + ");\n";
+            code += "  }\n";
           } else {
-            code += "    return rawValue;\n";
+            // For non-scalar, non-string types (shouldn't have encryption normally)
+            code += " => ";
+            code += GenReaderTypeName(field.value.type,
+                                      struct_def.defined_namespace, field);
+            if (struct_def.fixed) {
+              code += ".read(_bc, _bcOffset + " + field_offset + ")";
+            } else {
+              if (isNullable) {
+                code += ".vTableGetNullable(_bc, _bcOffset, " + field_offset + ")";
+              } else {
+                code += ".vTableGet(_bc, _bcOffset, " + field_offset + ", " + defaultValue + ")";
+              }
+            }
+            code += ";\n";
           }
-          code += "  }\n";
         } else {
           // Original one-liner getter
           code += " => ";

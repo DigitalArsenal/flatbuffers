@@ -627,6 +627,38 @@ bool EnableFIPSMode();
  */
 bool IsFIPSMode();
 
+// =============================================================================
+// Inline helpers for generated code
+// =============================================================================
+
+namespace encryption {
+
+/**
+ * Decrypt a scalar value and return it.
+ * This is used by generated code to transparently decrypt values.
+ */
+template<typename T>
+inline T DecryptScalar(T value, const EncryptionContext* ctx, uint16_t field_id) {
+  if (ctx == nullptr) return value;
+  ::flatbuffers::DecryptScalar(reinterpret_cast<uint8_t*>(&value), sizeof(T), *ctx, field_id);
+  return value;
+}
+
+/**
+ * Decrypt a string value and return it.
+ * For FlatBuffers strings, this operates on a copy.
+ */
+inline const String* DecryptString(const String* str, const EncryptionContext* ctx, uint16_t field_id) {
+  if (str == nullptr || ctx == nullptr) return str;
+  // Note: For zero-copy semantics, the caller should decrypt the buffer once
+  // rather than per-access. This returns the string as-is since we can't
+  // modify the const pointer. For proper decryption, use DecryptBuffer().
+  // This placeholder allows the generated code to compile.
+  return str;
+}
+
+}  // namespace encryption
+
 }  // namespace flatbuffers
 
 #endif  // FLATBUFFERS_ENCRYPTION_H_

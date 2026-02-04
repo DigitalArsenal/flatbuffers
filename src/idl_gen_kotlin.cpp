@@ -81,6 +81,17 @@ class KotlinGenerator : public BaseGenerator {
         namer_(WithFlagOptions(KotlinDefaultConfig(), parser.opts, path),
                KotlinKeywords()) {}
 
+  // Check if a struct has any encrypted fields
+  bool HasEncryptedFields(const StructDef& struct_def) const {
+    for (auto it = struct_def.fields.vec.begin();
+         it != struct_def.fields.vec.end(); ++it) {
+      if ((*it)->attributes.Lookup("encrypted") != nullptr) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   KotlinGenerator& operator=(const KotlinGenerator&);
   bool generate() FLATBUFFERS_OVERRIDE {
     std::string one_file_code;
@@ -113,11 +124,180 @@ class KotlinGenerator : public BaseGenerator {
       }
     }
 
+    // Generate encryption class if any struct has encrypted fields
+    bool needs_encryption = false;
+    for (auto it = parser_.structs_.vec.begin();
+         it != parser_.structs_.vec.end(); ++it) {
+      if (HasEncryptedFields(**it)) {
+        needs_encryption = true;
+        break;
+      }
+    }
+    if (needs_encryption) {
+      CodeWriter encryptionWriter(ident_pad);
+      GenEncryptionClass(encryptionWriter);
+      if (parser_.opts.one_file) {
+        one_file_code += encryptionWriter.ToString();
+      } else {
+        if (!SaveType("FlatbuffersEncryption", *parser_.current_namespace_,
+                      encryptionWriter.ToString(), true))
+          return false;
+      }
+    }
+
     if (parser_.opts.one_file) {
       return SaveType(file_name_, *parser_.current_namespace_, one_file_code,
                       true);
     }
     return true;
+  }
+
+  // Generate the FlatbuffersEncryption class using javax.crypto
+  void GenEncryptionClass(CodeWriter& writer) const {
+    // Note: java.nio.ByteBuffer and java.nio.ByteOrder are already imported
+    // by the standard Kotlin file generation
+    writer += "import javax.crypto.Cipher";
+    writer += "import javax.crypto.spec.IvParameterSpec";
+    writer += "import javax.crypto.spec.SecretKeySpec";
+    writer += "";
+    writer += "/**";
+    writer += " * FlatBuffers field-level encryption support using AES-256-CTR.";
+    writer += " */";
+    writer += "object FlatbuffersEncryption {";
+    writer.IncrementIdentLevel();
+    writer += "";
+    writer += "private fun deriveNonce(ctx: ByteArray, fieldOffset: Int): ByteArray {";
+    writer.IncrementIdentLevel();
+    writer += "require(ctx.size >= 12) { \"Encryption context must be at least 12 bytes\" }";
+    writer += "val nonce = ByteArray(16)";
+    writer += "System.arraycopy(ctx, 0, nonce, 0, 12)";
+    writer += "ByteBuffer.wrap(nonce, 12, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(fieldOffset)";
+    writer += "return nonce";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
+    writer += "private fun decryptBytes(data: ByteArray, ctx: ByteArray, fieldOffset: Int): ByteArray {";
+    writer.IncrementIdentLevel();
+    writer += "require(ctx.size >= 32) { \"Encryption context must be at least 32 bytes\" }";
+    writer += "val key = ctx.copyOfRange(0, 32)";
+    writer += "val nonce = deriveNonce(ctx, fieldOffset)";
+    writer += "val keySpec = SecretKeySpec(key, \"AES\")";
+    writer += "val ivSpec = IvParameterSpec(nonce)";
+    writer += "val cipher = Cipher.getInstance(\"AES/CTR/NoPadding\")";
+    writer += "cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec)";
+    writer += "return cipher.doFinal(data)";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
+    writer += "fun decryptScalar(value: Boolean, ctx: ByteArray?, fieldOffset: Int): Boolean {";
+    writer.IncrementIdentLevel();
+    writer += "if (ctx == null) return value";
+    writer += "val data = byteArrayOf(if (value) 1.toByte() else 0.toByte())";
+    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
+    writer += "return decrypted[0] != 0.toByte()";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
+    writer += "fun decryptScalar(value: Byte, ctx: ByteArray?, fieldOffset: Int): Byte {";
+    writer.IncrementIdentLevel();
+    writer += "if (ctx == null) return value";
+    writer += "val data = byteArrayOf(value)";
+    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
+    writer += "return decrypted[0]";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
+    writer += "fun decryptScalar(value: Short, ctx: ByteArray?, fieldOffset: Int): Short {";
+    writer.IncrementIdentLevel();
+    writer += "if (ctx == null) return value";
+    writer += "val data = ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(value).array()";
+    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
+    writer += "return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getShort()";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
+    writer += "fun decryptScalar(value: Int, ctx: ByteArray?, fieldOffset: Int): Int {";
+    writer.IncrementIdentLevel();
+    writer += "if (ctx == null) return value";
+    writer += "val data = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(value).array()";
+    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
+    writer += "return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getInt()";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
+    writer += "fun decryptScalar(value: Long, ctx: ByteArray?, fieldOffset: Int): Long {";
+    writer.IncrementIdentLevel();
+    writer += "if (ctx == null) return value";
+    writer += "val data = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(value).array()";
+    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
+    writer += "return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getLong()";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
+    writer += "fun decryptScalar(value: Float, ctx: ByteArray?, fieldOffset: Int): Float {";
+    writer.IncrementIdentLevel();
+    writer += "if (ctx == null) return value";
+    writer += "val data = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putFloat(value).array()";
+    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
+    writer += "return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getFloat()";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
+    writer += "fun decryptScalar(value: Double, ctx: ByteArray?, fieldOffset: Int): Double {";
+    writer.IncrementIdentLevel();
+    writer += "if (ctx == null) return value";
+    writer += "val data = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putDouble(value).array()";
+    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
+    writer += "return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getDouble()";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
+    // Unsigned type overloads
+    writer += "fun decryptScalar(value: UByte, ctx: ByteArray?, fieldOffset: Int): UByte {";
+    writer.IncrementIdentLevel();
+    writer += "return decryptScalar(value.toByte(), ctx, fieldOffset).toUByte()";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
+    writer += "fun decryptScalar(value: UShort, ctx: ByteArray?, fieldOffset: Int): UShort {";
+    writer.IncrementIdentLevel();
+    writer += "return decryptScalar(value.toShort(), ctx, fieldOffset).toUShort()";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
+    writer += "fun decryptScalar(value: UInt, ctx: ByteArray?, fieldOffset: Int): UInt {";
+    writer.IncrementIdentLevel();
+    writer += "return decryptScalar(value.toInt(), ctx, fieldOffset).toUInt()";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
+    writer += "fun decryptScalar(value: ULong, ctx: ByteArray?, fieldOffset: Int): ULong {";
+    writer.IncrementIdentLevel();
+    writer += "return decryptScalar(value.toLong(), ctx, fieldOffset).toULong()";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
+    writer += "fun decryptString(bb: ByteBuffer, offset: Int, ctx: ByteArray?, fieldOffset: Int): String? {";
+    writer.IncrementIdentLevel();
+    writer += "// Read raw bytes from the vector";
+    writer += "val pos = offset + bb.getInt(offset)";
+    writer += "val len = bb.getInt(pos)";
+    writer += "val data = ByteArray(len)";
+    writer += "for (i in 0 until len) data[i] = bb.get(pos + 4 + i)";
+    writer += "if (ctx == null) {";
+    writer.IncrementIdentLevel();
+    writer += "// No encryption context, decode as regular string";
+    writer += "return String(data, Charsets.UTF_8)";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "// Decrypt and decode";
+    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
+    writer += "return String(decrypted, Charsets.UTF_8)";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer.DecrementIdentLevel();
+    writer += "}";
+    writer += "";
   }
 
   // Save out the generated code for a single class while adding
@@ -517,6 +697,7 @@ class KotlinGenerator : public BaseGenerator {
 
     GenerateComment(struct_def.doc_comment, writer, &comment_config);
     auto fixed = struct_def.fixed;
+    bool has_encrypted = HasEncryptedFields(struct_def);
 
     writer.SetValue("struct_name", namer_.Type(struct_def));
     writer.SetValue("superclass", fixed ? "Struct" : "Table");
@@ -526,11 +707,27 @@ class KotlinGenerator : public BaseGenerator {
 
     writer.IncrementIdentLevel();
 
+    // Add encryptionCtx property for structs with encrypted fields
+    if (has_encrypted) {
+      writer += "/** Encryption context for decrypting encrypted fields */";
+      writer += "var encryptionCtx: ByteArray? = null";
+      writer += "";
+    }
+
     {
       // Generate the __init() method that sets the field in a pre-existing
       // accessor object. This is to allow object reuse.
       GenerateFun(writer, "__init", "_i: Int, _bb: ByteBuffer", "",
                   [&]() { writer += "__reset(_i, _bb)"; });
+
+      // Generate __init with encryption context
+      if (has_encrypted) {
+        GenerateFun(writer, "__init", "_i: Int, _bb: ByteBuffer, _encryptionCtx: ByteArray?", "",
+                    [&]() {
+                      writer += "__reset(_i, _bb)";
+                      writer += "encryptionCtx = _encryptionCtx";
+                    });
+      }
 
       // Generate assign method
       GenerateFun(writer, "__assign", "_i: Int, _bb: ByteBuffer",
@@ -538,6 +735,15 @@ class KotlinGenerator : public BaseGenerator {
                     writer += "__init(_i, _bb)";
                     writer += "return this";
                   });
+
+      // Generate assign with encryption context
+      if (has_encrypted) {
+        GenerateFun(writer, "__assign", "_i: Int, _bb: ByteBuffer, _encryptionCtx: ByteArray?",
+                    namer_.Type(struct_def), [&]() {
+                      writer += "__init(_i, _bb, _encryptionCtx)";
+                      writer += "return this";
+                    });
+      }
 
       // Generate all getters
       GenerateStructGetters(struct_def, writer);
@@ -555,7 +761,7 @@ class KotlinGenerator : public BaseGenerator {
               [&]() { writer += "Constants.FLATBUFFERS_25_12_19()"; },
               options.gen_jvmstatic);
 
-          GenerateGetRootAsAccessors(namer_.Type(struct_def), writer, options);
+          GenerateGetRootAsAccessors(struct_def, namer_.Type(struct_def), writer, options);
           GenerateBufferHasIdentifier(struct_def, writer, options);
           GenerateTableCreator(struct_def, writer, options);
 
@@ -1007,8 +1213,12 @@ class KotlinGenerator : public BaseGenerator {
           GenerateGetter(writer, field_name, return_type, [&]() {
             writer += "val o = __offset({{offset}})";
             if (field.attributes.Lookup("encrypted") != nullptr) {
+              writer += "return if(o != 0) {";
+              writer.IncrementIdentLevel();
               writer += "val rawValue = {{bbgetter}}(o + bb_pos){{ucast}}";
-              writer += "return if(o != 0) FlatbuffersEncryption.decryptScalar(rawValue, this.encryptionCtx, " + NumToString(field.value.offset) + ") else {{field_default}}";
+              writer += "FlatbuffersEncryption.decryptScalar(rawValue, this.encryptionCtx, " + NumToString(field.value.offset) + ")";
+              writer.DecrementIdentLevel();
+              writer += "} else {{field_default}}";
             } else {
               writer +=
                   "return if(o != 0) {{bbgetter}}"
@@ -1078,8 +1288,7 @@ class KotlinGenerator : public BaseGenerator {
               writer += "return if (o != 0) {";
               writer.IncrementIdentLevel();
               if (field.attributes.Lookup("encrypted") != nullptr) {
-                writer += "val rawValue = __string(o + bb_pos)";
-                writer += "if (this.encryptionCtx == null) rawValue else FlatbuffersEncryption.decryptString(rawValue, this.encryptionCtx, " + NumToString(field.value.offset) + ")";
+                writer += "FlatbuffersEncryption.decryptString(bb, o + bb_pos, this.encryptionCtx, " + NumToString(field.value.offset) + ")";
               } else {
                 writer += "__string(o + bb_pos)";
               }
@@ -1427,13 +1636,16 @@ class KotlinGenerator : public BaseGenerator {
     }
   }
 
-  void GenerateGetRootAsAccessors(const std::string& struct_name,
+  void GenerateGetRootAsAccessors(const StructDef& struct_def,
+                                  const std::string& struct_name,
                                   CodeWriter& writer,
                                   IDLOptions options) const {
     // Generate a special accessor for the table that when used as the root
     // ex: fun getRootAsMonster(_bb: ByteBuffer): Monster {...}
     writer.SetValue("gr_name", struct_name);
     writer.SetValue("gr_method", "getRootAs" + struct_name);
+
+    bool has_encrypted = HasEncryptedFields(struct_def);
 
     // create convenience method that doesn't require an existing object
     GenerateJvmStaticAnnotation(writer, options.gen_jvmstatic);
@@ -1453,6 +1665,27 @@ class KotlinGenerator : public BaseGenerator {
         " + _bb.position(), _bb))";
     writer.DecrementIdentLevel();
     writer += "}";
+
+    // For tables with encrypted fields, add overloads that accept encryption context
+    if (has_encrypted) {
+      // convenience method with encryption context
+      GenerateJvmStaticAnnotation(writer, options.gen_jvmstatic);
+      writer += "fun {{gr_method}}(_bb: ByteBuffer, _encryptionCtx: ByteArray?): {{gr_name}} = \\";
+      writer += "{{gr_method}}(_bb, {{gr_name}}(), _encryptionCtx)";
+
+      // method with object reuse and encryption context
+      GenerateJvmStaticAnnotation(writer, options.gen_jvmstatic);
+      writer +=
+          "fun {{gr_method}}"
+          "(_bb: ByteBuffer, obj: {{gr_name}}, _encryptionCtx: ByteArray?): {{gr_name}} {";
+      writer.IncrementIdentLevel();
+      writer += "_bb.order(ByteOrder.LITTLE_ENDIAN)";
+      writer +=
+          "return (obj.__assign(_bb.getInt(_bb.position())"
+          " + _bb.position(), _bb, _encryptionCtx))";
+      writer.DecrementIdentLevel();
+      writer += "}";
+    }
   }
 
   void GenerateStaticConstructor(const StructDef& struct_def, CodeWriter& code,

@@ -115,6 +115,8 @@ cc_library(
         "idl_gen_csharp.h",
         "idl_gen_dart.cpp",
         "idl_gen_dart.h",
+        "idl_gen_aligned.cpp",
+        "idl_gen_aligned.h",
         "idl_gen_go.cpp",
         "idl_gen_go.h",
         "idl_gen_grpc.cpp",

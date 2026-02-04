@@ -6,14 +6,14 @@
   "x-flatbuffer-namespace": "flatbuffers.encryption",
   "x-flatbuffer-root-type": "EncryptionHeader",
   "type": "object",
-  "required": ["ephemeral_public_key"],
+  "required": ["ephemeral_public_key", "nonce_start"],
   "properties": {
     "version": {
       "type": "integer",
       "minimum": 0,
       "maximum": 255,
-      "default": 1,
-      "description": "Version of the encryption header format",
+      "default": 2,
+      "description": "Version of the encryption header format (2 = nonce_start required)",
       "x-flatbuffer-type": "ubyte"
     },
     "key_exchange": {
@@ -79,6 +79,19 @@
       "x-flatbuffer-type": "[ubyte]",
       "x-flatbuffer-required": true
     },
+    "nonce_start": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+      },
+      "minItems": 12,
+      "maxItems": 12,
+      "description": "Random 12-byte nonce starting value. Incremented for each record in the stream to ensure unique nonces.",
+      "x-flatbuffer-type": "[ubyte]",
+      "x-flatbuffer-required": true
+    },
     "recipient_key_id": {
       "type": "array",
       "items": {
@@ -123,13 +136,16 @@
   "additionalProperties": false,
   "examples": [
     {
-      "version": 1,
+      "version": 2,
       "key_exchange": "X25519",
       "symmetric": "AES_256_CTR",
       "kdf": "HKDF_SHA256",
       "ephemeral_public_key": [
         4, 113, 195, 67, 27, 253, 85, 143, 45, 128, 183, 93, 133, 58, 119, 221,
         28, 203, 61, 55, 118, 85, 219, 203, 157, 157, 102, 228, 158, 68, 50, 89
+      ],
+      "nonce_start": [
+        186, 219, 173, 192, 255, 238, 11, 10, 13, 12, 0, 222
       ],
       "context": "my-application-v1",
       "root_type": "UserProfile",

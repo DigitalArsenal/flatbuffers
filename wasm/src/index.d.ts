@@ -192,6 +192,7 @@ export default createFlatcModule;
 
 export declare const KEY_SIZE: 32;
 export declare const IV_SIZE: 16;
+export declare const NONCE_SIZE: 12;
 export declare const SHA256_SIZE: 32;
 export declare const HMAC_SIZE: 32;
 export declare const X25519_PRIVATE_KEY_SIZE: 32;
@@ -322,7 +323,18 @@ export declare function hmacSha256Verify(key: Uint8Array, data: Uint8Array, mac:
 
 export declare function encryptBytes(data: Uint8Array, key: Uint8Array, iv: Uint8Array): void;
 export declare function decryptBytes(data: Uint8Array, key: Uint8Array, iv: Uint8Array): void;
-export declare function generateIV(): Uint8Array;
+/**
+ * Generate a random 12-byte nonce starting value using CSPRNG.
+ * @returns 12-byte nonce suitable for CTR mode.
+ */
+export declare function generateNonceStart(): Uint8Array;
+/**
+ * Derive a unique nonce from nonceStart and recordIndex using 96-bit addition.
+ * @param nonceStart - Starting nonce (12 bytes).
+ * @param recordIndex - Record/field index to add.
+ * @returns Derived 12-byte nonce.
+ */
+export declare function deriveNonce(nonceStart: Uint8Array, recordIndex: number | bigint): Uint8Array;
 export declare function encryptBytesCopy(plaintext: Uint8Array, key: Uint8Array, iv?: Uint8Array): { ciphertext: Uint8Array; iv: Uint8Array };
 export declare function decryptBytesCopy(ciphertext: Uint8Array, key: Uint8Array, iv: Uint8Array): Uint8Array;
 
@@ -475,7 +487,8 @@ export interface EncryptionHeader {
   algorithm: string;
   senderPublicKey: Uint8Array;
   recipientKeyId: Uint8Array;
-  iv: Uint8Array;
+  /** Starting nonce for CTR mode (12 bytes). Incremented per record for unique per-field nonces. */
+  nonceStart: Uint8Array;
   context: string;
   sequenceNumber?: bigint;
   sessionId?: Uint8Array;
@@ -485,7 +498,8 @@ export interface CreateEncryptionHeaderOptions {
   algorithm: string;
   senderPublicKey: Uint8Array;
   recipientKeyId: Uint8Array;
-  iv?: Uint8Array;
+  /** Starting nonce for CTR mode (12 bytes). Auto-generated if not provided. */
+  nonceStart?: Uint8Array;
   context?: string;
 }
 
@@ -530,12 +544,14 @@ export declare function parseSchemaForEncryption(schema: Uint8Array, rootType?: 
 export interface EncryptionContextOptions {
   algorithm?: 'x25519' | 'secp256k1';
   context?: string;
+  /** Starting nonce (12 bytes). Auto-generated if not provided. */
+  nonceStart?: Uint8Array;
 }
 
 export declare class EncryptionContext {
-  constructor(key: Uint8Array | string);
+  constructor(key: Uint8Array | string, nonceStart?: Uint8Array);
 
-  static fromHex(hexKey: string): EncryptionContext;
+  static fromHex(hexKey: string, nonceStart?: Uint8Array): EncryptionContext;
   static forEncryption(recipientPublicKey: Uint8Array, options?: EncryptionContextOptions): EncryptionContext;
   static forDecryption(privateKey: Uint8Array, header: EncryptionHeader, contextStr?: string): EncryptionContext;
 
@@ -547,8 +563,18 @@ export declare class EncryptionContext {
   getHeader(): EncryptionHeader;
   getHeaderJSON(): string;
 
+  /** Get the starting nonce (12 bytes). */
+  getNonceStart(): Uint8Array;
+  /** Get the current record index. */
+  getRecordIndex(): number;
+  /** Set the current record index. */
+  setRecordIndex(index: number): void;
+  /** Increment and return the record index. */
+  nextRecordIndex(): number;
+
   deriveFieldKey(fieldId: number, recordIndex?: number): Uint8Array;
-  deriveFieldIV(fieldId: number, recordIndex?: number): Uint8Array;
+  /** Derive nonce for a specific field using 96-bit addition of nonceStart + recordIndex + fieldId. */
+  deriveFieldNonce(fieldId: number, recordIndex?: number): Uint8Array;
 
   encryptScalar(buffer: Uint8Array, offset: number, length: number, fieldId: number, recordIndex?: number): void;
   decryptScalar(buffer: Uint8Array, offset: number, length: number, fieldId: number, recordIndex?: number): void;

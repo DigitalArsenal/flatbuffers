@@ -31,7 +31,8 @@ import {
   decryptBytes,
   encryptBytesCopy,
   decryptBytesCopy,
-  generateIV,
+  generateNonceStart,
+  deriveNonce,
   clearIVTracking,
   clearAllIVTracking,
   hkdf,
@@ -68,6 +69,7 @@ import {
   CryptoErrorCode,
   KEY_SIZE,
   IV_SIZE,
+  NONCE_SIZE,
   SHA256_SIZE,
   X25519_PRIVATE_KEY_SIZE,
   X25519_PUBLIC_KEY_SIZE,
@@ -536,22 +538,22 @@ async function main() {
     // No exception means unique IVs were derived for each record
   });
 
-  await test('generateIV produces valid random IVs', async () => {
-    const iv1 = generateIV();
-    const iv2 = generateIV();
+  await test('generateNonceStart produces valid random nonces', async () => {
+    const nonce1 = generateNonceStart();
+    const nonce2 = generateNonceStart();
 
-    assertEqual(iv1.length, IV_SIZE, 'IV should be 16 bytes');
-    assertEqual(iv2.length, IV_SIZE, 'IV should be 16 bytes');
+    assertEqual(nonce1.length, NONCE_SIZE, 'nonce should be 12 bytes');
+    assertEqual(nonce2.length, NONCE_SIZE, 'nonce should be 12 bytes');
 
-    // IVs should be different (with overwhelming probability)
+    // Nonces should be different (with overwhelming probability)
     let same = true;
-    for (let i = 0; i < IV_SIZE; i++) {
-      if (iv1[i] !== iv2[i]) {
+    for (let i = 0; i < NONCE_SIZE; i++) {
+      if (nonce1[i] !== nonce2[i]) {
         same = false;
         break;
       }
     }
-    assert(!same, 'generated IVs should be unique');
+    assert(!same, 'generated nonces should be unique');
   });
 
   // ==========================================================================
@@ -1089,24 +1091,26 @@ async function main() {
     assert(!same, 'different fields should have different keys');
   });
 
-  await test('deriveFieldIV produces different IVs for different fields', async () => {
-    const ctx = new EncryptionContext(new Uint8Array(KEY_SIZE).fill(0x42));
+  await test('deriveFieldNonce produces different nonces for different fields', async () => {
+    const nonceStart = generateNonceStart();
+    const ctx = new EncryptionContext(new Uint8Array(KEY_SIZE).fill(0x42), nonceStart);
 
-    const iv1 = ctx.deriveFieldIV(0);
-    const iv2 = ctx.deriveFieldIV(1);
+    const nonce1 = ctx.deriveFieldNonce(0);
+    const nonce2 = ctx.deriveFieldNonce(1);
 
     let same = true;
-    for (let i = 0; i < iv1.length; i++) {
-      if (iv1[i] !== iv2[i]) {
+    for (let i = 0; i < nonce1.length; i++) {
+      if (nonce1[i] !== nonce2[i]) {
         same = false;
         break;
       }
     }
-    assert(!same, 'different fields should have different IVs');
+    assert(!same, 'different fields should have different nonces');
   });
 
   await test('encryptScalar encrypts buffer range', async () => {
-    const ctx = new EncryptionContext(new Uint8Array(KEY_SIZE).fill(0x42));
+    const nonceStart = generateNonceStart();
+    const ctx = new EncryptionContext(new Uint8Array(KEY_SIZE).fill(0x42), nonceStart);
     const buffer = new Uint8Array([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
     const original = new Uint8Array(buffer);
 
@@ -1176,24 +1180,24 @@ async function main() {
       recipientKeyId: keyId,
     });
 
-    assertEqual(header.version, 1, 'version should be 1');
+    assertEqual(header.version, 2, 'version should be 2');
     assertEqual(header.algorithm, 'x25519', 'algorithm should match');
-    assertEqual(header.iv.length, IV_SIZE, 'IV should be 16 bytes');
+    assertEqual(header.nonceStart.length, NONCE_SIZE, 'nonceStart should be 12 bytes');
   });
 
-  await test('createEncryptionHeader accepts custom IV', async () => {
+  await test('createEncryptionHeader accepts custom nonceStart', async () => {
     const { publicKey } = x25519GenerateKeyPair();
     const keyId = computeKeyId(publicKey);
-    const customIV = new Uint8Array(IV_SIZE).fill(0x42);
+    const customNonce = new Uint8Array(NONCE_SIZE).fill(0x42);
 
     const header = createEncryptionHeader({
       algorithm: 'x25519',
       senderPublicKey: publicKey,
       recipientKeyId: keyId,
-      iv: customIV,
+      nonceStart: customNonce,
     });
 
-    assertArrayEqual(header.iv, customIV, 'IV should match custom value');
+    assertArrayEqual(header.nonceStart, customNonce, 'nonceStart should match custom value');
   });
 
   await test('computeKeyId produces 8 bytes', async () => {
@@ -1219,7 +1223,7 @@ async function main() {
     assertEqual(restored.algorithm, header.algorithm, 'algorithm should match');
     assertArrayEqual(restored.senderPublicKey, header.senderPublicKey, 'sender key should match');
     assertArrayEqual(restored.recipientKeyId, header.recipientKeyId, 'recipient key ID should match');
-    assertArrayEqual(restored.iv, header.iv, 'IV should match');
+    assertArrayEqual(restored.nonceStart, header.nonceStart, 'nonceStart should match');
   });
 
   // ==========================================================================
@@ -1280,11 +1284,11 @@ async function main() {
     });
 
     const header = ctx.getHeader();
-    assertEqual(header.version, 1, 'header version should be 1');
+    assertEqual(header.version, 2, 'header version should be 2');
     assertEqual(header.algorithm, 'x25519', 'algorithm should match');
     assertEqual(header.senderPublicKey.length, 32, 'sender public key should be 32 bytes');
     assertEqual(header.recipientKeyId.length, 8, 'recipient key ID should be 8 bytes');
-    assertEqual(header.iv.length, 16, 'IV should be 16 bytes');
+    assertEqual(header.nonceStart.length, NONCE_SIZE, 'nonceStart should be 12 bytes');
     assertEqual(header.context, 'test-context', 'context should match');
   });
 
@@ -1299,10 +1303,13 @@ async function main() {
     assert(typeof headerJSON === 'string', 'should return string');
 
     const parsed = JSON.parse(headerJSON);
-    assertEqual(parsed.version, 1, 'parsed version should be 1');
+    assertEqual(parsed.version, 2, 'parsed version should be 2');
     // senderPublicKey is hex-encoded in JSON format
     assert(typeof parsed.senderPublicKey === 'string', 'senderPublicKey should be hex string');
     assertEqual(parsed.senderPublicKey.length, 64, 'senderPublicKey hex should be 64 chars (32 bytes)');
+    // nonceStart is hex-encoded in JSON format
+    assert(typeof parsed.nonceStart === 'string', 'nonceStart should be hex string');
+    assertEqual(parsed.nonceStart.length, 24, 'nonceStart hex should be 24 chars (12 bytes)');
     assertEqual(parsed.context, 'json-test', 'context should match');
   });
 
@@ -1741,6 +1748,266 @@ async function main() {
     retrievedKey[0] ^= 0xFF;
     const retrievedKey2 = ctx.getKey();
     assertArrayEqual(retrievedKey2, key, 'context key should be unchanged');
+  });
+
+  // ==========================================================================
+  // Nonce Generation and Derivation Tests
+  // ==========================================================================
+  log('\n[Nonce Generation and Derivation]');
+
+  await test('generateNonceStart produces 12-byte random nonce', async () => {
+    const nonce = generateNonceStart();
+    assertEqual(nonce.length, NONCE_SIZE, 'nonce should be 12 bytes');
+    assert(nonce instanceof Uint8Array, 'nonce should be Uint8Array');
+  });
+
+  await test('generateNonceStart produces unique values', async () => {
+    const nonces = new Set();
+    for (let i = 0; i < 100; i++) {
+      const nonce = generateNonceStart();
+      const hex = bytesToHex(nonce);
+      assert(!nonces.has(hex), 'nonce should be unique');
+      nonces.add(hex);
+    }
+  });
+
+  await test('deriveNonce adds recordIndex correctly (simple case)', async () => {
+    const nonceStart = new Uint8Array(12).fill(0);
+
+    const nonce0 = deriveNonce(nonceStart, 0);
+    assertArrayEqual(nonce0, nonceStart, 'nonce with index 0 should equal nonceStart');
+
+    const nonce1 = deriveNonce(nonceStart, 1);
+    const expected1 = new Uint8Array(12);
+    expected1[11] = 1;  // Last byte should be 1
+    assertArrayEqual(nonce1, expected1, 'nonce with index 1 should have last byte = 1');
+
+    const nonce256 = deriveNonce(nonceStart, 256);
+    const expected256 = new Uint8Array(12);
+    expected256[10] = 1;  // Second-to-last byte should be 1
+    assertArrayEqual(nonce256, expected256, 'nonce with index 256 should have byte[10] = 1');
+  });
+
+  await test('deriveNonce handles 96-bit addition with carry', async () => {
+    // Start with all 0xFF except first byte
+    const nonceStart = new Uint8Array([0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+
+    const nonce1 = deriveNonce(nonceStart, 1);
+    // Adding 1 should carry through all bytes
+    const expected = new Uint8Array([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    assertArrayEqual(nonce1, expected, 'nonce should handle carry correctly');
+  });
+
+  await test('deriveNonce handles 96-bit wrap-around', async () => {
+    // Start with all 0xFF (maximum 96-bit value)
+    const nonceStart = new Uint8Array(12).fill(0xFF);
+
+    const nonce1 = deriveNonce(nonceStart, 1);
+    // Adding 1 to max should wrap to 0
+    const expected = new Uint8Array(12).fill(0);
+    assertArrayEqual(nonce1, expected, 'nonce should wrap around at 96-bit boundary');
+  });
+
+  await test('deriveNonce accepts bigint recordIndex', async () => {
+    const nonceStart = new Uint8Array(12).fill(0);
+
+    const nonce = deriveNonce(nonceStart, BigInt(0x123456789ABC));
+    // Verify the result has the expected bytes
+    assertEqual(nonce[6], 0x12, 'byte 6 should be 0x12');
+    assertEqual(nonce[7], 0x34, 'byte 7 should be 0x34');
+    assertEqual(nonce[8], 0x56, 'byte 8 should be 0x56');
+    assertEqual(nonce[9], 0x78, 'byte 9 should be 0x78');
+    assertEqual(nonce[10], 0x9A, 'byte 10 should be 0x9A');
+    assertEqual(nonce[11], 0xBC, 'byte 11 should be 0xBC');
+  });
+
+  await test('deriveNonce throws on invalid nonceStart', async () => {
+    assertThrows(
+      () => deriveNonce(new Uint8Array(11), 0),
+      '12-byte',
+      'should reject 11-byte nonce'
+    );
+    assertThrows(
+      () => deriveNonce(new Uint8Array(16), 0),
+      '12-byte',
+      'should reject 16-byte nonce'
+    );
+    assertThrows(
+      () => deriveNonce('not a uint8array', 0),
+      '12-byte',
+      'should reject non-Uint8Array'
+    );
+  });
+
+  // ==========================================================================
+  // EncryptionContext Nonce Tests
+  // ==========================================================================
+  log('\n[EncryptionContext Nonce Methods]');
+
+  await test('EncryptionContext constructor accepts nonceStart', async () => {
+    const key = randomBytes(32);
+    const nonceStart = generateNonceStart();
+
+    const ctx = new EncryptionContext(key, nonceStart);
+    assert(ctx.isValid(), 'context should be valid');
+    assertArrayEqual(ctx.getNonceStart(), nonceStart, 'nonceStart should match');
+  });
+
+  await test('EncryptionContext.forEncryption generates nonceStart', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+    const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey);
+
+    const nonceStart = ctx.getNonceStart();
+    assert(nonceStart !== null, 'nonceStart should not be null');
+    assertEqual(nonceStart.length, NONCE_SIZE, 'nonceStart should be 12 bytes');
+  });
+
+  await test('EncryptionContext.forEncryption accepts custom nonceStart', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+    const customNonce = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+
+    const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
+      nonceStart: customNonce
+    });
+
+    assertArrayEqual(ctx.getNonceStart(), customNonce, 'nonceStart should match custom value');
+  });
+
+  await test('EncryptionContext recordIndex management', async () => {
+    const key = randomBytes(32);
+    const nonceStart = generateNonceStart();
+    const ctx = new EncryptionContext(key, nonceStart);
+
+    assertEqual(ctx.getRecordIndex(), 0, 'initial recordIndex should be 0');
+
+    ctx.setRecordIndex(5);
+    assertEqual(ctx.getRecordIndex(), 5, 'recordIndex should be 5 after set');
+
+    const next = ctx.nextRecordIndex();
+    assertEqual(next, 6, 'nextRecordIndex should return 6');
+    assertEqual(ctx.getRecordIndex(), 6, 'recordIndex should be 6 after next');
+  });
+
+  await test('EncryptionContext.deriveFieldNonce produces unique nonces', async () => {
+    const key = randomBytes(32);
+    const nonceStart = generateNonceStart();
+    const ctx = new EncryptionContext(key, nonceStart);
+
+    const nonces = new Set();
+
+    // Test different field IDs with recordIndex=0
+    for (let fieldId = 0; fieldId < 10; fieldId++) {
+      const nonce = ctx.deriveFieldNonce(fieldId, 0);
+      const hex = bytesToHex(nonce);
+      assert(!nonces.has(hex), `nonce for fieldId ${fieldId} should be unique`);
+      nonces.add(hex);
+    }
+
+    // Test different record indices with fieldId=0 (starting from 1 to avoid duplicate)
+    for (let recordIndex = 1; recordIndex < 10; recordIndex++) {
+      const nonce = ctx.deriveFieldNonce(0, recordIndex);
+      const hex = bytesToHex(nonce);
+      assert(!nonces.has(hex), `nonce for recordIndex ${recordIndex} should be unique`);
+      nonces.add(hex);
+    }
+  });
+
+  await test('EncryptionContext encrypt/decrypt with nonce derivation', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+    const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey);
+
+    const plaintext = new TextEncoder().encode('Hello, World!');
+    const buffer = new Uint8Array(plaintext);
+
+    // Encrypt
+    ctx.encryptScalar(buffer, 0, buffer.length, 1, 0);
+
+    // Verify data changed
+    let changed = false;
+    for (let i = 0; i < plaintext.length; i++) {
+      if (buffer[i] !== plaintext[i]) {
+        changed = true;
+        break;
+      }
+    }
+    assert(changed, 'buffer should be encrypted (changed)');
+
+    // Decrypt
+    ctx.decryptScalar(buffer, 0, buffer.length, 1, 0);
+
+    // Verify decryption restored original
+    assertArrayEqual(buffer, plaintext, 'decrypted data should match original');
+  });
+
+  await test('EncryptionHeader includes nonceStart', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+    const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey);
+
+    const header = ctx.getHeader();
+    assertEqual(header.version, 2, 'header version should be 2');
+    assert(header.nonceStart !== undefined, 'header should have nonceStart');
+    assertEqual(header.nonceStart.length, NONCE_SIZE, 'nonceStart should be 12 bytes');
+    assertArrayEqual(header.nonceStart, ctx.getNonceStart(), 'header nonceStart should match context');
+  });
+
+  await test('EncryptionHeader JSON serialization includes nonceStart', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+    const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey);
+
+    const header = ctx.getHeader();
+    const json = encryptionHeaderToJSON(header);
+    const parsed = JSON.parse(json);
+
+    assert(parsed.nonceStart !== undefined, 'JSON should have nonceStart');
+    assert(typeof parsed.nonceStart === 'string', 'nonceStart should be hex string');
+    assertEqual(parsed.nonceStart.length, 24, 'nonceStart hex should be 24 chars (12 bytes)');
+  });
+
+  await test('EncryptionHeader round-trip preserves nonceStart', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+    const ctx = EncryptionContext.forEncryption(recipientKeys.publicKey);
+
+    const originalHeader = ctx.getHeader();
+    const json = encryptionHeaderToJSON(originalHeader);
+    const restoredHeader = encryptionHeaderFromJSON(json);
+
+    assertArrayEqual(restoredHeader.nonceStart, originalHeader.nonceStart, 'nonceStart should survive round-trip');
+    assertEqual(restoredHeader.version, originalHeader.version, 'version should survive round-trip');
+    assertEqual(restoredHeader.algorithm, originalHeader.algorithm, 'algorithm should survive round-trip');
+  });
+
+  await test('EncryptionContext.forDecryption uses header nonceStart', async () => {
+    const recipientKeys = x25519GenerateKeyPair();
+
+    // Encrypt
+    const encCtx = EncryptionContext.forEncryption(recipientKeys.publicKey);
+    const header = encCtx.getHeader();
+
+    const plaintext = new TextEncoder().encode('Secret message');
+    const buffer = new Uint8Array(plaintext);
+    encCtx.encryptScalar(buffer, 0, buffer.length, 1, 0);
+
+    // Decrypt using header
+    const decCtx = EncryptionContext.forDecryption(recipientKeys.privateKey, header);
+    assertArrayEqual(decCtx.getNonceStart(), encCtx.getNonceStart(), 'decryption context should have same nonceStart');
+
+    decCtx.decryptScalar(buffer, 0, buffer.length, 1, 0);
+    assertArrayEqual(buffer, plaintext, 'decrypted data should match original');
+  });
+
+  await test('Different records produce different nonces', async () => {
+    const key = randomBytes(32);
+    const nonceStart = generateNonceStart();
+    const ctx = new EncryptionContext(key, nonceStart);
+
+    const nonce0 = ctx.deriveFieldNonce(0, 0);
+    const nonce1 = ctx.deriveFieldNonce(0, 1);
+    const nonce2 = ctx.deriveFieldNonce(0, 2);
+
+    // Verify all are different
+    assert(bytesToHex(nonce0) !== bytesToHex(nonce1), 'record 0 and 1 should have different nonces');
+    assert(bytesToHex(nonce1) !== bytesToHex(nonce2), 'record 1 and 2 should have different nonces');
+    assert(bytesToHex(nonce0) !== bytesToHex(nonce2), 'record 0 and 2 should have different nonces');
   });
 
   // ==========================================================================

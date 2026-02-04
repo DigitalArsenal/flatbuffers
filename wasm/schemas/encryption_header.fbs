@@ -28,8 +28,8 @@ enum KeyDerivationFunction : byte {
 
 // The encryption header containing ephemeral key and algorithm metadata
 table EncryptionHeader {
-  // Version of the encryption header format
-  version: ubyte = 1;
+  // Version of the encryption header format (2 = nonce_start required)
+  version: ubyte = 2;
 
   // Key exchange algorithm used
   key_exchange: KeyExchangeAlgorithm = X25519;
@@ -66,6 +66,10 @@ table EncryptionHeader {
 
   // Session identifier for multiplexed streams (Task 39)
   session_id: [ubyte];
+
+  // Starting nonce for CTR mode (12 bytes, generated via CSPRNG)
+  // Each record increments this via 96-bit addition to derive unique per-field nonces
+  nonce_start: [ubyte] (required);
 }
 
 root_type EncryptionHeader;

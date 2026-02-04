@@ -70,6 +70,7 @@ export default createFlatcModule;
 
 export const KEY_SIZE = 32;
 export const IV_SIZE = 16;
+export const NONCE_SIZE = 12;  // 96-bit nonce for AES-CTR
 export const SHA256_SIZE = 32;
 export const HMAC_SIZE = 32;
 export const X25519_PRIVATE_KEY_SIZE = 32;
@@ -284,8 +285,51 @@ export function decryptBytes(data, key, iv) {
 // Encryption — Non-destructive encryption
 // =============================================================================
 
-export function generateIV() {
+// Internal: generate 16-byte IV for low-level AES operations
+function generateIV() {
   return new Uint8Array(nodeCrypto.randomBytes(IV_SIZE));
+}
+
+/**
+ * Generate a random 12-byte nonce starting value using CSPRNG.
+ * @returns {Uint8Array} 12-byte nonce suitable for CTR mode.
+ */
+export function generateNonceStart() {
+  return new Uint8Array(nodeCrypto.randomBytes(NONCE_SIZE));
+}
+
+/**
+ * Derive a unique nonce from nonceStart and recordIndex using 96-bit addition.
+ * @param {Uint8Array} nonceStart - Starting nonce (12 bytes).
+ * @param {number|bigint} recordIndex - Record/field index to add.
+ * @returns {Uint8Array} Derived 12-byte nonce.
+ */
+export function deriveNonce(nonceStart, recordIndex) {
+  if (!(nonceStart instanceof Uint8Array) || nonceStart.length !== NONCE_SIZE) {
+    throw new CryptoError('nonceStart must be a 12-byte Uint8Array', CryptoErrorCode.INVALID_INPUT);
+  }
+
+  // Convert recordIndex to BigInt for 96-bit arithmetic
+  const index = BigInt(recordIndex);
+
+  // Interpret nonceStart as a big-endian 96-bit integer
+  let value = 0n;
+  for (let i = 0; i < NONCE_SIZE; i++) {
+    value = (value << 8n) | BigInt(nonceStart[i]);
+  }
+
+  // Add recordIndex with 96-bit wrap-around
+  const mask96 = (1n << 96n) - 1n;
+  value = (value + index) & mask96;
+
+  // Convert back to bytes (big-endian)
+  const result = new Uint8Array(NONCE_SIZE);
+  for (let i = NONCE_SIZE - 1; i >= 0; i--) {
+    result[i] = Number(value & 0xFFn);
+    value >>= 8n;
+  }
+
+  return result;
 }
 
 export function encryptBytesCopy(plaintext, key, iv) {
@@ -662,13 +706,13 @@ export function computeKeyId(publicKey) {
 }
 
 export function createEncryptionHeader(options) {
-  const { algorithm, senderPublicKey, recipientKeyId, iv, context } = options;
+  const { algorithm, senderPublicKey, recipientKeyId, nonceStart, context } = options;
   return {
-    version: 1,
+    version: 2,
     algorithm,
     senderPublicKey: new Uint8Array(senderPublicKey),
     recipientKeyId: new Uint8Array(recipientKeyId),
-    iv: iv ? new Uint8Array(iv) : generateIV(),
+    nonceStart: nonceStart ? new Uint8Array(nonceStart) : generateNonceStart(),
     context: context || '',
   };
 }
@@ -679,7 +723,7 @@ export function encryptionHeaderToJSON(header) {
     algorithm: header.algorithm,
     senderPublicKey: bytesToHex(header.senderPublicKey),
     recipientKeyId: bytesToHex(header.recipientKeyId),
-    iv: bytesToHex(header.iv),
+    nonceStart: bytesToHex(header.nonceStart),
     context: header.context || '',
   });
 }
@@ -691,7 +735,7 @@ export function encryptionHeaderFromJSON(input) {
     algorithm: obj.algorithm,
     senderPublicKey: hexToBytes(obj.senderPublicKey),
     recipientKeyId: hexToBytes(obj.recipientKeyId),
-    iv: hexToBytes(obj.iv),
+    nonceStart: hexToBytes(obj.nonceStart),
     context: obj.context || '',
   };
 }
@@ -915,10 +959,11 @@ export class EncryptionContext {
   _algorithm = null;
   _context = null;
   _recipientKeyId = null;
-  _iv = null;
+  _nonceStart = null;
+  _recordIndex = 0;
   _scalarIVTracker = new Set();
 
-  constructor(key) {
+  constructor(key, nonceStart = null) {
     if (typeof key === 'string') {
       if (!/^[0-9a-fA-F]+$/.test(key)) {
         throw new CryptoError('Invalid hex string for key', CryptoErrorCode.INVALID_KEY);
@@ -935,10 +980,21 @@ export class EncryptionContext {
     } else {
       throw new CryptoError('Key must be Uint8Array or hex string', CryptoErrorCode.INVALID_KEY);
     }
+
+    // Handle nonceStart parameter
+    if (nonceStart !== null) {
+      if (!(nonceStart instanceof Uint8Array)) {
+        throw new CryptoError('nonceStart must be a Uint8Array', CryptoErrorCode.INVALID_INPUT);
+      }
+      if (nonceStart.length !== NONCE_SIZE) {
+        throw new CryptoError(`nonceStart is ${nonceStart.length} bytes, expected ${NONCE_SIZE} bytes`, CryptoErrorCode.INVALID_INPUT);
+      }
+      this._nonceStart = new Uint8Array(nonceStart);
+    }
   }
 
-  static fromHex(hexKey) {
-    return new EncryptionContext(hexKey);
+  static fromHex(hexKey, nonceStart = null) {
+    return new EncryptionContext(hexKey, nonceStart);
   }
 
   /**
@@ -987,12 +1043,13 @@ export class EncryptionContext {
     ephemeralKeyPair.privateKey.fill(0);
     sharedSecret.fill(0);
 
-    const ctx = new EncryptionContext(derivedKey);
+    // Use provided nonceStart or generate a new one
+    const nonceStart = options.nonceStart || generateNonceStart();
+    const ctx = new EncryptionContext(derivedKey, nonceStart);
     ctx._ephemeralPublicKey = ephemeralKeyPair.publicKey;
     ctx._algorithm = algorithm;
     ctx._context = contextStr;
     ctx._recipientKeyId = computeKeyId(recipientPublicKey);
-    ctx._iv = generateIV();
 
     return ctx;
   }
@@ -1030,10 +1087,9 @@ export class EncryptionContext {
     // Zero shared secret after derivation (Task 29)
     sharedSecret.fill(0);
 
-    const ctx = new EncryptionContext(derivedKey);
+    const ctx = new EncryptionContext(derivedKey, header.nonceStart);
     ctx._algorithm = algorithm;
     ctx._context = contextStr;
-    ctx._iv = header.iv;
 
     return ctx;
   }
@@ -1058,6 +1114,38 @@ export class EncryptionContext {
     return this._context;
   }
 
+  /**
+   * Get the starting nonce (12 bytes).
+   * @returns {Uint8Array}
+   */
+  getNonceStart() {
+    return this._nonceStart ? new Uint8Array(this._nonceStart) : null;
+  }
+
+  /**
+   * Get the current record index.
+   * @returns {number}
+   */
+  getRecordIndex() {
+    return this._recordIndex;
+  }
+
+  /**
+   * Set the current record index.
+   * @param {number} index
+   */
+  setRecordIndex(index) {
+    this._recordIndex = index;
+  }
+
+  /**
+   * Increment and return the record index.
+   * @returns {number}
+   */
+  nextRecordIndex() {
+    return ++this._recordIndex;
+  }
+
   getHeader() {
     if (!this._ephemeralPublicKey) {
       throw new CryptoError('No ephemeral key available - not using ECIES', CryptoErrorCode.INVALID_INPUT);
@@ -1066,7 +1154,7 @@ export class EncryptionContext {
       algorithm: this._algorithm,
       senderPublicKey: this._ephemeralPublicKey,
       recipientKeyId: this._recipientKeyId,
-      iv: this._iv,
+      nonceStart: this._nonceStart,
       context: this._context,
     });
   }
@@ -1096,23 +1184,34 @@ export class EncryptionContext {
   }
 
   /**
-   * Derive a field-specific IV using HKDF.
-   * Uses binary info format matching C++: "flatbuffers-iv" + BE(field_id) + BE(record_index)
+   * Derive nonce for a specific field using 96-bit addition of nonceStart + recordIndex + fieldId.
+   * This ensures unique nonces per field without HKDF overhead.
    * @param {number} fieldId
-   * @param {number} [recordIndex=0]
-   * @returns {Uint8Array}
+   * @param {number} [recordIndex] - Uses internal _recordIndex if not provided
+   * @returns {Uint8Array} 12-byte nonce
    */
-  deriveFieldIV(fieldId, recordIndex = 0) {
-    const prefix = new TextEncoder().encode('flatbuffers-iv');
-    const info = new Uint8Array(prefix.length + 2 + 4);
-    info.set(prefix, 0);
-    info[prefix.length] = (fieldId >> 8) & 0xFF;
-    info[prefix.length + 1] = fieldId & 0xFF;
-    info[prefix.length + 2] = (recordIndex >> 24) & 0xFF;
-    info[prefix.length + 3] = (recordIndex >> 16) & 0xFF;
-    info[prefix.length + 4] = (recordIndex >> 8) & 0xFF;
-    info[prefix.length + 5] = recordIndex & 0xFF;
-    return hkdf(this._key, null, info, IV_SIZE);
+  deriveFieldNonce(fieldId, recordIndex) {
+    if (!this._nonceStart) {
+      throw new CryptoError('No nonceStart available - use forEncryption() or provide nonceStart to constructor', CryptoErrorCode.INVALID_INPUT);
+    }
+    const idx = recordIndex !== undefined ? recordIndex : this._recordIndex;
+    // Combine recordIndex and fieldId into a single offset
+    // recordIndex occupies the upper bits, fieldId the lower 16 bits
+    const combinedIndex = BigInt(idx) * 65536n + BigInt(fieldId);
+    return deriveNonce(this._nonceStart, combinedIndex);
+  }
+
+  /**
+   * Convert a 12-byte nonce to a 16-byte IV for AES-CTR.
+   * Appends 4 zero bytes as the initial counter value.
+   * @param {Uint8Array} nonce - 12-byte nonce
+   * @returns {Uint8Array} 16-byte IV
+   */
+  _nonceToIV(nonce) {
+    const iv = new Uint8Array(IV_SIZE);
+    iv.set(nonce, 0);
+    // Last 4 bytes are zero (initial counter)
+    return iv;
   }
 
   /**
@@ -1121,11 +1220,12 @@ export class EncryptionContext {
    * @param {number} offset
    * @param {number} length
    * @param {number} fieldId
-   * @param {number} [recordIndex=0] - Per-record index for unique key/IV derivation
+   * @param {number} [recordIndex=0] - Per-record index for unique nonce derivation
    */
   encryptScalar(buffer, offset, length, fieldId, recordIndex = 0) {
     const fieldKey = this.deriveFieldKey(fieldId, recordIndex);
-    const fieldIV = this.deriveFieldIV(fieldId, recordIndex);
+    const fieldNonce = this.deriveFieldNonce(fieldId, recordIndex);
+    const fieldIV = this._nonceToIV(fieldNonce);
     const region = buffer.subarray(offset, offset + length);
 
     // Debug assertion only — per-record nonces ensure uniqueness by construction
@@ -1151,11 +1251,12 @@ export class EncryptionContext {
    * @param {number} offset
    * @param {number} length
    * @param {number} fieldId
-   * @param {number} [recordIndex=0] - Per-record index for unique key/IV derivation
+   * @param {number} [recordIndex=0] - Per-record index for unique nonce derivation
    */
   decryptScalar(buffer, offset, length, fieldId, recordIndex = 0) {
     const fieldKey = this.deriveFieldKey(fieldId, recordIndex);
-    const fieldIV = this.deriveFieldIV(fieldId, recordIndex);
+    const fieldNonce = this.deriveFieldNonce(fieldId, recordIndex);
+    const fieldIV = this._nonceToIV(fieldNonce);
     const region = buffer.subarray(offset, offset + length);
 
     const decipher = nodeCrypto.createDecipheriv('aes-256-ctr', fieldKey, fieldIV);

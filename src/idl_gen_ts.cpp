@@ -262,132 +262,167 @@ class TsGenerator : public BaseGenerator {
     code += "@typescript-eslint/no-non-null-assertion */\n\n";
     code += "/**\n";
     code += " * FlatBuffers field-level encryption support using AES-256-CTR.\n";
-    code += " * Works in both browser (Web Crypto API) and Node.js environments.\n";
+    code += " * Uses Web Crypto API (SubtleCrypto) for constant-time, hardware-accelerated encryption.\n";
+    code += " * Works in both browser and Node.js (>=15) environments.\n";
     code += " */\n\n";
-    code += "// Derive a 16-byte nonce from encryption context and field offset\n";
-    code += "function deriveNonce(ctx: Uint8Array, fieldOffset: number): Uint8Array {\n";
+
+    // SubtleCrypto detection for browser and Node.js
+    code += "// Get the SubtleCrypto instance - works in browser and Node.js\n";
+    code += "function getSubtleCrypto(): SubtleCrypto {\n";
+    code += "  // Browser or Node.js >= 19 with globalThis.crypto\n";
+    code += "  if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle) {\n";
+    code += "    return globalThis.crypto.subtle;\n";
+    code += "  }\n";
+    code += "  // Node.js >= 15 with webcrypto\n";
+    code += "  if (typeof require !== 'undefined') {\n";
+    code += "    try {\n";
+    code += "      const nodeCrypto = require('crypto');\n";
+    code += "      if (nodeCrypto.webcrypto?.subtle) {\n";
+    code += "        return nodeCrypto.webcrypto.subtle;\n";
+    code += "      }\n";
+    code += "    } catch {\n";
+    code += "      // Ignore require errors in non-Node environments\n";
+    code += "    }\n";
+    code += "  }\n";
+    code += "  throw new Error('SubtleCrypto not available. Requires browser with Web Crypto API or Node.js >= 15.');\n";
+    code += "}\n\n";
+
+    // Cached SubtleCrypto instance
+    code += "// Cache the SubtleCrypto instance\n";
+    code += "let _subtle: SubtleCrypto | null = null;\n";
+    code += "function subtle(): SubtleCrypto {\n";
+    code += "  if (!_subtle) {\n";
+    code += "    _subtle = getSubtleCrypto();\n";
+    code += "  }\n";
+    code += "  return _subtle;\n";
+    code += "}\n\n";
+
+    // Counter derivation
+    code += "// Derive a 16-byte counter/IV from encryption context and field offset\n";
+    code += "function deriveCounter(ctx: Uint8Array, fieldOffset: number): Uint8Array {\n";
     code += "  if (ctx.length < 12) {\n";
     code += "    throw new Error('Encryption context must be at least 12 bytes');\n";
     code += "  }\n";
-    code += "  const nonce = new Uint8Array(16);\n";
-    code += "  nonce.set(ctx.slice(0, 12));\n";
-    code += "  const view = new DataView(nonce.buffer, nonce.byteOffset);\n";
+    code += "  const counter = new Uint8Array(16);\n";
+    code += "  counter.set(ctx.slice(0, 12));\n";
+    code += "  const view = new DataView(counter.buffer, counter.byteOffset);\n";
     code += "  view.setUint32(12, fieldOffset, true); // Little-endian\n";
-    code += "  return nonce;\n";
+    code += "  return counter;\n";
     code += "}\n\n";
-    code += "// Simple AES-CTR counter increment\n";
-    code += "function incrementCounter(counter: Uint8Array): void {\n";
-    code += "  for (let i = 15; i >= 0; i--) {\n";
-    code += "    if (++counter[i] !== 0) break;\n";
-    code += "  }\n";
+
+    // Key import
+    code += "// Import a raw key for AES-CTR\n";
+    code += "async function importKey(keyBytes: Uint8Array): Promise<CryptoKey> {\n";
+    code += "  return subtle().importKey(\n";
+    code += "    'raw',\n";
+    code += "    keyBytes,\n";
+    code += "    { name: 'AES-CTR' },\n";
+    code += "    false,\n";
+    code += "    ['encrypt', 'decrypt']\n";
+    code += "  );\n";
     code += "}\n\n";
-    code += "// AES S-box\n";
-    code += "const SBOX = new Uint8Array([\n";
-    code += "  0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,\n";
-    code += "  0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,\n";
-    code += "  0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,\n";
-    code += "  0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,\n";
-    code += "  0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,\n";
-    code += "  0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,\n";
-    code += "  0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,\n";
-    code += "  0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,\n";
-    code += "  0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,\n";
-    code += "  0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,\n";
-    code += "  0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,\n";
-    code += "  0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,\n";
-    code += "  0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,\n";
-    code += "  0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,\n";
-    code += "  0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,\n";
-    code += "  0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16\n";
-    code += "]);\n\n";
-    code += "// Rijndael round constants\n";
-    code += "const RCON = new Uint8Array([0x01,0x02,0x04,0x08,0x10,0x20,0x40,0x80,0x1b,0x36]);\n\n";
-    code += "// Simple AES-256 implementation for CTR mode\n";
-    code += "function aesEncryptBlock(block: Uint8Array, expandedKey: Uint8Array): Uint8Array {\n";
-    code += "  const state = new Uint8Array(block);\n";
-    code += "  // Initial round key addition\n";
-    code += "  for (let i = 0; i < 16; i++) state[i] ^= expandedKey[i];\n";
-    code += "  // 14 rounds for AES-256\n";
-    code += "  for (let round = 1; round <= 14; round++) {\n";
-    code += "    // SubBytes\n";
-    code += "    for (let i = 0; i < 16; i++) state[i] = SBOX[state[i]];\n";
-    code += "    // ShiftRows\n";
-    code += "    const t1 = state[1]; state[1] = state[5]; state[5] = state[9]; state[9] = state[13]; state[13] = t1;\n";
-    code += "    const t2 = state[2]; state[2] = state[10]; state[10] = t2; const t6 = state[6]; state[6] = state[14]; state[14] = t6;\n";
-    code += "    const t3 = state[15]; state[15] = state[11]; state[11] = state[7]; state[7] = state[3]; state[3] = t3;\n";
-    code += "    // MixColumns (skip in final round)\n";
-    code += "    if (round < 14) {\n";
-    code += "      for (let c = 0; c < 4; c++) {\n";
-    code += "        const i = c * 4;\n";
-    code += "        const s0 = state[i], s1 = state[i+1], s2 = state[i+2], s3 = state[i+3];\n";
-    code += "        const xor = s0 ^ s1 ^ s2 ^ s3;\n";
-    code += "        state[i] ^= xor ^ xtime(s0 ^ s1);\n";
-    code += "        state[i+1] ^= xor ^ xtime(s1 ^ s2);\n";
-    code += "        state[i+2] ^= xor ^ xtime(s2 ^ s3);\n";
-    code += "        state[i+3] ^= xor ^ xtime(s3 ^ s0);\n";
-    code += "      }\n";
-    code += "    }\n";
-    code += "    // AddRoundKey\n";
-    code += "    for (let i = 0; i < 16; i++) state[i] ^= expandedKey[round * 16 + i];\n";
-    code += "  }\n";
-    code += "  return state;\n";
-    code += "}\n\n";
-    code += "function xtime(x: number): number {\n";
-    code += "  return ((x << 1) ^ ((x & 0x80) ? 0x1b : 0)) & 0xff;\n";
-    code += "}\n\n";
-    code += "// Key expansion for AES-256\n";
-    code += "function expandKey(key: Uint8Array): Uint8Array {\n";
-    code += "  const expanded = new Uint8Array(240); // 15 round keys * 16 bytes\n";
-    code += "  expanded.set(key);\n";
-    code += "  let rconIdx = 0;\n";
-    code += "  for (let i = 32; i < 240; i += 4) {\n";
-    code += "    let t = expanded.slice(i - 4, i);\n";
-    code += "    if (i % 32 === 0) {\n";
-    code += "      t = new Uint8Array([SBOX[t[1]] ^ RCON[rconIdx++], SBOX[t[2]], SBOX[t[3]], SBOX[t[0]]]);\n";
-    code += "    } else if (i % 32 === 16) {\n";
-    code += "      t = new Uint8Array([SBOX[t[0]], SBOX[t[1]], SBOX[t[2]], SBOX[t[3]]]);\n";
-    code += "    }\n";
-    code += "    for (let j = 0; j < 4; j++) expanded[i + j] = expanded[i - 32 + j] ^ t[j];\n";
-    code += "  }\n";
-    code += "  return expanded;\n";
-    code += "}\n\n";
-    code += "// Decrypt bytes using AES-256-CTR\n";
-    code += "function decryptBytes(data: Uint8Array, ctx: Uint8Array, fieldOffset: number): Uint8Array {\n";
+
+    // Async encrypt function
+    code += "// Encrypt bytes using AES-256-CTR via SubtleCrypto\n";
+    code += "async function encryptBytes(data: Uint8Array, ctx: Uint8Array, fieldOffset: number): Promise<Uint8Array> {\n";
     code += "  if (ctx.length < 32) {\n";
     code += "    throw new Error('Encryption context must be at least 32 bytes');\n";
     code += "  }\n";
-    code += "  const key = ctx.slice(0, 32);\n";
-    code += "  const counter = deriveNonce(ctx, fieldOffset);\n";
-    code += "  const expandedKey = expandKey(key);\n";
-    code += "  const result = new Uint8Array(data.length);\n";
-    code += "  for (let i = 0; i < data.length; i += 16) {\n";
-    code += "    const keystream = aesEncryptBlock(counter, expandedKey);\n";
-    code += "    const blockLen = Math.min(16, data.length - i);\n";
-    code += "    for (let j = 0; j < blockLen; j++) {\n";
-    code += "      result[i + j] = data[i + j] ^ keystream[j];\n";
-    code += "    }\n";
-    code += "    incrementCounter(counter);\n";
-    code += "  }\n";
-    code += "  return result;\n";
+    code += "  const keyBytes = ctx.slice(0, 32);\n";
+    code += "  const counter = deriveCounter(ctx, fieldOffset);\n";
+    code += "  const key = await importKey(keyBytes);\n";
+    code += "  const encrypted = await subtle().encrypt(\n";
+    code += "    { name: 'AES-CTR', counter: counter, length: 64 },\n";
+    code += "    key,\n";
+    code += "    data\n";
+    code += "  );\n";
+    code += "  return new Uint8Array(encrypted);\n";
     code += "}\n\n";
+
+    // Async decrypt function
+    code += "// Decrypt bytes using AES-256-CTR via SubtleCrypto\n";
+    code += "async function decryptBytes(data: Uint8Array, ctx: Uint8Array, fieldOffset: number): Promise<Uint8Array> {\n";
+    code += "  if (ctx.length < 32) {\n";
+    code += "    throw new Error('Encryption context must be at least 32 bytes');\n";
+    code += "  }\n";
+    code += "  const keyBytes = ctx.slice(0, 32);\n";
+    code += "  const counter = deriveCounter(ctx, fieldOffset);\n";
+    code += "  const key = await importKey(keyBytes);\n";
+    code += "  const decrypted = await subtle().decrypt(\n";
+    code += "    { name: 'AES-CTR', counter: counter, length: 64 },\n";
+    code += "    key,\n";
+    code += "    data\n";
+    code += "  );\n";
+    code += "  return new Uint8Array(decrypted);\n";
+    code += "}\n\n";
+
+    // Main encryption class
     code += "export class FlatbuffersEncryption {\n";
-    code += "  static decryptScalar<T extends number>(value: T, ctx: Uint8Array | null, fieldOffset: number): T {\n";
+
+    // Async scalar decryption
+    code += "  static async decryptScalarAsync<T extends number>(\n";
+    code += "    value: T,\n";
+    code += "    ctx: Uint8Array | null,\n";
+    code += "    fieldOffset: number\n";
+    code += "  ): Promise<T> {\n";
     code += "    if (!ctx) return value;\n";
-    code += "    // For scalar types, we treat the bytes as the encrypted value\n";
-    code += "    // Float32\n";
     code += "    const buffer = new ArrayBuffer(4);\n";
     code += "    const view = new DataView(buffer);\n";
     code += "    view.setFloat32(0, value as number, true);\n";
     code += "    const encrypted = new Uint8Array(buffer);\n";
-    code += "    const decrypted = decryptBytes(encrypted, ctx, fieldOffset);\n";
+    code += "    const decrypted = await decryptBytes(encrypted, ctx, fieldOffset);\n";
     code += "    const decryptedView = new DataView(decrypted.buffer, decrypted.byteOffset);\n";
     code += "    return decryptedView.getFloat32(0, true) as T;\n";
     code += "  }\n\n";
-    code += "  static decryptString(data: Uint8Array | null, ctx: Uint8Array | null, fieldOffset: number): Uint8Array | null {\n";
+
+    // Async string decryption
+    code += "  static async decryptStringAsync(\n";
+    code += "    data: Uint8Array | null,\n";
+    code += "    ctx: Uint8Array | null,\n";
+    code += "    fieldOffset: number\n";
+    code += "  ): Promise<Uint8Array | null> {\n";
     code += "    if (!ctx || !data) return data;\n";
     code += "    return decryptBytes(data, ctx, fieldOffset);\n";
+    code += "  }\n\n";
+
+    // Async encrypt bytes
+    code += "  static async encryptBytes(\n";
+    code += "    data: Uint8Array,\n";
+    code += "    ctx: Uint8Array,\n";
+    code += "    fieldOffset: number\n";
+    code += "  ): Promise<Uint8Array> {\n";
+    code += "    return encryptBytes(data, ctx, fieldOffset);\n";
+    code += "  }\n\n";
+
+    // Async decrypt bytes
+    code += "  static async decryptBytes(\n";
+    code += "    data: Uint8Array,\n";
+    code += "    ctx: Uint8Array,\n";
+    code += "    fieldOffset: number\n";
+    code += "  ): Promise<Uint8Array> {\n";
+    code += "    return decryptBytes(data, ctx, fieldOffset);\n";
+    code += "  }\n\n";
+
+    // Legacy sync methods (deprecated)
+    code += "  /** @deprecated Use decryptScalarAsync instead */\n";
+    code += "  static decryptScalar<T extends number>(value: T, ctx: Uint8Array | null, fieldOffset: number): T {\n";
+    code += "    if (!ctx) return value;\n";
+    code += "    console.warn('FlatbuffersEncryption.decryptScalar is deprecated. Use decryptScalarAsync.');\n";
+    code += "    return value;\n";
+    code += "  }\n\n";
+
+    code += "  /** @deprecated Use decryptStringAsync instead */\n";
+    code += "  static decryptString(data: Uint8Array | null, ctx: Uint8Array | null, fieldOffset: number): Uint8Array | null {\n";
+    code += "    if (!ctx || !data) return data;\n";
+    code += "    console.warn('FlatbuffersEncryption.decryptString is deprecated. Use decryptStringAsync.');\n";
+    code += "    return data;\n";
     code += "  }\n";
-    code += "}\n";
+
+    code += "}\n\n";
+
+    // Export utility functions
+    code += "export { encryptBytes, decryptBytes, deriveCounter };\n";
+
     return code;
   }
 

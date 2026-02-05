@@ -224,26 +224,26 @@
       </svg>
       Back to DA FlatBuffers
     </a>
-    <article class="markdown-body"><h1>Rust Integration Guide</h1>
+    <article class="markdown-body"><h1 id="rust-integration-guide">Rust Integration Guide</h1>
 <p>Integrate the FlatBuffers encryption WASM module into Rust applications using the <a href="https://wasmer.io/">wasmer</a> crate.</p>
-<h2>Why wasmer?</h2>
+<h2 id="why-wasmer">Why wasmer?</h2>
 <ul>
 <li><strong>High performance</strong> - Native speed with LLVM, Cranelift, or Singlepass</li>
 <li><strong>Memory safe</strong> - Rust&#39;s safety guarantees for WASM memory access</li>
 <li><strong>Flexible</strong> - Multiple compiler backends</li>
 <li><strong>Production ready</strong> - Used in production by many companies</li>
 </ul>
-<h2>Prerequisites</h2>
+<h2 id="prerequisites">Prerequisites</h2>
 <ul>
 <li>Rust 1.70 or later</li>
 <li><code>flatc-encryption.wasm</code> binary</li>
 </ul>
-<h2>Installation</h2>
+<h2 id="installation">Installation</h2>
 <p>Add to <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
 wasmer = &quot;4.2&quot;
 </code></pre>
-<h2>Quick Start</h2>
+<h2 id="quick-start">Quick Start</h2>
 <pre><code class="language-rust">use wasmer::{imports, Instance, Module, Store, Value};
 use std::fs;
 
@@ -311,7 +311,7 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
     Ok(())
 }
 </code></pre>
-<h2>Complete Module Wrapper</h2>
+<h2 id="complete-module-wrapper">Complete Module Wrapper</h2>
 <pre><code class="language-rust">//! FlatBuffers Encryption Module for Rust
 //!
 //! Provides cryptographic operations via the Crypto++ WASM module.
@@ -729,7 +729,7 @@ impl EncryptionModule {
     }
 }
 </code></pre>
-<h2>Template Project Structure</h2>
+<h2 id="template-project-structure">Template Project Structure</h2>
 <pre><code>myproject/
 ├── Cargo.toml
 ├── src/
@@ -752,8 +752,8 @@ thiserror = &quot;1.0&quot;
 rand = &quot;0.8&quot;
 hex = &quot;0.4&quot;
 </code></pre>
-<h2>Usage Examples</h2>
-<h3>Basic Encryption</h3>
+<h2 id="usage-examples">Usage Examples</h2>
+<h3 id="basic-encryption">Basic Encryption</h3>
 <pre><code class="language-rust">use crate::encryption::EncryptionModule;
 
 fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
@@ -770,7 +770,7 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
     Ok(())
 }
 </code></pre>
-<h3>End-to-End Encryption</h3>
+<h3 id="end-to-end-encryption">End-to-End Encryption</h3>
 <pre><code class="language-rust">use crate::encryption::EncryptionModule;
 
 fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
@@ -801,7 +801,7 @@ fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
     Ok(())
 }
 </code></pre>
-<h2>Performance Tips</h2>
+<h2 id="performance-tips">Performance Tips</h2>
 <ol>
 <li><strong>Reuse module instances</strong> - Module compilation is expensive</li>
 <li><strong>Use TypedFunction</strong> - For hot paths, use typed function calls</li>
@@ -819,17 +819,17 @@ for item in items {
     module.encrypt(&amp;key, &amp;iv, item)?;
 }
 </code></pre>
-<h2>Troubleshooting</h2>
-<h3>&quot;Import not found&quot;</h3>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="import-not-found">"Import not found"</h3>
 <p>Ensure all WASI and env imports are provided. See the complete wrapper above.</p>
-<h3>&quot;Memory access out of bounds&quot;</h3>
+<h3 id="memory-access-out-of-bounds">"Memory access out of bounds"</h3>
 <p>Check pointer validity:</p>
 <pre><code class="language-rust">let ptr = self.malloc(size)?;
 if ptr == 0 {
     return Err(EncryptionError::OperationFailed);
 }
 </code></pre>
-<h2>See Also</h2>
+<h2 id="see-also">See Also</h2>
 <ul>
 <li><a href="https://docs.wasmer.io/">wasmer Documentation</a></li>
 <li><a href="README.md#api-reference">API Reference</a></li>

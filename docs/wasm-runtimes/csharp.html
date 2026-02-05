@@ -224,24 +224,24 @@
       </svg>
       Back to DA FlatBuffers
     </a>
-    <article class="markdown-body"><h1>C# Integration Guide</h1>
+    <article class="markdown-body"><h1 id="c-integration-guide">C# Integration Guide</h1>
 <p>Integrate the FlatBuffers encryption WASM module into .NET applications using <a href="https://wasmtime.dev/">Wasmtime</a>, a fast and secure WebAssembly runtime.</p>
-<h2>Why Wasmtime?</h2>
+<h2 id="why-wasmtime">Why Wasmtime?</h2>
 <ul>
 <li><strong>Production ready</strong> - Used by Fastly, Shopify, and others</li>
 <li><strong>Fast</strong> - Optimizing compiler with excellent performance</li>
 <li><strong>.NET 6+ support</strong> - Modern .NET integration</li>
 <li><strong>NuGet package</strong> - Easy installation</li>
 </ul>
-<h2>Prerequisites</h2>
+<h2 id="prerequisites">Prerequisites</h2>
 <ul>
 <li>.NET 6.0 or later</li>
 <li><code>flatc-encryption.wasm</code> binary</li>
 </ul>
-<h2>Installation</h2>
+<h2 id="installation">Installation</h2>
 <pre><code class="language-bash">dotnet add package Wasmtime
 </code></pre>
-<h2>Quick Start</h2>
+<h2 id="quick-start">Quick Start</h2>
 <pre><code class="language-csharp">using Wasmtime;
 
 var engine = new Engine();
@@ -294,7 +294,7 @@ free.Invoke(keyPtr);
 free.Invoke(ivPtr);
 free.Invoke(dataPtr);
 </code></pre>
-<h2>Complete Module Wrapper</h2>
+<h2 id="complete-module-wrapper">Complete Module Wrapper</h2>
 <pre><code class="language-csharp">using Wasmtime;
 using System.Security.Cryptography;
 using System.Text;
@@ -708,7 +708,7 @@ public sealed class EncryptionModule : IDisposable
     }
 }
 </code></pre>
-<h2>Template Project Structure</h2>
+<h2 id="template-project-structure">Template Project Structure</h2>
 <pre><code>MyProject/
 ├── MyProject.csproj
 ├── Program.cs
@@ -738,8 +738,8 @@ public sealed class EncryptionModule : IDisposable
   &lt;/ItemGroup&gt;
 &lt;/Project&gt;
 </code></pre>
-<h2>Usage Examples</h2>
-<h3>Basic Encryption</h3>
+<h2 id="usage-examples">Usage Examples</h2>
+<h3 id="basic-encryption">Basic Encryption</h3>
 <pre><code class="language-csharp">using var module = new EncryptionModule(&quot;flatc-encryption.wasm&quot;);
 
 var key = new byte[32];
@@ -753,7 +753,7 @@ var decrypted = module.Decrypt(key, iv, ciphertext);
 
 Debug.Assert(plaintext.SequenceEqual(decrypted));
 </code></pre>
-<h3>End-to-End Encryption</h3>
+<h3 id="end-to-end-encryption">End-to-End Encryption</h3>
 <pre><code class="language-csharp">using var module = new EncryptionModule(&quot;flatc-encryption.wasm&quot;);
 
 // Generate key pairs
@@ -778,7 +778,7 @@ var ciphertext = module.Encrypt(encryptionKey, iv, &quot;Hello Bob!&quot;u8);
 var decrypted = module.Decrypt(encryptionKey, iv, ciphertext);
 Console.WriteLine(Encoding.UTF8.GetString(decrypted)); // &quot;Hello Bob!&quot;
 </code></pre>
-<h2>Performance Tips</h2>
+<h2 id="performance-tips">Performance Tips</h2>
 <ol>
 <li><strong>Reuse module instances</strong> - Module loading is expensive</li>
 <li><strong>Use Span<byte></strong> - Avoid unnecessary allocations</li>
@@ -798,16 +798,16 @@ foreach (var item in items)
     module.Encrypt(key, iv, item);
 }
 </code></pre>
-<h2>Troubleshooting</h2>
-<h3>&quot;Function not found&quot;</h3>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="function-not-found">"Function not found"</h3>
 <p>Ensure WASI and env stubs are defined before instantiation.</p>
-<h3>&quot;Memory access out of bounds&quot;</h3>
+<h3 id="memory-access-out-of-bounds">"Memory access out of bounds"</h3>
 <p>Check allocation succeeded:</p>
 <pre><code class="language-csharp">var ptr = _malloc(size);
 if (ptr == 0)
     throw new OutOfMemoryException(&quot;Allocation failed&quot;);
 </code></pre>
-<h2>See Also</h2>
+<h2 id="see-also">See Also</h2>
 <ul>
 <li><a href="https://docs.wasmtime.dev/">Wasmtime .NET Documentation</a></li>
 <li><a href="README.md#api-reference">API Reference</a></li>

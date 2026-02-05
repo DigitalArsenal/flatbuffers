@@ -224,28 +224,28 @@
       </svg>
       Back to DA FlatBuffers
     </a>
-    <article class="markdown-body"><h1>Swift Integration Guide</h1>
+    <article class="markdown-body"><h1 id="swift-integration-guide">Swift Integration Guide</h1>
 <p>Integrate the FlatBuffers encryption WASM module into Swift applications using <a href="https://github.com/AO/WasmKit">WasmKit</a>, a pure Swift WebAssembly runtime.</p>
-<h2>Why WasmKit?</h2>
+<h2 id="why-wasmkit">Why WasmKit?</h2>
 <ul>
 <li><strong>Pure Swift</strong> - No C dependencies, native Swift types</li>
 <li><strong>Swift Package Manager</strong> - Easy integration</li>
 <li><strong>Cross-platform</strong> - iOS, macOS, Linux</li>
 <li><strong>Modern API</strong> - Swift concurrency support</li>
 </ul>
-<h2>Prerequisites</h2>
+<h2 id="prerequisites">Prerequisites</h2>
 <ul>
 <li>Swift 5.9 or later</li>
 <li>macOS 13+ or iOS 16+</li>
 <li><code>flatc-encryption.wasm</code> binary</li>
 </ul>
-<h2>Installation</h2>
+<h2 id="installation">Installation</h2>
 <p>Add to <code>Package.swift</code>:</p>
 <pre><code class="language-swift">dependencies: [
     .package(url: &quot;https://github.com/AO/WasmKit.git&quot;, from: &quot;0.0.5&quot;)
 ]
 </code></pre>
-<h2>Quick Start</h2>
+<h2 id="quick-start">Quick Start</h2>
 <pre><code class="language-swift">import WasmKit
 import Foundation
 
@@ -298,7 +298,7 @@ _ = try free.invoke([.i32(keyPtr)])
 _ = try free.invoke([.i32(ivPtr)])
 _ = try free.invoke([.i32(dataPtr)])
 </code></pre>
-<h2>Complete Module Wrapper</h2>
+<h2 id="complete-module-wrapper">Complete Module Wrapper</h2>
 <pre><code class="language-swift">import WasmKit
 import Foundation
 import Security
@@ -741,7 +741,7 @@ private func registerEnvStubs(runtime: Runtime) throws {
     // Add other invoke_* stubs as needed...
 }
 </code></pre>
-<h2>Template Project Structure</h2>
+<h2 id="template-project-structure">Template Project Structure</h2>
 <pre><code>MyProject/
 ├── Package.swift
 ├── Sources/
@@ -778,8 +778,8 @@ let package = Package(
     ]
 )
 </code></pre>
-<h2>Usage Examples</h2>
-<h3>Basic Encryption</h3>
+<h2 id="usage-examples">Usage Examples</h2>
+<h3 id="basic-encryption">Basic Encryption</h3>
 <pre><code class="language-swift">let module = try EncryptionModule(path: &quot;flatc-encryption.wasm&quot;)
 
 var key = [UInt8](repeating: 0, count: 32)
@@ -793,7 +793,7 @@ let decrypted = try module.decrypt(key: key, iv: iv, data: ciphertext)
 
 assert(plaintext == decrypted)
 </code></pre>
-<h3>End-to-End Encryption</h3>
+<h3 id="end-to-end-encryption">End-to-End Encryption</h3>
 <pre><code class="language-swift">let module = try EncryptionModule(path: &quot;flatc-encryption.wasm&quot;)
 
 // Generate key pairs
@@ -829,18 +829,18 @@ let ciphertext = try module.encrypt(key: encryptionKey, iv: iv, data: Array(&quo
 let decrypted = try module.decrypt(key: encryptionKey, iv: iv, data: ciphertext)
 print(String(bytes: decrypted, encoding: .utf8)!) // &quot;Hello Bob!&quot;
 </code></pre>
-<h2>Performance Tips</h2>
+<h2 id="performance-tips">Performance Tips</h2>
 <ol>
 <li><strong>Reuse module instances</strong> - Module loading is expensive</li>
 <li><strong>Use async/await</strong> - For non-blocking operations in SwiftUI</li>
 <li><strong>Batch allocations</strong> - Minimize malloc/free calls</li>
 </ol>
-<h2>Troubleshooting</h2>
-<h3>&quot;Export not found&quot;</h3>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="export-not-found">"Export not found"</h3>
 <p>Ensure WASI and env stubs are registered before instantiation.</p>
-<h3>&quot;Memory access out of bounds&quot;</h3>
+<h3 id="memory-access-out-of-bounds">"Memory access out of bounds"</h3>
 <p>Check allocation succeeded and sizes are correct.</p>
-<h2>See Also</h2>
+<h2 id="see-also">See Also</h2>
 <ul>
 <li><a href="https://github.com/AO/WasmKit">WasmKit Documentation</a></li>
 <li><a href="README.md#api-reference">API Reference</a></li>

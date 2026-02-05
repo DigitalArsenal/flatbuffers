@@ -224,22 +224,22 @@
       </svg>
       Back to DA FlatBuffers
     </a>
-    <article class="markdown-body"><h1>Java Integration Guide</h1>
+    <article class="markdown-body"><h1 id="java-integration-guide">Java Integration Guide</h1>
 <p>Integrate the FlatBuffers encryption WASM module into Java applications using <a href="https://github.com/nickmccoll/chicory">Chicory</a>, a pure Java WebAssembly runtime.</p>
-<h2>Why Chicory?</h2>
+<h2 id="why-chicory">Why Chicory?</h2>
 <ul>
 <li><strong>Pure Java</strong> - No JNI, no native dependencies</li>
 <li><strong>JVM optimized</strong> - Designed for Java performance</li>
 <li><strong>Easy deployment</strong> - Just add a Maven dependency</li>
 <li><strong>GraalVM compatible</strong> - Works with native-image</li>
 </ul>
-<h2>Prerequisites</h2>
+<h2 id="prerequisites">Prerequisites</h2>
 <ul>
 <li>Java 17 or later</li>
 <li>Maven or Gradle</li>
 <li><code>flatc-encryption.wasm</code> binary</li>
 </ul>
-<h2>Installation</h2>
+<h2 id="installation">Installation</h2>
 <p><strong>Maven:</strong></p>
 <pre><code class="language-xml">&lt;dependency&gt;
     &lt;groupId&gt;com.dylibso.chicory&lt;/groupId&gt;
@@ -250,7 +250,7 @@
 <p><strong>Gradle:</strong></p>
 <pre><code class="language-groovy">implementation &#39;com.dylibso.chicory:runtime:1.5.3&#39;
 </code></pre>
-<h2>Quick Start</h2>
+<h2 id="quick-start">Quick Start</h2>
 <pre><code class="language-java">import com.dylibso.chicory.runtime.Instance;
 import com.dylibso.chicory.runtime.Module;
 import com.dylibso.chicory.runtime.Memory;
@@ -332,7 +332,7 @@ public class QuickStart {
     }
 }
 </code></pre>
-<h2>Complete Module Wrapper</h2>
+<h2 id="complete-module-wrapper">Complete Module Wrapper</h2>
 <pre><code class="language-java">package com.example.encryption;
 
 import com.dylibso.chicory.runtime.Instance;
@@ -738,7 +738,7 @@ public class EncryptionModule implements AutoCloseable {
     }
 }
 </code></pre>
-<h2>Template Project Structure</h2>
+<h2 id="template-project-structure">Template Project Structure</h2>
 <pre><code>myproject/
 ├── pom.xml
 ├── src/
@@ -788,8 +788,8 @@ public class EncryptionModule implements AutoCloseable {
     &lt;/dependencies&gt;
 &lt;/project&gt;
 </code></pre>
-<h2>Usage Examples</h2>
-<h3>Basic Encryption</h3>
+<h2 id="usage-examples">Usage Examples</h2>
+<h3 id="basic-encryption">Basic Encryption</h3>
 <pre><code class="language-java">var module = EncryptionModule.fromFile(&quot;flatc-encryption.wasm&quot;);
 
 SecureRandom random = new SecureRandom();
@@ -804,7 +804,7 @@ byte[] decrypted = module.decrypt(key, iv, ciphertext);
 
 assert Arrays.equals(plaintext, decrypted);
 </code></pre>
-<h3>End-to-End Encryption</h3>
+<h3 id="end-to-end-encryption">End-to-End Encryption</h3>
 <pre><code class="language-java">var module = EncryptionModule.fromFile(&quot;flatc-encryption.wasm&quot;);
 
 // Generate key pairs
@@ -829,7 +829,7 @@ byte[] ciphertext = module.encrypt(encryptionKey, iv, &quot;Hello Bob!&quot;.get
 byte[] decrypted = module.decrypt(encryptionKey, iv, ciphertext);
 System.out.println(new String(decrypted)); // &quot;Hello Bob!&quot;
 </code></pre>
-<h2>Performance Tips</h2>
+<h2 id="performance-tips">Performance Tips</h2>
 <ol>
 <li><strong>Reuse module instances</strong> - Module loading is expensive</li>
 <li><strong>Use try-with-resources</strong> - Ensures proper cleanup</li>
@@ -847,17 +847,17 @@ for (var item : items) {
     module.encrypt(key, iv, item);
 }
 </code></pre>
-<h2>Troubleshooting</h2>
-<h3>&quot;Function not found&quot;</h3>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="function-not-found">"Function not found"</h3>
 <p>Check that you&#39;re using the correct export names (wasi_* prefix).</p>
-<h3>&quot;Memory access out of bounds&quot;</h3>
+<h3 id="memory-access-out-of-bounds">"Memory access out of bounds"</h3>
 <p>Ensure allocated memory is valid:</p>
 <pre><code class="language-java">int ptr = allocate(size);
 if (ptr == 0) {
     throw new RuntimeException(&quot;Allocation failed&quot;);
 }
 </code></pre>
-<h2>See Also</h2>
+<h2 id="see-also">See Also</h2>
 <ul>
 <li><a href="https://github.com/nickmccoll/chicory">Chicory Documentation</a></li>
 <li><a href="README.md#api-reference">API Reference</a></li>

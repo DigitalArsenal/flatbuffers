@@ -224,9 +224,9 @@
       </svg>
       Back to DA FlatBuffers
     </a>
-    <article class="markdown-body"><h1>Go Integration Guide</h1>
+    <article class="markdown-body"><h1 id="go-integration-guide">Go Integration Guide</h1>
 <p>Integrate the FlatBuffers encryption WASM module into Go applications using <a href="https://wazero.io/">wazero</a>, a pure Go WebAssembly runtime with zero dependencies.</p>
-<h2>Why wazero?</h2>
+<h2 id="why-wazero">Why wazero?</h2>
 <ul>
 <li><strong>Pure Go</strong> - No CGo, no native dependencies</li>
 <li><strong>Zero dependencies</strong> - Just Go standard library</li>
@@ -234,15 +234,15 @@
 <li><strong>Full WASI support</strong> - Complete WASI snapshot preview1 implementation</li>
 <li><strong>Production ready</strong> - Used by Envoy, Dapr, and many others</li>
 </ul>
-<h2>Prerequisites</h2>
+<h2 id="prerequisites">Prerequisites</h2>
 <ul>
 <li>Go 1.20 or later</li>
 <li><code>flatc-encryption.wasm</code> binary</li>
 </ul>
-<h2>Installation</h2>
+<h2 id="installation">Installation</h2>
 <pre><code class="language-bash">go get github.com/tetratelabs/wazero
 </code></pre>
-<h2>Quick Start</h2>
+<h2 id="quick-start">Quick Start</h2>
 <pre><code class="language-go">package main
 
 import (
@@ -323,7 +323,7 @@ func main() {
     fmt.Printf(&quot;Decrypted: %s\n&quot;, decrypted)
 }
 </code></pre>
-<h2>Complete Module Wrapper</h2>
+<h2 id="complete-module-wrapper">Complete Module Wrapper</h2>
 <p>For production use, wrap the WASM module in a Go struct:</p>
 <pre><code class="language-go">package encryption
 
@@ -705,7 +705,7 @@ func (m *Module) freeAll(ptrs ...uint64) {
     }
 }
 </code></pre>
-<h3>Emscripten Trampolines</h3>
+<h3 id="emscripten-trampolines">Emscripten Trampolines</h3>
 <p>The WASM module requires Emscripten&#39;s exception handling trampolines:</p>
 <pre><code class="language-go">func defineEnvModule(ctx context.Context, r wazero.Runtime) error {
     var wasmModule api.Module
@@ -741,7 +741,7 @@ func (m *Module) freeAll(ptrs ...uint64) {
     return err
 }
 </code></pre>
-<h2>Template Project Structure</h2>
+<h2 id="template-project-structure">Template Project Structure</h2>
 <pre><code>myproject/
 ├── go.mod
 ├── go.sum
@@ -759,8 +759,8 @@ go 1.21
 
 require github.com/tetratelabs/wazero v1.7.0
 </code></pre>
-<h2>Advanced Usage</h2>
-<h3>Context Cancellation</h3>
+<h2 id="advanced-usage">Advanced Usage</h2>
+<h3 id="context-cancellation">Context Cancellation</h3>
 <p>Use context for timeout and cancellation:</p>
 <pre><code class="language-go">ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 defer cancel()
@@ -773,7 +773,7 @@ if err != nil {
     log.Fatal(err)
 }
 </code></pre>
-<h3>Module Caching</h3>
+<h3 id="module-caching">Module Caching</h3>
 <p>Cache compiled modules for faster subsequent instantiation:</p>
 <pre><code class="language-go">// Compile once
 compiled, err := r.CompileModule(ctx, wasmBytes)
@@ -785,7 +785,7 @@ if err != nil {
 instance1, _ := r.InstantiateModule(ctx, compiled, config)
 instance2, _ := r.InstantiateModule(ctx, compiled, config)
 </code></pre>
-<h3>Concurrent Usage</h3>
+<h3 id="concurrent-usage">Concurrent Usage</h3>
 <p>Each module instance has its own memory and can be used concurrently:</p>
 <pre><code class="language-go">// Create pool of modules
 pool := make(chan *Module, 10)
@@ -803,14 +803,14 @@ func encryptConcurrent(data []byte) []byte {
     return data
 }
 </code></pre>
-<h2>Performance Tips</h2>
+<h2 id="performance-tips">Performance Tips</h2>
 <ol>
 <li><strong>Reuse module instances</strong> - Module initialization is expensive</li>
 <li><strong>Use compilation cache</strong> - wazero supports filesystem caching</li>
 <li><strong>Batch operations</strong> - Minimize Go↔WASM boundary crossings</li>
 <li><strong>Pre-allocate memory</strong> - Reuse allocated buffers for repeated operations</li>
 </ol>
-<h3>Compilation Cache</h3>
+<h3 id="compilation-cache">Compilation Cache</h3>
 <pre><code class="language-go">// Enable filesystem cache
 cache, err := wazero.NewCompilationCacheWithDir(&quot;/tmp/wazero-cache&quot;)
 if err != nil {
@@ -820,14 +820,14 @@ if err != nil {
 config := wazero.NewRuntimeConfig().WithCompilationCache(cache)
 r := wazero.NewRuntimeWithConfig(ctx, config)
 </code></pre>
-<h2>Troubleshooting</h2>
-<h3>&quot;function not exported&quot;</h3>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="function-not-exported">"function not exported"</h3>
 <p>The function name may differ. Check exports:</p>
 <pre><code class="language-go">for name := range module.ExportedFunctionDefinitions() {
     fmt.Println(&quot;Exported:&quot;, name)
 }
 </code></pre>
-<h3>&quot;memory access out of bounds&quot;</h3>
+<h3 id="memory-access-out-of-bounds">"memory access out of bounds"</h3>
 <p>Check that pointers from <code>malloc</code> are valid:</p>
 <pre><code class="language-go">result, err := malloc.Call(ctx, size)
 if err != nil {
@@ -837,9 +837,9 @@ if result[0] == 0 {
     return errors.New(&quot;malloc returned null&quot;)
 }
 </code></pre>
-<h3>&quot;import not found: env.invoke_*&quot;</h3>
+<h3 id="import-not-found-envinvoke_">"import not found: env.invoke_*"</h3>
 <p>Add Emscripten trampolines (see above). The exact <code>invoke_*</code> variants needed depend on the WASM module.</p>
-<h2>See Also</h2>
+<h2 id="see-also">See Also</h2>
 <ul>
 <li><a href="https://wazero.io/">wazero Documentation</a></li>
 <li><a href="README.md#api-reference">API Reference</a></li>

@@ -224,9 +224,9 @@
       </svg>
       Back to DA FlatBuffers
     </a>
-    <article class="markdown-body"><h1>Browser Integration Guide</h1>
+    <article class="markdown-body"><h1 id="browser-integration-guide">Browser Integration Guide</h1>
 <p>Run the FlatBuffers encryption module directly in web browsers using the native WebAssembly API.</p>
-<h2>Browser Support</h2>
+<h2 id="browser-support">Browser Support</h2>
 <p>All modern browsers support WebAssembly:</p>
 <table>
 <thead>
@@ -257,24 +257,24 @@
 <td>V8</td>
 </tr>
 </tbody></table>
-<h2>Installation</h2>
-<h3>Option 1: npm + Bundler (Recommended)</h3>
+<h2 id="installation">Installation</h2>
+<h3 id="option-1-npm-bundler-recommended">Option 1: npm + Bundler (Recommended)</h3>
 <pre><code class="language-bash">npm install flatc-wasm
 </code></pre>
 <p>Works with Vite, Webpack, Rollup, Parcel, and other bundlers.</p>
-<h3>Option 2: CDN</h3>
+<h3 id="option-2-cdn">Option 2: CDN</h3>
 <pre><code class="language-html">&lt;script type=&quot;module&quot;&gt;
   import { initEncryption, encryptBytes } from &#39;https://esm.sh/flatc-wasm/encryption&#39;;
 &lt;/script&gt;
 </code></pre>
-<h3>Option 3: Direct WASM Loading</h3>
+<h3 id="option-3-direct-wasm-loading">Option 3: Direct WASM Loading</h3>
 <pre><code class="language-html">&lt;script type=&quot;module&quot;&gt;
   const wasmResponse = await fetch(&#39;/flatc-encryption.wasm&#39;);
   const wasmBytes = await wasmResponse.arrayBuffer();
   const { instance } = await WebAssembly.instantiate(wasmBytes, imports);
 &lt;/script&gt;
 </code></pre>
-<h2>Quick Start</h2>
+<h2 id="quick-start">Quick Start</h2>
 <pre><code class="language-html">&lt;!DOCTYPE html&gt;
 &lt;html&gt;
 &lt;head&gt;
@@ -320,7 +320,7 @@
 &lt;/body&gt;
 &lt;/html&gt;
 </code></pre>
-<h2>Vite Configuration</h2>
+<h2 id="vite-configuration">Vite Configuration</h2>
 <p>For Vite projects, the WASM file is handled automatically:</p>
 <pre><code class="language-javascript">// vite.config.js
 export default {
@@ -335,7 +335,7 @@ import { initEncryption, encryptBytes } from &#39;flatc-wasm/encryption&#39;;
 await initEncryption();
 // Use encryption functions...
 </code></pre>
-<h2>Webpack Configuration</h2>
+<h2 id="webpack-configuration">Webpack Configuration</h2>
 <pre><code class="language-javascript">// webpack.config.js
 module.exports = {
   experiments: {
@@ -343,15 +343,15 @@ module.exports = {
   }
 };
 </code></pre>
-<h2>API Reference</h2>
+<h2 id="api-reference">API Reference</h2>
 <p>The browser API is identical to Node.js:</p>
-<h3>Initialization</h3>
+<h3 id="initialization">Initialization</h3>
 <pre><code class="language-javascript">import { initEncryption } from &#39;flatc-wasm/encryption&#39;;
 
 // Must call before using any other functions
 await initEncryption();
 </code></pre>
-<h3>Symmetric Encryption</h3>
+<h3 id="symmetric-encryption">Symmetric Encryption</h3>
 <pre><code class="language-javascript">import { encryptBytes, decryptBytes, KEY_SIZE, IV_SIZE } from &#39;flatc-wasm/encryption&#39;;
 
 const key = crypto.getRandomValues(new Uint8Array(KEY_SIZE));  // 32 bytes
@@ -364,7 +364,7 @@ encryptBytes(data, key, iv);
 // Decrypt in-place
 decryptBytes(data, key, iv);
 </code></pre>
-<h3>Key Exchange</h3>
+<h3 id="key-exchange">Key Exchange</h3>
 <pre><code class="language-javascript">import {
   x25519GenerateKeyPair,
   x25519SharedSecret,
@@ -386,7 +386,7 @@ const encryptionKey = hkdf(
   32
 );
 </code></pre>
-<h3>Digital Signatures</h3>
+<h3 id="digital-signatures">Digital Signatures</h3>
 <pre><code class="language-javascript">import {
   ed25519GenerateKeyPair,
   ed25519Sign,
@@ -399,7 +399,7 @@ const message = new TextEncoder().encode(&#39;Sign this&#39;);
 const signature = ed25519Sign(keypair.privateKey, message);
 const isValid = ed25519Verify(keypair.publicKey, message, signature);
 </code></pre>
-<h2>Complete Example: Secure Messaging App</h2>
+<h2 id="complete-example-secure-messaging-app">Complete Example: Secure Messaging App</h2>
 <pre><code class="language-html">&lt;!DOCTYPE html&gt;
 &lt;html&gt;
 &lt;head&gt;
@@ -575,7 +575,7 @@ const isValid = ed25519Verify(keypair.publicKey, message, signature);
 &lt;/body&gt;
 &lt;/html&gt;
 </code></pre>
-<h2>Web Workers</h2>
+<h2 id="web-workers">Web Workers</h2>
 <p>For heavy encryption workloads, use Web Workers to avoid blocking the main thread:</p>
 <p><strong>worker.js:</strong></p>
 <pre><code class="language-javascript">import { initEncryption, encryptBytes } from &#39;flatc-wasm/encryption&#39;;
@@ -608,7 +608,7 @@ worker.postMessage({
   iv: iv
 }, [plaintext.buffer]);  // Transfer ownership for zero-copy
 </code></pre>
-<h2>Streaming Large Files</h2>
+<h2 id="streaming-large-files">Streaming Large Files</h2>
 <p>For large files, process in chunks to avoid memory issues:</p>
 <pre><code class="language-javascript">async function encryptFile(file, key) {
   const CHUNK_SIZE = 64 * 1024;  // 64KB
@@ -640,8 +640,8 @@ worker.postMessage({
   return new Blob(chunks);
 }
 </code></pre>
-<h2>Security Considerations</h2>
-<h3>1. Use crypto.getRandomValues()</h3>
+<h2 id="security-considerations">Security Considerations</h2>
+<h3 id="1-use-cryptogetrandomvalues">1. Use crypto.getRandomValues()</h3>
 <pre><code class="language-javascript">// Good: Cryptographically secure
 const key = crypto.getRandomValues(new Uint8Array(32));
 
@@ -651,7 +651,7 @@ for (let i = 0; i &lt; 32; i++) {
   badKey[i] = Math.floor(Math.random() * 256);
 }
 </code></pre>
-<h3>2. Clear Sensitive Data</h3>
+<h3 id="2-clear-sensitive-data">2. Clear Sensitive Data</h3>
 <pre><code class="language-javascript">function clearKey(key) {
   key.fill(0);
 }
@@ -662,9 +662,9 @@ encryptBytes(data, key, iv);
 // Then clear it
 clearKey(key);
 </code></pre>
-<h3>3. Use HTTPS</h3>
+<h3 id="3-use-https">3. Use HTTPS</h3>
 <p>Always serve your app over HTTPS. WebAssembly may be restricted on HTTP.</p>
-<h3>4. Consider SubtleCrypto for Some Operations</h3>
+<h3 id="4-consider-subtlecrypto-for-some-operations">4. Consider SubtleCrypto for Some Operations</h3>
 <p>For operations that don&#39;t require cross-language compatibility, consider using the native Web Crypto API:</p>
 <pre><code class="language-javascript">// Native Web Crypto (fast, but different format)
 const key = await crypto.subtle.generateKey(
@@ -676,8 +676,8 @@ const key = await crypto.subtle.generateKey(
 // FlatBuffers WASM (cross-language compatible)
 const fbKey = x25519GenerateKeyPair();
 </code></pre>
-<h2>Performance Tips</h2>
-<h3>1. Initialize Once</h3>
+<h2 id="performance-tips">Performance Tips</h2>
+<h3 id="1-initialize-once">1. Initialize Once</h3>
 <pre><code class="language-javascript">// At app startup
 let encryptionReady = initEncryption();
 
@@ -687,11 +687,11 @@ async function encrypt(data, key, iv) {
   // ...
 }
 </code></pre>
-<h3>2. Use Transferable Objects</h3>
+<h3 id="2-use-transferable-objects">2. Use Transferable Objects</h3>
 <pre><code class="language-javascript">// Transfer buffer ownership (zero-copy)
 worker.postMessage({ data: buffer }, [buffer.buffer]);
 </code></pre>
-<h3>3. Batch Operations</h3>
+<h3 id="3-batch-operations">3. Batch Operations</h3>
 <pre><code class="language-javascript">// Good: Single WASM call for batch
 const results = items.map(item =&gt; {
   const buf = new Uint8Array(item);
@@ -699,19 +699,19 @@ const results = items.map(item =&gt; {
   return buf;
 });
 </code></pre>
-<h2>Troubleshooting</h2>
-<h3>&quot;CompileError: WebAssembly.instantiate&quot;</h3>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="compileerror-webassemblyinstantiate">"CompileError: WebAssembly.instantiate"</h3>
 <p>The WASM file may be corrupted or incompatible. Ensure you&#39;re using the correct version.</p>
-<h3>&quot;ReferenceError: crypto is not defined&quot;</h3>
+<h3 id="referenceerror-crypto-is-not-defined">"ReferenceError: crypto is not defined"</h3>
 <p>Use <code>window.crypto</code> or ensure you&#39;re in a secure context (HTTPS).</p>
-<h3>&quot;Out of memory&quot;</h3>
+<h3 id="out-of-memory">"Out of memory"</h3>
 <p>Processing very large files? Use streaming or Web Workers.</p>
-<h3>CORS Errors</h3>
+<h3 id="cors-errors">CORS Errors</h3>
 <p>When loading WASM from a different origin, ensure CORS headers are set:</p>
 <pre><code>Access-Control-Allow-Origin: *
 Content-Type: application/wasm
 </code></pre>
-<h2>See Also</h2>
+<h2 id="see-also">See Also</h2>
 <ul>
 <li><a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API">Web Crypto API</a></li>
 <li><a href="https://developer.mozilla.org/en-US/docs/WebAssembly">WebAssembly on MDN</a></li>

@@ -224,9 +224,9 @@
       </svg>
       Back to DA FlatBuffers
     </a>
-    <article class="markdown-body"><h1>Encryption Sessions &amp; Nonce Management</h1>
+    <article class="markdown-body"><h1 id="encryption-sessions-nonce-management">Encryption Sessions & Nonce Management</h1>
 <p>This guide explains how to establish encrypted sessions using flatc-wasm&#39;s per-field encryption system, including the critical nonce management that ensures cryptographic security.</p>
-<h2>Overview</h2>
+<h2 id="overview">Overview</h2>
 <p>flatc-wasm uses <strong>AES-256-CTR</strong> for per-field encryption. CTR (Counter) mode requires a unique nonce for every encryption operation with the same key. Reusing a nonce catastrophically compromises security.</p>
 <p>To solve this, flatc-wasm implements a <strong>nonce incrementor</strong> system:</p>
 <ol>
@@ -235,8 +235,8 @@
 <li>Send the <code>EncryptionHeader</code> (containing <code>nonceStart</code>) before any encrypted data</li>
 <li>Recipients use the same derivation to decrypt any record in any order</li>
 </ol>
-<h2>Establishing an Encrypted Session</h2>
-<h3>Step 1: Sender Creates Encryption Context</h3>
+<h2 id="establishing-an-encrypted-session">Establishing an Encrypted Session</h2>
+<h3 id="step-1-sender-creates-encryption-context">Step 1: Sender Creates Encryption Context</h3>
 <pre><code class="language-javascript">import { EncryptionContext, generateNonceStart } from &#39;flatc-wasm&#39;;
 
 // Create context for encrypting to a recipient
@@ -249,7 +249,7 @@ const ctx = EncryptionContext.forEncryption(recipientPublicKey, {
 // Get the encryption header
 const header = ctx.getHeader();
 </code></pre>
-<h3>Step 2: Send Header First</h3>
+<h3 id="step-2-send-header-first">Step 2: Send Header First</h3>
 <p>The <code>EncryptionHeader</code> MUST be transmitted before any encrypted data. It contains:</p>
 <table>
 <thead>
@@ -299,7 +299,7 @@ await transport.send({
   payload: headerJSON
 });
 </code></pre>
-<h3>Step 3: Encrypt and Send Records</h3>
+<h3 id="step-3-encrypt-and-send-records">Step 3: Encrypt and Send Records</h3>
 <pre><code class="language-javascript">// Encrypt multiple records
 for (let recordIndex = 0; recordIndex &lt; records.length; recordIndex++) {
   ctx.setRecordIndex(recordIndex);
@@ -318,7 +318,7 @@ for (let recordIndex = 0; recordIndex &lt; records.length; recordIndex++) {
   });
 }
 </code></pre>
-<h3>Step 4: Recipient Establishes Decryption Context</h3>
+<h3 id="step-4-recipient-establishes-decryption-context">Step 4: Recipient Establishes Decryption Context</h3>
 <pre><code class="language-javascript">// Receive and parse the header first
 const headerJSON = await transport.receive(&#39;encryption_header&#39;);
 const header = encryptionHeaderFromJSON(headerJSON);
@@ -330,7 +330,7 @@ const ctx = EncryptionContext.forDecryption(
   &#39;my-application-v1&#39;  // Must match sender&#39;s context
 );
 </code></pre>
-<h3>Step 5: Decrypt Records (Any Order)</h3>
+<h3 id="step-5-decrypt-records-any-order">Step 5: Decrypt Records (Any Order)</h3>
 <pre><code class="language-javascript">// Records can be decrypted in any order
 while (const msg = await transport.receive(&#39;encrypted_record&#39;)) {
   ctx.setRecordIndex(msg.recordIndex);
@@ -343,8 +343,8 @@ while (const msg = await transport.receive(&#39;encrypted_record&#39;)) {
   processRecord(msg.payload);
 }
 </code></pre>
-<h2>Nonce Derivation Deep Dive</h2>
-<h3>The Algorithm</h3>
+<h2 id="nonce-derivation-deep-dive">Nonce Derivation Deep Dive</h2>
+<h3 id="the-algorithm">The Algorithm</h3>
 <p>Each field gets a unique 96-bit (12-byte) nonce derived via big-endian addition:</p>
 <pre><code class="language-text">derived_nonce = nonceStart + combined_index
 combined_index = recordIndex × 65536 + fieldId
@@ -355,7 +355,7 @@ combined_index = recordIndex × 65536 + fieldId
 <li><strong>2^80 unique record indices</strong> before the combined index could theoretically wrap</li>
 <li><strong>Deterministic derivation</strong> - same inputs always produce the same nonce</li>
 </ul>
-<h3>Implementation</h3>
+<h3 id="implementation">Implementation</h3>
 <pre><code class="language-javascript">import { deriveNonce, generateNonceStart } from &#39;flatc-wasm&#39;;
 
 // Generate cryptographically secure starting nonce
@@ -367,7 +367,7 @@ const nonce_r0_f1 = deriveNonce(nonceStart, 1);           // record 0, field 1
 const nonce_r1_f0 = deriveNonce(nonceStart, 65536);       // record 1, field 0
 const nonce_r5_f3 = deriveNonce(nonceStart, 5 * 65536 + 3); // record 5, field 3
 </code></pre>
-<h3>96-Bit Addition with Carry</h3>
+<h3 id="96-bit-addition-with-carry">96-Bit Addition with Carry</h3>
 <p>The nonce is treated as a big-endian 96-bit integer. Addition wraps around at 2^96:</p>
 <pre><code class="language-javascript">// Internal implementation (simplified)
 function deriveNonce(nonceStart, recordIndex) {
@@ -390,7 +390,7 @@ function deriveNonce(nonceStart, recordIndex) {
   return result;
 }
 </code></pre>
-<h2>Offline Decryption</h2>
+<h2 id="offline-decryption">Offline Decryption</h2>
 <p>Once the <code>EncryptionHeader</code> is received, decryption requires no further communication with the sender:</p>
 <pre><code class="language-javascript">// Store header for later use
 localStorage.setItem(&#39;session_header&#39;, ctx.getHeaderJSON());
@@ -406,7 +406,7 @@ const ctx = EncryptionContext.forDecryption(myPrivateKey, header, &#39;my-app&#3
 ctx.setRecordIndex(42);
 ctx.decryptScalar(encryptedData, offset, length, fieldId);
 </code></pre>
-<h2>Out-of-Order Decryption</h2>
+<h2 id="out-of-order-decryption">Out-of-Order Decryption</h2>
 <p>Records can arrive or be processed in any sequence:</p>
 <pre><code class="language-javascript">const ctx = EncryptionContext.forDecryption(privateKey, header, context);
 
@@ -423,7 +423,7 @@ websocket.onmessage = (event) =&gt; {
   processDecryptedRecord(recordIndex, data);
 };
 </code></pre>
-<h2>Parallel Decryption</h2>
+<h2 id="parallel-decryption">Parallel Decryption</h2>
 <p>Different records can be decrypted simultaneously in separate workers:</p>
 <pre><code class="language-javascript">// Main thread
 const header = ctx.getHeader();
@@ -465,7 +465,7 @@ self.onmessage = (event) =&gt; {
   self.postMessage(decrypted);
 };
 </code></pre>
-<h2>Recovering Unknown Record Index</h2>
+<h2 id="recovering-unknown-record-index">Recovering Unknown Record Index</h2>
 <p>If the record index is lost (e.g., corrupted metadata), you can brute-force recovery:</p>
 <pre><code class="language-javascript">async function recoverRecordIndex(encryptedData, ctx, validator, maxAttempts = 10000) {
   for (let i = 0; i &lt; maxAttempts; i++) {
@@ -498,8 +498,8 @@ const result = await recoverRecordIndex(encrypted, ctx, (data) =&gt; {
 });
 </code></pre>
 <p><strong>Performance note:</strong> This approach is O(n) where n is the unknown range. For production systems, always include the record index in your message framing.</p>
-<h2>Security Considerations</h2>
-<h3>Why Nonce Reuse is Catastrophic</h3>
+<h2 id="security-considerations">Security Considerations</h2>
+<h3 id="why-nonce-reuse-is-catastrophic">Why Nonce Reuse is Catastrophic</h3>
 <p>AES-CTR encrypts by XORing plaintext with a keystream generated from the key and nonce:</p>
 <pre><code class="language-text">ciphertext = plaintext XOR AES_CTR(key, nonce)
 </code></pre>
@@ -515,14 +515,14 @@ C1 XOR C2 = P1 XOR P2  // Keystream cancels out!
 <li><strong>Partial plaintext recovery</strong> - If P1 is known, P2 = C1 XOR C2 XOR P1</li>
 <li><strong>Crib dragging</strong> - Guess parts of one plaintext to reveal the other</li>
 </ol>
-<h3>How Nonce Incrementing Prevents This</h3>
+<h3 id="how-nonce-incrementing-prevents-this">How Nonce Incrementing Prevents This</h3>
 <p>The nonce incrementor guarantees:</p>
 <ul>
 <li>Every (recordIndex, fieldId) pair produces a unique nonce</li>
 <li>Even if you encrypt billions of records, no nonce is ever reused</li>
 <li>The starting nonce is random (CSPRNG), so it&#39;s unpredictable</li>
 </ul>
-<h3>Additional Recommendations</h3>
+<h3 id="additional-recommendations">Additional Recommendations</h3>
 <ol>
 <li><strong>Always send header first</strong> - Don&#39;t encrypt until recipient confirms header receipt</li>
 <li><strong>Validate record indices</strong> - Ensure indices are within expected range</li>
@@ -530,19 +530,19 @@ C1 XOR C2 = P1 XOR P2  // Keystream cancels out!
 <li><strong>Rotate sessions</strong> - Start new sessions periodically with fresh nonceStart values</li>
 <li><strong>Secure key storage</strong> - The recipient&#39;s private key must be protected</li>
 </ol>
-<h2>API Reference</h2>
-<h3>generateNonceStart()</h3>
+<h2 id="api-reference">API Reference</h2>
+<h3 id="generatenoncestart">generateNonceStart()</h3>
 <p>Generate a cryptographically secure 12-byte starting nonce.</p>
 <pre><code class="language-typescript">function generateNonceStart(): Uint8Array;  // Returns 12 bytes
 </code></pre>
-<h3>deriveNonce(nonceStart, recordIndex)</h3>
+<h3 id="derivenoncenoncestart-recordindex">deriveNonce(nonceStart, recordIndex)</h3>
 <p>Derive a unique nonce for a specific record/field combination.</p>
 <pre><code class="language-typescript">function deriveNonce(
   nonceStart: Uint8Array,      // 12-byte starting nonce
   recordIndex: number | bigint  // Combined index (recordIndex * 65536 + fieldId)
 ): Uint8Array;                  // Returns 12-byte derived nonce
 </code></pre>
-<h3>EncryptionContext</h3>
+<h3 id="encryptioncontext">EncryptionContext</h3>
 <pre><code class="language-typescript">class EncryptionContext {
   constructor(key: Uint8Array | string, nonceStart?: Uint8Array);
 
@@ -574,7 +574,7 @@ C1 XOR C2 = P1 XOR P2  // Keystream cancels out!
   getHeaderJSON(): string;
 }
 </code></pre>
-<h3>EncryptionHeader</h3>
+<h3 id="encryptionheader">EncryptionHeader</h3>
 <pre><code class="language-typescript">interface EncryptionHeader {
   version: number;              // 2 = nonce_start required
   algorithm: string;            // &#39;x25519&#39;, &#39;secp256k1&#39;, etc.
@@ -586,7 +586,7 @@ C1 XOR C2 = P1 XOR P2  // Keystream cancels out!
   sessionId?: Uint8Array;       // Optional session identifier
 }
 </code></pre>
-<h2>See Also</h2>
+<h2 id="see-also">See Also</h2>
 <ul>
 <li><a href="nodejs.html">Node.js Integration</a> - Using encryption in Node.js</li>
 <li><a href="browser.html">Browser Integration</a> - Using encryption in browsers</li>

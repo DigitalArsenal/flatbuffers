@@ -224,24 +224,24 @@
       </svg>
       Back to DA FlatBuffers
     </a>
-    <article class="markdown-body"><h1>Node.js Integration Guide</h1>
+    <article class="markdown-body"><h1 id="nodejs-integration-guide">Node.js Integration Guide</h1>
 <p>Integrate the FlatBuffers encryption module into Node.js applications using the native WebAssembly support built into V8.</p>
-<h2>Why Node.js Native WASM?</h2>
+<h2 id="why-nodejs-native-wasm">Why Node.js Native WASM?</h2>
 <ul>
 <li><strong>Zero dependencies</strong> - Built into Node.js</li>
 <li><strong>Fastest option</strong> - V8&#39;s optimizing JIT compiler</li>
 <li><strong>npm ecosystem</strong> - Use the <code>flatc-wasm</code> package directly</li>
 <li><strong>TypeScript support</strong> - Full type definitions included</li>
 </ul>
-<h2>Prerequisites</h2>
+<h2 id="prerequisites">Prerequisites</h2>
 <ul>
 <li>Node.js 16 or later (18+ recommended)</li>
 <li>npm or yarn</li>
 </ul>
-<h2>Installation</h2>
+<h2 id="installation">Installation</h2>
 <pre><code class="language-bash">npm install flatc-wasm
 </code></pre>
-<h2>Quick Start</h2>
+<h2 id="quick-start">Quick Start</h2>
 <p>The <code>flatc-wasm</code> package provides a high-level API:</p>
 <pre><code class="language-javascript">import {
   encryptBytes,
@@ -273,8 +273,8 @@ console.log(&#39;Encrypted:&#39;, Buffer.from(data).toString(&#39;hex&#39;));
 decryptBytes(data, key, iv);
 console.log(&#39;Decrypted:&#39;, new TextDecoder().decode(data));
 </code></pre>
-<h2>API Reference</h2>
-<h3>Symmetric Encryption</h3>
+<h2 id="api-reference">API Reference</h2>
+<h3 id="symmetric-encryption">Symmetric Encryption</h3>
 <pre><code class="language-javascript">import { encryptBytes, decryptBytes, KEY_SIZE, IV_SIZE } from &#39;flatc-wasm/encryption&#39;;
 
 // Key: 32 bytes, IV: 16 bytes
@@ -292,7 +292,7 @@ encryptBytes(data, key, iv);
 decryptBytes(data, key, iv);
 // data is back to original
 </code></pre>
-<h3>Hash Functions</h3>
+<h3 id="hash-functions">Hash Functions</h3>
 <pre><code class="language-javascript">import { sha256, hkdf } from &#39;flatc-wasm/encryption&#39;;
 
 // SHA-256
@@ -308,7 +308,7 @@ const derivedKey = hkdf(
 );
 // derivedKey: Uint8Array(32)
 </code></pre>
-<h3>X25519 Key Exchange</h3>
+<h3 id="x25519-key-exchange">X25519 Key Exchange</h3>
 <pre><code class="language-javascript">import { x25519GenerateKeyPair, x25519SharedSecret } from &#39;flatc-wasm/encryption&#39;;
 
 // Generate key pair
@@ -323,7 +323,7 @@ const aliceShared = x25519SharedSecret(alice.privateKey, bob.publicKey);
 const bobShared = x25519SharedSecret(bob.privateKey, alice.publicKey);
 // aliceShared === bobShared (32 bytes)
 </code></pre>
-<h3>secp256k1 (Bitcoin/Ethereum)</h3>
+<h3 id="secp256k1-bitcoinethereum">secp256k1 (Bitcoin/Ethereum)</h3>
 <pre><code class="language-javascript">import {
   secp256k1GenerateKeyPair,
   secp256k1SharedSecret,
@@ -350,7 +350,7 @@ const signature = secp256k1Sign(keypair.privateKey, messageHash);
 const isValid = secp256k1Verify(keypair.publicKey, messageHash, signature);
 // isValid: boolean
 </code></pre>
-<h3>P-256 (NIST)</h3>
+<h3 id="p-256-nist">P-256 (NIST)</h3>
 <pre><code class="language-javascript">import {
   p256GenerateKeyPair,
   p256SharedSecret,
@@ -364,7 +364,7 @@ const shared = p256SharedSecret(myPrivateKey, theirPublicKey);
 const signature = p256Sign(keypair.privateKey, messageHash);
 const isValid = p256Verify(keypair.publicKey, messageHash, signature);
 </code></pre>
-<h3>Ed25519 Signatures</h3>
+<h3 id="ed25519-signatures">Ed25519 Signatures</h3>
 <pre><code class="language-javascript">import {
   ed25519GenerateKeyPair,
   ed25519Sign,
@@ -385,7 +385,7 @@ const signature = ed25519Sign(keypair.privateKey, message);
 const isValid = ed25519Verify(keypair.publicKey, message, signature);
 // isValid: boolean
 </code></pre>
-<h2>Complete Example: End-to-End Encryption</h2>
+<h2 id="complete-example-end-to-end-encryption">Complete Example: End-to-End Encryption</h2>
 <pre><code class="language-javascript">import { FlatcRunner } from &#39;flatc-wasm&#39;;
 import {
   x25519GenerateKeyPair,
@@ -505,7 +505,7 @@ const content = JSON.parse(flatc.generateJSON({
 
 console.log(&#39;Decrypted message:&#39;, content.text);
 </code></pre>
-<h2>TypeScript Support</h2>
+<h2 id="typescript-support">TypeScript Support</h2>
 <p>Full TypeScript definitions are included:</p>
 <pre><code class="language-typescript">import {
   encryptBytes,
@@ -525,14 +525,14 @@ function encrypt(plaintext: Uint8Array, key: Uint8Array, iv: Uint8Array): Uint8A
   return data;
 }
 </code></pre>
-<h2>CommonJS Support</h2>
+<h2 id="commonjs-support">CommonJS Support</h2>
 <pre><code class="language-javascript">const { encryptBytes, x25519GenerateKeyPair } = require(&#39;flatc-wasm/encryption&#39;);
 
 const keypair = x25519GenerateKeyPair();
 console.log(&#39;Public key:&#39;, Buffer.from(keypair.publicKey).toString(&#39;hex&#39;));
 </code></pre>
-<h2>Performance Tips</h2>
-<h3>1. Initialize Once</h3>
+<h2 id="performance-tips">Performance Tips</h2>
+<h3 id="1-initialize-once">1. Initialize Once</h3>
 <pre><code class="language-javascript">// Good: Initialize at startup
 import { initEncryption } from &#39;flatc-wasm/encryption&#39;;
 await initEncryption();  // Loads WASM once
@@ -540,7 +540,7 @@ await initEncryption();  // Loads WASM once
 // Then use throughout your app
 encryptBytes(data, key, iv);
 </code></pre>
-<h3>2. Reuse Buffers</h3>
+<h3 id="2-reuse-buffers">2. Reuse Buffers</h3>
 <pre><code class="language-javascript">// Good: Reuse allocated buffers
 const buffer = new Uint8Array(1024);
 for (const chunk of chunks) {
@@ -554,7 +554,7 @@ for (const chunk of chunks) {
   encryptBytes(buffer, key, iv);
 }
 </code></pre>
-<h3>3. Use Worker Threads for Heavy Loads</h3>
+<h3 id="3-use-worker-threads-for-heavy-loads">3. Use Worker Threads for Heavy Loads</h3>
 <pre><code class="language-javascript">// worker.js
 import { parentPort } from &#39;worker_threads&#39;;
 import { encryptBytes } from &#39;flatc-wasm/encryption&#39;;
@@ -565,7 +565,7 @@ parentPort.on(&#39;message&#39;, ({ data, key, iv }) =&gt; {
   parentPort.postMessage(buffer);
 });
 </code></pre>
-<h2>Error Handling</h2>
+<h2 id="error-handling">Error Handling</h2>
 <pre><code class="language-javascript">try {
   encryptBytes(data, key, iv);
 } catch (error) {
@@ -578,7 +578,7 @@ parentPort.on(&#39;message&#39;, ({ data, key, iv }) =&gt; {
   }
 }
 </code></pre>
-<h2>Security Notes</h2>
+<h2 id="security-notes">Security Notes</h2>
 <ol>
 <li><strong>Use crypto.randomBytes for keys</strong> - Not Math.random()</li>
 <li><strong>Never reuse IVs</strong> - Generate fresh IV for each encryption</li>
@@ -596,8 +596,8 @@ for (let i = 0; i &lt; 32; i++) {
   badKey[i] = Math.floor(Math.random() * 256);  // NOT SECURE!
 }
 </code></pre>
-<h2>Troubleshooting</h2>
-<h3>&quot;Module not found&quot;</h3>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="module-not-found">"Module not found"</h3>
 <p>Ensure you&#39;re importing from the correct path:</p>
 <pre><code class="language-javascript">// Correct
 import { encryptBytes } from &#39;flatc-wasm/encryption&#39;;
@@ -605,19 +605,19 @@ import { encryptBytes } from &#39;flatc-wasm/encryption&#39;;
 // Wrong
 import { encryptBytes } from &#39;flatc-wasm&#39;;  // Main module, not encryption
 </code></pre>
-<h3>&quot;Invalid key/IV size&quot;</h3>
+<h3 id="invalid-keyiv-size">"Invalid key/IV size"</h3>
 <p>Check your buffer sizes:</p>
 <pre><code class="language-javascript">console.log(&#39;Key size:&#39;, key.length);  // Should be 32
 console.log(&#39;IV size:&#39;, iv.length);    // Should be 16
 </code></pre>
-<h3>&quot;WASM module not initialized&quot;</h3>
+<h3 id="wasm-module-not-initialized">"WASM module not initialized"</h3>
 <p>Call init before using:</p>
 <pre><code class="language-javascript">import { initEncryption, encryptBytes } from &#39;flatc-wasm/encryption&#39;;
 
 await initEncryption();  // Must call first!
 encryptBytes(data, key, iv);
 </code></pre>
-<h2>See Also</h2>
+<h2 id="see-also">See Also</h2>
 <ul>
 <li><a href="https://www.npmjs.com/package/flatc-wasm">npm package</a></li>
 <li><a href="README.md#api-reference">API Reference</a></li>

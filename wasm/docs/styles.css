@@ -6433,7 +6433,11 @@ details[open] .collapse-icon {
   border-radius: var(--radius-sm);
   padding: 16px 24px;
   margin: 16px auto;
-  max-width: 400px;
+  max-width: 500px;
+}
+
+.install-code {
+  white-space: nowrap;
 }
 
 .install-code {

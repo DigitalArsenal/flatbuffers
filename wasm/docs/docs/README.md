@@ -481,6 +481,10 @@ const files = flatc.getEmbeddedRuntime('python');
 
 // Get as downloadable ZIP archive
 const zip = flatc.getEmbeddedRuntimeZip('go');
+
+// Language aliases are supported:
+// "typescript"/"js" → "ts", "c++" → "cpp", "c#"/"cs" → "csharp"
+const tsFiles = flatc.getEmbeddedRuntime('typescript'); // same as 'ts'
 ```
 
 ### Low-Level API

@@ -1333,6 +1333,146 @@ export class FlatcRunner {
     this._encryptionConfig = { publicKey, config };
   }
 
+  // ===========================================================================
+  // Embedded Runtimes API
+  // ===========================================================================
+
+  /**
+   * Language alias mapping for embedded runtimes.
+   * @private
+   */
+  static _langAliases = {
+    'typescript': 'ts',
+    'c++': 'cpp',
+    'c#': 'csharp',
+    'cs': 'csharp',
+    'javascript': 'ts',
+    'js': 'ts',
+  };
+
+  /**
+   * Resolve language aliases to canonical names.
+   * @param {string} lang
+   * @returns {string}
+   * @private
+   */
+  static _resolveLanguageAlias(lang) {
+    const normalized = lang.toLowerCase().trim();
+    return FlatcRunner._langAliases[normalized] || normalized;
+  }
+
+  /**
+   * Get the embedded FlatBuffers runtime library for a language.
+   * Returns the files as a map of { "relative/path": "content" }.
+   *
+   * Decompression happens inside WASM (C++ brotli), not in JavaScript.
+   *
+   * @param {string} language - Target language (e.g., "python", "ts", "go", "typescript")
+   * @returns {Record<string, string>} Map of file paths to their contents
+   * @throws {Error} If the language is not found or decompression fails
+   */
+  getEmbeddedRuntime(language) {
+    const lang = FlatcRunner._resolveLanguageAlias(language);
+
+    if (!this.Module._wasm_get_embedded_runtime_json) {
+      throw new Error('Embedded runtimes not available in this build');
+    }
+
+    // Allocate string in WASM memory for the language name
+    const langBytes = new TextEncoder().encode(lang);
+    const langPtr = this.Module._malloc(langBytes.length + 1);
+    this.Module.HEAPU8.set(langBytes, langPtr);
+    this.Module.HEAPU8[langPtr + langBytes.length] = 0; // null terminator
+
+    // Allocate output size pointer
+    const outSizePtr = this.Module._malloc(4);
+
+    try {
+      const resultPtr = this.Module._wasm_get_embedded_runtime_json(langPtr, outSizePtr);
+
+      if (!resultPtr) {
+        throw new Error(`Embedded runtime not found for language: "${language}"`);
+      }
+
+      const size = this.Module.getValue(outSizePtr, 'i32');
+      const jsonStr = this.Module.UTF8ToString(resultPtr, size);
+
+      return JSON.parse(jsonStr);
+    } finally {
+      this.Module._free(langPtr);
+      this.Module._free(outSizePtr);
+    }
+  }
+
+  /**
+   * Get the embedded FlatBuffers runtime library for a language as a ZIP archive.
+   * The ZIP uses Store method (no compression) — files are directly readable.
+   *
+   * Brotli decompression and ZIP construction both happen inside WASM.
+   *
+   * @param {string} language - Target language (e.g., "python", "ts", "go")
+   * @returns {Uint8Array} ZIP archive data
+   * @throws {Error} If the language is not found or processing fails
+   */
+  getEmbeddedRuntimeZip(language) {
+    const lang = FlatcRunner._resolveLanguageAlias(language);
+
+    if (!this.Module._wasm_get_embedded_runtime_zip) {
+      throw new Error('Embedded runtimes not available in this build');
+    }
+
+    // Allocate string in WASM memory for the language name
+    const langBytes = new TextEncoder().encode(lang);
+    const langPtr = this.Module._malloc(langBytes.length + 1);
+    this.Module.HEAPU8.set(langBytes, langPtr);
+    this.Module.HEAPU8[langPtr + langBytes.length] = 0;
+
+    // Allocate output size pointer
+    const outSizePtr = this.Module._malloc(4);
+
+    try {
+      const resultPtr = this.Module._wasm_get_embedded_runtime_zip(langPtr, outSizePtr);
+
+      if (!resultPtr) {
+        throw new Error(`Embedded runtime not found for language: "${language}"`);
+      }
+
+      const size = this.Module.getValue(outSizePtr, 'i32');
+      // Copy ZIP data from WASM memory (must copy before next call invalidates buffer)
+      return new Uint8Array(this.Module.HEAPU8.buffer, resultPtr, size).slice();
+    } finally {
+      this.Module._free(langPtr);
+      this.Module._free(outSizePtr);
+    }
+  }
+
+  /**
+   * List all available embedded runtime languages.
+   * @returns {string[]} Array of language names (e.g., ["python", "ts", "go", ...])
+   */
+  listEmbeddedRuntimes() {
+    if (!this.Module._wasm_list_embedded_runtimes) {
+      return [];
+    }
+
+    const outSizePtr = this.Module._malloc(4);
+
+    try {
+      const resultPtr = this.Module._wasm_list_embedded_runtimes(outSizePtr);
+
+      if (!resultPtr) {
+        return [];
+      }
+
+      const size = this.Module.getValue(outSizePtr, 'i32');
+      const jsonStr = this.Module.UTF8ToString(resultPtr, size);
+
+      return JSON.parse(jsonStr);
+    } finally {
+      this.Module._free(outSizePtr);
+    }
+  }
+
   /**
    * Internal: Mount schema files if they've changed.
    * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput

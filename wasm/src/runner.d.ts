@@ -175,6 +175,23 @@ export type TargetLanguage =
   | "ts";
 
 /**
+ * Languages with embedded runtime support.
+ * These are the canonical names; aliases like "typescript", "c++", "c#" are also accepted.
+ */
+export type EmbeddedRuntimeLanguage =
+  | "python"
+  | "ts"
+  | "go"
+  | "java"
+  | "kotlin"
+  | "swift"
+  | "dart"
+  | "php"
+  | "csharp"
+  | "cpp"
+  | "rust";
+
+/**
  * Options for FlatcRunner initialization.
  */
 export interface FlatcRunnerOptions {
@@ -321,6 +338,32 @@ export declare class FlatcRunner {
    * Get flatc version.
    */
   version(): string;
+
+  /**
+   * Get the embedded FlatBuffers runtime library for a language as a file map.
+   * Brotli decompression happens inside WASM (C++ side).
+   *
+   * @param language - Target language or alias (e.g., "python", "typescript", "c++")
+   * @returns Map of relative file paths to their string contents.
+   * @throws Error if the language is not found or decompression fails.
+   */
+  getEmbeddedRuntime(language: EmbeddedRuntimeLanguage | string): Record<string, string>;
+
+  /**
+   * Get the embedded FlatBuffers runtime library for a language as a ZIP archive.
+   * Brotli decompression and ZIP construction both happen inside WASM.
+   *
+   * @param language - Target language or alias
+   * @returns ZIP archive as a Uint8Array (Store compression, directly extractable).
+   * @throws Error if the language is not found or processing fails.
+   */
+  getEmbeddedRuntimeZip(language: EmbeddedRuntimeLanguage | string): Uint8Array;
+
+  /**
+   * List all available embedded runtime languages.
+   * @returns Array of canonical language names (e.g., ["python", "ts", "go", ...])
+   */
+  listEmbeddedRuntimes(): string[];
 }
 
 /**

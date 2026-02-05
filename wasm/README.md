@@ -2531,13 +2531,22 @@ a.download = 'flatbuffers-go-runtime.zip';
 a.click();
 ```
 
-#### Get Runtime Metadata
+#### Language Aliases
+
+The FlatcRunner accepts common aliases in addition to canonical language names:
+
+| Alias | Resolves To |
+|-------|-------------|
+| `typescript` | `ts` |
+| `javascript`, `js` | `ts` |
+| `c++` | `cpp` |
+| `c#`, `cs` | `csharp` |
 
 ```javascript
-// Get info without decompressing
-const info = flatc.getEmbeddedRuntimeInfo('typescript');
-console.log(info);
-// { fileCount: 12, rawSize: 45678, compressedSize: 8901 }
+// All of these return the same runtime
+flatc.getEmbeddedRuntime('typescript');
+flatc.getEmbeddedRuntime('ts');
+flatc.getEmbeddedRuntime('js');
 ```
 
 ### Low-Level Runtime API

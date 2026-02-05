@@ -2042,6 +2042,14 @@ class EphemerisReader {
         <h3 class="card-subtitle">Language Bindings</h3>
         <p class="card-desc">Example integrations for different languages and runtimes:</p>
 
+        <div class="compliance-note" style="margin-bottom: 1rem;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+          <span><strong>Embedded Runtimes:</strong> All 11 FlatBuffers runtime libraries (Go, Python, Rust, Java, C#, Swift, TypeScript, C++, Kotlin, Dart, PHP) are Brotli-compressed and embedded directly in the WASM binary. Downloads are generated locally in your browser — no network requests, no package manager required.</span>
+        </div>
+
         <div class="runtimes-grid">
           <!-- Go Card -->
           <div class="runtime-card" data-lang="go">
@@ -2067,9 +2075,7 @@ class EphemerisReader {
                 </svg>
                 Runtime .zip
               </button>
-              <a href="docs-html/go.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
           <!-- Python Card -->
@@ -2096,9 +2102,7 @@ class EphemerisReader {
                 </svg>
                 Runtime .zip
               </button>
-              <a href="docs-html/python.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
           <!-- Rust Card -->
@@ -2125,9 +2129,7 @@ class EphemerisReader {
                 </svg>
                 Runtime .zip
               </button>
-              <a href="docs-html/rust.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
           <!-- Java Card -->
@@ -2154,9 +2156,7 @@ class EphemerisReader {
                 </svg>
                 Runtime .zip
               </button>
-              <a href="docs-html/java.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
           <!-- C# Card -->
@@ -2183,9 +2183,7 @@ class EphemerisReader {
                 </svg>
                 Runtime .zip
               </button>
-              <a href="docs-html/csharp.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
           <!-- Swift Card -->
@@ -2212,9 +2210,7 @@ class EphemerisReader {
                 </svg>
                 Runtime .zip
               </button>
-              <a href="docs-html/swift.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
           <!-- TypeScript / Node.js Card -->
@@ -2241,9 +2237,7 @@ class EphemerisReader {
                 </svg>
                 Runtime .zip
               </button>
-              <a href="docs-html/nodejs.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
           <!-- C++ Card -->
@@ -2270,19 +2264,10 @@ class EphemerisReader {
                 </svg>
                 Runtime .zip
               </button>
-              <a href="docs-html/README.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
         </div>
 
-        <div class="compliance-note" style="margin-top: 1rem;">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 16v-4M12 8h.01"/>
-          </svg>
-          <span><strong>Embedded Runtimes:</strong> All FlatBuffers runtime libraries are Brotli-compressed and embedded directly in the WASM binary. Downloads are generated locally in your browser — no network requests, no package manager required.</span>
-        </div>
       </div>
 
       <!-- Streaming API Examples -->

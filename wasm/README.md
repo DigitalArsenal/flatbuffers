@@ -33,6 +33,7 @@
 | **Encryption** | Per-field AES-256-CTR encryption with `(encrypted)` attribute |
 | **Streaming** | Process large data with streaming APIs |
 | **Cross-Lang** | Same WASM runs in Node.js, Go, Python, Rust, Java, C#, Swift |
+| **Runtimes** | Embedded language runtimes for 11 languages, retrievable as JSON or ZIP |
 | **Zero Deps** | Self-contained with inlined WASM binaries |
 
 ---
@@ -94,6 +95,12 @@ npm install flatc-wasm
   - [Streaming Encryption](#streaming-encryption)
   - [Encryption Configuration](#encryption-configuration)
   - [FIPS Mode](#fips-mode)
+- [Embedded Language Runtimes](#embedded-language-runtimes)
+  - [Overview](#overview)
+  - [Retrieving Runtimes](#retrieving-runtimes)
+  - [Low-Level Runtime API](#low-level-runtime-api)
+  - [Embedded Runtime Languages](#embedded-runtime-languages)
+  - [Build-Time Generation](#build-time-generation)
 - [Plugin Architecture](#plugin-architecture)
   - [Code Generator Plugins](#code-generator-plugins)
   - [Schema Transformation Plugins](#schema-transformation-plugins)
@@ -2470,6 +2477,153 @@ const { header, data } = flatc.generateBinaryEncrypted(schema, json, {
 | `secp256k1` | 33 bytes (compressed) | secp256k1 | Bitcoin/blockchain compatibility |
 | `p256` | 33 bytes (compressed) | NIST P-256 | FIPS compliance, broad support |
 | `p384` | 49 bytes (compressed) | NIST P-384 | Higher security margin |
+
+---
+
+## Embedded Language Runtimes
+
+flatc-wasm ships with the complete FlatBuffers runtime library source code for 11 languages, Brotli-compressed and embedded directly in the WASM binary. This allows you to retrieve the runtime files needed for any target language without network access or separate package installation.
+
+### Overview
+
+When you generate code with `flatc`, the output files depend on a language-specific runtime library (e.g., `flatbuffers` Python package, `flatbuffers` npm package, etc.). The embedded runtimes bundle all of these into the WASM module itself:
+
+- **Brotli-compressed** at build time (quality 11) for minimal binary size overhead (~264 KB compressed for all 11 languages)
+- **Decompressed on demand** inside the WASM module — no JavaScript decompression libraries needed
+- **Two retrieval formats**: JSON file map or ZIP archive
+
+### Retrieving Runtimes
+
+#### Using FlatcRunner (Recommended)
+
+```javascript
+import { FlatcRunner } from 'flatc-wasm';
+
+const flatc = await FlatcRunner.init();
+
+// List available runtimes
+const languages = flatc.listEmbeddedRuntimes();
+console.log(languages);
+// ["python", "ts", "go", "java", "kotlin", "swift", "dart", "php", "csharp", "cpp", "rust"]
+
+// Get runtime as JSON file map
+const pythonFiles = flatc.getEmbeddedRuntime('python');
+// { "flatbuffers/__init__.py": "...", "flatbuffers/builder.py": "...", ... }
+
+for (const [path, content] of Object.entries(pythonFiles)) {
+  console.log(`  ${path} (${content.length} bytes)`);
+}
+
+// Get runtime as a downloadable ZIP archive
+const zipData = flatc.getEmbeddedRuntimeZip('go');
+// Uint8Array containing a valid ZIP file
+
+// Save to disk (Node.js)
+import { writeFileSync } from 'fs';
+writeFileSync('go-runtime.zip', zipData);
+
+// Or trigger browser download
+const blob = new Blob([zipData], { type: 'application/zip' });
+const url = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = 'flatbuffers-go-runtime.zip';
+a.click();
+```
+
+#### Get Runtime Metadata
+
+```javascript
+// Get info without decompressing
+const info = flatc.getEmbeddedRuntimeInfo('typescript');
+console.log(info);
+// { fileCount: 12, rawSize: 45678, compressedSize: 8901 }
+```
+
+### Low-Level Runtime API
+
+For direct WASM module access:
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `_wasm_list_embedded_runtimes(outSize)` | `(i32) -> i32` | Returns pointer to JSON array of language names |
+| `_wasm_get_embedded_runtime_json(lang, outSize)` | `(i32, i32) -> i32` | Decompress and return as JSON file map |
+| `_wasm_get_embedded_runtime_zip(lang, outSize)` | `(i32, i32) -> i32` | Decompress, build ZIP archive, return pointer |
+| `_wasm_get_embedded_runtime_info(lang, fileCount, rawSize, compressedSize)` | `(i32, i32, i32, i32) -> i32` | Get metadata (returns 1 if found, 0 if not) |
+
+```javascript
+const flatc = await createFlatcWasm();
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+// List available runtimes
+const outSizePtr = flatc._malloc(4);
+const listPtr = flatc._wasm_list_embedded_runtimes(outSizePtr);
+const listLen = flatc.getValue(outSizePtr, 'i32');
+const languages = JSON.parse(decoder.decode(
+  flatc.HEAPU8.slice(listPtr, listPtr + listLen)
+));
+console.log('Available:', languages);
+
+// Get Python runtime as JSON
+const langBytes = encoder.encode('python\0');
+const langPtr = flatc._malloc(langBytes.length);
+flatc.HEAPU8.set(langBytes, langPtr);
+
+const jsonPtr = flatc._wasm_get_embedded_runtime_json(langPtr, outSizePtr);
+const jsonLen = flatc.getValue(outSizePtr, 'i32');
+const files = JSON.parse(decoder.decode(
+  flatc.HEAPU8.slice(jsonPtr, jsonPtr + jsonLen)
+));
+
+console.log('Python runtime files:', Object.keys(files));
+
+// Get Go runtime as ZIP
+const goBytes = encoder.encode('go\0');
+const goPtr = flatc._malloc(goBytes.length);
+flatc.HEAPU8.set(goBytes, goPtr);
+
+const zipPtr = flatc._wasm_get_embedded_runtime_zip(goPtr, outSizePtr);
+const zipLen = flatc.getValue(outSizePtr, 'i32');
+const zipData = flatc.HEAPU8.slice(zipPtr, zipPtr + zipLen);
+
+flatc._free(langPtr);
+flatc._free(goPtr);
+flatc._free(outSizePtr);
+```
+
+### Embedded Runtime Languages
+
+| Language | Runtime Source | Description |
+|----------|--------------|-------------|
+| `python` | `python/flatbuffers/` | FlatBuffers Python package |
+| `ts` | `ts/` | TypeScript runtime |
+| `go` | `go/` | Go runtime package |
+| `java` | `java/.../com/google/flatbuffers/` | Java runtime classes |
+| `kotlin` | `kotlin/.../src/` | Kotlin Multiplatform runtime |
+| `swift` | `swift/Sources/` | Swift runtime |
+| `dart` | `dart/lib/` | Dart runtime package |
+| `php` | `php/` | PHP runtime |
+| `csharp` | `net/FlatBuffers/` | C# (.NET) runtime |
+| `cpp` | `include/flatbuffers/` | C++ headers (runtime only, no compiler headers) |
+| `rust` | `rust/flatbuffers/src/` | Rust crate source |
+
+### Build-Time Generation
+
+The embedded runtime data is generated at build time by a Node.js script:
+
+```bash
+node scripts/generate_embedded_runtimes.mjs <flatbuffers-repo-path> <output-header>
+```
+
+This script:
+
+1. Reads runtime source files for each language from the FlatBuffers repository
+2. Creates a JSON map of `{ "relative/path": "file-content" }` per language
+3. Brotli-compresses each JSON blob at quality 11 (maximum compression)
+4. Emits a C header (`src/embedded_runtimes_data.h`) with static byte arrays
+
+The header is then compiled into the WASM binary. At runtime, Brotli decompression happens inside the WASM module using the [Brotli](https://github.com/google/brotli) C library (fetched via CMake FetchContent).
 
 ---
 

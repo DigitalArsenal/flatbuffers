@@ -446,6 +446,61 @@ func verifyPythonSignature(publicKey, message, signature []byte) bool {
 
 ---
 
+## Embedded Language Runtimes
+
+flatc-wasm ships with the complete FlatBuffers runtime library source code for 11 languages, Brotli-compressed and embedded directly in the WASM binary. Retrieve runtime files as JSON file maps or ZIP archives — no network access or separate package installation required.
+
+### Available Runtimes
+
+| Language | Key | Source Directory |
+|----------|-----|-----------------|
+| Python | `python` | `python/flatbuffers/` |
+| TypeScript | `ts` | `ts/` |
+| Go | `go` | `go/` |
+| Java | `java` | `java/.../com/google/flatbuffers/` |
+| Kotlin | `kotlin` | `kotlin/.../src/` |
+| Swift | `swift` | `swift/Sources/` |
+| Dart | `dart` | `dart/lib/` |
+| PHP | `php` | `php/` |
+| C# | `csharp` | `net/FlatBuffers/` |
+| C++ | `cpp` | `include/flatbuffers/` |
+| Rust | `rust` | `rust/flatbuffers/src/` |
+
+### Retrieval
+
+```javascript
+import { FlatcRunner } from 'flatc-wasm';
+const flatc = await FlatcRunner.init();
+
+// List available runtimes
+const languages = flatc.listEmbeddedRuntimes();
+// ["python", "ts", "go", "java", "kotlin", "swift", "dart", "php", "csharp", "cpp", "rust"]
+
+// Get as JSON file map { "path": "content", ... }
+const files = flatc.getEmbeddedRuntime('python');
+
+// Get as downloadable ZIP archive
+const zip = flatc.getEmbeddedRuntimeZip('go');
+```
+
+### Low-Level API
+
+| Function | Description |
+|----------|-------------|
+| `_wasm_list_embedded_runtimes(outSize)` | JSON array of language names |
+| `_wasm_get_embedded_runtime_json(lang, outSize)` | Decompress → JSON file map |
+| `_wasm_get_embedded_runtime_zip(lang, outSize)` | Decompress → ZIP archive |
+| `_wasm_get_embedded_runtime_info(lang, fileCount, rawSize, compressedSize)` | Metadata (1=found, 0=not) |
+
+### How It Works
+
+1. At **build time**, `scripts/generate_embedded_runtimes.mjs` reads runtime source files, creates JSON maps, Brotli-compresses each (quality 11), and emits a C header with static byte arrays
+2. The header is compiled into the WASM binary (~264 KB compressed for all 11 languages)
+3. At **runtime**, Brotli decompression happens inside WASM — no JavaScript decompression needed
+4. ZIP archive construction also happens in WASM using a minimal Store-only ZIP builder
+
+---
+
 ## Language Guides
 
 For detailed integration instructions, see:

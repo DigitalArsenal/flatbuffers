@@ -128,6 +128,7 @@ if(EMSCRIPTEN)
     src/flatc_wasm.cpp
     src/encryption.cpp
     src/encryption_emscripten.cpp
+    src/wasm_embedded_runtimes.cpp
   )
 
   # Exported C functions
@@ -206,6 +207,11 @@ if(EMSCRIPTEN)
     "_wasm_convert_auto_encrypted"
     "_wasm_stream_set_encryption"
     "_wasm_stream_clear_encryption"
+    # Embedded runtime exports
+    "_wasm_get_embedded_runtime_json"
+    "_wasm_get_embedded_runtime_zip"
+    "_wasm_list_embedded_runtimes"
+    "_wasm_get_embedded_runtime_info"
   )
   string(JOIN "," EXPORTED_FUNCS_STR ${WASM_EXPORTED_FUNCTIONS})
 
@@ -225,6 +231,21 @@ if(EMSCRIPTEN)
     set(CRYPTOPP_DISABLE_SSSE3 ON CACHE BOOL "" FORCE)
     set(CRYPTOPP_DISABLE_AESNI ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(cryptopp-cmake)
+  endif()
+
+  # Fetch Brotli for embedded runtime decompression
+  if(NOT TARGET brotlidec)
+    message(STATUS "Fetching Brotli for embedded runtime decompression...")
+    FetchContent_Declare(
+      brotli
+      GIT_REPOSITORY https://github.com/google/brotli.git
+      GIT_TAG        v1.1.0
+      GIT_SHALLOW    TRUE
+    )
+    set(BROTLI_BUNDLED_MODE ON CACHE BOOL "" FORCE)
+    set(BROTLI_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+    set(BROTLI_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(brotli)
   endif()
 
   # Optional: OpenSSL for FIPS compliance (alternative to Crypto++)
@@ -288,6 +309,7 @@ if(EMSCRIPTEN)
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/grpc
     ${CMAKE_SOURCE_DIR}/src
+    ${brotli_SOURCE_DIR}/c/include
   )
   target_compile_options(flatc_wasm PRIVATE ${WASM_COMPILE_OPTIONS} -fexceptions)
   if(FLATBUFFERS_WASM_USE_OPENSSL)
@@ -297,6 +319,7 @@ if(EMSCRIPTEN)
     target_compile_definitions(flatc_wasm PRIVATE FLATBUFFERS_USE_CRYPTOPP=1)
     target_link_libraries(flatc_wasm PRIVATE cryptopp)
   endif()
+  target_link_libraries(flatc_wasm PRIVATE brotlidec brotlicommon)
   target_link_options(flatc_wasm PRIVATE ${WASM_COMMON_LINK_OPTIONS} -sEXPORT_ES6=1 -fexceptions -sDISABLE_EXCEPTION_THROWING=0)
 
   # Copy TypeScript definitions
@@ -323,6 +346,7 @@ if(EMSCRIPTEN)
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/grpc
     ${CMAKE_SOURCE_DIR}/src
+    ${brotli_SOURCE_DIR}/c/include
   )
   target_compile_options(flatc_wasm_inline PRIVATE ${WASM_COMPILE_OPTIONS} -fexceptions)
   if(FLATBUFFERS_WASM_USE_OPENSSL)
@@ -332,6 +356,7 @@ if(EMSCRIPTEN)
     target_compile_definitions(flatc_wasm_inline PRIVATE FLATBUFFERS_USE_CRYPTOPP=1)
     target_link_libraries(flatc_wasm_inline PRIVATE cryptopp)
   endif()
+  target_link_libraries(flatc_wasm_inline PRIVATE brotlidec brotlicommon)
   target_link_options(flatc_wasm_inline PRIVATE ${WASM_COMMON_LINK_OPTIONS} -sEXPORT_ES6=1 -sSINGLE_FILE=1 -fexceptions -sDISABLE_EXCEPTION_THROWING=0)
 
   # Target: flatc_wasm_npm (build npm package)

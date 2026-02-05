@@ -2620,18 +2620,10 @@ class EphemerisReader {
         <p class="install-note">Works with any WASM runtime: Node.js, browsers, Go (wazero), Python (wasmer), Rust (wasmer), Java (Chicory), C# (Wasmtime), Swift (WasmKit), and more.</p>
       </div>
 
-      <!-- Runtime Cards Grid -->
+      <!-- WASM Runtime Integration -->
       <div class="glass-card">
-        <h3 class="card-subtitle">Language Bindings</h3>
-        <p class="card-desc">Example integrations for different languages and runtimes:</p>
-
-        <div class="compliance-note" style="margin-bottom: 1rem;">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M12 16v-4M12 8h.01"/>
-          </svg>
-          <span><strong>Embedded Runtimes:</strong> All 11 FlatBuffers runtime libraries (Go, Python, Rust, Java, C#, Swift, TypeScript, C++, Kotlin, Dart, PHP) are Brotli-compressed and embedded directly in the WASM binary. Downloads are generated locally in your browser — no network requests, no package manager required.</span>
-        </div>
+        <h3 class="card-subtitle">WASM Runtime Integration</h3>
+        <p class="card-desc">Run flatc-wasm in any language with a WebAssembly runtime. Load the .wasm binary and call exported functions directly:</p>
 
         <div class="runtimes-grid">
           <!-- Go Card -->
@@ -2647,17 +2639,6 @@ class EphemerisReader {
             <div class="runtime-features">
               <span class="feature-tag">Zero dependencies</span>
               <span class="feature-tag">CGo-free</span>
-              <span class="feature-tag embedded-tag">Embedded Runtime</span>
-            </div>
-            <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="go">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                Runtime .zip
-              </button>
             </div>
           </div>
 
@@ -2670,21 +2651,10 @@ class EphemerisReader {
                 <span class="runtime-engine">wasmer / wasmtime</span>
               </div>
             </div>
-            <p>FlatBuffers Python runtime with type hints</p>
+            <p>Load WASM modules with Cranelift JIT compilation</p>
             <div class="runtime-features">
-              <span class="feature-tag">Type hints</span>
-              <span class="feature-tag">Pure Python</span>
-              <span class="feature-tag embedded-tag">Embedded Runtime</span>
-            </div>
-            <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="python">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                Runtime .zip
-              </button>
+              <span class="feature-tag">Cranelift JIT</span>
+              <span class="feature-tag">Pure Python API</span>
             </div>
           </div>
 
@@ -2697,21 +2667,10 @@ class EphemerisReader {
                 <span class="runtime-engine">wasmer</span>
               </div>
             </div>
-            <p>FlatBuffers Rust crate source with no_std support</p>
+            <p>Native WASM execution with wasmer crate</p>
             <div class="runtime-features">
-              <span class="feature-tag">no_std support</span>
+              <span class="feature-tag">Native speed</span>
               <span class="feature-tag">Memory safe</span>
-              <span class="feature-tag embedded-tag">Embedded Runtime</span>
-            </div>
-            <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="rust">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                Runtime .zip
-              </button>
             </div>
           </div>
 
@@ -2728,17 +2687,6 @@ class EphemerisReader {
             <div class="runtime-features">
               <span class="feature-tag">Pure Java</span>
               <span class="feature-tag">JNI-free</span>
-              <span class="feature-tag embedded-tag">Embedded Runtime</span>
-            </div>
-            <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="java">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                Runtime .zip
-              </button>
             </div>
           </div>
 
@@ -2751,21 +2699,10 @@ class EphemerisReader {
                 <span class="runtime-engine">Wasmtime</span>
               </div>
             </div>
-            <p>.NET 6+ FlatBuffers runtime library</p>
+            <p>Wasmtime .NET bindings for WASM execution</p>
             <div class="runtime-features">
               <span class="feature-tag">.NET 6+</span>
-              <span class="feature-tag">NuGet</span>
-              <span class="feature-tag embedded-tag">Embedded Runtime</span>
-            </div>
-            <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="csharp">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                Runtime .zip
-              </button>
+              <span class="feature-tag">AOT support</span>
             </div>
           </div>
 
@@ -2778,21 +2715,10 @@ class EphemerisReader {
                 <span class="runtime-engine">WasmKit</span>
               </div>
             </div>
-            <p>Swift FlatBuffers runtime for iOS/macOS</p>
+            <p>Pure Swift WASM runtime for iOS/macOS</p>
             <div class="runtime-features">
               <span class="feature-tag">SPM</span>
               <span class="feature-tag">iOS/macOS</span>
-              <span class="feature-tag embedded-tag">Embedded Runtime</span>
-            </div>
-            <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="swift">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/>
-                  <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                Runtime .zip
-              </button>
             </div>
           </div>
 
@@ -2805,12 +2731,180 @@ class EphemerisReader {
                 <span class="runtime-engine">V8 (native)</span>
               </div>
             </div>
-            <p>FlatBuffers TypeScript runtime for Node.js and bundlers</p>
+            <p>Native V8 WASM support - no extra runtime needed</p>
             <div class="runtime-features">
               <span class="feature-tag">Native V8</span>
               <span class="feature-tag">ESM/CJS</span>
-              <span class="feature-tag embedded-tag">Embedded Runtime</span>
             </div>
+          </div>
+
+          <!-- Browser Card -->
+          <div class="runtime-card" data-lang="browser">
+            <div class="runtime-header">
+              <div class="runtime-icon wasm">WEB</div>
+              <div class="runtime-meta">
+                <h4>Browser</h4>
+                <span class="runtime-engine">WebAssembly API</span>
+              </div>
+            </div>
+            <p>All modern browsers support WASM natively</p>
+            <div class="runtime-features">
+              <span class="feature-tag">Chrome/Firefox/Safari</span>
+              <span class="feature-tag">Edge</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FlatBuffers Language Bindings -->
+      <div class="glass-card">
+        <h3 class="card-subtitle">FlatBuffers Language Bindings</h3>
+        <p class="card-desc">Download the FlatBuffers runtime library for your target language. These are the libraries your generated code imports to read/write FlatBuffer data:</p>
+
+        <div class="compliance-note" style="margin-bottom: 1rem;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+          <span><strong>Embedded in WASM:</strong> All 11 language runtimes are Brotli-compressed and embedded directly in the WASM binary. Downloads are generated locally in your browser — no network requests required.</span>
+        </div>
+
+        <div class="runtimes-grid">
+          <!-- Go Bindings -->
+          <div class="runtime-card" data-lang="go-bindings">
+            <div class="runtime-header">
+              <div class="runtime-icon go">GO</div>
+              <div class="runtime-meta">
+                <h4>Go</h4>
+              </div>
+            </div>
+            <p>FlatBuffers Go runtime package</p>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="go">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download .zip
+              </button>
+            </div>
+          </div>
+
+          <!-- Python Bindings -->
+          <div class="runtime-card" data-lang="python-bindings">
+            <div class="runtime-header">
+              <div class="runtime-icon py">PY</div>
+              <div class="runtime-meta">
+                <h4>Python</h4>
+              </div>
+            </div>
+            <p>FlatBuffers Python runtime with type hints</p>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="python">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download .zip
+              </button>
+            </div>
+          </div>
+
+          <!-- Rust Bindings -->
+          <div class="runtime-card" data-lang="rust-bindings">
+            <div class="runtime-header">
+              <div class="runtime-icon rs">RS</div>
+              <div class="runtime-meta">
+                <h4>Rust</h4>
+              </div>
+            </div>
+            <p>FlatBuffers Rust crate with no_std support</p>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="rust">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download .zip
+              </button>
+            </div>
+          </div>
+
+          <!-- Java Bindings -->
+          <div class="runtime-card" data-lang="java-bindings">
+            <div class="runtime-header">
+              <div class="runtime-icon java">JV</div>
+              <div class="runtime-meta">
+                <h4>Java</h4>
+              </div>
+            </div>
+            <p>FlatBuffers Java runtime classes</p>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="java">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download .zip
+              </button>
+            </div>
+          </div>
+
+          <!-- C# Bindings -->
+          <div class="runtime-card" data-lang="csharp-bindings">
+            <div class="runtime-header">
+              <div class="runtime-icon cs">C#</div>
+              <div class="runtime-meta">
+                <h4>C# / .NET</h4>
+              </div>
+            </div>
+            <p>FlatBuffers .NET runtime library</p>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="csharp">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download .zip
+              </button>
+            </div>
+          </div>
+
+          <!-- Swift Bindings -->
+          <div class="runtime-card" data-lang="swift-bindings">
+            <div class="runtime-header">
+              <div class="runtime-icon swift">SW</div>
+              <div class="runtime-meta">
+                <h4>Swift</h4>
+              </div>
+            </div>
+            <p>FlatBuffers Swift package for iOS/macOS</p>
+            <div class="runtime-actions">
+              <button class="glass-btn small primary" data-download="swift">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download .zip
+              </button>
+            </div>
+          </div>
+
+          <!-- TypeScript Bindings -->
+          <div class="runtime-card" data-lang="ts-bindings">
+            <div class="runtime-header">
+              <div class="runtime-icon ts">TS</div>
+              <div class="runtime-meta">
+                <h4>TypeScript</h4>
+              </div>
+            </div>
+            <p>FlatBuffers TypeScript/JavaScript runtime</p>
             <div class="runtime-actions">
               <button class="glass-btn small primary" data-download="ts">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2818,26 +2912,20 @@ class EphemerisReader {
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Runtime .zip
+                Download .zip
               </button>
             </div>
           </div>
 
-          <!-- C++ Card -->
-          <div class="runtime-card" data-lang="cpp">
+          <!-- C++ Bindings -->
+          <div class="runtime-card" data-lang="cpp-bindings">
             <div class="runtime-header">
               <div class="runtime-icon wasm">C++</div>
               <div class="runtime-meta">
                 <h4>C++</h4>
-                <span class="runtime-engine">Headers</span>
               </div>
             </div>
-            <p>FlatBuffers C++ header-only runtime library</p>
-            <div class="runtime-features">
-              <span class="feature-tag">Header-only</span>
-              <span class="feature-tag">Zero-copy</span>
-              <span class="feature-tag embedded-tag">Embedded Runtime</span>
-            </div>
+            <p>FlatBuffers C++ header-only library</p>
             <div class="runtime-actions">
               <button class="glass-btn small primary" data-download="cpp">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2845,12 +2933,11 @@ class EphemerisReader {
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Runtime .zip
+                Download .zip
               </button>
             </div>
           </div>
         </div>
-
       </div>
 
       <!-- Documentation Links Card -->

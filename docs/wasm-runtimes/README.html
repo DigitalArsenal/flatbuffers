@@ -879,6 +879,120 @@ func verifyPythonSignature(publicKey, message, signature []byte) bool {
 }
 </code></pre>
 <hr>
+<h2>Embedded Language Runtimes</h2>
+<p>flatc-wasm ships with the complete FlatBuffers runtime library source code for 11 languages, Brotli-compressed and embedded directly in the WASM binary. Retrieve runtime files as JSON file maps or ZIP archives — no network access or separate package installation required.</p>
+<h3>Available Runtimes</h3>
+<table>
+<thead>
+<tr>
+<th>Language</th>
+<th>Key</th>
+<th>Source Directory</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Python</td>
+<td><code>python</code></td>
+<td><code>python/flatbuffers/</code></td>
+</tr>
+<tr>
+<td>TypeScript</td>
+<td><code>ts</code></td>
+<td><code>ts/</code></td>
+</tr>
+<tr>
+<td>Go</td>
+<td><code>go</code></td>
+<td><code>go/</code></td>
+</tr>
+<tr>
+<td>Java</td>
+<td><code>java</code></td>
+<td><code>java/.../com/google/flatbuffers/</code></td>
+</tr>
+<tr>
+<td>Kotlin</td>
+<td><code>kotlin</code></td>
+<td><code>kotlin/.../src/</code></td>
+</tr>
+<tr>
+<td>Swift</td>
+<td><code>swift</code></td>
+<td><code>swift/Sources/</code></td>
+</tr>
+<tr>
+<td>Dart</td>
+<td><code>dart</code></td>
+<td><code>dart/lib/</code></td>
+</tr>
+<tr>
+<td>PHP</td>
+<td><code>php</code></td>
+<td><code>php/</code></td>
+</tr>
+<tr>
+<td>C#</td>
+<td><code>csharp</code></td>
+<td><code>net/FlatBuffers/</code></td>
+</tr>
+<tr>
+<td>C++</td>
+<td><code>cpp</code></td>
+<td><code>include/flatbuffers/</code></td>
+</tr>
+<tr>
+<td>Rust</td>
+<td><code>rust</code></td>
+<td><code>rust/flatbuffers/src/</code></td>
+</tr>
+</tbody></table>
+<h3>Retrieval</h3>
+<pre><code class="language-javascript">import { FlatcRunner } from &#39;flatc-wasm&#39;;
+const flatc = await FlatcRunner.init();
+
+// List available runtimes
+const languages = flatc.listEmbeddedRuntimes();
+// [&quot;python&quot;, &quot;ts&quot;, &quot;go&quot;, &quot;java&quot;, &quot;kotlin&quot;, &quot;swift&quot;, &quot;dart&quot;, &quot;php&quot;, &quot;csharp&quot;, &quot;cpp&quot;, &quot;rust&quot;]
+
+// Get as JSON file map { &quot;path&quot;: &quot;content&quot;, ... }
+const files = flatc.getEmbeddedRuntime(&#39;python&#39;);
+
+// Get as downloadable ZIP archive
+const zip = flatc.getEmbeddedRuntimeZip(&#39;go&#39;);
+</code></pre>
+<h3>Low-Level API</h3>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>_wasm_list_embedded_runtimes(outSize)</code></td>
+<td>JSON array of language names</td>
+</tr>
+<tr>
+<td><code>_wasm_get_embedded_runtime_json(lang, outSize)</code></td>
+<td>Decompress → JSON file map</td>
+</tr>
+<tr>
+<td><code>_wasm_get_embedded_runtime_zip(lang, outSize)</code></td>
+<td>Decompress → ZIP archive</td>
+</tr>
+<tr>
+<td><code>_wasm_get_embedded_runtime_info(lang, fileCount, rawSize, compressedSize)</code></td>
+<td>Metadata (1=found, 0=not)</td>
+</tr>
+</tbody></table>
+<h3>How It Works</h3>
+<ol>
+<li>At <strong>build time</strong>, <code>scripts/generate_embedded_runtimes.mjs</code> reads runtime source files, creates JSON maps, Brotli-compresses each (quality 11), and emits a C header with static byte arrays</li>
+<li>The header is compiled into the WASM binary (~264 KB compressed for all 11 languages)</li>
+<li>At <strong>runtime</strong>, Brotli decompression happens inside WASM — no JavaScript decompression needed</li>
+<li>ZIP archive construction also happens in WASM using a minimal Store-only ZIP builder</li>
+</ol>
+<hr>
 <h2>Language Guides</h2>
 <p>For detailed integration instructions, see:</p>
 <ul>

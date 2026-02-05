@@ -445,8 +445,7 @@ body:has(.modal.active) .nav-bar {
 }
 
 .ci-badges a:hover {
-  transform: translateY(-2px);
-  opacity: 0.9;
+  opacity: 0.8;
 }
 
 .ci-badges img {
@@ -4229,9 +4228,7 @@ details[open] .collapse-icon {
 }
 
 .crypto-spec-card:hover {
-  background: linear-gradient(135deg, var(--white-08) 0%, var(--white-05) 100%);
-  border-color: var(--accent);
-  transform: translateY(-2px);
+  background: linear-gradient(135deg, var(--white-12) 0%, var(--white-08) 100%);
 }
 
 .crypto-spec-icon {
@@ -4321,8 +4318,6 @@ details[open] .collapse-icon {
 
 .compliance-card:hover {
   background: var(--white-10);
-  border-color: var(--white-20);
-  transform: translateY(-2px);
 }
 
 .compliance-header {
@@ -6548,7 +6543,7 @@ details[open] .collapse-icon {
 }
 
 .runtime-card:hover {
-  border-color: var(--white-20);
+  background: var(--white-10);
 }
 
 .runtime-header {
@@ -6676,7 +6671,6 @@ details[open] .collapse-icon {
 
 .doc-link-card:hover {
   background: var(--white-10);
-  border-color: var(--white-20);
 }
 
 .doc-link-card svg {
@@ -6814,8 +6808,6 @@ details[open] .collapse-icon {
 
 .principle:hover {
   background: var(--white-10);
-  border-color: var(--white-20);
-  transform: translateY(-2px);
 }
 
 .principle-number {
@@ -6974,7 +6966,6 @@ details[open] .collapse-icon {
 
 .concept-card:hover {
   background: var(--white-10);
-  border-color: var(--white-20);
 }
 
 .concept-icon {
@@ -7285,7 +7276,6 @@ details[open] .collapse-icon {
 
 .wallet-network-card:hover {
   background: var(--white-10);
-  border-color: var(--white-20);
 }
 
 .wallet-network-card.has-balance {

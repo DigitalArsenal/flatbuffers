@@ -4197,6 +4197,85 @@ details[open] .collapse-icon {
   font-weight: 500;
 }
 
+/* New crypto specs grid */
+.crypto-specs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .crypto-specs-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 500px) {
+  .crypto-specs-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.crypto-spec-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px 16px;
+  background: linear-gradient(135deg, var(--white-05) 0%, var(--white-03) 100%);
+  border: 1px solid var(--white-10);
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.crypto-spec-card:hover {
+  background: linear-gradient(135deg, var(--white-08) 0%, var(--white-05) 100%);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.crypto-spec-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.crypto-spec-icon svg {
+  color: white;
+}
+
+.crypto-spec-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.crypto-spec-value {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--white-90);
+}
+
+.crypto-spec-value a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.crypto-spec-value a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
 .spec-value.fips-indicator {
   display: flex;
   align-items: center;

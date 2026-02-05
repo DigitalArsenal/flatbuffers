@@ -1413,6 +1413,34 @@
               This view is valid until the next <code>pushBytes()</code> call that overwrites the ring buffer slot.
             </div>
           </div>
+
+          <!-- Live Hexdump Visualization -->
+          <div class="hexdump-section">
+            <h5 class="hexdump-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="18" rx="2"/>
+                <line x1="2" y1="9" x2="22" y2="9"/>
+              </svg>
+              Linear Memory Hexdump
+            </h5>
+            <div id="hexdump-container" class="hexdump-container">
+              <div class="hexdump-header">
+                <span class="hex-col offset-col">Offset</span>
+                <span class="hex-col bytes-col">00 01 02 03 04 05 06 07 &nbsp;08 09 0A 0B 0C 0D 0E 0F</span>
+                <span class="hex-col parsed-col">Parsed</span>
+              </div>
+              <div id="hexdump-output" class="hexdump-output">
+                <div class="hexdump-placeholder">Push messages to the dispatcher to see the memory layout here</div>
+              </div>
+            </div>
+            <div class="hexdump-legend">
+              <span class="legend-item"><span class="legend-swatch" style="background: rgba(239, 68, 68, 0.3)"></span> Monster (MONS)</span>
+              <span class="legend-item"><span class="legend-swatch" style="background: rgba(59, 130, 246, 0.3)"></span> Weapon (WEAP)</span>
+              <span class="legend-item"><span class="legend-swatch" style="background: rgba(139, 92, 246, 0.3)"></span> Galaxy (GALX)</span>
+              <span class="legend-item"><span class="legend-swatch" style="background: rgba(251, 191, 36, 0.3)"></span> Size Prefix</span>
+              <span class="legend-item"><span class="legend-swatch" style="background: rgba(52, 211, 153, 0.3)"></span> File ID</span>
+            </div>
+          </div>
         </div>
 
         <!-- Initialization Example -->
@@ -1713,7 +1741,9 @@ table Entity {
   health:int;
   mana:int;
   name:string;  // Fixed-length if string length is set
-}</textarea>
+}
+
+root_type Entity;</textarea>
               </div>
               <div class="pane-footer">
                 <div class="aligned-options">
@@ -2026,19 +2056,20 @@ class EphemerisReader {
             <div class="runtime-features">
               <span class="feature-tag">Zero dependencies</span>
               <span class="feature-tag">CGo-free</span>
+              <span class="feature-tag embedded-tag">Embedded Runtime</span>
             </div>
             <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="go-bindings">
+              <button class="glass-btn small primary" data-download="go">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Download
+                Runtime .zip
               </button>
               <a href="docs-html/go.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">go get github.com/tetratelabs/wazero</code>
+            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
           <!-- Python Card -->
@@ -2050,23 +2081,24 @@ class EphemerisReader {
                 <span class="runtime-engine">wasmer / wasmtime</span>
               </div>
             </div>
-            <p>Run WASM modules with wasmer-python or wasmtime</p>
+            <p>FlatBuffers Python runtime with type hints</p>
             <div class="runtime-features">
-              <span class="feature-tag">PyPI ready</span>
               <span class="feature-tag">Type hints</span>
+              <span class="feature-tag">Pure Python</span>
+              <span class="feature-tag embedded-tag">Embedded Runtime</span>
             </div>
             <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="python-bindings">
+              <button class="glass-btn small primary" data-download="python">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Download
+                Runtime .zip
               </button>
               <a href="docs-html/python.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">pip install wasmer wasmer-compiler-cranelift</code>
+            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
           <!-- Rust Card -->
@@ -2078,23 +2110,24 @@ class EphemerisReader {
                 <span class="runtime-engine">wasmer</span>
               </div>
             </div>
-            <p>Native Rust bindings with wasmer crate</p>
+            <p>FlatBuffers Rust crate source with no_std support</p>
             <div class="runtime-features">
               <span class="feature-tag">no_std support</span>
               <span class="feature-tag">Memory safe</span>
+              <span class="feature-tag embedded-tag">Embedded Runtime</span>
             </div>
             <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="rust-bindings">
+              <button class="glass-btn small primary" data-download="rust">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Download
+                Runtime .zip
               </button>
               <a href="docs-html/rust.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">cargo add wasmer</code>
+            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
           <!-- Java Card -->
@@ -2110,19 +2143,20 @@ class EphemerisReader {
             <div class="runtime-features">
               <span class="feature-tag">Pure Java</span>
               <span class="feature-tag">JNI-free</span>
+              <span class="feature-tag embedded-tag">Embedded Runtime</span>
             </div>
             <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="java-bindings">
+              <button class="glass-btn small primary" data-download="java">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Download
+                Runtime .zip
               </button>
               <a href="docs-html/java.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">com.dylibso.chicory:runtime:1.5.3</code>
+            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
           <!-- C# Card -->
@@ -2134,23 +2168,24 @@ class EphemerisReader {
                 <span class="runtime-engine">Wasmtime</span>
               </div>
             </div>
-            <p>.NET 6+ support via Wasmtime NuGet package</p>
+            <p>.NET 6+ FlatBuffers runtime library</p>
             <div class="runtime-features">
               <span class="feature-tag">.NET 6+</span>
               <span class="feature-tag">NuGet</span>
+              <span class="feature-tag embedded-tag">Embedded Runtime</span>
             </div>
             <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="csharp-bindings">
+              <button class="glass-btn small primary" data-download="csharp">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Download
+                Runtime .zip
               </button>
               <a href="docs-html/csharp.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">dotnet add package Wasmtime</code>
+            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
           <!-- Swift Card -->
@@ -2162,475 +2197,667 @@ class EphemerisReader {
                 <span class="runtime-engine">WasmKit</span>
               </div>
             </div>
-            <p>Swift Package Manager compatible WASM runtime</p>
+            <p>Swift FlatBuffers runtime for iOS/macOS</p>
             <div class="runtime-features">
               <span class="feature-tag">SPM</span>
               <span class="feature-tag">iOS/macOS</span>
+              <span class="feature-tag embedded-tag">Embedded Runtime</span>
             </div>
             <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="swift-bindings">
+              <button class="glass-btn small primary" data-download="swift">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Download
+                Runtime .zip
               </button>
               <a href="docs-html/swift.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">.package(url: "WasmKit.git")</code>
+            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
-          <!-- Node.js Card -->
+          <!-- TypeScript / Node.js Card -->
           <div class="runtime-card" data-lang="nodejs">
             <div class="runtime-header">
-              <div class="runtime-icon ts">JS</div>
+              <div class="runtime-icon ts">TS</div>
               <div class="runtime-meta">
-                <h4>Node.js</h4>
+                <h4>TypeScript / Node.js</h4>
                 <span class="runtime-engine">V8 (native)</span>
               </div>
             </div>
-            <p>Native WebAssembly support in Node.js 16+</p>
+            <p>FlatBuffers TypeScript runtime for Node.js and bundlers</p>
             <div class="runtime-features">
               <span class="feature-tag">Native V8</span>
               <span class="feature-tag">ESM/CJS</span>
+              <span class="feature-tag embedded-tag">Embedded Runtime</span>
             </div>
             <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="nodejs-bindings">
+              <button class="glass-btn small primary" data-download="ts">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Download
+                Runtime .zip
               </button>
               <a href="docs-html/nodejs.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">npm install flatc-wasm</code>
+            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
 
-          <!-- Browser Card -->
-          <div class="runtime-card" data-lang="browser">
+          <!-- C++ Card -->
+          <div class="runtime-card" data-lang="cpp">
             <div class="runtime-header">
-              <div class="runtime-icon wasm">WA</div>
+              <div class="runtime-icon wasm">C++</div>
               <div class="runtime-meta">
-                <h4>Browser</h4>
-                <span class="runtime-engine">V8/SpiderMonkey/JSC</span>
+                <h4>C++</h4>
+                <span class="runtime-engine">Headers</span>
               </div>
             </div>
-            <p>Works in all modern browsers with WebAssembly</p>
+            <p>FlatBuffers C++ header-only runtime library</p>
             <div class="runtime-features">
-              <span class="feature-tag">All browsers</span>
-              <span class="feature-tag">Vite/Webpack</span>
+              <span class="feature-tag">Header-only</span>
+              <span class="feature-tag">Zero-copy</span>
+              <span class="feature-tag embedded-tag">Embedded Runtime</span>
             </div>
             <div class="runtime-actions">
-              <button class="glass-btn small primary" data-download="browser-bindings">
+              <button class="glass-btn small primary" data-download="cpp">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Download
+                Runtime .zip
               </button>
-              <a href="docs-html/browser.html" class="glass-btn small">Docs</a>
+              <a href="docs-html/README.html" class="glass-btn small">Docs</a>
             </div>
-            <code class="install-cmd">npm install flatc-wasm</code>
+            <code class="install-cmd">Generated locally from WASM — no network needed</code>
           </div>
+        </div>
+
+        <div class="compliance-note" style="margin-top: 1rem;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 16v-4M12 8h.01"/>
+          </svg>
+          <span><strong>Embedded Runtimes:</strong> All FlatBuffers runtime libraries are Brotli-compressed and embedded directly in the WASM binary. Downloads are generated locally in your browser — no network requests, no package manager required.</span>
         </div>
       </div>
 
       <!-- Streaming API Examples -->
       <div class="glass-card">
-        <h3 class="card-subtitle">Streaming API Examples</h3>
-        <p class="card-desc">FlatBuffers supports streaming multiple messages in a single buffer. Here's how to read them in each language:</p>
+        <h3 class="card-subtitle">Encrypted Streaming API</h3>
+        <p class="card-desc">Complete producer/consumer streaming with per-field encryption. The producer sends an encryption header first, then encrypted size-prefixed messages. The consumer uses the header to decrypt, with brute force fallback for unknown record indices.</p>
 
-        <div class="streaming-examples">
-          <!-- TypeScript/JavaScript -->
-          <div class="streaming-example">
-            <div class="streaming-lang-header">
-              <span class="lang-badge ts">TypeScript / JavaScript</span>
-            </div>
-            <pre class="code-block"><code>import { ByteBuffer } from 'flatbuffers';
+        <!-- Language Tabs -->
+        <div class="streaming-lang-tabs">
+          <button class="streaming-tab active" data-stream-lang="ts">TypeScript</button>
+          <button class="streaming-tab" data-stream-lang="go">Go</button>
+          <button class="streaming-tab" data-stream-lang="python">Python</button>
+          <button class="streaming-tab" data-stream-lang="rust">Rust</button>
+          <button class="streaming-tab" data-stream-lang="java">Java</button>
+          <button class="streaming-tab" data-stream-lang="csharp">C#</button>
+          <button class="streaming-tab" data-stream-lang="swift">Swift</button>
+        </div>
+
+        <!-- TypeScript -->
+        <div class="streaming-tab-content active" data-stream-lang="ts">
+          <div class="producer-consumer-layout">
+            <div class="producer-panel">
+              <div class="panel-label producer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
+                Producer (Sender)
+              </div>
+              <pre class="code-block"><code>import { EncryptionContext } from 'flatc-wasm';
+import { Builder } from 'flatbuffers';
 import { Monster } from './monster_generated';
 
-// Assume `buffer` contains multiple size-prefixed FlatBuffer messages
-const data = new Uint8Array(buffer);
-const messages: Monster[] = [];
-let offset = 0;
+// 1. Create encryption context with receiver's public key
+const ctx = EncryptionContext.forEncryption(bobPublicKey, {
+  algorithm: 'x25519',
+  context: 'monster-stream-v1'
+});
 
-// Read entire buffer of messages
-while (offset &lt; data.length) {
-  const size = new DataView(data.buffer, offset).getUint32(0, true);
-  const bb = new ByteBuffer(data.slice(offset + 4, offset + 4 + size));
-  messages.push(Monster.getRootAsMonster(bb));
-  offset += 4 + size;
+// 2. Get the encryption header (sent FIRST to consumer)
+const header = ctx.getHeaderJSON();
+// { ephemeral_key: "a1b2c3...", nonce_start: "d4e5f6...",
+//   algorithm: 0, context: "monster-stream-v1" }
+sendToConsumer(JSON.stringify(header));
+
+// 3. Produce encrypted messages
+for (let i = 0; i &lt; recordCount; i++) {
+  ctx.setRecordIndex(i);
+  const builder = new Builder(256);
+  // ... build Monster FlatBuffer ...
+  const buf = builder.finishSizePrefixed(monster);
+  const encrypted = ctx.encryptBuffer(builder.asUint8Array());
+  sendToConsumer(encrypted);
+}</code></pre>
+            </div>
+
+            <div class="data-flow-arrow">
+              <div class="flow-item header-flow">EncryptionHeader</div>
+              <svg class="flow-arrow" viewBox="0 0 60 24"><path d="M0 12 H50 M42 4 L54 12 L42 20" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <div class="flow-item msg-flow">Message 0 (encrypted)</div>
+              <svg class="flow-arrow" viewBox="0 0 60 24"><path d="M0 12 H50 M42 4 L54 12 L42 20" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <div class="flow-item msg-flow">Message 1 (encrypted)</div>
+              <svg class="flow-arrow" viewBox="0 0 60 24"><path d="M0 12 H50 M42 4 L54 12 L42 20" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <div class="flow-item msg-flow">Message N (encrypted)</div>
+            </div>
+
+            <div class="consumer-panel">
+              <div class="panel-label consumer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7 7 7-7"/></svg>
+                Consumer (Receiver)
+              </div>
+              <pre class="code-block"><code>import { EncryptionContext } from 'flatc-wasm';
+import { Monster } from './monster_generated';
+
+// 1. Receive the encryption header
+const header = JSON.parse(receiveFromProducer());
+const ctx = EncryptionContext.forDecryption(myPrivateKey, header);
+
+// 2. Decrypt messages with known record index
+function decryptMessage(encrypted, recordIndex) {
+  ctx.setRecordIndex(recordIndex);
+  return ctx.decryptBuffer(encrypted);
 }
 
-// Read latest message (last in buffer)
-function getLatestMessage(data: Uint8Array): Monster {
-  let offset = 0;
-  let lastOffset = 0;
-  while (offset &lt; data.length) {
-    lastOffset = offset;
-    const size = new DataView(data.buffer, offset).getUint32(0, true);
-    offset += 4 + size;
+// 3. Brute force fallback (unknown record index)
+function decryptWithRecovery(encrypted, maxAttempts = 1000) {
+  for (let i = 0; i &lt; maxAttempts; i++) {
+    ctx.setRecordIndex(i);
+    try {
+      const result = ctx.decryptBuffer(encrypted);
+      // Validate FlatBuffer structure (magic bytes / vtable)
+      const view = new DataView(result.buffer);
+      const rootOffset = view.getUint32(0, true);
+      if (rootOffset &lt; result.length) {
+        return { data: result, recordIndex: i };
+      }
+    } catch (e) { continue; }
   }
-  const size = new DataView(data.buffer, lastOffset).getUint32(0, true);
-  const bb = new ByteBuffer(data.slice(lastOffset + 4, lastOffset + 4 + size));
-  return Monster.getRootAsMonster(bb);
-}
-
-// Read arbitrary indexed message
-function getMessageAtIndex(data: Uint8Array, index: number): Monster | null {
-  let offset = 0;
-  let currentIndex = 0;
-  while (offset &lt; data.length) {
-    const size = new DataView(data.buffer, offset).getUint32(0, true);
-    if (currentIndex === index) {
-      const bb = new ByteBuffer(data.slice(offset + 4, offset + 4 + size));
-      return Monster.getRootAsMonster(bb);
-    }
-    offset += 4 + size;
-    currentIndex++;
-  }
-  return null;
+  throw new Error('Decryption failed: record index not found');
 }</code></pre>
-          </div>
-
-          <!-- Go -->
-          <div class="streaming-example">
-            <div class="streaming-lang-header">
-              <span class="lang-badge go">Go</span>
             </div>
-            <pre class="code-block"><code>import (
-    "encoding/binary"
-    flatbuffers "github.com/google/flatbuffers/go"
-    "myapp/Monster"
-)
-
-// Read entire buffer of messages
-func ReadAllMessages(data []byte) []*Monster.Monster {
-    var messages []*Monster.Monster
-    offset := 0
-    for offset &lt; len(data) {
-        size := binary.LittleEndian.Uint32(data[offset:])
-        msg := Monster.GetRootAsMonster(data[offset+4:offset+4+int(size)], 0)
-        messages = append(messages, msg)
-        offset += 4 + int(size)
-    }
-    return messages
-}
-
-// Read latest message
-func GetLatestMessage(data []byte) *Monster.Monster {
-    offset := 0
-    lastOffset := 0
-    for offset &lt; len(data) {
-        lastOffset = offset
-        size := binary.LittleEndian.Uint32(data[offset:])
-        offset += 4 + int(size)
-    }
-    size := binary.LittleEndian.Uint32(data[lastOffset:])
-    return Monster.GetRootAsMonster(data[lastOffset+4:lastOffset+4+int(size)], 0)
-}
-
-// Read arbitrary indexed message
-func GetMessageAtIndex(data []byte, index int) *Monster.Monster {
-    offset := 0
-    currentIndex := 0
-    for offset &lt; len(data) {
-        size := binary.LittleEndian.Uint32(data[offset:])
-        if currentIndex == index {
-            return Monster.GetRootAsMonster(data[offset+4:offset+4+int(size)], 0)
-        }
-        offset += 4 + int(size)
-        currentIndex++
-    }
-    return nil
-}</code></pre>
-          </div>
-
-          <!-- Python -->
-          <div class="streaming-example">
-            <div class="streaming-lang-header">
-              <span class="lang-badge py">Python</span>
-            </div>
-            <pre class="code-block"><code>import struct
-from Monster import Monster
-
-def read_all_messages(data: bytes) -> list:
-    """Read entire buffer of messages."""
-    messages = []
-    offset = 0
-    while offset &lt; len(data):
-        size = struct.unpack('&lt;I', data[offset:offset+4])[0]
-        msg = Monster.Monster.GetRootAs(data[offset+4:offset+4+size], 0)
-        messages.append(msg)
-        offset += 4 + size
-    return messages
-
-def get_latest_message(data: bytes):
-    """Read the latest (last) message in the buffer."""
-    offset = 0
-    last_offset = 0
-    while offset &lt; len(data):
-        last_offset = offset
-        size = struct.unpack('&lt;I', data[offset:offset+4])[0]
-        offset += 4 + size
-    size = struct.unpack('&lt;I', data[last_offset:last_offset+4])[0]
-    return Monster.Monster.GetRootAs(data[last_offset+4:last_offset+4+size], 0)
-
-def get_message_at_index(data: bytes, index: int):
-    """Read arbitrary indexed message."""
-    offset = 0
-    current_index = 0
-    while offset &lt; len(data):
-        size = struct.unpack('&lt;I', data[offset:offset+4])[0]
-        if current_index == index:
-            return Monster.Monster.GetRootAs(data[offset+4:offset+4+size], 0)
-        offset += 4 + size
-        current_index += 1
-    return None</code></pre>
-          </div>
-
-          <!-- Rust -->
-          <div class="streaming-example">
-            <div class="streaming-lang-header">
-              <span class="lang-badge rs">Rust</span>
-            </div>
-            <pre class="code-block"><code>use flatbuffers;
-use crate::monster_generated::Monster;
-
-/// Read entire buffer of messages
-fn read_all_messages(data: &amp;[u8]) -&gt; Vec&lt;Monster&gt; {
-    let mut messages = Vec::new();
-    let mut offset = 0;
-    while offset &lt; data.len() {
-        let size = u32::from_le_bytes(data[offset..offset+4].try_into().unwrap()) as usize;
-        let msg = flatbuffers::root::&lt;Monster&gt;(&amp;data[offset+4..offset+4+size]).unwrap();
-        messages.push(msg);
-        offset += 4 + size;
-    }
-    messages
-}
-
-/// Read latest message
-fn get_latest_message(data: &amp;[u8]) -&gt; Option&lt;Monster&gt; {
-    let mut offset = 0;
-    let mut last_offset = 0;
-    while offset &lt; data.len() {
-        last_offset = offset;
-        let size = u32::from_le_bytes(data[offset..offset+4].try_into().unwrap()) as usize;
-        offset += 4 + size;
-    }
-    let size = u32::from_le_bytes(data[last_offset..last_offset+4].try_into().unwrap()) as usize;
-    flatbuffers::root::&lt;Monster&gt;(&amp;data[last_offset+4..last_offset+4+size]).ok()
-}
-
-/// Read arbitrary indexed message
-fn get_message_at_index(data: &amp;[u8], index: usize) -&gt; Option&lt;Monster&gt; {
-    let mut offset = 0;
-    let mut current_index = 0;
-    while offset &lt; data.len() {
-        let size = u32::from_le_bytes(data[offset..offset+4].try_into().unwrap()) as usize;
-        if current_index == index {
-            return flatbuffers::root::&lt;Monster&gt;(&amp;data[offset+4..offset+4+size]).ok();
-        }
-        offset += 4 + size;
-        current_index += 1;
-    }
-    None
-}</code></pre>
-          </div>
-
-          <!-- Java -->
-          <div class="streaming-example">
-            <div class="streaming-lang-header">
-              <span class="lang-badge java">Java</span>
-            </div>
-            <pre class="code-block"><code>import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.ArrayList;
-import java.util.List;
-import Monster;
-
-public class StreamingReader {
-    // Read entire buffer of messages
-    public static List&lt;Monster&gt; readAllMessages(byte[] data) {
-        List&lt;Monster&gt; messages = new ArrayList&lt;&gt;();
-        int offset = 0;
-        while (offset &lt; data.length) {
-            int size = ByteBuffer.wrap(data, offset, 4)
-                .order(ByteOrder.LITTLE_ENDIAN).getInt();
-            ByteBuffer bb = ByteBuffer.wrap(data, offset + 4, size);
-            messages.add(Monster.getRootAsMonster(bb));
-            offset += 4 + size;
-        }
-        return messages;
-    }
-
-    // Read latest message
-    public static Monster getLatestMessage(byte[] data) {
-        int offset = 0;
-        int lastOffset = 0;
-        while (offset &lt; data.length) {
-            lastOffset = offset;
-            int size = ByteBuffer.wrap(data, offset, 4)
-                .order(ByteOrder.LITTLE_ENDIAN).getInt();
-            offset += 4 + size;
-        }
-        int size = ByteBuffer.wrap(data, lastOffset, 4)
-            .order(ByteOrder.LITTLE_ENDIAN).getInt();
-        ByteBuffer bb = ByteBuffer.wrap(data, lastOffset + 4, size);
-        return Monster.getRootAsMonster(bb);
-    }
-
-    // Read arbitrary indexed message
-    public static Monster getMessageAtIndex(byte[] data, int index) {
-        int offset = 0;
-        int currentIndex = 0;
-        while (offset &lt; data.length) {
-            int size = ByteBuffer.wrap(data, offset, 4)
-                .order(ByteOrder.LITTLE_ENDIAN).getInt();
-            if (currentIndex == index) {
-                ByteBuffer bb = ByteBuffer.wrap(data, offset + 4, size);
-                return Monster.getRootAsMonster(bb);
-            }
-            offset += 4 + size;
-            currentIndex++;
-        }
-        return null;
-    }
-}</code></pre>
-          </div>
-
-          <!-- C# -->
-          <div class="streaming-example">
-            <div class="streaming-lang-header">
-              <span class="lang-badge cs">C#</span>
-            </div>
-            <pre class="code-block"><code>using FlatBuffers;
-using System;
-using System.Collections.Generic;
-
-public static class StreamingReader
-{
-    // Read entire buffer of messages
-    public static List&lt;Monster&gt; ReadAllMessages(byte[] data)
-    {
-        var messages = new List&lt;Monster&gt;();
-        int offset = 0;
-        while (offset &lt; data.Length)
-        {
-            int size = BitConverter.ToInt32(data, offset);
-            var bb = new ByteBuffer(data, offset + 4);
-            messages.Add(Monster.GetRootAsMonster(bb));
-            offset += 4 + size;
-        }
-        return messages;
-    }
-
-    // Read latest message
-    public static Monster GetLatestMessage(byte[] data)
-    {
-        int offset = 0;
-        int lastOffset = 0;
-        while (offset &lt; data.Length)
-        {
-            lastOffset = offset;
-            int size = BitConverter.ToInt32(data, offset);
-            offset += 4 + size;
-        }
-        int lastSize = BitConverter.ToInt32(data, lastOffset);
-        var bb = new ByteBuffer(data, lastOffset + 4);
-        return Monster.GetRootAsMonster(bb);
-    }
-
-    // Read arbitrary indexed message
-    public static Monster? GetMessageAtIndex(byte[] data, int index)
-    {
-        int offset = 0;
-        int currentIndex = 0;
-        while (offset &lt; data.Length)
-        {
-            int size = BitConverter.ToInt32(data, offset);
-            if (currentIndex == index)
-            {
-                var bb = new ByteBuffer(data, offset + 4);
-                return Monster.GetRootAsMonster(bb);
-            }
-            offset += 4 + size;
-            currentIndex++;
-        }
-        return null;
-    }
-}</code></pre>
-          </div>
-
-          <!-- Swift -->
-          <div class="streaming-example">
-            <div class="streaming-lang-header">
-              <span class="lang-badge swift">Swift</span>
-            </div>
-            <pre class="code-block"><code>import FlatBuffers
-
-class StreamingReader {
-    // Read entire buffer of messages
-    static func readAllMessages(data: Data) -&gt; [Monster] {
-        var messages: [Monster] = []
-        var offset = 0
-        while offset &lt; data.count {
-            let size = data.withUnsafeBytes { ptr in
-                ptr.load(fromByteOffset: offset, as: UInt32.self).littleEndian
-            }
-            let slice = data[offset+4..&lt;offset+4+Int(size)]
-            var bb = ByteBuffer(data: slice)
-            messages.append(Monster.getRootAsMonster(bb: &amp;bb))
-            offset += 4 + Int(size)
-        }
-        return messages
-    }
-
-    // Read latest message
-    static func getLatestMessage(data: Data) -&gt; Monster? {
-        var offset = 0
-        var lastOffset = 0
-        while offset &lt; data.count {
-            lastOffset = offset
-            let size = data.withUnsafeBytes { ptr in
-                ptr.load(fromByteOffset: offset, as: UInt32.self).littleEndian
-            }
-            offset += 4 + Int(size)
-        }
-        let size = data.withUnsafeBytes { ptr in
-            ptr.load(fromByteOffset: lastOffset, as: UInt32.self).littleEndian
-        }
-        let slice = data[lastOffset+4..&lt;lastOffset+4+Int(size)]
-        var bb = ByteBuffer(data: slice)
-        return Monster.getRootAsMonster(bb: &amp;bb)
-    }
-
-    // Read arbitrary indexed message
-    static func getMessageAtIndex(data: Data, index: Int) -&gt; Monster? {
-        var offset = 0
-        var currentIndex = 0
-        while offset &lt; data.count {
-            let size = data.withUnsafeBytes { ptr in
-                ptr.load(fromByteOffset: offset, as: UInt32.self).littleEndian
-            }
-            if currentIndex == index {
-                let slice = data[offset+4..&lt;offset+4+Int(size)]
-                var bb = ByteBuffer(data: slice)
-                return Monster.getRootAsMonster(bb: &amp;bb)
-            }
-            offset += 4 + Int(size)
-            currentIndex += 1
-        }
-        return nil
-    }
-}</code></pre>
           </div>
         </div>
+
+        <!-- Go -->
+        <div class="streaming-tab-content" data-stream-lang="go">
+          <div class="producer-consumer-layout">
+            <div class="producer-panel">
+              <div class="panel-label producer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
+                Producer (Sender)
+              </div>
+              <pre class="code-block"><code>import (
+    "encoding/binary"
+    "encoding/json"
+    flatbuffers "github.com/google/flatbuffers/go"
+)
+
+// 1. Initialize WASM module and create encryption context
+module := loadWasmModule("flatc-wasm.wasm")
+ctx := module.EncryptionContextForEncryption(bobPubKey, "x25519", "stream-v1")
+
+// 2. Send encryption header first
+headerJSON := ctx.GetHeaderJSON()
+sendToConsumer(headerJSON)
+
+// 3. Produce encrypted size-prefixed messages
+for i := 0; i &lt; recordCount; i++ {
+    ctx.SetRecordIndex(i)
+    builder := flatbuffers.NewBuilder(256)
+    // ... build Monster FlatBuffer ...
+    builder.FinishSizePrefixed(monster)
+    buf := builder.FinishedBytes()
+    encrypted := ctx.EncryptBuffer(buf)
+    sendToConsumer(encrypted)
+}</code></pre>
+            </div>
+
+            <div class="data-flow-arrow">
+              <div class="flow-item header-flow">EncryptionHeader</div>
+              <svg class="flow-arrow" viewBox="0 0 60 24"><path d="M0 12 H50 M42 4 L54 12 L42 20" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <div class="flow-item msg-flow">Encrypted Messages</div>
+            </div>
+
+            <div class="consumer-panel">
+              <div class="panel-label consumer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7 7 7-7"/></svg>
+                Consumer (Receiver)
+              </div>
+              <pre class="code-block"><code>import (
+    "encoding/binary"
+    "encoding/json"
+)
+
+// 1. Receive encryption header
+var header EncryptionHeader
+json.Unmarshal(receiveFromProducer(), &amp;header)
+ctx := module.EncryptionContextForDecryption(myPrivKey, header)
+
+// 2. Decrypt with known index
+func decryptMessage(ctx *EncryptionContext, data []byte, idx int) []byte {
+    ctx.SetRecordIndex(idx)
+    return ctx.DecryptBuffer(data)
+}
+
+// 3. Brute force fallback
+func decryptWithRecovery(ctx *EncryptionContext, data []byte) ([]byte, int) {
+    for i := 0; i &lt; 1000; i++ {
+        ctx.SetRecordIndex(i)
+        result := ctx.DecryptBuffer(data)
+        if result != nil &amp;&amp; isValidFlatBuffer(result) {
+            return result, i
+        }
+    }
+    return nil, -1
+}</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Python -->
+        <div class="streaming-tab-content" data-stream-lang="python">
+          <div class="producer-consumer-layout">
+            <div class="producer-panel">
+              <div class="panel-label producer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
+                Producer (Sender)
+              </div>
+              <pre class="code-block"><code>import struct, json
+from flatc_wasm import EncryptionContext
+
+# 1. Create encryption context
+ctx = EncryptionContext.for_encryption(
+    bob_public_key, algorithm="x25519", context="stream-v1"
+)
+
+# 2. Send encryption header first
+header = ctx.get_header_json()
+send_to_consumer(json.dumps(header))
+
+# 3. Produce encrypted messages
+for i in range(record_count):
+    ctx.set_record_index(i)
+    buf = build_monster_flatbuffer(data[i])  # size-prefixed
+    encrypted = ctx.encrypt_buffer(buf)
+    send_to_consumer(encrypted)</code></pre>
+            </div>
+
+            <div class="data-flow-arrow">
+              <div class="flow-item header-flow">EncryptionHeader</div>
+              <svg class="flow-arrow" viewBox="0 0 60 24"><path d="M0 12 H50 M42 4 L54 12 L42 20" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <div class="flow-item msg-flow">Encrypted Messages</div>
+            </div>
+
+            <div class="consumer-panel">
+              <div class="panel-label consumer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7 7 7-7"/></svg>
+                Consumer (Receiver)
+              </div>
+              <pre class="code-block"><code>import struct, json
+from flatc_wasm import EncryptionContext
+
+# 1. Receive encryption header
+header = json.loads(receive_from_producer())
+ctx = EncryptionContext.for_decryption(my_private_key, header)
+
+# 2. Decrypt with known index
+def decrypt_message(ctx, data, index):
+    ctx.set_record_index(index)
+    return ctx.decrypt_buffer(data)
+
+# 3. Brute force fallback
+def decrypt_with_recovery(ctx, data, max_attempts=1000):
+    for i in range(max_attempts):
+        ctx.set_record_index(i)
+        try:
+            result = ctx.decrypt_buffer(data)
+            if is_valid_flatbuffer(result):
+                return result, i
+        except Exception:
+            continue
+    raise RuntimeError("Record index not found")</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rust -->
+        <div class="streaming-tab-content" data-stream-lang="rust">
+          <div class="producer-consumer-layout">
+            <div class="producer-panel">
+              <div class="panel-label producer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
+                Producer (Sender)
+              </div>
+              <pre class="code-block"><code>use flatc_wasm::EncryptionContext;
+
+// 1. Create encryption context
+let ctx = EncryptionContext::for_encryption(
+    &amp;bob_public_key, "x25519", "stream-v1"
+)?;
+
+// 2. Send header first
+let header = ctx.get_header_json();
+send_to_consumer(header.as_bytes());
+
+// 3. Produce encrypted messages
+for i in 0..record_count {
+    ctx.set_record_index(i);
+    let buf = build_monster(i); // size-prefixed
+    let encrypted = ctx.encrypt_buffer(&amp;buf)?;
+    send_to_consumer(&amp;encrypted);
+}</code></pre>
+            </div>
+
+            <div class="data-flow-arrow">
+              <div class="flow-item header-flow">EncryptionHeader</div>
+              <svg class="flow-arrow" viewBox="0 0 60 24"><path d="M0 12 H50 M42 4 L54 12 L42 20" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <div class="flow-item msg-flow">Encrypted Messages</div>
+            </div>
+
+            <div class="consumer-panel">
+              <div class="panel-label consumer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7 7 7-7"/></svg>
+                Consumer (Receiver)
+              </div>
+              <pre class="code-block"><code>use flatc_wasm::EncryptionContext;
+
+// 1. Receive header
+let header: EncryptionHeader = serde_json::from_slice(
+    &amp;receive_from_producer()
+)?;
+let ctx = EncryptionContext::for_decryption(
+    &amp;my_private_key, &amp;header
+)?;
+
+// 2. Decrypt with known index
+fn decrypt(ctx: &amp;mut EncryptionContext, data: &amp;[u8], idx: u32)
+    -&gt; Result&lt;Vec&lt;u8&gt;&gt; {
+    ctx.set_record_index(idx);
+    ctx.decrypt_buffer(data)
+}
+
+// 3. Brute force fallback
+fn decrypt_recover(ctx: &amp;mut EncryptionContext, data: &amp;[u8])
+    -&gt; Result&lt;(Vec&lt;u8&gt;, u32)&gt; {
+    for i in 0..1000 {
+        ctx.set_record_index(i);
+        if let Ok(result) = ctx.decrypt_buffer(data) {
+            if is_valid_flatbuffer(&amp;result) {
+                return Ok((result, i));
+            }
+        }
+    }
+    Err(anyhow!("Record index not found"))
+}</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Java -->
+        <div class="streaming-tab-content" data-stream-lang="java">
+          <div class="producer-consumer-layout">
+            <div class="producer-panel">
+              <div class="panel-label producer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
+                Producer (Sender)
+              </div>
+              <pre class="code-block"><code>import com.google.flatbuffers.FlatBufferBuilder;
+
+// 1. Create encryption context
+EncryptionContext ctx = EncryptionContext
+    .forEncryption(bobPublicKey, "x25519", "stream-v1");
+
+// 2. Send header first
+String headerJson = ctx.getHeaderJSON();
+sendToConsumer(headerJson.getBytes());
+
+// 3. Produce encrypted messages
+for (int i = 0; i &lt; recordCount; i++) {
+    ctx.setRecordIndex(i);
+    FlatBufferBuilder builder = new FlatBufferBuilder(256);
+    // ... build Monster ...
+    builder.finishSizePrefixed(monster);
+    byte[] encrypted = ctx.encryptBuffer(builder.sizedByteArray());
+    sendToConsumer(encrypted);
+}</code></pre>
+            </div>
+
+            <div class="data-flow-arrow">
+              <div class="flow-item header-flow">EncryptionHeader</div>
+              <svg class="flow-arrow" viewBox="0 0 60 24"><path d="M0 12 H50 M42 4 L54 12 L42 20" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <div class="flow-item msg-flow">Encrypted Messages</div>
+            </div>
+
+            <div class="consumer-panel">
+              <div class="panel-label consumer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7 7 7-7"/></svg>
+                Consumer (Receiver)
+              </div>
+              <pre class="code-block"><code>// 1. Receive header
+EncryptionHeader header = EncryptionHeader
+    .fromJSON(new String(receiveFromProducer()));
+EncryptionContext ctx = EncryptionContext
+    .forDecryption(myPrivateKey, header);
+
+// 2. Decrypt with known index
+byte[] decrypt(EncryptionContext ctx, byte[] data, int idx) {
+    ctx.setRecordIndex(idx);
+    return ctx.decryptBuffer(data);
+}
+
+// 3. Brute force fallback
+DecryptResult decryptRecover(EncryptionContext ctx, byte[] data) {
+    for (int i = 0; i &lt; 1000; i++) {
+        ctx.setRecordIndex(i);
+        try {
+            byte[] result = ctx.decryptBuffer(data);
+            if (isValidFlatBuffer(result))
+                return new DecryptResult(result, i);
+        } catch (Exception e) { continue; }
+    }
+    throw new RuntimeException("Record index not found");
+}</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- C# -->
+        <div class="streaming-tab-content" data-stream-lang="csharp">
+          <div class="producer-consumer-layout">
+            <div class="producer-panel">
+              <div class="panel-label producer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
+                Producer (Sender)
+              </div>
+              <pre class="code-block"><code>using FlatBuffers;
+
+// 1. Create encryption context
+var ctx = EncryptionContext.ForEncryption(
+    bobPublicKey, "x25519", "stream-v1");
+
+// 2. Send header first
+string headerJson = ctx.GetHeaderJSON();
+SendToConsumer(Encoding.UTF8.GetBytes(headerJson));
+
+// 3. Produce encrypted messages
+for (int i = 0; i &lt; recordCount; i++) {
+    ctx.SetRecordIndex(i);
+    var builder = new FlatBufferBuilder(256);
+    // ... build Monster ...
+    builder.FinishSizePrefixed(monster);
+    var encrypted = ctx.EncryptBuffer(builder.SizedByteArray());
+    SendToConsumer(encrypted);
+}</code></pre>
+            </div>
+
+            <div class="data-flow-arrow">
+              <div class="flow-item header-flow">EncryptionHeader</div>
+              <svg class="flow-arrow" viewBox="0 0 60 24"><path d="M0 12 H50 M42 4 L54 12 L42 20" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <div class="flow-item msg-flow">Encrypted Messages</div>
+            </div>
+
+            <div class="consumer-panel">
+              <div class="panel-label consumer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7 7 7-7"/></svg>
+                Consumer (Receiver)
+              </div>
+              <pre class="code-block"><code>// 1. Receive header
+var header = EncryptionHeader.FromJSON(
+    Encoding.UTF8.GetString(ReceiveFromProducer()));
+var ctx = EncryptionContext.ForDecryption(
+    myPrivateKey, header);
+
+// 2. Decrypt with known index
+byte[] Decrypt(EncryptionContext ctx, byte[] data, int idx) {
+    ctx.SetRecordIndex(idx);
+    return ctx.DecryptBuffer(data);
+}
+
+// 3. Brute force fallback
+(byte[] data, int idx) DecryptRecover(
+    EncryptionContext ctx, byte[] data) {
+    for (int i = 0; i &lt; 1000; i++) {
+        ctx.SetRecordIndex(i);
+        try {
+            var result = ctx.DecryptBuffer(data);
+            if (IsValidFlatBuffer(result))
+                return (result, i);
+        } catch { continue; }
+    }
+    throw new Exception("Record index not found");
+}</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Swift -->
+        <div class="streaming-tab-content" data-stream-lang="swift">
+          <div class="producer-consumer-layout">
+            <div class="producer-panel">
+              <div class="panel-label producer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7-7 7 7"/></svg>
+                Producer (Sender)
+              </div>
+              <pre class="code-block"><code>import FlatBuffers
+
+// 1. Create encryption context
+let ctx = try EncryptionContext.forEncryption(
+    publicKey: bobPublicKey,
+    algorithm: .x25519,
+    context: "stream-v1"
+)
+
+// 2. Send header first
+let header = ctx.getHeaderJSON()
+sendToConsumer(header.data(using: .utf8)!)
+
+// 3. Produce encrypted messages
+for i in 0..&lt;recordCount {
+    ctx.setRecordIndex(i)
+    var builder = FlatBufferBuilder(initialSize: 256)
+    // ... build Monster ...
+    builder.finishSizePrefixed(offset: monster)
+    let encrypted = try ctx.encryptBuffer(builder.sizedByteArray)
+    sendToConsumer(encrypted)
+}</code></pre>
+            </div>
+
+            <div class="data-flow-arrow">
+              <div class="flow-item header-flow">EncryptionHeader</div>
+              <svg class="flow-arrow" viewBox="0 0 60 24"><path d="M0 12 H50 M42 4 L54 12 L42 20" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+              <div class="flow-item msg-flow">Encrypted Messages</div>
+            </div>
+
+            <div class="consumer-panel">
+              <div class="panel-label consumer-label">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7 7 7-7"/></svg>
+                Consumer (Receiver)
+              </div>
+              <pre class="code-block"><code>import FlatBuffers
+
+// 1. Receive header
+let headerData = receiveFromProducer()
+let header = try EncryptionHeader.fromJSON(headerData)
+let ctx = try EncryptionContext.forDecryption(
+    privateKey: myPrivateKey, header: header)
+
+// 2. Decrypt with known index
+func decrypt(_ ctx: EncryptionContext,
+             _ data: Data, index: Int) throws -&gt; Data {
+    ctx.setRecordIndex(index)
+    return try ctx.decryptBuffer(data)
+}
+
+// 3. Brute force fallback
+func decryptRecover(_ ctx: EncryptionContext,
+                    _ data: Data) throws -&gt; (Data, Int) {
+    for i in 0..&lt;1000 {
+        ctx.setRecordIndex(i)
+        if let result = try? ctx.decryptBuffer(data),
+           isValidFlatBuffer(result) {
+            return (result, i)
+        }
+    }
+    throw StreamError.recordIndexNotFound
+}</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Encryption Header Reference -->
+      <div class="glass-card">
+        <h3 class="card-subtitle">Encryption Header Fields</h3>
+        <p class="card-desc">The encryption header is sent once at the start of a stream. Without it, the consumer cannot decrypt any messages.</p>
+        <table class="glass-table">
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Type</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>ephemeral_public_key</code></td>
+              <td>bytes</td>
+              <td>Sender's ephemeral public key for ECDH key exchange. Combined with receiver's private key to derive the shared encryption key.</td>
+            </tr>
+            <tr>
+              <td><code>nonce_start</code></td>
+              <td>12 bytes</td>
+              <td>Random starting nonce. Each field's nonce is derived as: <code>nonce_start + (recordIndex * 65536 + fieldId)</code>. Sent once, not per-message.</td>
+            </tr>
+            <tr>
+              <td><code>algorithm</code></td>
+              <td>enum</td>
+              <td>Key exchange algorithm: 0 = X25519, 1 = secp256k1, 2 = P-256 (FIPS), 3 = P-384</td>
+            </tr>
+            <tr>
+              <td><code>context</code></td>
+              <td>string</td>
+              <td>Application context mixed into HKDF key derivation. Must match between producer and consumer.</td>
+            </tr>
+            <tr>
+              <td><code>timestamp</code></td>
+              <td>uint64</td>
+              <td>Session creation time (Unix ms). Used for key rotation and session expiry.</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="compliance-note" style="margin-top: 1rem;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <span><strong>Nonce Safety:</strong> The nonce_start ensures every field in every record gets a unique nonce. Reusing a nonce with AES-256-CTR leaks the XOR of two plaintexts. The incrementing scheme guarantees uniqueness for up to 65,536 fields per record across billions of records.</span>
+        </div>
+      </div>
 
         <div class="compliance-note" style="margin-top: 1rem;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2640,32 +2867,6 @@ class StreamingReader {
           <span><strong>Size-Prefixed Format:</strong> Each message is prefixed with a 4-byte little-endian size. Use <code>FinishSizePrefixed</code> when building to create streamable buffers.</span>
         </div>
       </div>
-
-      <!-- Core Module Card -->
-      <div class="glass-card">
-        <h3 class="card-subtitle">Core WASM Module</h3>
-        <p class="card-desc">The npm package includes everything you need:</p>
-
-        <div class="core-downloads">
-          <div class="core-download-item">
-            <div class="download-icon enc">WA</div>
-            <div class="core-download-info">
-              <h4>flatc-encryption.wasm</h4>
-              <p>Core encryption module compiled from Crypto++ (~1.2MB)</p>
-            </div>
-            <button id="download-core-wasm" class="glass-btn primary">View on npm</button>
-          </div>
-          <div class="core-download-item">
-            <div class="download-icon ts">JS</div>
-            <div class="core-download-info">
-              <h4>encryption.mjs</h4>
-              <p>JavaScript loader with TypeScript definitions</p>
-            </div>
-            <button id="download-core-loader" class="glass-btn">View on npm</button>
-          </div>
-        </div>
-      </div>
-
       <!-- Documentation Links Card -->
       <div class="glass-card">
         <h3 class="card-subtitle">Documentation</h3>
@@ -2688,14 +2889,14 @@ class StreamingReader {
             <h4>API Reference</h4>
             <p>Complete function documentation</p>
           </a>
-          <a href="docs-html/README.html#security" class="doc-link-card">
+          <a href="docs-html/README.html#security-considerations" class="doc-link-card">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
             <h4>Security Guide</h4>
             <p>Best practices and threat model</p>
           </a>
-          <a href="docs-html/README.html#performance" class="doc-link-card">
+          <a href="docs-html/README.html#performance-optimization" class="doc-link-card">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
             </svg>

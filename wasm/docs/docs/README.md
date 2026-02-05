@@ -509,6 +509,7 @@ const tsFiles = flatc.getEmbeddedRuntime('typescript'); // same as 'ts'
 
 For detailed integration instructions, see:
 
+- [Streaming API](streaming.md) - Producer/consumer patterns, encrypted streams, ring buffers
 - [Encryption Sessions](encryption.md) - Nonce management, session establishment, offline decryption
 - [Go Integration](go.md) - wazero runtime, pure Go
 - [Python Integration](python.md) - wasmer with Cranelift

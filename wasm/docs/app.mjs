@@ -3354,6 +3354,9 @@ function populateHexExplorer() {
   // Reset to first message of selected type
   state.hexExplorer.currentIndex = 0;
   updateHexExplorer();
+
+  // Also render the linear memory hexdump visualization
+  renderLinearMemoryHexdump();
 }
 
 /**
@@ -3468,6 +3471,99 @@ function setupHexExplorerListeners() {
       updateHexExplorer();
     }
   };
+}
+
+/**
+ * Render linear memory hexdump showing interleaved messages from all types.
+ * Shows the raw buffer as it would appear in WASM linear memory with
+ * size-prefix, file_id, and data sections color-coded.
+ */
+function renderLinearMemoryHexdump() {
+  const output = $('hexdump-output');
+  if (!output) return;
+
+  const { messages } = state.hexExplorer;
+  if (!messages || Object.keys(messages).length === 0) {
+    output.innerHTML = '<div class="hexdump-placeholder">Push messages to the dispatcher to see the memory layout here</div>';
+    return;
+  }
+
+  // Build an interleaved stream: simulate size-prefixed messages
+  const stream = [];
+  const annotations = []; // { offset, length, type, label }
+  const typeColors = {
+    MONS: 'monster', WEAP: 'weapon', GALX: 'galaxy'
+  };
+  const typeNames = {
+    MONS: 'Monster', WEAP: 'Weapon', GALX: 'Galaxy'
+  };
+
+  // Interleave first few messages from each type
+  const maxPerType = 3;
+  const order = [];
+  for (let i = 0; i < maxPerType; i++) {
+    for (const fileId of Object.keys(messages)) {
+      if (messages[fileId][i]) order.push({ fileId, index: i, data: messages[fileId][i] });
+    }
+  }
+
+  let globalOffset = 0;
+  for (const { fileId, index, data } of order) {
+    // Size prefix (4 bytes LE)
+    const sizeBuf = new Uint8Array(4);
+    new DataView(sizeBuf.buffer).setUint32(0, data.length, true);
+    annotations.push({ offset: globalOffset, length: 4, type: 'size', label: `size=${data.length}` });
+    stream.push(...sizeBuf);
+    globalOffset += 4;
+
+    // File ID (first 4 bytes of the FlatBuffer contain the file_id after offset)
+    annotations.push({ offset: globalOffset, length: 4, type: 'fileid', label: fileId });
+
+    // Data
+    annotations.push({ offset: globalOffset + 4, length: data.length - 4, type: typeColors[fileId], label: `${typeNames[fileId]} #${index}` });
+    stream.push(...data);
+    globalOffset += data.length;
+  }
+
+  const bytes = new Uint8Array(stream);
+
+  // Render hex rows (16 bytes per row)
+  const rows = [];
+  for (let rowOffset = 0; rowOffset < Math.min(bytes.length, 256); rowOffset += 16) {
+    const hexParts = [];
+    const parsedLabels = new Set();
+
+    for (let i = 0; i < 16; i++) {
+      const byteOffset = rowOffset + i;
+      if (byteOffset < bytes.length) {
+        const hex = bytes[byteOffset].toString(16).padStart(2, '0');
+        // Find annotation for this byte
+        let highlight = '';
+        for (const ann of annotations) {
+          if (byteOffset >= ann.offset && byteOffset < ann.offset + ann.length) {
+            highlight = `hex-highlight-${ann.type}`;
+            parsedLabels.add(ann.label);
+            break;
+          }
+        }
+        hexParts.push(`<span class="${highlight}">${hex}</span>`);
+      } else {
+        hexParts.push('<span>  </span>');
+      }
+      if (i === 7) hexParts.push('<span>&nbsp;</span>');
+    }
+
+    const offsetStr = rowOffset.toString(16).padStart(4, '0').toUpperCase();
+    const parsed = [...parsedLabels].join(' | ');
+
+    rows.push(`<div class="hexdump-row">
+      <span class="hex-col offset-col">0x${offsetStr}</span>
+      <span class="hex-col bytes-col">${hexParts.join(' ')}</span>
+      <span class="hex-col parsed-col">${parsed}</span>
+    </div>`);
+  }
+
+  output.innerHTML = rows.join('');
 }
 
 // =============================================================================
@@ -5702,6 +5798,9 @@ function initStudio() {
   // Runtime download handlers
   initRuntimeDownloads();
 
+  // Streaming language tabs
+  initStreamingTabs();
+
   // Initialize Schema Builder
   initSchemaBuilder();
 }
@@ -7429,20 +7528,69 @@ function initRuntimeDownloads() {
     }
   });
 
-  // Runtime binding download handlers - redirect to npm
+  // Embedded runtime ZIP download handlers
+  // Downloads FlatBuffers runtime libraries directly from WASM (Brotli-compressed, no network needed)
   document.querySelectorAll('[data-download]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      window.open('https://www.npmjs.com/package/flatc-wasm', '_blank');
+    btn.addEventListener('click', async () => {
+      const lang = btn.dataset.download;
+      if (!state.flatcRunner) {
+        console.error('FlatcRunner not initialized');
+        return;
+      }
+
+      const originalHTML = btn.innerHTML;
+      btn.innerHTML = '<span class="spinner"></span> Generating...';
+      btn.disabled = true;
+
+      try {
+        const zipData = state.flatcRunner.getEmbeddedRuntimeZip(lang);
+        if (!zipData || zipData.length === 0) {
+          throw new Error(`No embedded runtime found for "${lang}"`);
+        }
+
+        // Trigger browser download
+        const blob = new Blob([zipData], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `flatbuffers-runtime-${lang}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Downloaded!';
+        setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
+      } catch (err) {
+        console.error('Runtime download failed:', err);
+        btn.innerHTML = 'Error';
+        setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
+      } finally {
+        btn.disabled = false;
+      }
     });
   });
 
-  // Core module downloads - redirect to npm
-  $('download-core-wasm')?.addEventListener('click', () => {
-    window.open('https://www.npmjs.com/package/flatc-wasm', '_blank');
-  });
+}
 
-  $('download-core-loader')?.addEventListener('click', () => {
-    window.open('https://www.npmjs.com/package/flatc-wasm', '_blank');
+// =============================================================================
+// Streaming Language Tabs
+// =============================================================================
+
+function initStreamingTabs() {
+  document.querySelectorAll('.streaming-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const lang = tab.dataset.streamLang;
+
+      // Update active tab
+      document.querySelectorAll('.streaming-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      // Update active content
+      document.querySelectorAll('.streaming-tab-content').forEach(content => {
+        content.classList.toggle('active', content.dataset.streamLang === lang);
+      });
+    });
   });
 }
 
@@ -9200,7 +9348,7 @@ const alignedState = {
 /**
  * Generate aligned code from schema
  */
-function generateAligned() {
+async function generateAligned() {
   const schemaInput = $('aligned-schema-input');
   const outputEl = $('aligned-output');
   const statusEl = $('aligned-status');
@@ -9217,8 +9365,8 @@ function generateAligned() {
   const defaultStringLength = parseInt(stringLengthInput?.value || '0', 10);
 
   try {
-    // Generate code for all languages
-    const result = generateAlignedCode(schema, { defaultStringLength });
+    // Generate code for all languages (async - WASM init may be required)
+    const result = await generateAlignedCode(schema, { defaultStringLength });
 
     alignedState.generatedCode.cpp = result.cpp;
     alignedState.generatedCode.ts = result.ts;

@@ -4,337 +4,244 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Csharp - DA FlatBuffers</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <style>
     :root {
-      --black: #000000;
-      --white: #F5F5F7;
-      --white-90: rgba(255, 255, 255, 0.9);
-      --white-80: rgba(255, 255, 255, 0.8);
-      --white-60: rgba(255, 255, 255, 0.6);
-      --white-40: rgba(255, 255, 255, 0.4);
-      --white-20: rgba(255, 255, 255, 0.2);
-      --white-10: rgba(255, 255, 255, 0.1);
-      --white-05: rgba(255, 255, 255, 0.05);
-      --muted: rgba(134, 134, 139, 1.0);
-      --glass-bg: rgba(42, 42, 45, 0.72);
-      --glass-hover: rgba(66, 66, 69, 0.72);
-      --glass-border: rgba(255, 255, 255, 0.1);
-      --glass-blur: blur(20px);
-      --radius: 28px;
-      --radius-sm: 14px;
+      --bg-primary: #000000;
+      --bg-secondary: rgba(42, 42, 45, 0.72);
+      --bg-tertiary: rgba(66, 66, 69, 0.72);
+      --accent-primary: #3b82f6;
+      --accent-secondary: #60a5fa;
+      --text-primary: #F5F5F7;
+      --text-secondary: rgba(255, 255, 255, 0.6);
+      --border-color: rgba(59, 130, 246, 0.3);
+      --glow-color: rgba(59, 130, 246, 0.15);
+    }
 
     * {
       box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-
-    html {
-      scroll-behavior: smooth;
+    }
 
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: var(--black);
-      color: var(--white);
-      line-height: 1.6;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 0;
       min-height: 100vh;
       position: relative;
       overflow-x: hidden;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
+    }
 
-    /* Video Background */
-    .video-background {
+    /* Animated background */
+    body::before {
+      content: '';
       position: fixed;
       top: 0;
       left: 0;
-      width: 100vw;
-      height: 100vh;
+      right: 0;
+      bottom: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(59, 130, 246, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(59, 130, 246, 0.04) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(59, 130, 246, 0.03) 0%, transparent 70%);
+      pointer-events: none;
       z-index: 0;
-      overflow: hidden;
+    }
 
-    .video-background video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      opacity: 0.3;
-
-    .video-overlay {
-      position: absolute;
+    /* Grid pattern overlay */
+    body::after {
+      content: '';
+      position: fixed;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(
-        to bottom,
-        rgba(0, 0, 0, 0.4) 0%,
-        rgba(0, 0, 0, 0.6) 50%,
-        rgba(0, 0, 0, 0.85) 100%
-      );
+      right: 0;
+      bottom: 0;
+      background-image:
+        linear-gradient(rgba(59, 130, 246, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59, 130, 246, 0.02) 1px, transparent 1px);
+      background-size: 50px 50px;
+      pointer-events: none;
+      z-index: 0;
+    }
 
     .page-container {
       position: relative;
       z-index: 1;
       max-width: 900px;
       margin: 0 auto;
-      padding: 60px 24px 80px;
+      padding: 40px 20px;
+    }
 
     .back-link {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 12px 24px;
-      margin-bottom: 40px;
-      background: var(--glass-bg);
-      backdrop-filter: var(--glass-blur);
-      -webkit-backdrop-filter: var(--glass-blur);
-      border: 1px solid var(--glass-border);
-      border-radius: var(--radius);
-      color: var(--white);
+      padding: 10px 20px;
+      margin-bottom: 30px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--accent-secondary);
       text-decoration: none;
       font-weight: 500;
       font-size: 14px;
-      transition: all 0.3s ease;
+      transition: all 0.2s ease;
+    }
 
     .back-link:hover {
-      background: var(--glass-hover);
-      transform: translateY(-2px);
+      background: var(--bg-tertiary);
+      border-color: var(--accent-primary);
+      transform: translateY(-1px);
+    }
 
     .markdown-body {
-      background: var(--glass-bg);
-      backdrop-filter: var(--glass-blur);
-      -webkit-backdrop-filter: var(--glass-blur);
-      border: 1px solid var(--glass-border);
-      border-radius: var(--radius);
-      padding: 64px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 48px;
+    }
 
-    .markdown-body h1 {
-      color: var(--white);
-      font-size: 56px;
-      font-weight: 600;
-      line-height: 1.1;
-      margin-bottom: 32px;
-      letter-spacing: -0.02em;
-
-    .markdown-body h2 {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: var(--white);
-      font-size: 28px;
-      font-weight: 600;
-      line-height: 1.15;
-      margin-top: 56px;
-      margin-bottom: 24px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--glass-border);
-
-    .markdown-body h2::before {
-      content: '';
-      display: inline-flex;
-      width: 24px;
-      height: 24px;
-      background: var(--white);
-      -webkit-mask-size: contain;
-      mask-size: contain;
-      -webkit-mask-repeat: no-repeat;
-      mask-repeat: no-repeat;
-      -webkit-mask-position: center;
-      mask-position: center;
-      flex-shrink: 0;
-
-    /* Icon mappings for h2 headers based on content */
-    .markdown-body h2[id*="why"]::before,
-    .markdown-body h2:has(+ p:first-of-type)::before {
-      -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4M12 8h.01'/%3E%3C/svg%3E");
-      mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4M12 8h.01'/%3E%3C/svg%3E");
-
+    .markdown-body h1,
+    .markdown-body h2,
     .markdown-body h3,
     .markdown-body h4 {
-      color: var(--white);
+      color: var(--text-primary);
+      border-bottom-color: var(--border-color);
       font-weight: 600;
-      margin-top: 32px;
-      margin-bottom: 16px;
+    }
 
-    .markdown-body h3 {
-      font-size: 22px;
-
-    .markdown-body h4 {
-      font-size: 18px;
-      color: var(--white-90);
-
-    .markdown-body p {
-      color: var(--white-80);
-      font-size: 18px;
-      line-height: 1.7;
-      margin-bottom: 20px;
+    .markdown-body h1 {
+      background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-size: 2.2em;
+      margin-bottom: 24px;
+    }
 
     .markdown-body a {
-      color: var(--white);
-      text-decoration: underline;
-      text-underline-offset: 3px;
-      transition: opacity 0.2s;
+      color: var(--accent-secondary);
+    }
 
     .markdown-body a:hover {
-      opacity: 0.7;
-
-    .markdown-body strong {
-      color: var(--white);
-      font-weight: 600;
+      color: var(--accent-primary);
+    }
 
     .markdown-body code {
-      background: var(--glass-hover);
-      border: 1px solid var(--glass-border);
-      border-radius: 6px;
-      padding: 3px 8px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 2px 6px;
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.9em;
-      color: var(--white);
+    }
 
     .markdown-body pre {
-      background: var(--black) !important;
-      border: 1px solid var(--glass-border);
-      border-radius: var(--radius-sm);
-      padding: 24px;
+      background: var(--bg-primary) !important;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
       overflow-x: auto;
-      margin: 24px 0;
+    }
 
     .markdown-body pre code {
       background: transparent;
       border: none;
       padding: 0;
-      font-size: 14px;
-      line-height: 1.7;
-      color: var(--white-90);
-
-    .markdown-body ul, .markdown-body ol {
-      padding-left: 24px;
-      margin-bottom: 20px;
-
-    .markdown-body li {
-      margin: 12px 0;
-      color: var(--white-80);
-      font-size: 18px;
-
-    .markdown-body li strong {
-      color: var(--white);
+      font-size: 0.85em;
+      line-height: 1.6;
+    }
 
     .markdown-body table {
-      width: 100%;
       border-collapse: collapse;
-      margin: 24px 0;
-      border-radius: var(--radius-sm);
-      overflow: hidden;
+      width: 100%;
+      margin: 20px 0;
+    }
 
     .markdown-body table th,
     .markdown-body table td {
-      border: 1px solid var(--glass-border);
-      padding: 14px 18px;
+      border: 1px solid var(--border-color);
+      padding: 12px 16px;
       text-align: left;
+    }
 
     .markdown-body table th {
-      background: var(--glass-hover);
+      background: var(--bg-tertiary);
       font-weight: 600;
-      color: var(--white);
-      font-size: 14px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      color: var(--accent-secondary);
+    }
 
-    .markdown-body table td {
-      background: var(--white-05);
-      color: var(--white-80);
-
-    .markdown-body table tr:nth-child(even) td {
-      background: var(--white-10);
+    .markdown-body table tr:nth-child(even) {
+      background: rgba(59, 130, 246, 0.03);
+    }
 
     .markdown-body blockquote {
-      border-left: 4px solid var(--white-40);
-      background: var(--white-05);
-      padding: 20px 24px;
-      margin: 24px 0;
-      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-
-    .markdown-body blockquote p {
-      margin: 0;
-      color: var(--white-80);
+      border-left: 4px solid var(--accent-primary);
+      background: var(--bg-tertiary);
+      padding: 16px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
 
     .markdown-body hr {
       border: none;
       height: 1px;
-      background: var(--glass-border);
-      margin: 48px 0;
+      background: var(--border-color);
+      margin: 32px 0;
+    }
 
-    /* Section header icons */
-    .section-icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 32px;
-      background: var(--white-10);
-      border-radius: 8px;
-      margin-right: 12px;
-      flex-shrink: 0;
+    .markdown-body ul, .markdown-body ol {
+      padding-left: 24px;
+    }
 
-    .section-icon svg {
-      width: 18px;
-      height: 18px;
-      stroke: var(--white);
-      fill: none;
-      stroke-width: 2;
+    .markdown-body li {
+      margin: 8px 0;
+    }
 
     @media (max-width: 768px) {
       .page-container {
-        padding: 40px 16px 60px;
+        padding: 20px 16px;
+      }
       .markdown-body {
-        padding: 32px 24px;
-        border-radius: 20px;
+        padding: 24px;
+        border-radius: 12px;
+      }
       .markdown-body h1 {
-        font-size: 36px;
-      .markdown-body h2 {
-        font-size: 24px;
-      .markdown-body p,
-      .markdown-body li {
-        font-size: 16px;
+        font-size: 1.8em;
+      }
+    }
   </style>
 </head>
 <body>
-  <!-- Video Background -->
-  <div class="video-background">
-    <video autoplay loop muted playsinline id="bg-video">
-      <source src="" type="application/x-mpegURL">
-    </video>
-    <div class="video-overlay"></div>
-  </div>
-
   <div class="page-container">
-    <a href="../index.html" class="back-link">
+    <a href="https://digitalarsenal.github.io/flatbuffers/" class="back-link">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M19 12H5M12 19l-7-7 7-7"/>
       </svg>
       Back to DA FlatBuffers
     </a>
-    <article class="markdown-body"><h1>C# Integration Guide</h1>
+    <article class="markdown-body"><h1 id="c-integration-guide">C# Integration Guide</h1>
 <p>Integrate the FlatBuffers encryption WASM module into .NET applications using <a href="https://wasmtime.dev/">Wasmtime</a>, a fast and secure WebAssembly runtime.</p>
-<h2><span class="section-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></span>Why Wasmtime?</h2>
+<h2 id="why-wasmtime">Why Wasmtime?</h2>
 <ul>
 <li><strong>Production ready</strong> - Used by Fastly, Shopify, and others</li>
 <li><strong>Fast</strong> - Optimizing compiler with excellent performance</li>
 <li><strong>.NET 6+ support</strong> - Modern .NET integration</li>
 <li><strong>NuGet package</strong> - Easy installation</li>
 </ul>
-<h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>Prerequisites</h2>
+<h2 id="prerequisites">Prerequisites</h2>
 <ul>
 <li>.NET 6.0 or later</li>
 <li><code>flatc-encryption.wasm</code> binary</li>
 </ul>
-<h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>Installation</h2>
+<h2 id="installation">Installation</h2>
 <pre><code class="language-bash">dotnet add package Wasmtime
 </code></pre>
-<h2><span class="section-icon"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>Quick Start</h2>
+<h2 id="quick-start">Quick Start</h2>
 <pre><code class="language-csharp">using Wasmtime;
 
 var engine = new Engine();
@@ -387,7 +294,7 @@ free.Invoke(keyPtr);
 free.Invoke(ivPtr);
 free.Invoke(dataPtr);
 </code></pre>
-<h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></span>Complete Module Wrapper</h2>
+<h2 id="complete-module-wrapper">Complete Module Wrapper</h2>
 <pre><code class="language-csharp">using Wasmtime;
 using System.Security.Cryptography;
 using System.Text;
@@ -488,6 +395,7 @@ public sealed class EncryptionModule : IDisposable
         _ed25519Generate = _instance.GetFunction&lt;int, int, int&gt;(&quot;wasi_ed25519_generate_keypair&quot;)!;
         _ed25519Sign = _instance.GetFunction&lt;int, int, int, int, int&gt;(&quot;wasi_ed25519_sign&quot;)!;
         _ed25519Verify = _instance.GetFunction&lt;int, int, int, int, int&gt;(&quot;wasi_ed25519_verify&quot;)!;
+    }
 
     private void DefineWasiStubs()
     {
@@ -509,6 +417,7 @@ public sealed class EncryptionModule : IDisposable
             (int code) =&gt; { });
         _linker.DefineFunction(&quot;wasi_snapshot_preview1&quot;, &quot;random_get&quot;,
             (Caller c, int buf, int bufLen) =&gt; 0);
+    }
 
     private void DefineEnvStubs()
     {
@@ -519,6 +428,7 @@ public sealed class EncryptionModule : IDisposable
         _linker.DefineFunction(&quot;env&quot;, &quot;invoke_i&quot;, (int idx) =&gt; 0);
         _linker.DefineFunction(&quot;env&quot;, &quot;invoke_ii&quot;, (int idx, int a) =&gt; 0);
         _linker.DefineFunction(&quot;env&quot;, &quot;invoke_iii&quot;, (int idx, int a, int b) =&gt; 0);
+    }
 
     // Key pair records
 
@@ -532,11 +442,13 @@ public sealed class EncryptionModule : IDisposable
     {
         var span = _memory.GetSpan&lt;byte&gt;(offset, data.Length);
         data.CopyTo(span);
+    }
 
     private byte[] ReadBytes(int offset, int length)
     {
         var span = _memory.GetSpan&lt;byte&gt;(offset, length);
         return span.ToArray();
+    }
 
     private int Allocate(int size)
     {
@@ -544,6 +456,7 @@ public sealed class EncryptionModule : IDisposable
         if (ptr == 0)
             throw new OutOfMemoryException(&quot;WASM malloc returned null&quot;);
         return ptr;
+    }
 
     // Symmetric Encryption
 
@@ -572,11 +485,14 @@ public sealed class EncryptionModule : IDisposable
                 throw new CryptographicException(&quot;Encryption failed&quot;);
 
             return ReadBytes(dataPtr, data.Length);
+        }
         finally
         {
             _free(keyPtr);
             _free(ivPtr);
             _free(dataPtr);
+        }
+    }
 
     /// &lt;summary&gt;
     /// Decrypt data using AES-256-CTR.
@@ -585,6 +501,7 @@ public sealed class EncryptionModule : IDisposable
     {
         // CTR mode is symmetric
         return Encrypt(key, iv, data);
+    }
 
     // Hash Functions
 
@@ -601,10 +518,13 @@ public sealed class EncryptionModule : IDisposable
             WriteBytes(dataPtr, data);
             _sha256(dataPtr, data.Length, outPtr);
             return ReadBytes(outPtr, Sha256Size);
+        }
         finally
         {
             _free(dataPtr);
             _free(outPtr);
+        }
+    }
 
     /// &lt;summary&gt;
     /// Derive key using HKDF-SHA256.
@@ -621,6 +541,7 @@ public sealed class EncryptionModule : IDisposable
             saltPtr = Allocate(salt.Length);
             WriteBytes(saltPtr, salt);
             saltLen = salt.Length;
+        }
 
         var infoPtr = Allocate(info.Length);
         WriteBytes(infoPtr, info);
@@ -631,12 +552,15 @@ public sealed class EncryptionModule : IDisposable
         {
             _hkdf(ikmPtr, ikm.Length, saltPtr, saltLen, infoPtr, info.Length, outPtr, length);
             return ReadBytes(outPtr, length);
+        }
         finally
         {
             _free(ikmPtr);
             if (saltPtr != 0) _free(saltPtr);
             _free(infoPtr);
             _free(outPtr);
+        }
+    }
 
     // X25519 Key Exchange
 
@@ -658,10 +582,13 @@ public sealed class EncryptionModule : IDisposable
                 ReadBytes(privPtr, X25519PrivateKeySize),
                 ReadBytes(pubPtr, X25519PublicKeySize)
             );
+        }
         finally
         {
             _free(privPtr);
             _free(pubPtr);
+        }
+    }
 
     /// &lt;summary&gt;
     /// Compute X25519 shared secret.
@@ -682,11 +609,14 @@ public sealed class EncryptionModule : IDisposable
                 throw new CryptographicException(&quot;Shared secret computation failed&quot;);
 
             return ReadBytes(outPtr, 32);
+        }
         finally
         {
             _free(privPtr);
             _free(pubPtr);
             _free(outPtr);
+        }
+    }
 
     // Ed25519 Signatures
 
@@ -708,10 +638,13 @@ public sealed class EncryptionModule : IDisposable
                 ReadBytes(privPtr, Ed25519PrivateKeySize),
                 ReadBytes(pubPtr, Ed25519PublicKeySize)
             );
+        }
         finally
         {
             _free(privPtr);
             _free(pubPtr);
+        }
+    }
 
     /// &lt;summary&gt;
     /// Sign with Ed25519.
@@ -732,11 +665,14 @@ public sealed class EncryptionModule : IDisposable
                 throw new CryptographicException(&quot;Signing failed&quot;);
 
             return ReadBytes(sigPtr, Ed25519SignatureSize);
+        }
         finally
         {
             _free(privPtr);
             _free(msgPtr);
             _free(sigPtr);
+        }
+    }
 
     /// &lt;summary&gt;
     /// Verify Ed25519 signature.
@@ -755,19 +691,24 @@ public sealed class EncryptionModule : IDisposable
 
             var result = _ed25519Verify(pubPtr, msgPtr, message.Length, sigPtr);
             return result == 0;
+        }
         finally
         {
             _free(pubPtr);
             _free(msgPtr);
             _free(sigPtr);
+        }
+    }
 
     public void Dispose()
     {
         _store.Dispose();
         _linker.Dispose();
         _engine.Dispose();
+    }
+}
 </code></pre>
-<h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>Template Project Structure</h2>
+<h2 id="template-project-structure">Template Project Structure</h2>
 <pre><code>MyProject/
 ├── MyProject.csproj
 ├── Program.cs
@@ -797,8 +738,8 @@ public sealed class EncryptionModule : IDisposable
   &lt;/ItemGroup&gt;
 &lt;/Project&gt;
 </code></pre>
-<h2><span class="section-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>Usage Examples</h2>
-<h3>Basic Encryption</h3>
+<h2 id="usage-examples">Usage Examples</h2>
+<h3 id="basic-encryption">Basic Encryption</h3>
 <pre><code class="language-csharp">using var module = new EncryptionModule(&quot;flatc-encryption.wasm&quot;);
 
 var key = new byte[32];
@@ -812,7 +753,7 @@ var decrypted = module.Decrypt(key, iv, ciphertext);
 
 Debug.Assert(plaintext.SequenceEqual(decrypted));
 </code></pre>
-<h3>End-to-End Encryption</h3>
+<h3 id="end-to-end-encryption">End-to-End Encryption</h3>
 <pre><code class="language-csharp">using var module = new EncryptionModule(&quot;flatc-encryption.wasm&quot;);
 
 // Generate key pairs
@@ -837,7 +778,7 @@ var ciphertext = module.Encrypt(encryptionKey, iv, &quot;Hello Bob!&quot;u8);
 var decrypted = module.Decrypt(encryptionKey, iv, ciphertext);
 Console.WriteLine(Encoding.UTF8.GetString(decrypted)); // &quot;Hello Bob!&quot;
 </code></pre>
-<h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>Performance Tips</h2>
+<h2 id="performance-tips">Performance Tips</h2>
 <ol>
 <li><strong>Reuse module instances</strong> - Module loading is expensive</li>
 <li><strong>Use Span<byte></strong> - Avoid unnecessary allocations</li>
@@ -848,49 +789,31 @@ using var module = new EncryptionModule(&quot;wasm&quot;);
 foreach (var item in items)
 {
     module.Encrypt(key, iv, item);
+}
 
 // Bad: Create new instance each time
 foreach (var item in items)
 {
     using var module = new EncryptionModule(&quot;wasm&quot;); // Slow!
     module.Encrypt(key, iv, item);
+}
 </code></pre>
-<h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>Troubleshooting</h2>
-<h3>"Function not found"</h3>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="function-not-found">"Function not found"</h3>
 <p>Ensure WASI and env stubs are defined before instantiation.</p>
-<h3>"Memory access out of bounds"</h3>
+<h3 id="memory-access-out-of-bounds">"Memory access out of bounds"</h3>
 <p>Check allocation succeeded:</p>
 <pre><code class="language-csharp">var ptr = _malloc(size);
 if (ptr == 0)
     throw new OutOfMemoryException(&quot;Allocation failed&quot;);
 </code></pre>
-<h2><span class="section-icon"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>See Also</h2>
+<h2 id="see-also">See Also</h2>
 <ul>
 <li><a href="https://docs.wasmtime.dev/">Wasmtime .NET Documentation</a></li>
-<li><a href="README.html#api-reference">API Reference</a></li>
-<li><a href="README.html#security-considerations">Security Considerations</a></li>
+<li><a href="README.md#api-reference">API Reference</a></li>
+<li><a href="README.md#security-considerations">Security Considerations</a></li>
 </ul>
 </article>
   </div>
-
-  <script>
-    // Initialize video with random selection
-    const videoUrls = [
-      "../videos/bg-1.mp4",
-      "../videos/bg-2.mp4",
-      "../videos/bg-3.mp4",
-      "../videos/bg-4.mp4",
-      "../videos/bg-5.mp4",
-      "../videos/bg-6.mp4",
-      "../videos/bg-7.mp4",
-      "../videos/bg-8.mp4",
-      "../videos/bg-9.mp4",
-      "../videos/bg-10.mp4",
-      "../videos/bg-11.mp4"
-    ];
-
-    const video = document.getElementById('bg-video');
-    video.src = videoUrls[Math.floor(Math.random() * videoUrls.length)];
-  </script>
 </body>
 </html>

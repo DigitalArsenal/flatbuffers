@@ -6530,6 +6530,26 @@ details[open] .collapse-icon {
   letter-spacing: 0.5px;
 }
 
+.feature-tag.embedded-tag {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .runtime-actions {
   display: flex;
   gap: 8px;
@@ -6546,40 +6566,6 @@ details[open] .collapse-icon {
   border-radius: 6px;
   overflow-x: auto;
   white-space: nowrap;
-}
-
-/* Core Downloads */
-.core-downloads {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-top: 16px;
-}
-
-.core-download-item {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  background: var(--white-05);
-  border-radius: var(--radius-sm);
-}
-
-.core-download-info {
-  flex: 1;
-}
-
-.core-download-info h4 {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--white-90);
-  margin: 0 0 4px 0;
-}
-
-.core-download-info p {
-  font-size: 12px;
-  color: var(--white-60);
-  margin: 0;
 }
 
 /* Documentation Links */
@@ -6634,11 +6620,6 @@ details[open] .collapse-icon {
 
   .runtime-intro {
     grid-template-columns: 1fr;
-  }
-
-  .core-download-item {
-    flex-direction: column;
-    text-align: center;
   }
 
   .docs-grid {
@@ -7895,4 +7876,257 @@ details[open] .collapse-icon {
     gap: 12px;
     align-items: flex-start;
   }
+}
+
+/* =========================================================================
+   Streaming Tabs & Producer/Consumer Layout
+   ========================================================================= */
+
+.streaming-lang-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--white-10);
+  padding-bottom: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.streaming-tab {
+  padding: 10px 20px;
+  background: transparent;
+  border: none;
+  color: var(--white-50);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.streaming-tab:hover {
+  color: var(--white-80);
+  background: var(--white-05);
+}
+
+.streaming-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.streaming-tab-content {
+  display: none;
+  padding-top: 20px;
+}
+
+.streaming-tab-content.active {
+  display: block;
+}
+
+.producer-consumer-layout {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+@media (max-width: 1100px) {
+  .producer-consumer-layout {
+    grid-template-columns: 1fr;
+  }
+  .data-flow-arrow {
+    flex-direction: row !important;
+    justify-content: center;
+    padding: 12px 0 !important;
+  }
+  .data-flow-arrow .flow-arrow {
+    transform: rotate(90deg);
+    width: 24px !important;
+    height: 24px !important;
+  }
+}
+
+.producer-panel,
+.consumer-panel {
+  min-width: 0;
+}
+
+.panel-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.producer-label {
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.2);
+}
+
+.consumer-label {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.data-flow-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px 8px;
+  min-width: 140px;
+}
+
+.flow-item {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.flow-item.header-flow {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.flow-item.msg-flow {
+  background: var(--white-05);
+  color: var(--white-50);
+  border: 1px solid var(--white-10);
+}
+
+.flow-arrow {
+  width: 40px;
+  height: 20px;
+  color: var(--white-30);
+}
+
+.producer-panel .code-block,
+.consumer-panel .code-block {
+  font-size: 11px;
+  line-height: 1.5;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* =========================================================================
+   Hexdump Memory Visualization
+   ========================================================================= */
+
+.hexdump-section {
+  margin-top: 24px;
+  border-top: 1px solid var(--white-10);
+  padding-top: 20px;
+}
+
+.hexdump-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--white-80);
+  margin-bottom: 12px;
+}
+
+.hexdump-container {
+  background: #0a0a0f;
+  border: 1px solid var(--white-10);
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.hexdump-header {
+  display: flex;
+  gap: 16px;
+  padding: 8px 16px;
+  background: var(--white-05);
+  border-bottom: 1px solid var(--white-10);
+  color: var(--white-40);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.hexdump-output {
+  padding: 8px 16px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.hexdump-placeholder {
+  color: var(--white-30);
+  padding: 24px;
+  text-align: center;
+  font-family: inherit;
+}
+
+.hexdump-row {
+  display: flex;
+  gap: 16px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--white-05);
+}
+
+.hex-col.offset-col {
+  min-width: 60px;
+  color: var(--white-40);
+}
+
+.hex-col.bytes-col {
+  min-width: 370px;
+  color: var(--white-70);
+  letter-spacing: 0.5px;
+}
+
+.hex-col.parsed-col {
+  color: var(--white-50);
+  flex: 1;
+}
+
+.hex-highlight-monster { background: rgba(239, 68, 68, 0.15); }
+.hex-highlight-weapon { background: rgba(59, 130, 246, 0.15); }
+.hex-highlight-galaxy { background: rgba(139, 92, 246, 0.15); }
+.hex-highlight-size { background: rgba(251, 191, 36, 0.15); }
+.hex-highlight-fileid { background: rgba(52, 211, 153, 0.15); }
+
+.hexdump-legend {
+  display: flex;
+  gap: 16px;
+  padding: 10px 16px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--white-50);
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
 }

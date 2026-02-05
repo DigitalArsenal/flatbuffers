@@ -8,6 +8,19 @@ import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync } from 
 import { join, basename } from 'path';
 import { marked } from 'marked';
 
+// Configure marked to generate heading IDs (GitHub-style slugs)
+const renderer = new marked.Renderer();
+renderer.heading = function ({ text, depth }) {
+  const slug = text.toLowerCase()
+    .replace(/<[^>]*>/g, '')       // strip HTML tags
+    .replace(/[^\w\s-]/g, '')      // remove non-word chars
+    .replace(/\s+/g, '-')          // spaces to hyphens
+    .replace(/-+/g, '-')           // collapse multiple hyphens
+    .trim();
+  return `<h${depth} id="${slug}">${text}</h${depth}>\n`;
+};
+marked.use({ renderer });
+
 const DOCS_DIR = join(import.meta.dirname, '..', 'docs');
 const OUTPUT_DIR = join(import.meta.dirname, '..', 'docs-html');
 

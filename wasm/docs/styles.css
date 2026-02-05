@@ -8018,8 +8018,9 @@ details[open] .collapse-icon {
 
 .producer-panel .code-block,
 .consumer-panel .code-block {
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.6;
+  font-weight: 500;
   max-height: 400px;
   overflow-y: auto;
 }

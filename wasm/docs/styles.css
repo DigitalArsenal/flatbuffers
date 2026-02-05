@@ -279,6 +279,7 @@ body:has(.modal.active) .nav-bar {
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   padding: 12px 16px;
+  margin-top: 24px;
   margin-bottom: 24px;
 }
 

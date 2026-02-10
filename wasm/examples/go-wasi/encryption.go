@@ -7,6 +7,11 @@
 // - secp256k1 ECDH and ECDSA signatures (Bitcoin/Ethereum compatible)
 // - P-256 ECDH and ECDSA signatures (NIST)
 // - Ed25519 signatures
+// - Homomorphic Encryption (HE) operations via BFV/CKKS schemes:
+//   - Client/server context creation and key management
+//   - Integer and floating-point encryption/decryption
+//   - Arithmetic on ciphertexts (add, sub, multiply, negate)
+//   - Plaintext-ciphertext arithmetic (add_plain, multiply_plain)
 package main
 
 import (
@@ -16,6 +21,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
@@ -98,6 +104,25 @@ type EncryptionModule struct {
 
 	// Key derivation
 	deriveSymmetricKey api.Function
+
+	// HE (Homomorphic Encryption)
+	heContextCreateClient api.Function
+	heContextCreateServer api.Function
+	heContextDestroy      api.Function
+	heGetPublicKey        api.Function
+	heGetRelinKeys        api.Function
+	heGetSecretKey        api.Function
+	heSetRelinKeys        api.Function
+	heEncryptInt64        api.Function
+	heDecryptInt64        api.Function
+	heEncryptDouble       api.Function
+	heDecryptDouble       api.Function
+	heAdd                 api.Function
+	heSub                 api.Function
+	heMultiply            api.Function
+	heNegate              api.Function
+	heAddPlain            api.Function
+	heMultiplyPlain       api.Function
 }
 
 // wasmModule holds the module reference for invoke_* trampolines
@@ -478,6 +503,25 @@ func NewEncryptionModule(ctx context.Context, wasmBytes []byte) (*EncryptionModu
 
 		// Key derivation
 		deriveSymmetricKey: mod.ExportedFunction("wasi_derive_symmetric_key"),
+
+		// HE functions (optional - only available with HE-enabled WASI module)
+		heContextCreateClient: mod.ExportedFunction("wasi_he_context_create_client"),
+		heContextCreateServer: mod.ExportedFunction("wasi_he_context_create_server"),
+		heContextDestroy:      mod.ExportedFunction("wasi_he_context_destroy"),
+		heGetPublicKey:        mod.ExportedFunction("wasi_he_get_public_key"),
+		heGetRelinKeys:        mod.ExportedFunction("wasi_he_get_relin_keys"),
+		heGetSecretKey:        mod.ExportedFunction("wasi_he_get_secret_key"),
+		heSetRelinKeys:        mod.ExportedFunction("wasi_he_set_relin_keys"),
+		heEncryptInt64:        mod.ExportedFunction("wasi_he_encrypt_int64"),
+		heDecryptInt64:        mod.ExportedFunction("wasi_he_decrypt_int64"),
+		heEncryptDouble:       mod.ExportedFunction("wasi_he_encrypt_double"),
+		heDecryptDouble:       mod.ExportedFunction("wasi_he_decrypt_double"),
+		heAdd:                 mod.ExportedFunction("wasi_he_add"),
+		heSub:                 mod.ExportedFunction("wasi_he_sub"),
+		heMultiply:            mod.ExportedFunction("wasi_he_multiply"),
+		heNegate:              mod.ExportedFunction("wasi_he_negate"),
+		heAddPlain:            mod.ExportedFunction("wasi_he_add_plain"),
+		heMultiplyPlain:       mod.ExportedFunction("wasi_he_multiply_plain"),
 	}
 
 	// Verify required functions are exported
@@ -1506,6 +1550,577 @@ func (ec *EncryptionContext) DeriveFieldIV(ctx context.Context, fieldID uint16) 
 	return result, nil
 }
 
+// =============================================================================
+// Homomorphic Encryption (HE)
+// =============================================================================
+
+// HasHE returns true if the WASI module supports homomorphic encryption
+func (em *EncryptionModule) HasHE() bool {
+	return em.heContextCreateClient != nil
+}
+
+// HECreateClient creates a new HE context with full key material (client-side).
+// polyDegree controls the polynomial modulus degree (e.g., 4096, 8192).
+// Returns a context ID that must be destroyed with HEDestroyContext.
+func (em *EncryptionModule) HECreateClient(ctx context.Context, polyDegree uint32) (int32, error) {
+	if em.heContextCreateClient == nil {
+		return 0, errors.New("wasi_he_context_create_client not exported")
+	}
+
+	results, err := em.heContextCreateClient.Call(ctx, uint64(polyDegree))
+	if err != nil {
+		return 0, fmt.Errorf("he_context_create_client failed: %w", err)
+	}
+
+	ctxID := int32(results[0])
+	if ctxID < 0 {
+		return 0, fmt.Errorf("he_context_create_client returned error: %d", ctxID)
+	}
+
+	return ctxID, nil
+}
+
+// HECreateServer creates a new HE context from a serialized public key (server-side).
+// The server context can encrypt and perform operations but cannot decrypt.
+// Returns a context ID that must be destroyed with HEDestroyContext.
+func (em *EncryptionModule) HECreateServer(ctx context.Context, publicKey []byte) (int32, error) {
+	if em.heContextCreateServer == nil {
+		return 0, errors.New("wasi_he_context_create_server not exported")
+	}
+
+	mem := em.module.Memory()
+
+	pkPtr, err := em.allocate(ctx, uint32(len(publicKey)))
+	if err != nil {
+		return 0, err
+	}
+	defer em.deallocate(ctx, pkPtr)
+
+	if !mem.Write(pkPtr, publicKey) {
+		return 0, errors.New("failed to write public key")
+	}
+
+	results, err := em.heContextCreateServer.Call(ctx, uint64(pkPtr), uint64(len(publicKey)))
+	if err != nil {
+		return 0, fmt.Errorf("he_context_create_server failed: %w", err)
+	}
+
+	ctxID := int32(results[0])
+	if ctxID < 0 {
+		return 0, fmt.Errorf("he_context_create_server returned error: %d", ctxID)
+	}
+
+	return ctxID, nil
+}
+
+// HEDestroyContext destroys a previously created HE context and frees resources.
+func (em *EncryptionModule) HEDestroyContext(ctx context.Context, ctxID int32) {
+	if em.heContextDestroy != nil {
+		em.heContextDestroy.Call(ctx, uint64(uint32(ctxID)))
+	}
+}
+
+// heGetVariableLengthData is a helper for HE functions that return variable-length data.
+// The WASI function signature is: fn(ctx_id i32, out_len_ptr i32) -> data_ptr i32
+func (em *EncryptionModule) heGetVariableLengthData(ctx context.Context, fn api.Function, fnName string, ctxID int32) ([]byte, error) {
+	if fn == nil {
+		return nil, fmt.Errorf("%s not exported", fnName)
+	}
+
+	mem := em.module.Memory()
+
+	// Allocate 4 bytes for output length
+	outLenPtr, err := em.allocate(ctx, 4)
+	if err != nil {
+		return nil, err
+	}
+	defer em.deallocate(ctx, outLenPtr)
+
+	// Call the function: returns data pointer, writes length to outLenPtr
+	results, err := fn.Call(ctx, uint64(uint32(ctxID)), uint64(outLenPtr))
+	if err != nil {
+		return nil, fmt.Errorf("%s failed: %w", fnName, err)
+	}
+
+	dataPtr := uint32(results[0])
+	if dataPtr == 0 {
+		return nil, fmt.Errorf("%s returned null", fnName)
+	}
+
+	// Read the output length (little-endian uint32)
+	lenData, ok := mem.Read(outLenPtr, 4)
+	if !ok {
+		return nil, fmt.Errorf("failed to read output length from %s", fnName)
+	}
+	dataLen := uint32(lenData[0]) | uint32(lenData[1])<<8 |
+		uint32(lenData[2])<<16 | uint32(lenData[3])<<24
+
+	if dataLen == 0 {
+		return nil, fmt.Errorf("%s returned zero-length data", fnName)
+	}
+
+	// Read the data
+	rawData, ok := mem.Read(dataPtr, dataLen)
+	if !ok {
+		return nil, fmt.Errorf("failed to read data from %s", fnName)
+	}
+
+	result := make([]byte, dataLen)
+	copy(result, rawData)
+
+	// Free the data pointer allocated by the WASI module
+	em.deallocate(ctx, dataPtr)
+
+	return result, nil
+}
+
+// HEGetPublicKey returns the serialized public key from a client HE context.
+func (em *EncryptionModule) HEGetPublicKey(ctx context.Context, ctxID int32) ([]byte, error) {
+	return em.heGetVariableLengthData(ctx, em.heGetPublicKey, "wasi_he_get_public_key", ctxID)
+}
+
+// HEGetRelinKeys returns the serialized relinearization keys from a client HE context.
+func (em *EncryptionModule) HEGetRelinKeys(ctx context.Context, ctxID int32) ([]byte, error) {
+	return em.heGetVariableLengthData(ctx, em.heGetRelinKeys, "wasi_he_get_relin_keys", ctxID)
+}
+
+// HEGetSecretKey returns the serialized secret key from a client HE context.
+func (em *EncryptionModule) HEGetSecretKey(ctx context.Context, ctxID int32) ([]byte, error) {
+	return em.heGetVariableLengthData(ctx, em.heGetSecretKey, "wasi_he_get_secret_key", ctxID)
+}
+
+// HESetRelinKeys sets the relinearization keys on a server HE context.
+// This is required before performing multiplication on the server side.
+func (em *EncryptionModule) HESetRelinKeys(ctx context.Context, ctxID int32, relinKeys []byte) error {
+	if em.heSetRelinKeys == nil {
+		return errors.New("wasi_he_set_relin_keys not exported")
+	}
+
+	mem := em.module.Memory()
+
+	rkPtr, err := em.allocate(ctx, uint32(len(relinKeys)))
+	if err != nil {
+		return err
+	}
+	defer em.deallocate(ctx, rkPtr)
+
+	if !mem.Write(rkPtr, relinKeys) {
+		return errors.New("failed to write relin keys")
+	}
+
+	results, err := em.heSetRelinKeys.Call(ctx,
+		uint64(uint32(ctxID)), uint64(rkPtr), uint64(len(relinKeys)))
+	if err != nil {
+		return fmt.Errorf("he_set_relin_keys failed: %w", err)
+	}
+
+	if int32(results[0]) != 0 {
+		return errors.New("he_set_relin_keys failed")
+	}
+
+	return nil
+}
+
+// HEEncryptInt64 encrypts an int64 value using the BFV scheme.
+// Returns the serialized ciphertext.
+func (em *EncryptionModule) HEEncryptInt64(ctx context.Context, ctxID int32, value int64) ([]byte, error) {
+	if em.heEncryptInt64 == nil {
+		return nil, errors.New("wasi_he_encrypt_int64 not exported")
+	}
+
+	mem := em.module.Memory()
+
+	// Allocate 4 bytes for output length
+	outLenPtr, err := em.allocate(ctx, 4)
+	if err != nil {
+		return nil, err
+	}
+	defer em.deallocate(ctx, outLenPtr)
+
+	// Call: wasi_he_encrypt_int64(ctx_id, value_i64, out_len_ptr) -> data_ptr
+	results, err := em.heEncryptInt64.Call(ctx,
+		uint64(uint32(ctxID)), uint64(value), uint64(outLenPtr))
+	if err != nil {
+		return nil, fmt.Errorf("he_encrypt_int64 failed: %w", err)
+	}
+
+	dataPtr := uint32(results[0])
+	if dataPtr == 0 {
+		return nil, errors.New("he_encrypt_int64 returned null")
+	}
+
+	// Read the output length (little-endian uint32)
+	lenData, ok := mem.Read(outLenPtr, 4)
+	if !ok {
+		return nil, errors.New("failed to read output length")
+	}
+	dataLen := uint32(lenData[0]) | uint32(lenData[1])<<8 |
+		uint32(lenData[2])<<16 | uint32(lenData[3])<<24
+
+	if dataLen == 0 {
+		return nil, errors.New("he_encrypt_int64 returned zero-length ciphertext")
+	}
+
+	// Read ciphertext data
+	rawData, ok := mem.Read(dataPtr, dataLen)
+	if !ok {
+		return nil, errors.New("failed to read ciphertext")
+	}
+
+	result := make([]byte, dataLen)
+	copy(result, rawData)
+
+	em.deallocate(ctx, dataPtr)
+
+	return result, nil
+}
+
+// HEDecryptInt64 decrypts a ciphertext to an int64 value using the BFV scheme.
+func (em *EncryptionModule) HEDecryptInt64(ctx context.Context, ctxID int32, ciphertext []byte) (int64, error) {
+	if em.heDecryptInt64 == nil {
+		return 0, errors.New("wasi_he_decrypt_int64 not exported")
+	}
+
+	mem := em.module.Memory()
+
+	ctPtr, err := em.allocate(ctx, uint32(len(ciphertext)))
+	if err != nil {
+		return 0, err
+	}
+	defer em.deallocate(ctx, ctPtr)
+
+	if !mem.Write(ctPtr, ciphertext) {
+		return 0, errors.New("failed to write ciphertext")
+	}
+
+	// Call: wasi_he_decrypt_int64(ctx_id, ct_ptr, ct_len) -> i64
+	results, err := em.heDecryptInt64.Call(ctx,
+		uint64(uint32(ctxID)), uint64(ctPtr), uint64(len(ciphertext)))
+	if err != nil {
+		return 0, fmt.Errorf("he_decrypt_int64 failed: %w", err)
+	}
+
+	return int64(results[0]), nil
+}
+
+// HEEncryptDouble encrypts a float64 value using the CKKS scheme.
+// Returns the serialized ciphertext.
+func (em *EncryptionModule) HEEncryptDouble(ctx context.Context, ctxID int32, value float64) ([]byte, error) {
+	if em.heEncryptDouble == nil {
+		return nil, errors.New("wasi_he_encrypt_double not exported")
+	}
+
+	mem := em.module.Memory()
+
+	// Allocate 4 bytes for output length
+	outLenPtr, err := em.allocate(ctx, 4)
+	if err != nil {
+		return nil, err
+	}
+	defer em.deallocate(ctx, outLenPtr)
+
+	// Call: wasi_he_encrypt_double(ctx_id, value_f64, out_len_ptr) -> data_ptr
+	// Pass the float64 as its raw bits for wazero
+	results, err := em.heEncryptDouble.Call(ctx,
+		uint64(uint32(ctxID)), math.Float64bits(value), uint64(outLenPtr))
+	if err != nil {
+		return nil, fmt.Errorf("he_encrypt_double failed: %w", err)
+	}
+
+	dataPtr := uint32(results[0])
+	if dataPtr == 0 {
+		return nil, errors.New("he_encrypt_double returned null")
+	}
+
+	// Read the output length (little-endian uint32)
+	lenData, ok := mem.Read(outLenPtr, 4)
+	if !ok {
+		return nil, errors.New("failed to read output length")
+	}
+	dataLen := uint32(lenData[0]) | uint32(lenData[1])<<8 |
+		uint32(lenData[2])<<16 | uint32(lenData[3])<<24
+
+	if dataLen == 0 {
+		return nil, errors.New("he_encrypt_double returned zero-length ciphertext")
+	}
+
+	// Read ciphertext data
+	rawData, ok := mem.Read(dataPtr, dataLen)
+	if !ok {
+		return nil, errors.New("failed to read ciphertext")
+	}
+
+	result := make([]byte, dataLen)
+	copy(result, rawData)
+
+	em.deallocate(ctx, dataPtr)
+
+	return result, nil
+}
+
+// HEDecryptDouble decrypts a ciphertext to a float64 value using the CKKS scheme.
+func (em *EncryptionModule) HEDecryptDouble(ctx context.Context, ctxID int32, ciphertext []byte) (float64, error) {
+	if em.heDecryptDouble == nil {
+		return 0, errors.New("wasi_he_decrypt_double not exported")
+	}
+
+	mem := em.module.Memory()
+
+	ctPtr, err := em.allocate(ctx, uint32(len(ciphertext)))
+	if err != nil {
+		return 0, err
+	}
+	defer em.deallocate(ctx, ctPtr)
+
+	if !mem.Write(ctPtr, ciphertext) {
+		return 0, errors.New("failed to write ciphertext")
+	}
+
+	// Call: wasi_he_decrypt_double(ctx_id, ct_ptr, ct_len) -> f64
+	results, err := em.heDecryptDouble.Call(ctx,
+		uint64(uint32(ctxID)), uint64(ctPtr), uint64(len(ciphertext)))
+	if err != nil {
+		return 0, fmt.Errorf("he_decrypt_double failed: %w", err)
+	}
+
+	return math.Float64frombits(results[0]), nil
+}
+
+// heBinaryCtOp is a helper for HE operations on two ciphertexts (add, sub, multiply).
+// The WASI function signature is:
+//
+//	fn(ctx_id, ct1_ptr, ct1_len, ct2_ptr, ct2_len, out_len_ptr) -> data_ptr
+func (em *EncryptionModule) heBinaryCtOp(ctx context.Context, fn api.Function, fnName string, ctxID int32, ct1, ct2 []byte) ([]byte, error) {
+	if fn == nil {
+		return nil, fmt.Errorf("%s not exported", fnName)
+	}
+
+	mem := em.module.Memory()
+
+	ct1Ptr, err := em.allocate(ctx, uint32(len(ct1)))
+	if err != nil {
+		return nil, err
+	}
+	defer em.deallocate(ctx, ct1Ptr)
+
+	ct2Ptr, err := em.allocate(ctx, uint32(len(ct2)))
+	if err != nil {
+		return nil, err
+	}
+	defer em.deallocate(ctx, ct2Ptr)
+
+	outLenPtr, err := em.allocate(ctx, 4)
+	if err != nil {
+		return nil, err
+	}
+	defer em.deallocate(ctx, outLenPtr)
+
+	if !mem.Write(ct1Ptr, ct1) {
+		return nil, errors.New("failed to write ciphertext 1")
+	}
+	if !mem.Write(ct2Ptr, ct2) {
+		return nil, errors.New("failed to write ciphertext 2")
+	}
+
+	results, err := fn.Call(ctx,
+		uint64(uint32(ctxID)),
+		uint64(ct1Ptr), uint64(len(ct1)),
+		uint64(ct2Ptr), uint64(len(ct2)),
+		uint64(outLenPtr))
+	if err != nil {
+		return nil, fmt.Errorf("%s failed: %w", fnName, err)
+	}
+
+	dataPtr := uint32(results[0])
+	if dataPtr == 0 {
+		return nil, fmt.Errorf("%s returned null", fnName)
+	}
+
+	// Read the output length (little-endian uint32)
+	lenData, ok := mem.Read(outLenPtr, 4)
+	if !ok {
+		return nil, fmt.Errorf("failed to read output length from %s", fnName)
+	}
+	dataLen := uint32(lenData[0]) | uint32(lenData[1])<<8 |
+		uint32(lenData[2])<<16 | uint32(lenData[3])<<24
+
+	if dataLen == 0 {
+		return nil, fmt.Errorf("%s returned zero-length ciphertext", fnName)
+	}
+
+	rawData, ok := mem.Read(dataPtr, dataLen)
+	if !ok {
+		return nil, fmt.Errorf("failed to read result from %s", fnName)
+	}
+
+	result := make([]byte, dataLen)
+	copy(result, rawData)
+
+	em.deallocate(ctx, dataPtr)
+
+	return result, nil
+}
+
+// HEAdd performs homomorphic addition of two ciphertexts.
+// Returns a new ciphertext representing the sum of the encrypted values.
+func (em *EncryptionModule) HEAdd(ctx context.Context, ctxID int32, ct1, ct2 []byte) ([]byte, error) {
+	return em.heBinaryCtOp(ctx, em.heAdd, "wasi_he_add", ctxID, ct1, ct2)
+}
+
+// HESub performs homomorphic subtraction of two ciphertexts.
+// Returns a new ciphertext representing ct1 - ct2.
+func (em *EncryptionModule) HESub(ctx context.Context, ctxID int32, ct1, ct2 []byte) ([]byte, error) {
+	return em.heBinaryCtOp(ctx, em.heSub, "wasi_he_sub", ctxID, ct1, ct2)
+}
+
+// HEMultiply performs homomorphic multiplication of two ciphertexts.
+// Returns a new ciphertext representing the product. Relinearization keys
+// should be set on the context for noise management.
+func (em *EncryptionModule) HEMultiply(ctx context.Context, ctxID int32, ct1, ct2 []byte) ([]byte, error) {
+	return em.heBinaryCtOp(ctx, em.heMultiply, "wasi_he_multiply", ctxID, ct1, ct2)
+}
+
+// HENegate performs homomorphic negation of a ciphertext.
+// Returns a new ciphertext representing the negated value.
+func (em *EncryptionModule) HENegate(ctx context.Context, ctxID int32, ct []byte) ([]byte, error) {
+	if em.heNegate == nil {
+		return nil, errors.New("wasi_he_negate not exported")
+	}
+
+	mem := em.module.Memory()
+
+	ctPtr, err := em.allocate(ctx, uint32(len(ct)))
+	if err != nil {
+		return nil, err
+	}
+	defer em.deallocate(ctx, ctPtr)
+
+	outLenPtr, err := em.allocate(ctx, 4)
+	if err != nil {
+		return nil, err
+	}
+	defer em.deallocate(ctx, outLenPtr)
+
+	if !mem.Write(ctPtr, ct) {
+		return nil, errors.New("failed to write ciphertext")
+	}
+
+	results, err := em.heNegate.Call(ctx,
+		uint64(uint32(ctxID)),
+		uint64(ctPtr), uint64(len(ct)),
+		uint64(outLenPtr))
+	if err != nil {
+		return nil, fmt.Errorf("he_negate failed: %w", err)
+	}
+
+	dataPtr := uint32(results[0])
+	if dataPtr == 0 {
+		return nil, errors.New("he_negate returned null")
+	}
+
+	// Read the output length (little-endian uint32)
+	lenData, ok := mem.Read(outLenPtr, 4)
+	if !ok {
+		return nil, errors.New("failed to read output length")
+	}
+	dataLen := uint32(lenData[0]) | uint32(lenData[1])<<8 |
+		uint32(lenData[2])<<16 | uint32(lenData[3])<<24
+
+	if dataLen == 0 {
+		return nil, errors.New("he_negate returned zero-length ciphertext")
+	}
+
+	rawData, ok := mem.Read(dataPtr, dataLen)
+	if !ok {
+		return nil, errors.New("failed to read negated ciphertext")
+	}
+
+	result := make([]byte, dataLen)
+	copy(result, rawData)
+
+	em.deallocate(ctx, dataPtr)
+
+	return result, nil
+}
+
+// heCtPlainOp is a helper for HE operations between a ciphertext and a plaintext int64.
+// The WASI function signature is:
+//
+//	fn(ctx_id, ct_ptr, ct_len, plain_i64, out_len_ptr) -> data_ptr
+func (em *EncryptionModule) heCtPlainOp(ctx context.Context, fn api.Function, fnName string, ctxID int32, ct []byte, plain int64) ([]byte, error) {
+	if fn == nil {
+		return nil, fmt.Errorf("%s not exported", fnName)
+	}
+
+	mem := em.module.Memory()
+
+	ctPtr, err := em.allocate(ctx, uint32(len(ct)))
+	if err != nil {
+		return nil, err
+	}
+	defer em.deallocate(ctx, ctPtr)
+
+	outLenPtr, err := em.allocate(ctx, 4)
+	if err != nil {
+		return nil, err
+	}
+	defer em.deallocate(ctx, outLenPtr)
+
+	if !mem.Write(ctPtr, ct) {
+		return nil, errors.New("failed to write ciphertext")
+	}
+
+	results, err := fn.Call(ctx,
+		uint64(uint32(ctxID)),
+		uint64(ctPtr), uint64(len(ct)),
+		uint64(plain),
+		uint64(outLenPtr))
+	if err != nil {
+		return nil, fmt.Errorf("%s failed: %w", fnName, err)
+	}
+
+	dataPtr := uint32(results[0])
+	if dataPtr == 0 {
+		return nil, fmt.Errorf("%s returned null", fnName)
+	}
+
+	// Read the output length (little-endian uint32)
+	lenData, ok := mem.Read(outLenPtr, 4)
+	if !ok {
+		return nil, fmt.Errorf("failed to read output length from %s", fnName)
+	}
+	dataLen := uint32(lenData[0]) | uint32(lenData[1])<<8 |
+		uint32(lenData[2])<<16 | uint32(lenData[3])<<24
+
+	if dataLen == 0 {
+		return nil, fmt.Errorf("%s returned zero-length ciphertext", fnName)
+	}
+
+	rawData, ok := mem.Read(dataPtr, dataLen)
+	if !ok {
+		return nil, fmt.Errorf("failed to read result from %s", fnName)
+	}
+
+	result := make([]byte, dataLen)
+	copy(result, rawData)
+
+	em.deallocate(ctx, dataPtr)
+
+	return result, nil
+}
+
+// HEAddPlain performs homomorphic addition of a ciphertext and a plaintext int64.
+// Returns a new ciphertext representing the sum.
+func (em *EncryptionModule) HEAddPlain(ctx context.Context, ctxID int32, ct []byte, plain int64) ([]byte, error) {
+	return em.heCtPlainOp(ctx, em.heAddPlain, "wasi_he_add_plain", ctxID, ct, plain)
+}
+
+// HEMultiplyPlain performs homomorphic multiplication of a ciphertext by a plaintext int64.
+// Returns a new ciphertext representing the product.
+func (em *EncryptionModule) HEMultiplyPlain(ctx context.Context, ctxID int32, ct []byte, plain int64) ([]byte, error) {
+	return em.heCtPlainOp(ctx, em.heMultiplyPlain, "wasi_he_multiply_plain", ctxID, ct, plain)
+}
+
 func main() {
 	fmt.Println("FlatBuffers WASI Encryption Example")
 	fmt.Println("====================================")
@@ -1519,6 +2134,7 @@ func main() {
 	fmt.Println("  - secp256k1 ECDH and ECDSA signatures (Bitcoin/Ethereum)")
 	fmt.Println("  - P-256 ECDH and ECDSA signatures (NIST)")
 	fmt.Println("  - Ed25519 signatures")
+	fmt.Println("  - Homomorphic Encryption (HE) operations")
 	fmt.Println()
 	fmt.Println("To run this example:")
 	fmt.Println("1. Build the WASI module: cmake --build build/wasm --target flatc_wasm_wasi")

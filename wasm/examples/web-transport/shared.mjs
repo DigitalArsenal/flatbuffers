@@ -1,11 +1,12 @@
 /**
  * Shared utilities for web transport examples
+ *
+ * All crypto operations use the WASM binary's exported wasm_crypto_* functions.
  */
 
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { FlatcRunner } from "flatc-wasm";
-import { loadEncryptionWasm, isInitialized } from "../../src/index.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -48,25 +49,27 @@ export const plainSchemaInput = {
 };
 
 let runnerInstance = null;
-let encryptionInitialized = false;
+let wasmModule = null;
 
 /**
- * Initialize the encryption WASM module (call once before using encryption)
+ * Get the WASM module with crypto exports.
+ * Load the Emscripten module directly — all crypto lives in the binary.
  */
-export async function initEncryption() {
-  if (!encryptionInitialized && !isInitialized()) {
-    const wasmPath = path.join(__dirname, '..', '..', 'dist', 'flatc-encryption.wasm');
-    await loadEncryptionWasm(wasmPath);
-    encryptionInitialized = true;
+export async function getWasmModule() {
+  if (!wasmModule) {
+    const wasmPath = path.join(__dirname, '..', '..', 'dist', 'flatc-wasm.js');
+    const { default: createModule } = await import(wasmPath);
+    wasmModule = await createModule({ noExitRuntime: true, noInitialRun: true });
   }
+  return wasmModule;
 }
 
 export async function getRunner() {
   if (!runnerInstance) {
     runnerInstance = await FlatcRunner.init();
   }
-  // Also init encryption when getting runner
-  await initEncryption();
+  // Also ensure WASM module is loaded
+  await getWasmModule();
   return runnerInstance;
 }
 

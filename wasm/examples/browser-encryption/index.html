@@ -116,283 +116,230 @@
   </style>
 </head>
 <body>
-  <h1>🔐 FlatBuffers Encryption Demo</h1>
+  <h1>FlatBuffers Encryption Demo (WASM Binary)</h1>
 
   <div id="status" class="loading">Loading flatc-wasm...</div>
 
   <div class="card">
-    <h2>1. Schema</h2>
-    <p>Define your schema with <code>(encrypted)</code> attributes on sensitive fields:</p>
-    <textarea id="schema">table UserData {
-  user_id: uint64;
-  username: string;
-  password_hash: string (encrypted);
-  balance: double (encrypted);
-  notes: string;
-}
-root_type UserData;</textarea>
-  </div>
-
-  <div class="card">
-    <h2>2. JSON Data</h2>
-    <p>Enter the data to be serialized:</p>
-    <textarea id="json-input">{
-  "user_id": 12345,
-  "username": "alice",
-  "password_hash": "secret_hash_abc123",
-  "balance": 1000.50,
-  "notes": "This is a public note"
-}</textarea>
-  </div>
-
-  <div class="card">
-    <h2>3. Encryption Key</h2>
+    <h2>1. Encryption Key</h2>
     <p>256-bit key (64 hex characters):</p>
     <input type="text" id="encryption-key" placeholder="Generate or enter a 64-character hex key">
-    <button onclick="generateKey()">🎲 Generate Random Key</button>
+    <button onclick="generateKey()">Generate Random Key</button>
   </div>
 
   <div class="card">
-    <h2>4. Operations</h2>
-    <button onclick="createBuffer()" id="btn-create">Create FlatBuffer</button>
-    <button onclick="encryptBuffer()" id="btn-encrypt" disabled>Encrypt</button>
-    <button onclick="decryptBuffer()" id="btn-decrypt" disabled>Decrypt</button>
-    <button onclick="readBuffer()" id="btn-read" disabled>Read as JSON</button>
-    <button onclick="compareBuffers()" id="btn-compare" disabled>Compare Original vs Encrypted</button>
+    <h2>2. Operations</h2>
+    <button onclick="testEncryptDecrypt()" id="btn-test">Run AES-256-CTR Test</button>
+    <button onclick="testX25519()" id="btn-x25519">Run X25519 ECDH Test</button>
+    <button onclick="testSha256()" id="btn-sha256">Run SHA-256 Test</button>
+    <button onclick="testHkdf()" id="btn-hkdf">Run HKDF Test</button>
   </div>
 
   <div class="card">
-    <h2>5. Output</h2>
-    <div class="row">
-      <div class="col">
-        <label>Buffer (hex):</label>
-        <div id="buffer-hex" class="output hex-display">No buffer created yet</div>
-      </div>
-      <div class="col">
-        <label>Log:</label>
-        <div id="log" class="output"></div>
-      </div>
-    </div>
+    <h2>3. Output</h2>
+    <div id="log" class="output">Waiting for WASM module to load...</div>
   </div>
 
   <div class="card">
     <h2>How It Works</h2>
     <ul>
-      <li><strong>Create FlatBuffer</strong>: Converts JSON to binary FlatBuffer format</li>
-      <li><strong>Encrypt</strong>: Encrypts fields marked with <code>(encrypted)</code> in-place</li>
-      <li><strong>Decrypt</strong>: Restores encrypted fields (same operation as encrypt for AES-CTR)</li>
-      <li><strong>Read as JSON</strong>: Converts buffer back to JSON (will show garbage if encrypted)</li>
-      <li><strong>Compare</strong>: Shows which bytes changed after encryption</li>
+      <li><strong>All crypto runs in the WASM binary</strong> &mdash; no JS crypto code</li>
+      <li>Uses <code>Module._wasm_crypto_*</code> Emscripten exports</li>
+      <li>Data is copied to/from WASM linear memory via <code>_malloc</code>/<code>HEAPU8</code></li>
+      <li>Supports AES-256-CTR, X25519, secp256k1, P-256, P-384, Ed25519, HKDF, SHA-256</li>
     </ul>
-    <p><strong>Key insight:</strong> The encrypted buffer maintains valid FlatBuffer structure. Only the field <em>values</em> are encrypted, not the schema/offsets.</p>
   </div>
 
-  <!-- Import from CDN or local -->
   <script type="module">
-    // Import the encryption module which includes all needed functions
-    import {
-      loadEncryptionWasm,
-      encryptBytes,
-      hkdf,
-      EncryptionContext,
-      encryptBuffer as encryptBufferLib,
-      decryptBuffer as decryptBufferLib,
-      parseSchemaForEncryption,
-      KEY_SIZE,
-      IV_SIZE
-    } from '../../src/index.mjs';
+    // Load the Emscripten module directly
+    const createModule = (await import('../../dist/flatc-wasm.js')).default;
 
-    // Path to the encryption WASM module (built from Crypto++)
-    const ENCRYPTION_WASM_PATH = '../../dist/flatc-encryption.wasm';
-
-    // Wrapper for encrypting buffers that uses the library's implementation
-    function encryptBufferImpl(buffer, schema, key, rootType) {
-      const { buffer: encrypted } = encryptBufferLib(buffer, schema, key, rootType);
-      return encrypted;
-    }
-
-    // Global state
-    let flatc = null;
-    let currentBuffer = null;
-    let originalBuffer = null;
-    let encryptionNonce = null;  // Store nonce for decrypt
-
-    // UI helpers
-    const log = document.getElementById('log');
-    const bufferHex = document.getElementById('buffer-hex');
+    let Module = null;
+    const logEl = document.getElementById('log');
     const status = document.getElementById('status');
 
     function appendLog(msg, className = '') {
       const line = document.createElement('div');
       line.textContent = msg;
       if (className) line.className = className;
-      log.appendChild(line);
-      log.scrollTop = log.scrollHeight;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
     }
 
     function clearLog() {
-      log.innerHTML = '';
+      logEl.innerHTML = '';
     }
 
     function toHex(arr) {
-      return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join(' ');
+      return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
-    function updateBufferDisplay() {
-      if (currentBuffer) {
-        bufferHex.textContent = toHex(currentBuffer);
+    function fromHex(hex) {
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < hex.length; i += 2) {
+        bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
       }
+      return bytes;
+    }
+
+    // WASM memory helpers
+    function allocBytes(data) {
+      const ptr = Module._malloc(data.length);
+      Module.HEAPU8.set(data, ptr);
+      return ptr;
+    }
+
+    function readBytes(ptr, len) {
+      return new Uint8Array(Module.HEAPU8.buffer, ptr, len).slice();
     }
 
     // Operations
     window.generateKey = function() {
       const key = crypto.getRandomValues(new Uint8Array(32));
-      document.getElementById('encryption-key').value = Array.from(key).map(b => b.toString(16).padStart(2, '0')).join('');
+      document.getElementById('encryption-key').value = toHex(key);
       appendLog('Generated new 256-bit key', 'success');
     };
 
-    window.createBuffer = async function() {
+    window.testEncryptDecrypt = function() {
       clearLog();
-      appendLog('Creating FlatBuffer...', 'info');
+      appendLog('=== AES-256-CTR Encrypt/Decrypt ===', 'info');
 
-      try {
-        const schema = document.getElementById('schema').value;
-        const json = document.getElementById('json-input').value;
-
-        // Parse to validate JSON
-        JSON.parse(json);
-
-        // Extract root type from schema
-        const rootMatch = schema.match(/root_type\s+(\w+)/);
-        if (!rootMatch) throw new Error('No root_type found in schema');
-        const rootType = rootMatch[1];
-
-        const schemaInput = {
-          entry: '/schema.fbs',
-          files: { '/schema.fbs': schema }
-        };
-
-        currentBuffer = flatc.generateBinary(schemaInput, json);
-        originalBuffer = new Uint8Array(currentBuffer);
-
-        appendLog(`Created buffer: ${currentBuffer.length} bytes`, 'success');
-        updateBufferDisplay();
-
-        document.getElementById('btn-encrypt').disabled = false;
-        document.getElementById('btn-read').disabled = false;
-        document.getElementById('btn-compare').disabled = false;
-      } catch (e) {
-        appendLog(`Error: ${e.message}`, 'error');
+      const keyHex = document.getElementById('encryption-key').value;
+      if (keyHex.length !== 64) {
+        appendLog('Error: Key must be 64 hex characters', 'error');
+        return;
       }
+
+      const key = fromHex(keyHex);
+      const iv = crypto.getRandomValues(new Uint8Array(16));
+      const plaintext = new TextEncoder().encode('Hello from the browser! This is encrypted with WASM.');
+      const original = new Uint8Array(plaintext);
+
+      const keyPtr = allocBytes(key);
+      const ivPtr = allocBytes(iv);
+      const dataPtr = allocBytes(plaintext);
+
+      appendLog(`Plaintext: "${new TextDecoder().decode(plaintext)}"`);
+      appendLog(`Key: ${toHex(key).substring(0, 32)}...`);
+      appendLog(`IV:  ${toHex(iv)}`);
+
+      // Encrypt
+      Module._wasm_crypto_encrypt_bytes(keyPtr, ivPtr, dataPtr, plaintext.length);
+      const encrypted = readBytes(dataPtr, plaintext.length);
+      appendLog(`Encrypted: ${toHex(encrypted).substring(0, 64)}...`, 'info');
+
+      // Decrypt (re-copy IV since encrypt consumed it)
+      Module.HEAPU8.set(iv, ivPtr);
+      Module._wasm_crypto_decrypt_bytes(keyPtr, ivPtr, dataPtr, plaintext.length);
+      const decrypted = readBytes(dataPtr, plaintext.length);
+      const decryptedText = new TextDecoder().decode(decrypted);
+
+      appendLog(`Decrypted: "${decryptedText}"`);
+
+      const match = decryptedText === new TextDecoder().decode(original);
+      appendLog(match ? 'Round-trip PASSED' : 'Round-trip FAILED', match ? 'success' : 'error');
+
+      Module._free(keyPtr);
+      Module._free(ivPtr);
+      Module._free(dataPtr);
     };
 
-    window.encryptBuffer = function() {
-      appendLog('Encrypting buffer...', 'info');
+    window.testX25519 = function() {
+      clearLog();
+      appendLog('=== X25519 ECDH Key Exchange ===', 'info');
 
-      try {
-        const keyHex = document.getElementById('encryption-key').value;
-        if (keyHex.length !== 64) throw new Error('Key must be 64 hex characters (256 bits)');
+      const privPtr1 = Module._malloc(32), pubPtr1 = Module._malloc(32);
+      const privPtr2 = Module._malloc(32), pubPtr2 = Module._malloc(32);
+      const secretPtr1 = Module._malloc(32), secretPtr2 = Module._malloc(32);
 
-        const schema = document.getElementById('schema').value;
-        const rootMatch = schema.match(/root_type\s+(\w+)/);
-        const rootType = rootMatch[1];
+      Module._wasm_crypto_x25519_generate_keypair(privPtr1, pubPtr1);
+      Module._wasm_crypto_x25519_generate_keypair(privPtr2, pubPtr2);
 
-        // Encrypt and save the nonce for later decryption
-        const { buffer, nonce } = encryptBufferLib(currentBuffer, schema, keyHex, rootType);
-        encryptionNonce = nonce;
+      const pub1 = readBytes(pubPtr1, 32);
+      const pub2 = readBytes(pubPtr2, 32);
+      appendLog(`Alice pubkey: ${toHex(pub1).substring(0, 32)}...`);
+      appendLog(`Bob pubkey:   ${toHex(pub2).substring(0, 32)}...`);
 
-        appendLog('Buffer encrypted!', 'success');
-        appendLog(`Nonce (save for decrypt): ${Array.from(nonce).map(b => b.toString(16).padStart(2, '0')).join('')}`, 'info');
-        updateBufferDisplay();
-        document.getElementById('btn-decrypt').disabled = false;
-      } catch (e) {
-        appendLog(`Error: ${e.message}`, 'error');
-      }
+      Module._wasm_crypto_x25519_shared_secret(privPtr1, pubPtr1, pubPtr2, secretPtr1);
+      Module._wasm_crypto_x25519_shared_secret(privPtr2, pubPtr2, pubPtr1, secretPtr2);
+
+      const secret1 = readBytes(secretPtr1, 32);
+      const secret2 = readBytes(secretPtr2, 32);
+      appendLog(`Alice secret: ${toHex(secret1).substring(0, 32)}...`);
+      appendLog(`Bob secret:   ${toHex(secret2).substring(0, 32)}...`);
+
+      const match = toHex(secret1) === toHex(secret2);
+      appendLog(match ? 'Shared secrets match - PASSED' : 'Shared secrets differ - FAILED', match ? 'success' : 'error');
+
+      [privPtr1, pubPtr1, privPtr2, pubPtr2, secretPtr1, secretPtr2].forEach(p => Module._free(p));
     };
 
-    window.decryptBuffer = function() {
-      appendLog('Decrypting buffer...', 'info');
+    window.testSha256 = function() {
+      clearLog();
+      appendLog('=== SHA-256 Hash ===', 'info');
 
-      try {
-        if (!encryptionNonce) {
-          throw new Error('No nonce available. Encrypt first or provide the nonce from encryption.');
-        }
+      const data = new TextEncoder().encode('test');
+      const dataPtr = allocBytes(data);
+      const hashPtr = Module._malloc(32);
 
-        const keyHex = document.getElementById('encryption-key').value;
-        const schema = document.getElementById('schema').value;
-        const rootMatch = schema.match(/root_type\s+(\w+)/);
-        const rootType = rootMatch[1];
+      Module._wasm_crypto_sha256(dataPtr, data.length, hashPtr);
+      const hash = readBytes(hashPtr, 32);
 
-        // Decrypt using the saved nonce (CRITICAL: must use same nonce as encryption)
-        decryptBufferLib(currentBuffer, schema, keyHex, rootType, encryptionNonce);
-        appendLog('Buffer decrypted!', 'success');
-        updateBufferDisplay();
-      } catch (e) {
-        appendLog(`Error: ${e.message}`, 'error');
-      }
+      const expected = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08';
+      const actual = toHex(hash);
+
+      appendLog(`Input: "test"`);
+      appendLog(`Expected: ${expected}`);
+      appendLog(`Got:      ${actual}`);
+      appendLog(actual === expected ? 'SHA-256 PASSED' : 'SHA-256 FAILED', actual === expected ? 'success' : 'error');
+
+      Module._free(dataPtr);
+      Module._free(hashPtr);
     };
 
-    window.readBuffer = function() {
-      appendLog('Reading buffer as JSON...', 'info');
+    window.testHkdf = function() {
+      clearLog();
+      appendLog('=== HKDF-SHA256 Key Derivation ===', 'info');
 
-      try {
-        const schema = document.getElementById('schema').value;
-        const schemaInput = {
-          entry: '/schema.fbs',
-          files: { '/schema.fbs': schema }
-        };
+      const ikm = crypto.getRandomValues(new Uint8Array(32));
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const info = new TextEncoder().encode('flatbuffers-test');
 
-        const json = flatc.generateJSON(schemaInput, { path: '/data.bin', data: currentBuffer });
-        appendLog('JSON output:', 'info');
-        appendLog(JSON.stringify(JSON.parse(json), null, 2));
-      } catch (e) {
-        appendLog(`Error reading buffer: ${e.message}`, 'error');
-        appendLog('(This may be expected if buffer is encrypted and strings contain invalid UTF-8)', 'info');
-      }
-    };
+      const ikmPtr = allocBytes(ikm);
+      const saltPtr = allocBytes(salt);
+      const infoPtr = allocBytes(info);
+      const outPtr = Module._malloc(32);
 
-    window.compareBuffers = function() {
-      if (!originalBuffer || !currentBuffer) return;
+      Module._wasm_crypto_hkdf(ikmPtr, ikm.length, saltPtr, salt.length, infoPtr, info.length, outPtr, 32);
+      const derived1 = readBytes(outPtr, 32);
 
-      appendLog('Comparing original vs current buffer:', 'info');
+      Module._wasm_crypto_hkdf(ikmPtr, ikm.length, saltPtr, salt.length, infoPtr, info.length, outPtr, 32);
+      const derived2 = readBytes(outPtr, 32);
 
-      let diffCount = 0;
-      for (let i = 0; i < originalBuffer.length; i++) {
-        if (originalBuffer[i] !== currentBuffer[i]) {
-          diffCount++;
-        }
-      }
+      appendLog(`IKM:     ${toHex(ikm).substring(0, 32)}...`);
+      appendLog(`Derived: ${toHex(derived1).substring(0, 32)}...`);
 
-      if (diffCount === 0) {
-        appendLog('Buffers are identical', 'success');
-      } else {
-        appendLog(`${diffCount} bytes differ (${((diffCount / originalBuffer.length) * 100).toFixed(1)}% of buffer)`, 'info');
-      }
+      const match = toHex(derived1) === toHex(derived2);
+      appendLog(match ? 'HKDF deterministic - PASSED' : 'HKDF non-deterministic - FAILED', match ? 'success' : 'error');
+
+      Module._free(ikmPtr); Module._free(saltPtr);
+      Module._free(infoPtr); Module._free(outPtr);
     };
 
     // Initialize
     async function init() {
       try {
-        // Load the encryption WASM module (Crypto++ compiled to WASM)
-        appendLog('Loading encryption WASM module...', 'info');
-        await loadEncryptionWasm(ENCRYPTION_WASM_PATH);
-        appendLog('Encryption module loaded (Crypto++ WASM)', 'success');
-
-        // Load flatc-wasm for FlatBuffer operations
-        const module = await import('../../src/index.mjs');
-        const { FlatcRunner } = module;
-
-        flatc = await FlatcRunner.init();
-        status.textContent = `Ready! flatc ${flatc.version()} + Crypto++ WASM`;
+        Module = await createModule({ noExitRuntime: true, noInitialRun: true });
+        const versionPtr = Module._wasm_crypto_get_version();
+        const version = Module.UTF8ToString(versionPtr);
+        status.textContent = `Ready! WASM crypto v${version}`;
         status.className = 'ready';
-
-        appendLog('flatc-wasm loaded successfully', 'success');
-        appendLog(`Version: ${flatc.version()}`, 'info');
+        logEl.innerHTML = '';
+        appendLog(`WASM module loaded - crypto v${version}`, 'success');
       } catch (e) {
         status.textContent = `Failed to load: ${e.message}`;
         status.className = 'error';
         appendLog(`Failed to load: ${e.message}`, 'error');
-        appendLog('Make sure you have built the WASM modules (flatc.wasm and flatc-encryption.wasm)', 'info');
       }
     }
 

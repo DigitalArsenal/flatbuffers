@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 /**
- * X25519 ECDH Test
+ * X25519 ECDH Test -- WASM binary exports
  */
 
-import {
-  x25519GenerateKeyPair,
-  x25519SharedSecret,
-  x25519DeriveKey,
-} from "flatc-wasm/encryption";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function toHex(bytes) {
   return Array.from(bytes)
@@ -15,27 +14,89 @@ function toHex(bytes) {
     .join("");
 }
 
-function testBasicKeyExchange() {
+async function loadModule() {
+  const wasmPath = path.join(__dirname, "..", "..", "dist", "flatc-wasm.js");
+  const { default: createModule } = await import(wasmPath);
+  const Module = await createModule({
+    noInitialRun: true,
+    noExitRuntime: true,
+  });
+  return Module;
+}
+
+function allocBytes(Module, data) {
+  const ptr = Module._malloc(data.length);
+  Module.HEAPU8.set(data, ptr);
+  return ptr;
+}
+
+function readBytes(Module, ptr, len) {
+  return new Uint8Array(Module.HEAPU8.buffer, ptr, len).slice();
+}
+
+function x25519GenerateKeyPair(Module, existingPrivate) {
+  const privPtr = Module._malloc(32);
+  const pubPtr = Module._malloc(32);
+
+  if (existingPrivate) {
+    Module.HEAPU8.set(existingPrivate, privPtr);
+  }
+
+  Module._wasm_crypto_x25519_generate_keypair(privPtr, pubPtr);
+
+  const privateKey = readBytes(Module, privPtr, 32);
+  const publicKey = readBytes(Module, pubPtr, 32);
+  Module._free(privPtr);
+  Module._free(pubPtr);
+  return { privateKey, publicKey };
+}
+
+function x25519SharedSecret(Module, privateKey, publicKey) {
+  const privPtr = allocBytes(Module, privateKey);
+  const pubPtr = allocBytes(Module, publicKey);
+  const outPtr = Module._malloc(32);
+
+  Module._wasm_crypto_x25519_shared_secret(privPtr, pubPtr, outPtr);
+
+  const shared = readBytes(Module, outPtr, 32);
+  Module._free(privPtr);
+  Module._free(pubPtr);
+  Module._free(outPtr);
+  return shared;
+}
+
+function hkdf(Module, inputKey) {
+  const ikmPtr = allocBytes(Module, inputKey);
+  const outPtr = Module._malloc(32);
+  // HKDF with empty salt and info, output 32 bytes
+  Module._wasm_crypto_hkdf(ikmPtr, inputKey.length, 0, 0, 0, 0, outPtr, 32);
+  const derived = readBytes(Module, outPtr, 32);
+  Module._free(ikmPtr);
+  Module._free(outPtr);
+  return derived;
+}
+
+function testBasicKeyExchange(Module) {
   console.log("=== Testing X25519 Key Exchange ===\n");
 
   // Generate Alice's key pair
-  const alice = x25519GenerateKeyPair();
+  const alice = x25519GenerateKeyPair(Module);
   console.log("Alice's private key:", toHex(alice.privateKey));
   console.log("Alice's public key: ", toHex(alice.publicKey));
   console.log();
 
   // Generate Bob's key pair
-  const bob = x25519GenerateKeyPair();
+  const bob = x25519GenerateKeyPair(Module);
   console.log("Bob's private key:  ", toHex(bob.privateKey));
   console.log("Bob's public key:   ", toHex(bob.publicKey));
   console.log();
 
   // Alice computes shared secret with Bob's public key
-  const aliceShared = x25519SharedSecret(alice.privateKey, bob.publicKey);
+  const aliceShared = x25519SharedSecret(Module, alice.privateKey, bob.publicKey);
   console.log("Alice's shared secret:", toHex(aliceShared));
 
   // Bob computes shared secret with Alice's public key
-  const bobShared = x25519SharedSecret(bob.privateKey, alice.publicKey);
+  const bobShared = x25519SharedSecret(Module, bob.privateKey, alice.publicKey);
   console.log("Bob's shared secret:  ", toHex(bobShared));
 
   // Compare
@@ -47,11 +108,11 @@ function testBasicKeyExchange() {
     return false;
   }
 
-  // Test key derivation
+  // Test key derivation via HKDF
   console.log("\n=== Testing Key Derivation ===\n");
 
-  const aliceDerived = x25519DeriveKey(aliceShared);
-  const bobDerived = x25519DeriveKey(bobShared);
+  const aliceDerived = hkdf(Module, aliceShared);
+  const bobDerived = hkdf(Module, bobShared);
 
   console.log("Alice's derived key:", toHex(aliceDerived));
   console.log("Bob's derived key:  ", toHex(bobDerived));
@@ -62,7 +123,7 @@ function testBasicKeyExchange() {
   return match && derivedMatch;
 }
 
-function testKnownVector() {
+function testKnownVector(Module) {
   console.log("\n=== Testing Known Vector (RFC 7748) ===\n");
 
   // RFC 7748 test vector
@@ -80,7 +141,6 @@ function testKnownVector() {
     0x1c, 0x2f, 0x8b, 0x27, 0xff, 0x88, 0xe0, 0xeb,
   ]);
 
-  // Expected public keys from RFC 7748
   const aliceExpectedPublic = new Uint8Array([
     0x85, 0x20, 0xf0, 0x09, 0x89, 0x30, 0xa7, 0x54,
     0x74, 0x8b, 0x7d, 0xdc, 0xb4, 0x3e, 0xf7, 0x5a,
@@ -95,7 +155,6 @@ function testKnownVector() {
     0xad, 0xfc, 0x7e, 0x14, 0x6f, 0x88, 0x2b, 0x4f,
   ]);
 
-  // Expected shared secret
   const expectedShared = new Uint8Array([
     0x4a, 0x5d, 0x9d, 0x5b, 0xa4, 0xce, 0x2d, 0xe1,
     0x72, 0x8e, 0x3b, 0xf4, 0x80, 0x35, 0x0f, 0x25,
@@ -103,16 +162,16 @@ function testKnownVector() {
     0x76, 0xf0, 0x9b, 0x3c, 0x1e, 0x16, 0x17, 0x42,
   ]);
 
-  // Generate Alice's public key
-  const alice = x25519GenerateKeyPair(alicePrivate);
+  // Generate Alice's public key from known private key
+  const alice = x25519GenerateKeyPair(Module, alicePrivate);
   console.log("Alice's public key (computed): ", toHex(alice.publicKey));
   console.log("Alice's public key (expected): ", toHex(aliceExpectedPublic));
   const aliceMatch = toHex(alice.publicKey) === toHex(aliceExpectedPublic);
   console.log("Match:", aliceMatch ? "YES" : "NO");
   console.log();
 
-  // Generate Bob's public key
-  const bob = x25519GenerateKeyPair(bobPrivate);
+  // Generate Bob's public key from known private key
+  const bob = x25519GenerateKeyPair(Module, bobPrivate);
   console.log("Bob's public key (computed): ", toHex(bob.publicKey));
   console.log("Bob's public key (expected): ", toHex(bobExpectedPublic));
   const bobMatch = toHex(bob.publicKey) === toHex(bobExpectedPublic);
@@ -120,7 +179,7 @@ function testKnownVector() {
   console.log();
 
   // Compute shared secret
-  const shared = x25519SharedSecret(alice.privateKey, bob.publicKey);
+  const shared = x25519SharedSecret(Module, alice.privateKey, bob.publicKey);
   console.log("Shared secret (computed):", toHex(shared));
   console.log("Shared secret (expected):", toHex(expectedShared));
   const sharedMatch = toHex(shared) === toHex(expectedShared);
@@ -129,13 +188,22 @@ function testKnownVector() {
   return aliceMatch && bobMatch && sharedMatch;
 }
 
-const basicOk = testBasicKeyExchange();
-const vectorOk = testKnownVector();
+async function main() {
+  const Module = await loadModule();
 
-console.log("\n=== Summary ===");
-console.log("Basic key exchange:", basicOk ? "PASS" : "FAIL");
-console.log("RFC 7748 vectors:", vectorOk ? "PASS" : "FAIL");
+  const basicOk = testBasicKeyExchange(Module);
+  const vectorOk = testKnownVector(Module);
 
-if (!basicOk || !vectorOk) {
-  process.exit(1);
+  console.log("\n=== Summary ===");
+  console.log("Basic key exchange:", basicOk ? "PASS" : "FAIL");
+  console.log("RFC 7748 vectors:", vectorOk ? "PASS" : "FAIL");
+
+  if (!basicOk || !vectorOk) {
+    process.exit(1);
+  }
 }
+
+main().catch((err) => {
+  console.error("Error:", err);
+  process.exit(1);
+});

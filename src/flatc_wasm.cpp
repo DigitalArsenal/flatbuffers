@@ -991,6 +991,317 @@ void wasm_stream_clear_encryption() {
   g_stream_encryption_ctx.reset();
 }
 
+// ----------------------------------------------------------------------------
+// Homomorphic Encryption (HE) Functions
+// These are only available when built with FLATBUFFERS_HE_USE_SEAL
+// ----------------------------------------------------------------------------
+
+#ifdef FLATBUFFERS_HE_USE_SEAL
+#include "flatbuffers/he_encryption.h"
+
+// Global storage for HE contexts
+static std::map<int32_t, std::unique_ptr<flatbuffers::he::HEContext>> g_he_contexts;
+static int32_t g_next_he_context_id = 1;
+
+// Global buffer for HE output data
+static std::vector<uint8_t> g_he_output;
+
+EMSCRIPTEN_KEEPALIVE
+int32_t wasm_he_context_create_client(uint32_t poly_degree) {
+  using namespace flatbuffers::he;
+  try {
+    auto ctx = std::make_unique<HEContext>(
+        HEContext::CreateClient(poly_degree > 0 ? poly_degree : kDefaultPolyModulusDegree));
+    if (!ctx->IsValid()) {
+      SetError("Failed to create HE client context");
+      return -1;
+    }
+    int32_t id = g_next_he_context_id++;
+    g_he_contexts[id] = std::move(ctx);
+    return id;
+  } catch (const std::exception& e) {
+    SetError(std::string("HE context creation failed: ") + e.what());
+    return -1;
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE
+int32_t wasm_he_context_create_server(const uint8_t* public_key, uint32_t pk_len) {
+  using namespace flatbuffers::he;
+  try {
+    auto ctx = std::make_unique<HEContext>(
+        HEContext::CreateServer(public_key, pk_len));
+    if (!ctx->IsValid()) {
+      SetError("Failed to create HE server context");
+      return -1;
+    }
+    int32_t id = g_next_he_context_id++;
+    g_he_contexts[id] = std::move(ctx);
+    return id;
+  } catch (const std::exception& e) {
+    SetError(std::string("HE server context creation failed: ") + e.what());
+    return -1;
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE
+void wasm_he_context_destroy(int32_t ctx_id) {
+  g_he_contexts.erase(ctx_id);
+}
+
+EMSCRIPTEN_KEEPALIVE
+const uint8_t* wasm_he_get_public_key(int32_t ctx_id, uint32_t* out_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    *out_len = 0;
+    return nullptr;
+  }
+  g_he_output = it->second->GetPublicKey();
+  *out_len = static_cast<uint32_t>(g_he_output.size());
+  return g_he_output.data();
+}
+
+EMSCRIPTEN_KEEPALIVE
+const uint8_t* wasm_he_get_relin_keys(int32_t ctx_id, uint32_t* out_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    *out_len = 0;
+    return nullptr;
+  }
+  g_he_output = it->second->GetRelinKeys();
+  *out_len = static_cast<uint32_t>(g_he_output.size());
+  return g_he_output.data();
+}
+
+EMSCRIPTEN_KEEPALIVE
+const uint8_t* wasm_he_get_secret_key(int32_t ctx_id, uint32_t* out_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    *out_len = 0;
+    return nullptr;
+  }
+  try {
+    g_he_output = it->second->GetSecretKey();
+    *out_len = static_cast<uint32_t>(g_he_output.size());
+    return g_he_output.data();
+  } catch (const std::exception& e) {
+    SetError(std::string("Cannot get secret key: ") + e.what());
+    *out_len = 0;
+    return nullptr;
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE
+int32_t wasm_he_set_relin_keys(int32_t ctx_id, const uint8_t* rk, uint32_t rk_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    return -1;
+  }
+  auto result = it->second->SetRelinKeys(rk, rk_len);
+  if (!result.ok()) {
+    SetError(result.message);
+    return -1;
+  }
+  return 0;
+}
+
+EMSCRIPTEN_KEEPALIVE
+const uint8_t* wasm_he_encrypt_int64(int32_t ctx_id, int64_t value, uint32_t* out_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    *out_len = 0;
+    return nullptr;
+  }
+  g_he_output = it->second->EncryptInt64(value);
+  if (g_he_output.empty()) {
+    SetError("Encryption failed");
+    *out_len = 0;
+    return nullptr;
+  }
+  *out_len = static_cast<uint32_t>(g_he_output.size());
+  return g_he_output.data();
+}
+
+EMSCRIPTEN_KEEPALIVE
+int64_t wasm_he_decrypt_int64(int32_t ctx_id, const uint8_t* ct, uint32_t ct_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    return 0;
+  }
+  try {
+    return it->second->DecryptInt64(ct, ct_len);
+  } catch (const std::exception& e) {
+    SetError(std::string("Decryption failed: ") + e.what());
+    return 0;
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE
+const uint8_t* wasm_he_encrypt_double(int32_t ctx_id, double value, uint32_t* out_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    *out_len = 0;
+    return nullptr;
+  }
+  g_he_output = it->second->EncryptDouble(value);
+  if (g_he_output.empty()) {
+    SetError("Encryption failed");
+    *out_len = 0;
+    return nullptr;
+  }
+  *out_len = static_cast<uint32_t>(g_he_output.size());
+  return g_he_output.data();
+}
+
+EMSCRIPTEN_KEEPALIVE
+double wasm_he_decrypt_double(int32_t ctx_id, const uint8_t* ct, uint32_t ct_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    return 0.0;
+  }
+  try {
+    return it->second->DecryptDouble(ct, ct_len);
+  } catch (const std::exception& e) {
+    SetError(std::string("Decryption failed: ") + e.what());
+    return 0.0;
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE
+const uint8_t* wasm_he_add(int32_t ctx_id,
+                            const uint8_t* ct1, uint32_t ct1_len,
+                            const uint8_t* ct2, uint32_t ct2_len,
+                            uint32_t* out_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    *out_len = 0;
+    return nullptr;
+  }
+  g_he_output = it->second->Add(ct1, ct1_len, ct2, ct2_len);
+  if (g_he_output.empty()) {
+    SetError("HE addition failed");
+    *out_len = 0;
+    return nullptr;
+  }
+  *out_len = static_cast<uint32_t>(g_he_output.size());
+  return g_he_output.data();
+}
+
+EMSCRIPTEN_KEEPALIVE
+const uint8_t* wasm_he_sub(int32_t ctx_id,
+                            const uint8_t* ct1, uint32_t ct1_len,
+                            const uint8_t* ct2, uint32_t ct2_len,
+                            uint32_t* out_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    *out_len = 0;
+    return nullptr;
+  }
+  g_he_output = it->second->Sub(ct1, ct1_len, ct2, ct2_len);
+  if (g_he_output.empty()) {
+    SetError("HE subtraction failed");
+    *out_len = 0;
+    return nullptr;
+  }
+  *out_len = static_cast<uint32_t>(g_he_output.size());
+  return g_he_output.data();
+}
+
+EMSCRIPTEN_KEEPALIVE
+const uint8_t* wasm_he_multiply(int32_t ctx_id,
+                                 const uint8_t* ct1, uint32_t ct1_len,
+                                 const uint8_t* ct2, uint32_t ct2_len,
+                                 uint32_t* out_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    *out_len = 0;
+    return nullptr;
+  }
+  g_he_output = it->second->Multiply(ct1, ct1_len, ct2, ct2_len);
+  if (g_he_output.empty()) {
+    SetError("HE multiplication failed");
+    *out_len = 0;
+    return nullptr;
+  }
+  *out_len = static_cast<uint32_t>(g_he_output.size());
+  return g_he_output.data();
+}
+
+EMSCRIPTEN_KEEPALIVE
+const uint8_t* wasm_he_negate(int32_t ctx_id,
+                               const uint8_t* ct, uint32_t ct_len,
+                               uint32_t* out_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    *out_len = 0;
+    return nullptr;
+  }
+  g_he_output = it->second->Negate(ct, ct_len);
+  if (g_he_output.empty()) {
+    SetError("HE negation failed");
+    *out_len = 0;
+    return nullptr;
+  }
+  *out_len = static_cast<uint32_t>(g_he_output.size());
+  return g_he_output.data();
+}
+
+EMSCRIPTEN_KEEPALIVE
+const uint8_t* wasm_he_add_plain(int32_t ctx_id,
+                                  const uint8_t* ct, uint32_t ct_len,
+                                  int64_t plain,
+                                  uint32_t* out_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    *out_len = 0;
+    return nullptr;
+  }
+  g_he_output = it->second->AddPlain(ct, ct_len, plain);
+  if (g_he_output.empty()) {
+    SetError("HE add_plain failed");
+    *out_len = 0;
+    return nullptr;
+  }
+  *out_len = static_cast<uint32_t>(g_he_output.size());
+  return g_he_output.data();
+}
+
+EMSCRIPTEN_KEEPALIVE
+const uint8_t* wasm_he_multiply_plain(int32_t ctx_id,
+                                       const uint8_t* ct, uint32_t ct_len,
+                                       int64_t plain,
+                                       uint32_t* out_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end()) {
+    SetError("HE context not found");
+    *out_len = 0;
+    return nullptr;
+  }
+  g_he_output = it->second->MultiplyPlain(ct, ct_len, plain);
+  if (g_he_output.empty()) {
+    SetError("HE multiply_plain failed");
+    *out_len = 0;
+    return nullptr;
+  }
+  *out_len = static_cast<uint32_t>(g_he_output.size());
+  return g_he_output.data();
+}
+
+#endif  // FLATBUFFERS_HE_USE_SEAL
+
 }  // extern "C"
 
 // ============================================================================

@@ -213,6 +213,28 @@ if(EMSCRIPTEN)
     "_wasm_list_embedded_runtimes"
     "_wasm_get_embedded_runtime_info"
   )
+
+  # HE (Homomorphic Encryption) exports - only included when SEAL is enabled
+  set(WASM_HE_EXPORTED_FUNCTIONS
+    "_wasm_he_context_create_client"
+    "_wasm_he_context_create_server"
+    "_wasm_he_context_destroy"
+    "_wasm_he_get_public_key"
+    "_wasm_he_get_relin_keys"
+    "_wasm_he_get_secret_key"
+    "_wasm_he_set_relin_keys"
+    "_wasm_he_encrypt_int64"
+    "_wasm_he_decrypt_int64"
+    "_wasm_he_encrypt_double"
+    "_wasm_he_decrypt_double"
+    "_wasm_he_add"
+    "_wasm_he_sub"
+    "_wasm_he_multiply"
+    "_wasm_he_negate"
+    "_wasm_he_add_plain"
+    "_wasm_he_multiply_plain"
+  )
+
   string(JOIN "," EXPORTED_FUNCS_STR ${WASM_EXPORTED_FUNCTIONS})
 
   # Fetch Crypto++ for encryption support (used by flatc_wasm and flatc_wasm_wasi)
@@ -261,6 +283,26 @@ if(EMSCRIPTEN)
         GIT_SHALLOW    FALSE  # Pin for reproducibility (Task 46)
       )
       FetchContent_MakeAvailable(openssl)
+    endif()
+  endif()
+
+  # Optional: Microsoft SEAL for Homomorphic Encryption
+  option(FLATBUFFERS_WASM_ENABLE_HE "Enable Homomorphic Encryption support via Microsoft SEAL" OFF)
+  if(FLATBUFFERS_WASM_ENABLE_HE)
+    if(NOT TARGET seal)
+      message(STATUS "Fetching Microsoft SEAL for Homomorphic Encryption...")
+      FetchContent_Declare(
+        seal
+        GIT_REPOSITORY https://github.com/microsoft/SEAL.git
+        GIT_TAG        v4.1.1
+        GIT_SHALLOW    TRUE
+      )
+      set(SEAL_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+      set(SEAL_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+      set(SEAL_BUILD_BENCH OFF CACHE BOOL "" FORCE)
+      set(SEAL_USE_INTEL_HEXL OFF CACHE BOOL "" FORCE)
+      set(SEAL_THROW_ON_TRANSPARENT_CIPHERTEXT OFF CACHE BOOL "" FORCE)
+      FetchContent_MakeAvailable(seal)
     endif()
   endif()
 
@@ -376,6 +418,72 @@ module.exports.default = createModule;
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/ts/flatc-wasm.d.ts" "${WASM_NPM_DIR}/flatc-wasm.d.ts"
     COMMENT "NPM package created in ${WASM_NPM_DIR}"
   )
+
+  # Target: flatc_wasm_he (with Homomorphic Encryption support via SEAL)
+  if(FLATBUFFERS_WASM_ENABLE_HE)
+    # Combine base exports with HE exports
+    set(WASM_HE_ALL_EXPORTS ${WASM_EXPORTED_FUNCTIONS} ${WASM_HE_EXPORTED_FUNCTIONS})
+    string(JOIN "," HE_EXPORTED_FUNCS_STR ${WASM_HE_ALL_EXPORTS})
+
+    # HE-specific source files
+    set(FlatBuffers_WASM_HE_SRCS
+      ${FlatBuffers_WASM_SRCS}
+      src/he_encryption.cpp
+    )
+
+    add_executable(flatc_wasm_he ${FlatBuffers_WASM_HE_SRCS})
+    target_compile_features(flatc_wasm_he PRIVATE cxx_std_17)
+    set_target_properties(flatc_wasm_he PROPERTIES
+      CXX_STANDARD 17
+      CXX_STANDARD_REQUIRED ON
+      CXX_EXTENSIONS OFF
+      OUTPUT_NAME "flatc-he"
+      SUFFIX ".js"
+      RUNTIME_OUTPUT_DIRECTORY "${WASM_OUTPUT_DIR}"
+    )
+    target_include_directories(flatc_wasm_he PRIVATE
+      ${CMAKE_SOURCE_DIR}/include
+      ${CMAKE_SOURCE_DIR}/grpc
+      ${CMAKE_SOURCE_DIR}/src
+      ${brotli_SOURCE_DIR}/c/include
+    )
+    target_compile_options(flatc_wasm_he PRIVATE ${WASM_COMPILE_OPTIONS} -fexceptions)
+    target_compile_definitions(flatc_wasm_he PRIVATE
+      FLATBUFFERS_USE_CRYPTOPP=1
+      FLATBUFFERS_HE_USE_SEAL=1
+    )
+    target_link_libraries(flatc_wasm_he PRIVATE cryptopp brotlidec brotlicommon seal)
+
+    # HE-specific link options with larger memory for SEAL
+    set(WASM_HE_LINK_OPTIONS
+      -sWASM=1
+      -sMODULARIZE=1
+      -sEXPORT_NAME=FlatcWasmHE
+      -sALLOW_MEMORY_GROWTH=1
+      -sINITIAL_MEMORY=64MB
+      -sMAXIMUM_MEMORY=512MB
+      -sSTACK_SIZE=2MB
+      "-sEXPORTED_FUNCTIONS=[${HE_EXPORTED_FUNCS_STR},_main]"
+      -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8,FS,PATH,callMain,HEAPU8
+      --bind
+      -sENVIRONMENT=web,node
+      -sFILESYSTEM=1
+      -sFORCE_FILESYSTEM=1
+      -sNO_EXIT_RUNTIME=1
+      -sINVOKE_RUN=0
+      -sEXPORT_ES6=1
+      -sSINGLE_FILE=1
+      -fexceptions
+      -sDISABLE_EXCEPTION_THROWING=0
+      $<$<CONFIG:Release>:-O3>
+      $<$<CONFIG:Release>:-flto>
+      $<$<CONFIG:Debug>:-g>
+      $<$<CONFIG:Debug>:-sASSERTIONS=2>
+    )
+    target_link_options(flatc_wasm_he PRIVATE ${WASM_HE_LINK_OPTIONS})
+
+    message(STATUS "  flatc_wasm_he     - With Homomorphic Encryption (SEAL) -> ${WASM_OUTPUT_DIR}/")
+  endif()
 
   # Test targets
   find_program(NODE_EXECUTABLE node)
@@ -526,6 +634,82 @@ module.exports.default = createModule;
   )
 
   message(STATUS "  flatc_wasm_wasi   - WASI standalone module (with Crypto++) -> ${WASM_OUTPUT_DIR}/")
+
+  # Target: flatc_wasm_wasi_he (WASI standalone module with HE support)
+  if(FLATBUFFERS_WASM_ENABLE_HE)
+    # WASI HE exported functions
+    set(WASI_HE_EXPORTED_FUNCTIONS
+      "_wasi_he_context_create_client"
+      "_wasi_he_context_create_server"
+      "_wasi_he_context_destroy"
+      "_wasi_he_get_public_key"
+      "_wasi_he_get_relin_keys"
+      "_wasi_he_get_secret_key"
+      "_wasi_he_set_relin_keys"
+      "_wasi_he_encrypt_int64"
+      "_wasi_he_decrypt_int64"
+      "_wasi_he_encrypt_double"
+      "_wasi_he_decrypt_double"
+      "_wasi_he_add"
+      "_wasi_he_sub"
+      "_wasi_he_multiply"
+      "_wasi_he_negate"
+      "_wasi_he_add_plain"
+      "_wasi_he_multiply_plain"
+    )
+
+    # Combine base WASI exports with HE exports
+    set(WASI_HE_ALL_EXPORTS ${WASI_EXPORTED_FUNCTIONS} ${WASI_HE_EXPORTED_FUNCTIONS})
+    string(JOIN "," WASI_HE_EXPORTED_FUNCS_STR ${WASI_HE_ALL_EXPORTS})
+
+    # WASI HE source files
+    set(FlatBuffers_WASI_HE_SRCS
+      ${FlatBuffers_WASI_SRCS}
+      ${CMAKE_SOURCE_DIR}/src/he_encryption.cpp
+      ${CMAKE_SOURCE_DIR}/src/he_encryption_wasi.cpp
+    )
+
+    add_executable(flatc_wasm_wasi_he ${FlatBuffers_WASI_HE_SRCS})
+    target_compile_features(flatc_wasm_wasi_he PRIVATE cxx_std_17)
+    set_target_properties(flatc_wasm_wasi_he PROPERTIES
+      CXX_STANDARD 17
+      CXX_STANDARD_REQUIRED ON
+      CXX_EXTENSIONS OFF
+      OUTPUT_NAME "flatc-encryption-he"
+      SUFFIX ".wasm"
+      RUNTIME_OUTPUT_DIRECTORY "${WASM_OUTPUT_DIR}"
+    )
+    target_include_directories(flatc_wasm_wasi_he PRIVATE
+      ${CMAKE_SOURCE_DIR}/include
+    )
+    target_compile_definitions(flatc_wasm_wasi_he PRIVATE
+      FLATBUFFERS_WASI=1
+      FLATBUFFERS_USE_CRYPTOPP=1
+      FLATBUFFERS_HE_USE_SEAL=1
+    )
+    target_compile_options(flatc_wasm_wasi_he PRIVATE -fexceptions)
+    target_link_libraries(flatc_wasm_wasi_he PRIVATE cryptopp seal)
+    target_link_options(flatc_wasm_wasi_he PRIVATE
+      -sSTANDALONE_WASM=1
+      -sPURE_WASI=1
+      -sWASM=1
+      -sERROR_ON_UNDEFINED_SYMBOLS=0
+      "-sEXPORTED_FUNCTIONS=[${WASI_HE_EXPORTED_FUNCS_STR}]"
+      -sALLOW_MEMORY_GROWTH=1
+      -sINITIAL_MEMORY=64MB
+      -sMAXIMUM_MEMORY=512MB
+      -sSTACK_SIZE=2MB
+      -fexceptions
+      -sDISABLE_EXCEPTION_THROWING=0
+      --no-entry
+      $<$<CONFIG:Release>:-O3>
+      $<$<CONFIG:Release>:-flto>
+      $<$<CONFIG:Release>:--strip-debug>
+      $<$<CONFIG:Debug>:-g>
+    )
+
+    message(STATUS "  flatc_wasm_wasi_he - WASI standalone module with HE (SEAL) -> ${WASM_OUTPUT_DIR}/")
+  endif()
 
   # Browser example targets (also available in Emscripten build)
   find_program(NPM_EXECUTABLE npm)
@@ -693,6 +877,12 @@ add_custom_target(flatc_wasm_wasi
   USES_TERMINAL
 )
 
+add_custom_target(flatc_wasm_wasi_he
+  COMMAND bash "${WASM_BUILD_SCRIPT}" flatc_wasm_wasi_he
+  COMMENT "Building WASI standalone module with HE..."
+  USES_TERMINAL
+)
+
 # Test targets
 find_program(NODE_EXECUTABLE node)
 if(NODE_EXECUTABLE)
@@ -732,6 +922,7 @@ message(STATUS "  flatc_wasm        - Build WASM module (separate files)")
 message(STATUS "  flatc_wasm_inline - Build WASM module (single file)")
 message(STATUS "  flatc_wasm_npm    - Build npm package")
 message(STATUS "  flatc_wasm_wasi   - Build WASI standalone module")
+message(STATUS "  flatc_wasm_wasi_he - Build WASI standalone module with HE")
 if(NODE_EXECUTABLE)
   message(STATUS "  flatc_wasm_test   - Run basic tests")
   message(STATUS "  flatc_wasm_test_all - Run all tests")

@@ -17,13 +17,35 @@
  * - A smart contract (for blockchain use cases)
  *
  * This module demonstrates BOTH JSON and FlatBuffer binary formats for headers.
+ *
+ * All crypto operations (sha256) use WASM binary exports (Module._wasm_crypto_*).
  */
 
-import {
-  sha256,
-  encryptionHeaderToJSON,
-  encryptionHeaderFromJSON,
-} from "flatc-wasm/encryption";
+import { getWasmModule, toHex } from "./shared.mjs";
+
+// ---------------------------------------------------------------------------
+// WASM crypto helper: sha256 (lazy-loaded)
+// ---------------------------------------------------------------------------
+
+let _module = null;
+
+async function ensureModule() {
+  if (!_module) {
+    _module = await getWasmModule();
+  }
+  return _module;
+}
+
+function sha256Sync(data, Module) {
+  const dataPtr = Module._malloc(data.length);
+  Module.HEAPU8.set(data, dataPtr);
+  const hashPtr = Module._malloc(32);
+  Module._wasm_crypto_sha256(dataPtr, data.length, hashPtr);
+  const hash = new Uint8Array(Module.HEAPU8.buffer, hashPtr, 32).slice();
+  Module._free(dataPtr);
+  Module._free(hashPtr);
+  return hash;
+}
 
 /**
  * Session descriptor - can be serialized to JSON or FlatBuffer
@@ -56,6 +78,15 @@ class HeaderStore {
     this.byMessageId = new Map();
     // Map of recipient key ID -> [headers] (multiple messages per recipient)
     this.byRecipientKeyId = new Map();
+    this._module = null;
+  }
+
+  /**
+   * Initialise the store (loads the WASM module for sha256)
+   */
+  async init() {
+    this._module = await ensureModule();
+    return this;
   }
 
   /**
@@ -64,7 +95,10 @@ class HeaderStore {
    * @returns {string} - Hex-encoded SHA-256 hash
    */
   computeContentHash(encryptedData) {
-    const hash = sha256(encryptedData);
+    if (!this._module) {
+      throw new Error("HeaderStore not initialised. Call await store.init() first.");
+    }
+    const hash = sha256Sync(encryptedData, this._module);
     return Array.from(hash)
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
@@ -265,7 +299,7 @@ export function headerFromBinary(binary) {
  * @returns {string} - JSON string
  */
 export function headerToJSON(header) {
-  return encryptionHeaderToJSON(header);
+  return JSON.stringify(header, null, 2);
 }
 
 /**
@@ -274,7 +308,8 @@ export function headerToJSON(header) {
  * @returns {Object} - Header object
  */
 export function headerFromJSON(json) {
-  return encryptionHeaderFromJSON(json);
+  const parsed = typeof json === "string" ? JSON.parse(json) : json;
+  return normalizeHeader(parsed);
 }
 
 /**

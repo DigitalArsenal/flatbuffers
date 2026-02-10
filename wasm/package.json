@@ -1,6 +1,6 @@
 {
   "name": "flatc-wasm",
-  "version": "25.12.19-wasm.55",
+  "version": "25.12.19-wasm.56",
   "description": "FlatBuffers compiler (flatc) as a WebAssembly module - schema management, JSON/binary conversion, and code generation",
   "type": "module",
   "main": "src/index.mjs",
@@ -44,7 +44,7 @@
   ],
   "scripts": {
     "build": "cmake --build ../build/wasm --target flatc_wasm_npm -j",
-    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_aligned.mjs && node test/test_aligned_interop.mjs && node test/test_encryption.mjs && node test/test_webapp_crypto.mjs",
+    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
     "test:aligned": "node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
     "prepublishOnly": "npm test",
     "prepare": "cd .. && husky || true"

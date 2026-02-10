@@ -4,6 +4,7 @@
  *
  * Demonstrates streaming FlatBuffers over SSE.
  * Supports both encrypted and non-encrypted streams.
+ * All crypto operations use WASM binary exports (Module._wasm_crypto_*).
  *
  * Encryption Model (Session-Based):
  * - One header establishes the encryption context for the stream
@@ -26,18 +27,11 @@
 
 import { createServer } from "http";
 import {
-  x25519GenerateKeyPair,
-  secp256k1GenerateKeyPair,
-  p256GenerateKeyPair,
-  EncryptionContext,
-  KeyExchangeAlgorithm,
-  encryptBuffer,
-} from "flatc-wasm/encryption";
-import {
+  getWasmModule,
+  getRunner,
   schemaContent,
   schemaInput,
   plainSchemaInput,
-  getRunner,
   toHex,
   fromHex,
   generateId,
@@ -45,39 +39,154 @@ import {
 
 const PORT = parseInt(process.argv[2]) || 8081;
 
-// Server's key pairs
-const serverKeys = {
-  x25519: x25519GenerateKeyPair(),
-  secp256k1: secp256k1GenerateKeyPair(),
-  p256: p256GenerateKeyPair(),
-};
+// ---------------------------------------------------------------------------
+// WASM memory helpers
+// ---------------------------------------------------------------------------
+
+let Module;
+
+function allocBytes(data) {
+  const ptr = Module._malloc(data.length);
+  Module.HEAPU8.set(data, ptr);
+  return ptr;
+}
+
+function readBytes(ptr, len) {
+  return new Uint8Array(Module.HEAPU8.buffer, ptr, len).slice();
+}
+
+function freeBytes(ptr) {
+  Module._free(ptr);
+}
+
+// ---------------------------------------------------------------------------
+// Crypto helpers
+// ---------------------------------------------------------------------------
+
+function x25519GenerateKeyPair() {
+  const privPtr = Module._malloc(32);
+  const pubPtr = Module._malloc(32);
+  const rc = Module._wasm_crypto_x25519_generate_keypair(privPtr, pubPtr);
+  if (rc !== 0) throw new Error("x25519 keypair generation failed");
+  const privateKey = readBytes(privPtr, 32);
+  const publicKey = readBytes(pubPtr, 32);
+  freeBytes(privPtr);
+  freeBytes(pubPtr);
+  return { privateKey, publicKey };
+}
+
+function secp256k1GenerateKeyPair() {
+  const privPtr = Module._malloc(32);
+  const pubPtr = Module._malloc(33);
+  const rc = Module._wasm_crypto_secp256k1_generate_keypair(privPtr, pubPtr);
+  if (rc !== 0) throw new Error("secp256k1 keypair generation failed");
+  const privateKey = readBytes(privPtr, 32);
+  const publicKey = readBytes(pubPtr, 33);
+  freeBytes(privPtr);
+  freeBytes(pubPtr);
+  return { privateKey, publicKey };
+}
+
+function x25519SharedSecret(privateKey, myPublicKey, peerPublicKey) {
+  const privPtr = allocBytes(privateKey);
+  const myPubPtr = allocBytes(myPublicKey);
+  const peerPubPtr = allocBytes(peerPublicKey);
+  const secretPtr = Module._malloc(32);
+  const rc = Module._wasm_crypto_x25519_shared_secret(privPtr, myPubPtr, peerPubPtr, secretPtr);
+  if (rc !== 0) throw new Error("x25519 shared secret failed");
+  const secret = readBytes(secretPtr, 32);
+  freeBytes(privPtr);
+  freeBytes(myPubPtr);
+  freeBytes(peerPubPtr);
+  freeBytes(secretPtr);
+  return secret;
+}
+
+function deriveSymmetricKey(sharedSecret, context) {
+  const ssPtr = allocBytes(sharedSecret);
+  const ctxBytes = new TextEncoder().encode(context);
+  const ctxPtr = allocBytes(ctxBytes);
+  const outLen = 32;
+  const outPtr = Module._malloc(outLen);
+  Module._wasm_crypto_derive_symmetric_key(
+    ssPtr, sharedSecret.length,
+    ctxPtr, ctxBytes.length,
+    outPtr, outLen
+  );
+  const key = readBytes(outPtr, outLen);
+  freeBytes(ssPtr);
+  freeBytes(ctxPtr);
+  freeBytes(outPtr);
+  return key;
+}
+
+function encryptBytes(key, iv, data) {
+  const keyPtr = allocBytes(key);
+  const ivPtr = allocBytes(iv);
+  const dataPtr = allocBytes(data);
+  const rc = Module._wasm_crypto_encrypt_bytes(keyPtr, ivPtr, dataPtr, data.length);
+  if (rc !== 0) throw new Error("encryption failed");
+  const result = readBytes(dataPtr, data.length);
+  freeBytes(keyPtr);
+  freeBytes(ivPtr);
+  freeBytes(dataPtr);
+  return result;
+}
+
+function sha256(data) {
+  const dataPtr = allocBytes(data);
+  const hashPtr = Module._malloc(32);
+  Module._wasm_crypto_sha256(dataPtr, data.length, hashPtr);
+  const hash = readBytes(hashPtr, 32);
+  freeBytes(dataPtr);
+  freeBytes(hashPtr);
+  return hash;
+}
+
+// ---------------------------------------------------------------------------
+// Session management
+// ---------------------------------------------------------------------------
+
+// Server's key pairs (initialised after WASM module loads)
+let serverKeys;
 
 // Active SSE connections
 const plainClients = new Set();
 // Encrypted clients with their session context
-const encryptedClients = new Map(); // Map<res, {publicKey, keyExchange, encryptCtx}>
+const encryptedClients = new Map(); // Map<res, session>
 
 function toBase64(bytes) {
   return Buffer.from(bytes).toString("base64");
 }
 
 /**
- * Create a new encryption session for a client
+ * Create a new encryption session for a client.
+ * Generates an ephemeral keypair, computes shared secret, derives symmetric key.
  */
 function createSession(publicKey, algorithm) {
-  const encryptCtx = EncryptionContext.forEncryption(publicKey, {
-    algorithm,
-    context: "sse-stream-v1",
-    rootType: "Message",
-  });
+  const ephemeral = x25519GenerateKeyPair();
+  const shared = x25519SharedSecret(ephemeral.privateKey, ephemeral.publicKey, publicKey);
+  const encryptKey = deriveSymmetricKey(shared, "sse-stream-v1");
+  const encryptIv = sha256(ephemeral.publicKey).slice(0, 16);
+
   return {
     publicKey,
     algorithm,
-    encryptCtx,
-    headerJSON: encryptCtx.getHeaderJSON(),
+    encryptKey,
+    encryptIv,
+    header: {
+      ephemeralPublicKey: toHex(ephemeral.publicKey),
+      iv: toHex(encryptIv),
+      algorithm: "x25519",
+      context: "sse-stream-v1",
+    },
     messageCount: 0,
   };
 }
+
+// ---------------------------------------------------------------------------
+// HTTP handler
+// ---------------------------------------------------------------------------
 
 async function handleRequest(req, res) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -100,7 +209,6 @@ async function handleRequest(req, res) {
       const keys = {
         x25519: toHex(serverKeys.x25519.publicKey),
         secp256k1: toHex(serverKeys.secp256k1.publicKey),
-        p256: toHex(serverKeys.p256.publicKey),
       };
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(keys, null, 2));
@@ -127,7 +235,7 @@ async function handleRequest(req, res) {
       return;
     }
 
-    // GET /encrypted-events?key=<hex>&algo=<x25519|secp256k1|p256>
+    // GET /encrypted-events?key=<hex>&algo=<x25519>
     if (path === "/encrypted-events") {
       const keyHex = url.searchParams.get("key");
       const algo = url.searchParams.get("algo") || "x25519";
@@ -138,29 +246,14 @@ async function handleRequest(req, res) {
         return;
       }
 
-      let algorithm;
-      let expectedLength;
-      switch (algo) {
-        case "x25519":
-          algorithm = KeyExchangeAlgorithm.X25519;
-          expectedLength = 32;
-          break;
-        case "secp256k1":
-          algorithm = KeyExchangeAlgorithm.SECP256K1;
-          expectedLength = 33;
-          break;
-        case "p256":
-          algorithm = KeyExchangeAlgorithm.P256;
-          expectedLength = 33;
-          break;
-        default:
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "Invalid algo" }));
-          return;
+      if (algo !== "x25519") {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Only x25519 supported via WASM" }));
+        return;
       }
 
       const publicKey = fromHex(keyHex);
-      if (publicKey.length !== expectedLength) {
+      if (publicKey.length !== 32) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: `Invalid key length for ${algo}` }));
         return;
@@ -173,7 +266,7 @@ async function handleRequest(req, res) {
       });
 
       // Create session with encryption context
-      const session = createSession(publicKey, algorithm);
+      const session = createSession(publicKey, algo);
       encryptedClients.set(res, session);
       console.log(`[ENCRYPTED] Client connected with ${algo} (${encryptedClients.size} total)`);
 
@@ -187,7 +280,7 @@ async function handleRequest(req, res) {
       res.write(`event: connected\ndata: ${JSON.stringify({
         type: "encrypted",
         algo,
-        header: JSON.parse(session.headerJSON),
+        header: session.header,
       })}\n\n`);
       return;
     }
@@ -200,6 +293,10 @@ async function handleRequest(req, res) {
     res.end(JSON.stringify({ error: err.message }));
   }
 }
+
+// ---------------------------------------------------------------------------
+// Broadcast loop
+// ---------------------------------------------------------------------------
 
 async function broadcast() {
   const runner = await getRunner();
@@ -232,8 +329,8 @@ async function broadcast() {
     try {
       const buffer = runner.generateBinary(schemaInput, JSON.stringify(message));
 
-      // Use the session's encryption context
-      encryptBuffer(buffer, schemaContent, session.encryptCtx, "Message");
+      // Encrypt using session's symmetric key
+      const enc = encryptBytes(session.encryptKey, session.encryptIv, buffer);
       session.messageCount++;
 
       // Optional: Rotate keys every N messages (e.g., 100)
@@ -245,7 +342,7 @@ async function broadcast() {
 
         // Send rotation event with new header
         client.write(`event: rotate\ndata: ${JSON.stringify({
-          header: JSON.parse(newSession.headerJSON),
+          header: newSession.header,
           reason: "periodic",
         })}\n\n`);
 
@@ -254,7 +351,7 @@ async function broadcast() {
 
       // Send encrypted data (just the buffer, no header)
       client.write(`event: message\ndata: ${JSON.stringify({
-        buffer: toBase64(buffer),
+        buffer: toBase64(enc),
       })}\n\n`);
     } catch (err) {
       encryptedClients.delete(client);
@@ -266,23 +363,39 @@ async function broadcast() {
   }
 }
 
-const server = createServer(handleRequest);
+// ---------------------------------------------------------------------------
+// Start server
+// ---------------------------------------------------------------------------
 
-server.listen(PORT, () => {
-  console.log("=== SSE Server (Session-Based Encryption) ===\n");
-  console.log(`Listening on http://localhost:${PORT}\n`);
-  console.log("Endpoints:");
-  console.log("  GET /keys                     - Get server public keys");
-  console.log("  GET /events                   - Plaintext event stream");
-  console.log("  GET /encrypted-events?key=... - Encrypted event stream");
-  console.log("\nEncryption model:");
-  console.log("  - Header sent once at connection");
-  console.log("  - All messages use same header until rotation");
-  console.log("  - Optional key rotation every 100 messages");
-  console.log("\nServer public keys:");
-  console.log(`  X25519: ${toHex(serverKeys.x25519.publicKey)}`);
-  console.log();
-});
+async function start() {
+  Module = await getWasmModule();
 
-setInterval(broadcast, 3000);
-setTimeout(broadcast, 1000);
+  // Generate server key pairs using WASM crypto
+  serverKeys = {
+    x25519: x25519GenerateKeyPair(),
+    secp256k1: secp256k1GenerateKeyPair(),
+  };
+
+  const server = createServer(handleRequest);
+
+  server.listen(PORT, () => {
+    console.log("=== SSE Server (Session-Based Encryption) ===\n");
+    console.log(`Listening on http://localhost:${PORT}\n`);
+    console.log("Endpoints:");
+    console.log("  GET /keys                     - Get server public keys");
+    console.log("  GET /events                   - Plaintext event stream");
+    console.log("  GET /encrypted-events?key=... - Encrypted event stream");
+    console.log("\nEncryption model:");
+    console.log("  - Header sent once at connection");
+    console.log("  - All messages use same header until rotation");
+    console.log("  - Optional key rotation every 100 messages");
+    console.log("\nServer public keys:");
+    console.log(`  X25519: ${toHex(serverKeys.x25519.publicKey)}`);
+    console.log();
+  });
+
+  setInterval(broadcast, 3000);
+  setTimeout(broadcast, 1000);
+}
+
+start().catch(console.error);

@@ -60,9 +60,23 @@ option(FLATBUFFERS_STRICT_MODE
 option(FLATBUFFERS_USE_CRYPTOPP
       "Use Crypto++ library for encryption (replaces custom crypto implementation)."
       OFF)
+option(FLATBUFFERS_USE_OPENSSL
+      "Use OpenSSL for encryption with FIPS compliance support."
+      ON)
+option(FLATBUFFERS_USE_SEAL
+      "Use Microsoft SEAL library for homomorphic encryption support."
+      ON)
 
 if(NOT DEFINED FLATBUFFERS_CPP_STD)
   set(FLATBUFFERS_CPP_STD 11)
+endif()
+
+# SEAL requires C++17; upgrade automatically if needed.
+if(FLATBUFFERS_USE_SEAL)
+  if(FLATBUFFERS_CPP_STD LESS 17)
+    message(STATUS "SEAL requires C++17; upgrading FLATBUFFERS_CPP_STD from ${FLATBUFFERS_CPP_STD} to 17")
+    set(FLATBUFFERS_CPP_STD 17)
+  endif()
 endif()
 
 set(MSVC_LIKE OFF)
@@ -138,6 +152,39 @@ if(FLATBUFFERS_USE_CRYPTOPP)
   message(STATUS "Using Crypto++ for encryption")
 endif()
 
+# =============================================================================
+# Microsoft SEAL library for homomorphic encryption (optional)
+# =============================================================================
+if(FLATBUFFERS_USE_SEAL)
+  include(FetchContent)
+  FetchContent_Declare(
+    seal
+    GIT_REPOSITORY https://github.com/microsoft/SEAL.git
+    GIT_TAG        v4.1.1
+    GIT_SHALLOW    TRUE
+  )
+  set(SEAL_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+  set(SEAL_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(SEAL_BUILD_BENCH OFF CACHE BOOL "" FORCE)
+  set(SEAL_USE_INTEL_HEXL OFF CACHE BOOL "" FORCE)
+  set(SEAL_THROW_ON_TRANSPARENT_CIPHERTEXT OFF CACHE BOOL "" FORCE)
+  set(SEAL_USE_ZLIB OFF CACHE BOOL "" FORCE)
+  set(SEAL_USE_ZSTD OFF CACHE BOOL "" FORCE)
+  set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
+  FetchContent_MakeAvailable(seal)
+  add_definitions(-DFLATBUFFERS_HE_USE_SEAL=1)
+  message(STATUS "Using Microsoft SEAL for homomorphic encryption")
+endif()
+
+# =============================================================================
+# OpenSSL for FIPS-compliant encryption (optional, alternative to Crypto++)
+# =============================================================================
+if(FLATBUFFERS_USE_OPENSSL)
+  find_package(OpenSSL REQUIRED)
+  add_definitions(-DFLATBUFFERS_USE_OPENSSL=1)
+  message(STATUS "Using OpenSSL for FIPS-compliant encryption (version ${OPENSSL_VERSION})")
+endif()
+
 set(FlatBuffers_Library_SRCS
   include/flatbuffers/allocator.h
   include/flatbuffers/array.h
@@ -168,7 +215,10 @@ set(FlatBuffers_Library_SRCS
   include/flatbuffers/vector_downward.h
   include/flatbuffers/verifier.h
   include/flatbuffers/encryption.h
+  include/flatbuffers/he_encryption.h
+  include/flatbuffers/he_operations.h
   src/encryption.cpp
+  src/he_encryption.cpp
   src/file_manager.cpp
   src/file_name_manager.cpp
   src/idl_parser.cpp
@@ -477,6 +527,16 @@ if(FLATBUFFERS_BUILD_FLATLIB)
     target_link_libraries(flatbuffers PUBLIC cryptopp)
   endif()
 
+  # Link SEAL if enabled
+  if(FLATBUFFERS_USE_SEAL)
+    target_link_libraries(flatbuffers PUBLIC seal)
+  endif()
+
+  # Link OpenSSL if enabled
+  if(FLATBUFFERS_USE_OPENSSL)
+    target_link_libraries(flatbuffers PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+  endif()
+
   if(FLATBUFFERS_ENABLE_PCH)
     add_pch_to_target(flatbuffers include/flatbuffers/pch/pch.h)
   endif()
@@ -496,6 +556,16 @@ if(FLATBUFFERS_BUILD_FLATC)
   # Link Crypto++ if enabled
   if(FLATBUFFERS_USE_CRYPTOPP)
     target_link_libraries(flatc PRIVATE cryptopp)
+  endif()
+
+  # Link SEAL if enabled
+  if(FLATBUFFERS_USE_SEAL)
+    target_link_libraries(flatc PRIVATE seal)
+  endif()
+
+  # Link OpenSSL if enabled
+  if(FLATBUFFERS_USE_OPENSSL)
+    target_link_libraries(flatc PRIVATE OpenSSL::SSL OpenSSL::Crypto)
   endif()
 
   target_compile_options(flatc
@@ -532,6 +602,14 @@ if(FLATBUFFERS_BUILD_SHAREDLIB)
   # Link Crypto++ if enabled
   if(FLATBUFFERS_USE_CRYPTOPP)
     target_link_libraries(flatbuffers_shared PUBLIC cryptopp)
+  endif()
+  # Link SEAL if enabled
+  if(FLATBUFFERS_USE_SEAL)
+    target_link_libraries(flatbuffers_shared PUBLIC seal)
+  endif()
+  # Link OpenSSL if enabled
+  if(FLATBUFFERS_USE_OPENSSL)
+    target_link_libraries(flatbuffers_shared PUBLIC OpenSSL::SSL OpenSSL::Crypto)
   endif()
   # FlatBuffers use calendar-based versioning and do not provide any ABI
   # stability guarantees. Therefore, always use the full version as SOVERSION
@@ -590,6 +668,21 @@ if(FLATBUFFERS_BUILD_TESTS)
     ${CMAKE_CURRENT_BINARY_DIR}/tests 
   )
 
+  # Link SEAL if enabled (he_encryption.cpp is in library sources)
+  if(FLATBUFFERS_USE_SEAL)
+    target_link_libraries(flattests PRIVATE seal)
+  endif()
+
+  # Link Crypto++ if enabled
+  if(FLATBUFFERS_USE_CRYPTOPP)
+    target_link_libraries(flattests PRIVATE cryptopp)
+  endif()
+
+  # Link OpenSSL if enabled
+  if(FLATBUFFERS_USE_OPENSSL)
+    target_link_libraries(flattests PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+  endif()
+
   # Have tests load data from the source directory, not the build directory.
   add_definitions(-DFLATBUFFERS_TEST_PATH_PREFIX=${CMAKE_CURRENT_SOURCE_DIR}/)
 
@@ -633,16 +726,64 @@ if(FLATBUFFERS_BUILD_TESTS)
   target_link_libraries(flatsampletext PRIVATE $<BUILD_INTERFACE:ProjectConfig> flatsample)
   target_link_libraries(flatsamplebfbs PRIVATE $<BUILD_INTERFACE:ProjectConfig> flatsample)
 
+  # Sample targets that use FlatBuffers_Library_SRCS need SEAL and OpenSSL
+  if(FLATBUFFERS_USE_SEAL)
+    target_link_libraries(flatsampletext PRIVATE seal)
+    target_link_libraries(flatsamplebfbs PRIVATE seal)
+  endif()
+  if(FLATBUFFERS_USE_OPENSSL)
+    target_link_libraries(flatsampletext PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    target_link_libraries(flatsamplebfbs PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+  endif()
+
   if(FLATBUFFERS_BUILD_CPP17)
     add_executable(flattests_cpp17 ${FlatBuffers_Tests_CPP17_SRCS})
     target_link_libraries(flattests_cpp17 PRIVATE $<BUILD_INTERFACE:ProjectConfig>)
     target_include_directories(flattests_cpp17 PUBLIC src tests)
     target_compile_features(flattests_cpp17 PRIVATE cxx_std_17) # requires cmake 3.8
 
+    # Link SEAL if enabled
+    if(FLATBUFFERS_USE_SEAL)
+      target_link_libraries(flattests_cpp17 PRIVATE seal)
+    endif()
+
+    # Link OpenSSL if enabled
+    if(FLATBUFFERS_USE_OPENSSL)
+      target_link_libraries(flattests_cpp17 PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+    endif()
+
     if(FLATBUFFERS_CODE_SANITIZE)
       add_fsanitize_to_target(flattests_cpp17 ${FLATBUFFERS_CODE_SANITIZE})
     endif()
   endif(FLATBUFFERS_BUILD_CPP17)
+
+  # HE encryption tests (separate executable with its own main)
+  add_executable(flattests_he
+    ${FlatBuffers_Library_SRCS}
+    src/idl_gen_fbs.cpp
+    include/flatbuffers/code_generators.h
+    src/code_generators.cpp
+    tests/he_encryption_test.cpp
+  )
+  target_link_libraries(flattests_he PRIVATE $<BUILD_INTERFACE:ProjectConfig>)
+  target_include_directories(flattests_he PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
+    src
+    tests
+  )
+  if(FLATBUFFERS_USE_SEAL)
+    target_link_libraries(flattests_he PRIVATE seal)
+  endif()
+  if(FLATBUFFERS_USE_CRYPTOPP)
+    target_link_libraries(flattests_he PRIVATE cryptopp)
+  endif()
+  if(FLATBUFFERS_USE_OPENSSL)
+    target_link_libraries(flattests_he PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+  endif()
+  if(FLATBUFFERS_CODE_SANITIZE)
+    add_fsanitize_to_target(flattests_he ${FLATBUFFERS_CODE_SANITIZE})
+  endif()
 endif()
 
 if(FLATBUFFERS_BUILD_GRPCTEST)
@@ -750,6 +891,7 @@ if(FLATBUFFERS_BUILD_TESTS)
   if(FLATBUFFERS_BUILD_GRPCTEST)
     add_test(NAME grpctest COMMAND grpctest)
   endif()
+  add_test(NAME flattests_he COMMAND flattests_he)
 endif()
 
 include(CMake/BuildFlatBuffers.cmake)

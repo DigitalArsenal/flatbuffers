@@ -2,18 +2,15 @@
 /**
  * Public Key Encryption Example
  *
- * This example demonstrates how to use X25519 (Curve25519) ECDH for
- * hybrid encryption of FlatBuffers.
+ * Demonstrates X25519 ECDH + AES-256-CTR encryption using the WASM binary's
+ * exported wasm_crypto_* functions. No JS crypto code is used.
  *
  * The workflow:
- * 1. Recipient generates a long-term X25519 key pair
- * 2. Sender encrypts a FlatBuffer using recipient's public key
- *    - Generates ephemeral X25519 key pair
- *    - Computes shared secret via ECDH
- *    - Derives symmetric key via HKDF
- *    - Encrypts fields with AES-256-CTR
- * 3. Sender sends encrypted FlatBuffer + EncryptionHeader to recipient
- * 4. Recipient decrypts using their private key + ephemeral public key from header
+ * 1. Recipient generates an X25519 key pair (via WASM binary)
+ * 2. Sender generates an ephemeral X25519 key pair
+ * 3. Sender computes shared secret via ECDH, derives symmetric key via HKDF
+ * 4. Sender encrypts data with AES-256-CTR
+ * 5. Recipient derives same symmetric key and decrypts
  *
  * Usage: node example.mjs
  */
@@ -23,145 +20,118 @@ import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-import {
-  loadEncryptionWasm,
-  EncryptionContext,
-  x25519GenerateKeyPair,
-  encryptBuffer,
-  decryptBuffer,
-  encryptionHeaderFromJSON,
-} from "../../src/index.mjs";
+// Load the Emscripten module directly
+const wasmPath = path.join(__dirname, '..', '..', 'dist', 'flatc-wasm.js');
+const { default: createModule } = await import(wasmPath);
+const Module = await createModule({ noExitRuntime: true, noInitialRun: true });
 
-import { FlatcRunner } from "flatc-wasm";
+// WASM memory helpers
+function allocBytes(data) {
+  const ptr = Module._malloc(data.length);
+  Module.HEAPU8.set(data, ptr);
+  return ptr;
+}
+
+function readBytes(ptr, len) {
+  return new Uint8Array(Module.HEAPU8.buffer, ptr, len).slice();
+}
 
 function toHex(bytes) {
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function main() {
-  console.log("=== Public Key Encryption Example ===\n");
+  console.log("=== Public Key Encryption Example (WASM Binary) ===\n");
 
-  // Initialize the encryption WASM module
-  const wasmPath = path.join(__dirname, '..', '..', 'dist', 'flatc-encryption.wasm');
-  console.log("Loading encryption WASM module...");
-  await loadEncryptionWasm(wasmPath);
-  console.log("WASM module loaded.\n");
+  const versionPtr = Module._wasm_crypto_get_version();
+  console.log(`WASM crypto version: ${Module.UTF8ToString(versionPtr)}\n`);
 
   // Step 1: Recipient generates their long-term key pair
   console.log("1. Recipient generates X25519 key pair...");
-  const recipientKeys = x25519GenerateKeyPair();
-  console.log(`   Private key: ${toHex(recipientKeys.privateKey).substring(0, 32)}...`);
-  console.log(`   Public key:  ${toHex(recipientKeys.publicKey).substring(0, 32)}...\n`);
+  const recipPrivPtr = Module._malloc(32);
+  const recipPubPtr = Module._malloc(32);
+  Module._wasm_crypto_x25519_generate_keypair(recipPrivPtr, recipPubPtr);
+  const recipientPublicKey = readBytes(recipPubPtr, 32);
+  console.log(`   Public key: ${toHex(recipientPublicKey).substring(0, 32)}...\n`);
 
-  // Step 2: Sender prepares a FlatBuffer to encrypt
-  console.log("2. Sender creates a FlatBuffer with sensitive data...");
+  // Step 2: Sender generates ephemeral key pair
+  console.log("2. Sender generates ephemeral X25519 key pair...");
+  const ephPrivPtr = Module._malloc(32);
+  const ephPubPtr = Module._malloc(32);
+  Module._wasm_crypto_x25519_generate_keypair(ephPrivPtr, ephPubPtr);
+  const ephemeralPublicKey = readBytes(ephPubPtr, 32);
+  console.log(`   Ephemeral public key: ${toHex(ephemeralPublicKey).substring(0, 32)}...\n`);
 
-  const schemaContent = `
-    attribute "encrypted";
+  // Step 3: Sender computes shared secret and derives symmetric key
+  console.log("3. Sender derives symmetric key via ECDH + HKDF...");
+  const senderSecretPtr = Module._malloc(32);
+  Module._wasm_crypto_x25519_shared_secret(ephPrivPtr, ephPubPtr, recipPubPtr, senderSecretPtr);
+  const senderSecret = readBytes(senderSecretPtr, 32);
 
-    table SecretMessage {
-      recipient: string;
-      message: string (encrypted);
-      secret_code: int (encrypted);
-      public_note: string;
-    }
+  // Derive symmetric key using HKDF
+  const info = new TextEncoder().encode("flatbuffers-encryption-v1");
+  const infoPtr = allocBytes(info);
+  const symKeyPtr = Module._malloc(32);
+  // Use ephemeral public key as salt for key separation
+  const saltPtr = allocBytes(ephemeralPublicKey);
+  Module._wasm_crypto_hkdf(senderSecretPtr, 32, saltPtr, 32, infoPtr, info.length, symKeyPtr, 32);
+  const symmetricKey = readBytes(symKeyPtr, 32);
+  console.log(`   Symmetric key: ${toHex(symmetricKey).substring(0, 32)}...\n`);
 
-    root_type SecretMessage;
-  `;
+  // Zero ephemeral private key (forward secrecy)
+  Module.HEAPU8.fill(0, ephPrivPtr, ephPrivPtr + 32);
 
-  const schemaInput = {
-    entry: "/schema.fbs",
-    files: { "/schema.fbs": schemaContent },
-  };
+  // Step 4: Sender encrypts data
+  console.log("4. Sender encrypts data with AES-256-CTR...");
+  const plaintext = new TextEncoder().encode("This is a secret message encrypted with X25519 + AES-256-CTR!");
+  const original = new Uint8Array(plaintext);
+  console.log(`   Plaintext: "${new TextDecoder().decode(plaintext)}"`);
 
-  const originalData = {
-    recipient: "Alice",
-    message: "This is a secret message!",
-    secret_code: 42,
-    public_note: "This note is not encrypted",
-  };
+  // Generate a random IV
+  const iv = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(iv);
+  const ivPtr = allocBytes(iv);
+  const dataPtr = allocBytes(plaintext);
 
-  console.log(`   Original data: ${JSON.stringify(originalData)}\n`);
+  Module._wasm_crypto_encrypt_bytes(symKeyPtr, ivPtr, dataPtr, plaintext.length);
+  const encrypted = readBytes(dataPtr, plaintext.length);
+  console.log(`   Encrypted: ${toHex(encrypted).substring(0, 64)}...\n`);
 
-  // Create FlatBuffer using FlatcRunner
-  const runner = await FlatcRunner.init();
-  const flatbuffer = runner.generateBinary(schemaInput, JSON.stringify(originalData));
-  console.log(`   FlatBuffer size: ${flatbuffer.length} bytes`);
+  // Sender would transmit: ephemeralPublicKey + iv + encrypted data
 
-  // Make a copy of the original for comparison
-  const originalHex = toHex(flatbuffer);
+  // Step 5: Recipient derives same symmetric key
+  console.log("5. Recipient derives the same symmetric key...");
+  const recipSecretPtr = Module._malloc(32);
+  const ephPubPtrRecip = allocBytes(ephemeralPublicKey);
+  Module._wasm_crypto_x25519_shared_secret(recipPrivPtr, recipPubPtr, ephPubPtrRecip, recipSecretPtr);
 
-  // Step 3: Sender encrypts using recipient's public key
-  console.log("\n3. Sender encrypts using recipient's public key...");
-  const appContext = "example-app-v1";
-  const encryptCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
-    algorithm: "x25519",
-    context: appContext,
-    rootType: "SecretMessage",
-  });
+  const recipSymKeyPtr = Module._malloc(32);
+  const recipSaltPtr = allocBytes(ephemeralPublicKey);
+  Module._wasm_crypto_hkdf(recipSecretPtr, 32, recipSaltPtr, 32, infoPtr, info.length, recipSymKeyPtr, 32);
+  const recipSymKey = readBytes(recipSymKeyPtr, 32);
+  console.log(`   Symmetric key: ${toHex(recipSymKey).substring(0, 32)}...`);
+  console.log(`   Keys match: ${toHex(symmetricKey) === toHex(recipSymKey) ? "YES" : "NO"}\n`);
 
-  // Get the encryption header (must be sent to recipient along with encrypted data)
-  const headerJSON = encryptCtx.getHeaderJSON();
-  console.log(`   Ephemeral public key: ${toHex(encryptCtx.getEphemeralPublicKey()).substring(0, 32)}...`);
-  console.log(`   Header: ${headerJSON.substring(0, 100)}...\n`);
+  // Step 6: Recipient decrypts
+  console.log("6. Recipient decrypts data...");
+  const ivPtrDec = allocBytes(iv);
+  Module._wasm_crypto_decrypt_bytes(recipSymKeyPtr, ivPtrDec, dataPtr, plaintext.length);
+  const decrypted = readBytes(dataPtr, plaintext.length);
+  const decryptedText = new TextDecoder().decode(decrypted);
+  console.log(`   Decrypted: "${decryptedText}"`);
 
-  // Encrypt the buffer
-  encryptBuffer(flatbuffer, schemaContent, encryptCtx, "SecretMessage");
-  const encryptedHex = toHex(flatbuffer);
-  console.log(`   Original hex:  ${originalHex.substring(0, 60)}...`);
-  console.log(`   Encrypted hex: ${encryptedHex.substring(0, 60)}...`);
-  console.log(`   Buffer changed: ${originalHex !== encryptedHex ? "YES" : "NO"}\n`);
-
-  // Step 4: Recipient receives encrypted data + header
-  console.log("4. Recipient receives encrypted data and header...");
-
-  // Simulate transmission - recipient parses the header
-  const receivedHeader = encryptionHeaderFromJSON(headerJSON);
-  console.log(`   Received ephemeral key: ${toHex(receivedHeader.senderPublicKey).substring(0, 32)}...`);
-  console.log(`   Algorithm: ${receivedHeader.algorithm}`);
-  console.log(`   Context: ${receivedHeader.context || appContext}`);
-
-  // Step 5: Recipient decrypts using their private key
-  console.log("\n5. Recipient decrypts using their private key...");
-  const decryptCtx = EncryptionContext.forDecryption(
-    recipientKeys.privateKey,
-    receivedHeader,
-    appContext  // Pass context explicitly for key derivation
-  );
-
-  // Decrypt the buffer
-  decryptBuffer(flatbuffer, schemaContent, decryptCtx, "SecretMessage");
-  const decryptedHex = toHex(flatbuffer);
-
-  console.log(`   Decrypted hex: ${decryptedHex.substring(0, 60)}...`);
-  console.log(`   Matches original: ${decryptedHex === originalHex ? "YES" : "NO"}\n`);
-
-  // Step 6: Verify by reading back the data
-  console.log("6. Verifying decrypted data...");
-  const decryptedJson = runner.generateJSON(
-    schemaInput,
-    { path: "/decrypted.bin", data: flatbuffer }
-  );
-  const decryptedData = JSON.parse(decryptedJson);
-  console.log(`   Decrypted: ${JSON.stringify(decryptedData)}`);
-  console.log(`   Original:  ${JSON.stringify(originalData)}`);
-
-  const success =
-    decryptedData.recipient === originalData.recipient &&
-    decryptedData.message === originalData.message &&
-    decryptedData.secret_code === originalData.secret_code &&
-    decryptedData.public_note === originalData.public_note;
-
+  const success = decryptedText === new TextDecoder().decode(original);
   console.log(`\n=== Test ${success ? "PASSED" : "FAILED"} ===`);
 
-  if (!success) {
-    process.exit(1);
-  }
+  // Cleanup
+  [recipPrivPtr, recipPubPtr, ephPrivPtr, ephPubPtr, senderSecretPtr,
+   infoPtr, symKeyPtr, saltPtr, ivPtr, dataPtr, recipSecretPtr,
+   ephPubPtrRecip, recipSymKeyPtr, recipSaltPtr, ivPtrDec].forEach(p => Module._free(p));
+
+  if (!success) process.exit(1);
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error("Error:", err);
   process.exit(1);
 });

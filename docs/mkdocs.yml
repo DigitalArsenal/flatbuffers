@@ -167,5 +167,8 @@ nav:
     - Swift: "wasm-runtimes/swift.md"
     - Node.js: "wasm-runtimes/nodejs.md"
     - Browser: "wasm-runtimes/browser.md"
+  - Security:
+    - Field Encryption: "encryption.md"
+    - Homomorphic Encryption: "homomorphic_encryption.md"
   - Encryption Demo: "demo/index.html"
   - Contributing: "contributing.md"

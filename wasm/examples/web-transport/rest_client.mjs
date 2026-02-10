@@ -4,31 +4,195 @@
  *
  * Demonstrates sending/receiving FlatBuffers over REST API.
  * Shows both encrypted and non-encrypted usage.
+ * All crypto operations use WASM binary exports (Module._wasm_crypto_*).
  *
  * Usage: node rest_client.mjs [server_url]
  */
 
 import {
-  x25519GenerateKeyPair,
-  EncryptionContext,
-  KeyExchangeAlgorithm,
-  encryptBuffer,
-  decryptBuffer,
-  encryptionHeaderFromJSON,
-} from "../../src/index.mjs";
-import {
+  getWasmModule,
+  getRunner,
   schemaContent,
   schemaInput,
   plainSchemaContent,
   plainSchemaInput,
-  getRunner,
   toHex,
   fromHex,
+  generateId,
 } from "./shared.mjs";
 
 const SERVER_URL = process.argv[2] || "http://localhost:8080";
 
+// ---------------------------------------------------------------------------
+// WASM memory helpers
+// ---------------------------------------------------------------------------
+
+let Module;
+
+function allocBytes(data) {
+  const ptr = Module._malloc(data.length);
+  Module.HEAPU8.set(data, ptr);
+  return ptr;
+}
+
+function readBytes(ptr, len) {
+  return new Uint8Array(Module.HEAPU8.buffer, ptr, len).slice();
+}
+
+function freeBytes(ptr) {
+  Module._free(ptr);
+}
+
+// ---------------------------------------------------------------------------
+// Crypto helpers that wrap Module._wasm_crypto_* functions
+// ---------------------------------------------------------------------------
+
+function x25519GenerateKeyPair() {
+  const privPtr = Module._malloc(32);
+  const pubPtr = Module._malloc(32);
+  const rc = Module._wasm_crypto_x25519_generate_keypair(privPtr, pubPtr);
+  if (rc !== 0) throw new Error("x25519 keypair generation failed");
+  const privateKey = readBytes(privPtr, 32);
+  const publicKey = readBytes(pubPtr, 32);
+  freeBytes(privPtr);
+  freeBytes(pubPtr);
+  return { privateKey, publicKey };
+}
+
+function x25519SharedSecret(privateKey, myPublicKey, peerPublicKey) {
+  const privPtr = allocBytes(privateKey);
+  const myPubPtr = allocBytes(myPublicKey);
+  const peerPubPtr = allocBytes(peerPublicKey);
+  const secretPtr = Module._malloc(32);
+  const rc = Module._wasm_crypto_x25519_shared_secret(privPtr, myPubPtr, peerPubPtr, secretPtr);
+  if (rc !== 0) throw new Error("x25519 shared secret failed");
+  const secret = readBytes(secretPtr, 32);
+  freeBytes(privPtr);
+  freeBytes(myPubPtr);
+  freeBytes(peerPubPtr);
+  freeBytes(secretPtr);
+  return secret;
+}
+
+function deriveSymmetricKey(sharedSecret, context) {
+  const ssPtr = allocBytes(sharedSecret);
+  const ctxBytes = new TextEncoder().encode(context);
+  const ctxPtr = allocBytes(ctxBytes);
+  const outLen = 32;
+  const outPtr = Module._malloc(outLen);
+  Module._wasm_crypto_derive_symmetric_key(
+    ssPtr, sharedSecret.length,
+    ctxPtr, ctxBytes.length,
+    outPtr, outLen
+  );
+  const key = readBytes(outPtr, outLen);
+  freeBytes(ssPtr);
+  freeBytes(ctxPtr);
+  freeBytes(outPtr);
+  return key;
+}
+
+function encryptBytes(key, iv, data) {
+  const keyPtr = allocBytes(key);
+  const ivPtr = allocBytes(iv);
+  const dataPtr = allocBytes(data);
+  const rc = Module._wasm_crypto_encrypt_bytes(keyPtr, ivPtr, dataPtr, data.length);
+  if (rc !== 0) throw new Error("encryption failed");
+  const encrypted = readBytes(dataPtr, data.length);
+  freeBytes(keyPtr);
+  freeBytes(ivPtr);
+  freeBytes(dataPtr);
+  return encrypted;
+}
+
+function decryptBytes(key, iv, data) {
+  const keyPtr = allocBytes(key);
+  const ivPtr = allocBytes(iv);
+  const dataPtr = allocBytes(data);
+  const rc = Module._wasm_crypto_decrypt_bytes(keyPtr, ivPtr, dataPtr, data.length);
+  if (rc !== 0) throw new Error("decryption failed");
+  const decrypted = readBytes(dataPtr, data.length);
+  freeBytes(keyPtr);
+  freeBytes(ivPtr);
+  freeBytes(dataPtr);
+  return decrypted;
+}
+
+function sha256(data) {
+  const dataPtr = allocBytes(data);
+  const hashPtr = Module._malloc(32);
+  Module._wasm_crypto_sha256(dataPtr, data.length, hashPtr);
+  const hash = readBytes(hashPtr, 32);
+  freeBytes(dataPtr);
+  freeBytes(hashPtr);
+  return hash;
+}
+
+// ---------------------------------------------------------------------------
+// Encrypt / Decrypt a FlatBuffer using ephemeral X25519 key exchange
+// ---------------------------------------------------------------------------
+
+/**
+ * Encrypt a FlatBuffer buffer in-place style. Returns { encrypted, header }.
+ * header contains the ephemeral public key and IV needed for decryption.
+ */
+function encryptFlatBuffer(buffer, peerPublicKey, context) {
+  const ephemeral = x25519GenerateKeyPair();
+  const shared = x25519SharedSecret(ephemeral.privateKey, ephemeral.publicKey, peerPublicKey);
+  const key = deriveSymmetricKey(shared, context);
+  // Use first 16 bytes of SHA-256(ephemeral public key) as IV
+  const iv = sha256(ephemeral.publicKey).slice(0, 16);
+  const encrypted = encryptBytes(key, iv, buffer);
+  return {
+    encrypted,
+    header: {
+      ephemeralPublicKey: ephemeral.publicKey,
+      iv,
+      algorithm: "x25519",
+      context,
+    },
+  };
+}
+
+/**
+ * Decrypt a FlatBuffer buffer using our private key and the header.
+ */
+function decryptFlatBuffer(buffer, privateKey, myPublicKey, header) {
+  const shared = x25519SharedSecret(privateKey, myPublicKey, header.ephemeralPublicKey);
+  const key = deriveSymmetricKey(shared, header.context);
+  const iv = header.iv || sha256(header.ephemeralPublicKey).slice(0, 16);
+  return decryptBytes(key, iv, buffer);
+}
+
+// ---------------------------------------------------------------------------
+// Serialise / deserialise headers as JSON for transport
+// ---------------------------------------------------------------------------
+
+function headerToJSON(header) {
+  return JSON.stringify({
+    ephemeralPublicKey: toHex(header.ephemeralPublicKey),
+    iv: toHex(header.iv),
+    algorithm: header.algorithm,
+    context: header.context,
+  });
+}
+
+function headerFromJSONStr(json) {
+  const obj = typeof json === "string" ? JSON.parse(json) : json;
+  return {
+    ephemeralPublicKey: fromHex(obj.ephemeralPublicKey),
+    iv: fromHex(obj.iv),
+    algorithm: obj.algorithm,
+    context: obj.context,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
 async function main() {
+  Module = await getWasmModule();
   const runner = await getRunner();
 
   console.log("=== REST Client Example ===\n");
@@ -113,21 +277,16 @@ async function main() {
   console.log(`Original FlatBuffer: ${encBuffer.length} bytes`);
   console.log(`Original hex: ${toHex(encBuffer).substring(0, 60)}...`);
 
-  // Create encryption context with server's public key
+  // Encrypt using WASM crypto
   const appContext = "rest-api-v1";
-  const encryptCtx = EncryptionContext.forEncryption(serverPublicKey, {
-    algorithm: KeyExchangeAlgorithm.X25519,
-    context: appContext,
-    rootType: "Message",
-  });
+  const { encrypted: encryptedData, header: encHeader } = encryptFlatBuffer(
+    encBuffer, serverPublicKey, appContext
+  );
+  console.log(`Encrypted hex: ${toHex(encryptedData).substring(0, 60)}...`);
 
-  // Encrypt the FlatBuffer
-  encryptBuffer(encBuffer, schemaContent, encryptCtx, "Message");
-  console.log(`Encrypted hex: ${toHex(encBuffer).substring(0, 60)}...`);
-
-  // Get the encryption header
-  const headerJSON = encryptCtx.getHeaderJSON();
-  console.log(`Ephemeral key: ${toHex(encryptCtx.getEphemeralPublicKey()).substring(0, 32)}...`);
+  // Get the encryption header as JSON
+  const encHeaderJSON = headerToJSON(encHeader);
+  console.log(`Ephemeral key: ${toHex(encHeader.ephemeralPublicKey).substring(0, 32)}...`);
 
   // Step 3: POST encrypted message to server
   console.log("\nSending to POST /encrypted...");
@@ -135,9 +294,9 @@ async function main() {
     method: "POST",
     headers: {
       "Content-Type": "application/octet-stream",
-      "X-Encryption-Header": headerJSON,
+      "X-Encryption-Header": encHeaderJSON,
     },
-    body: encBuffer,
+    body: encryptedData,
   });
   const postEncJson = await postEncRes.json();
   console.log(`Response: ${JSON.stringify(postEncJson)}\n`);
@@ -154,7 +313,7 @@ async function main() {
 
   // Note: In a real scenario, only the recipient with the matching private key
   // can decrypt. Here we just verify the data was received correctly.
-  console.log(`Encrypted data matches: ${toHex(receivedEncBuffer) === toHex(encBuffer) ? "yes" : "no"}`);
+  console.log(`Encrypted data matches: ${toHex(receivedEncBuffer) === toHex(encryptedData) ? "yes" : "no"}`);
 
   // =========================================================================
   // Part 3: End-to-end encrypted messaging (client-to-client via server)
@@ -179,13 +338,10 @@ async function main() {
   // Create and encrypt FlatBuffer for recipient
   const privateBuffer = runner.generateBinary(schemaInput, JSON.stringify(privateMessage));
   const e2eContext = "e2e-messaging-v1";
-  const senderCtx = EncryptionContext.forEncryption(recipientKeys.publicKey, {
-    algorithm: KeyExchangeAlgorithm.X25519,
-    context: e2eContext,
-    rootType: "Message",
-  });
-  encryptBuffer(privateBuffer, schemaContent, senderCtx, "Message");
-  const e2eHeaderJSON = senderCtx.getHeaderJSON();
+  const { encrypted: e2eEncrypted, header: e2eHeader } = encryptFlatBuffer(
+    privateBuffer, recipientKeys.publicKey, e2eContext
+  );
+  const e2eHeaderJSON = headerToJSON(e2eHeader);
 
   console.log("Encrypted for recipient, sending via server...");
 
@@ -195,11 +351,15 @@ async function main() {
 
   // Recipient receives and decrypts
   console.log("\nRecipient decrypting...");
-  const e2eHeader = encryptionHeaderFromJSON(e2eHeaderJSON);
-  const recipientCtx = EncryptionContext.forDecryption(recipientKeys.privateKey, e2eHeader, e2eContext);
+  const parsedE2eHeader = headerFromJSONStr(e2eHeaderJSON);
 
-  const decryptedBuffer = new Uint8Array(privateBuffer);
-  decryptBuffer(decryptedBuffer, schemaContent, recipientCtx, "Message");
+  // Recipient needs to derive the same shared secret from their private key
+  const decryptedBuffer = decryptFlatBuffer(
+    e2eEncrypted,
+    recipientKeys.privateKey,
+    recipientKeys.publicKey,
+    parsedE2eHeader
+  );
 
   const decryptedJson = runner.generateJSON(schemaInput, {
     path: "/msg.bin",

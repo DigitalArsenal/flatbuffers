@@ -71,6 +71,25 @@ public final class EncryptionModule {
     private let ed25519VerifyFunc: Function
     private let deriveSymmetricKeyFunc: Function
 
+    // HE (Homomorphic Encryption) functions - optional, may not be in the WASM module
+    private let heCreateClientFunc: Function?
+    private let heCreateServerFunc: Function?
+    private let heDestroyContextFunc: Function?
+    private let heGetPublicKeyFunc: Function?
+    private let heGetRelinKeysFunc: Function?
+    private let heGetSecretKeyFunc: Function?
+    private let heSetRelinKeysFunc: Function?
+    private let heEncryptInt64Func: Function?
+    private let heDecryptInt64Func: Function?
+    private let heEncryptDoubleFunc: Function?
+    private let heDecryptDoubleFunc: Function?
+    private let heAddFunc: Function?
+    private let heSubFunc: Function?
+    private let heMultiplyFunc: Function?
+    private let heNegateFunc: Function?
+    private let heAddPlainFunc: Function?
+    private let heMultiplyPlainFunc: Function?
+
     // Exception state
     private var threwValue: Int32 = 0
     private var threwType: Int32 = 0
@@ -181,6 +200,25 @@ public final class EncryptionModule {
         self.ed25519SignFunc = try getFunction("ed25519_sign")
         self.ed25519VerifyFunc = try getFunction("ed25519_verify")
         self.deriveSymmetricKeyFunc = try getFunction("derive_symmetric_key")
+
+        // HE functions are optional - resolve them without throwing
+        self.heCreateClientFunc = try? getFunction("wasi_he_context_create_client")
+        self.heCreateServerFunc = try? getFunction("wasi_he_context_create_server")
+        self.heDestroyContextFunc = try? getFunction("wasi_he_context_destroy")
+        self.heGetPublicKeyFunc = try? getFunction("wasi_he_get_public_key")
+        self.heGetRelinKeysFunc = try? getFunction("wasi_he_get_relin_keys")
+        self.heGetSecretKeyFunc = try? getFunction("wasi_he_get_secret_key")
+        self.heSetRelinKeysFunc = try? getFunction("wasi_he_set_relin_keys")
+        self.heEncryptInt64Func = try? getFunction("wasi_he_encrypt_int64")
+        self.heDecryptInt64Func = try? getFunction("wasi_he_decrypt_int64")
+        self.heEncryptDoubleFunc = try? getFunction("wasi_he_encrypt_double")
+        self.heDecryptDoubleFunc = try? getFunction("wasi_he_decrypt_double")
+        self.heAddFunc = try? getFunction("wasi_he_add")
+        self.heSubFunc = try? getFunction("wasi_he_sub")
+        self.heMultiplyFunc = try? getFunction("wasi_he_multiply")
+        self.heNegateFunc = try? getFunction("wasi_he_negate")
+        self.heAddPlainFunc = try? getFunction("wasi_he_add_plain")
+        self.heMultiplyPlainFunc = try? getFunction("wasi_he_multiply_plain")
     }
 
     private func getFunction(_ name: String) throws -> Function {
@@ -316,6 +354,65 @@ public final class EncryptionModule {
         return memory.data.withUnsafeBytes { buffer in
             buffer.load(fromByteOffset: Int(ptr), as: Int32.self)
         }
+    }
+
+    private func readUInt32(_ ptr: Int32) -> UInt32 {
+        let bytes = readBytes(ptr, 4)
+        return UInt32(bytes[0])
+            | (UInt32(bytes[1]) << 8)
+            | (UInt32(bytes[2]) << 16)
+            | (UInt32(bytes[3]) << 24)
+    }
+
+    private func readInt64(_ ptr: Int32) -> Int64 {
+        return memory.data.withUnsafeBytes { buffer in
+            buffer.load(fromByteOffset: Int(ptr), as: Int64.self)
+        }
+    }
+
+    private func readFloat64(_ ptr: Int32) -> Double {
+        return memory.data.withUnsafeBytes { buffer in
+            buffer.load(fromByteOffset: Int(ptr), as: Double.self)
+        }
+    }
+
+    private func writeInt64(_ ptr: Int32, _ value: Int64) {
+        var v = value
+        withUnsafeBytes(of: &v) { src in
+            memory.data.withUnsafeMutableBytes { buffer in
+                for i in 0..<8 {
+                    buffer[Int(ptr) + i] = src[i]
+                }
+            }
+        }
+    }
+
+    private func writeFloat64(_ ptr: Int32, _ value: Double) {
+        var v = value
+        withUnsafeBytes(of: &v) { src in
+            memory.data.withUnsafeMutableBytes { buffer in
+                for i in 0..<8 {
+                    buffer[Int(ptr) + i] = src[i]
+                }
+            }
+        }
+    }
+
+    private func writeUInt32(_ ptr: Int32, _ value: UInt32) {
+        let bytes: [UInt8] = [
+            UInt8(value & 0xFF),
+            UInt8((value >> 8) & 0xFF),
+            UInt8((value >> 16) & 0xFF),
+            UInt8((value >> 24) & 0xFF)
+        ]
+        writeBytes(ptr, bytes)
+    }
+
+    private func requireHEFunc(_ func: Function?, name: String) throws -> Function {
+        guard let f = `func` else {
+            throw EncryptionError.heNotAvailable(name)
+        }
+        return f
     }
 
     // MARK: - Public API
@@ -807,6 +904,390 @@ public final class EncryptionModule {
         )
     }
 
+    // MARK: - Homomorphic Encryption (HE) API
+
+    /// Returns true if homomorphic encryption functions are available in the WASM module.
+    public func hasHE() -> Bool {
+        return heCreateClientFunc != nil
+    }
+
+    /// Creates an HE client context with optional polynomial degree.
+    /// Returns a context ID used for subsequent HE operations.
+    public func heCreateClient(polyDegree: UInt32 = 0) throws -> Int32 {
+        let f = try requireHEFunc(heCreateClientFunc, name: "wasi_he_context_create_client")
+        let results = try f.invoke([.i32(Int32(bitPattern: polyDegree))], runtime: runtime)
+        let ctxId = results[0].i32
+        if ctxId < 0 {
+            throw EncryptionError.heOperationFailed("heCreateClient returned error code \(ctxId)")
+        }
+        return ctxId
+    }
+
+    /// Creates an HE server context from the given public key bytes.
+    /// Returns a context ID used for subsequent HE operations.
+    public func heCreateServer(publicKey: [UInt8]) throws -> Int32 {
+        let f = try requireHEFunc(heCreateServerFunc, name: "wasi_he_context_create_server")
+
+        let pkPtr = try allocate(publicKey.count)
+        defer { try? deallocate(pkPtr) }
+        writeBytes(pkPtr, publicKey)
+
+        let results = try f.invoke([
+            .i32(pkPtr),
+            .i32(Int32(publicKey.count))
+        ], runtime: runtime)
+        let ctxId = results[0].i32
+        if ctxId < 0 {
+            throw EncryptionError.heOperationFailed("heCreateServer returned error code \(ctxId)")
+        }
+        return ctxId
+    }
+
+    /// Destroys an HE context, freeing its resources.
+    public func heDestroyContext(_ ctxId: Int32) {
+        guard let f = heDestroyContextFunc else { return }
+        _ = try? f.invoke([.i32(ctxId)], runtime: runtime)
+    }
+
+    /// Returns the public key bytes for the given HE context.
+    public func heGetPublicKey(_ ctxId: Int32) throws -> [UInt8] {
+        let f = try requireHEFunc(heGetPublicKeyFunc, name: "wasi_he_get_public_key")
+        let outLenPtr = try allocate(4)
+        defer { try? deallocate(outLenPtr) }
+        writeUInt32(outLenPtr, 0)
+
+        let results = try f.invoke([.i32(ctxId), .i32(outLenPtr)], runtime: runtime)
+        let dataPtr = results[0].i32
+        if dataPtr == 0 {
+            throw EncryptionError.heOperationFailed("heGetPublicKey returned null pointer")
+        }
+        let length = readUInt32(outLenPtr)
+        return readBytes(dataPtr, Int(length))
+    }
+
+    /// Returns the relinearization keys bytes for the given HE context.
+    public func heGetRelinKeys(_ ctxId: Int32) throws -> [UInt8] {
+        let f = try requireHEFunc(heGetRelinKeysFunc, name: "wasi_he_get_relin_keys")
+        let outLenPtr = try allocate(4)
+        defer { try? deallocate(outLenPtr) }
+        writeUInt32(outLenPtr, 0)
+
+        let results = try f.invoke([.i32(ctxId), .i32(outLenPtr)], runtime: runtime)
+        let dataPtr = results[0].i32
+        if dataPtr == 0 {
+            throw EncryptionError.heOperationFailed("heGetRelinKeys returned null pointer")
+        }
+        let length = readUInt32(outLenPtr)
+        return readBytes(dataPtr, Int(length))
+    }
+
+    /// Returns the secret key bytes for the given HE context.
+    public func heGetSecretKey(_ ctxId: Int32) throws -> [UInt8] {
+        let f = try requireHEFunc(heGetSecretKeyFunc, name: "wasi_he_get_secret_key")
+        let outLenPtr = try allocate(4)
+        defer { try? deallocate(outLenPtr) }
+        writeUInt32(outLenPtr, 0)
+
+        let results = try f.invoke([.i32(ctxId), .i32(outLenPtr)], runtime: runtime)
+        let dataPtr = results[0].i32
+        if dataPtr == 0 {
+            throw EncryptionError.heOperationFailed("heGetSecretKey returned null pointer")
+        }
+        let length = readUInt32(outLenPtr)
+        return readBytes(dataPtr, Int(length))
+    }
+
+    /// Sets the relinearization keys on the given HE context.
+    public func heSetRelinKeys(_ ctxId: Int32, relinKeys: [UInt8]) throws {
+        let f = try requireHEFunc(heSetRelinKeysFunc, name: "wasi_he_set_relin_keys")
+
+        let rkPtr = try allocate(relinKeys.count)
+        defer { try? deallocate(rkPtr) }
+        writeBytes(rkPtr, relinKeys)
+
+        let results = try f.invoke([
+            .i32(ctxId),
+            .i32(rkPtr),
+            .i32(Int32(relinKeys.count))
+        ], runtime: runtime)
+        let rc = results[0].i32
+        if rc != 0 {
+            throw EncryptionError.heOperationFailed("heSetRelinKeys returned error code \(rc)")
+        }
+    }
+
+    /// Encrypts a 64-bit integer using homomorphic encryption.
+    /// Returns the ciphertext bytes.
+    public func heEncryptInt64(_ ctxId: Int32, value: Int64) throws -> [UInt8] {
+        let f = try requireHEFunc(heEncryptInt64Func, name: "wasi_he_encrypt_int64")
+        let outLenPtr = try allocate(4)
+        defer { try? deallocate(outLenPtr) }
+        writeUInt32(outLenPtr, 0)
+
+        // Pass Int64 as two i32 values (low, high) for WASM i64 compatibility
+        let lo = Int32(truncatingIfNeeded: value)
+        let hi = Int32(truncatingIfNeeded: value >> 32)
+
+        let results = try f.invoke([
+            .i32(ctxId),
+            .i32(lo),
+            .i32(hi),
+            .i32(outLenPtr)
+        ], runtime: runtime)
+        let dataPtr = results[0].i32
+        if dataPtr == 0 {
+            throw EncryptionError.heOperationFailed("heEncryptInt64 returned null pointer")
+        }
+        let length = readUInt32(outLenPtr)
+        return readBytes(dataPtr, Int(length))
+    }
+
+    /// Decrypts a ciphertext back to a 64-bit integer.
+    public func heDecryptInt64(_ ctxId: Int32, ciphertext: [UInt8]) throws -> Int64 {
+        let f = try requireHEFunc(heDecryptInt64Func, name: "wasi_he_decrypt_int64")
+
+        let ctPtr = try allocate(ciphertext.count)
+        let resultPtr = try allocate(8)
+        defer {
+            try? deallocate(ctPtr)
+            try? deallocate(resultPtr)
+        }
+        writeBytes(ctPtr, ciphertext)
+
+        let results = try f.invoke([
+            .i32(ctxId),
+            .i32(ctPtr),
+            .i32(Int32(ciphertext.count)),
+            .i32(resultPtr)
+        ], runtime: runtime)
+        let rc = results[0].i32
+        if rc != 0 {
+            throw EncryptionError.heOperationFailed("heDecryptInt64 returned error code \(rc)")
+        }
+        return readInt64(resultPtr)
+    }
+
+    /// Encrypts a Double using homomorphic encryption.
+    /// Returns the ciphertext bytes.
+    public func heEncryptDouble(_ ctxId: Int32, value: Double) throws -> [UInt8] {
+        let f = try requireHEFunc(heEncryptDoubleFunc, name: "wasi_he_encrypt_double")
+        let outLenPtr = try allocate(4)
+        let valPtr = try allocate(8)
+        defer {
+            try? deallocate(outLenPtr)
+            try? deallocate(valPtr)
+        }
+        writeUInt32(outLenPtr, 0)
+        writeFloat64(valPtr, value)
+
+        let results = try f.invoke([
+            .i32(ctxId),
+            .i32(valPtr),
+            .i32(outLenPtr)
+        ], runtime: runtime)
+        let dataPtr = results[0].i32
+        if dataPtr == 0 {
+            throw EncryptionError.heOperationFailed("heEncryptDouble returned null pointer")
+        }
+        let length = readUInt32(outLenPtr)
+        return readBytes(dataPtr, Int(length))
+    }
+
+    /// Decrypts a ciphertext back to a Double.
+    public func heDecryptDouble(_ ctxId: Int32, ciphertext: [UInt8]) throws -> Double {
+        let f = try requireHEFunc(heDecryptDoubleFunc, name: "wasi_he_decrypt_double")
+
+        let ctPtr = try allocate(ciphertext.count)
+        let resultPtr = try allocate(8)
+        defer {
+            try? deallocate(ctPtr)
+            try? deallocate(resultPtr)
+        }
+        writeBytes(ctPtr, ciphertext)
+
+        let results = try f.invoke([
+            .i32(ctxId),
+            .i32(ctPtr),
+            .i32(Int32(ciphertext.count)),
+            .i32(resultPtr)
+        ], runtime: runtime)
+        let rc = results[0].i32
+        if rc != 0 {
+            throw EncryptionError.heOperationFailed("heDecryptDouble returned error code \(rc)")
+        }
+        return readFloat64(resultPtr)
+    }
+
+    /// Adds two ciphertexts homomorphically. Returns the resulting ciphertext.
+    public func heAdd(_ ctxId: Int32, ct1: [UInt8], ct2: [UInt8]) throws -> [UInt8] {
+        let f = try requireHEFunc(heAddFunc, name: "wasi_he_add")
+        let ct1Ptr = try allocate(ct1.count)
+        let ct2Ptr = try allocate(ct2.count)
+        let outLenPtr = try allocate(4)
+        defer {
+            try? deallocate(ct1Ptr)
+            try? deallocate(ct2Ptr)
+            try? deallocate(outLenPtr)
+        }
+        writeBytes(ct1Ptr, ct1)
+        writeBytes(ct2Ptr, ct2)
+        writeUInt32(outLenPtr, 0)
+
+        let results = try f.invoke([
+            .i32(ctxId),
+            .i32(ct1Ptr), .i32(Int32(ct1.count)),
+            .i32(ct2Ptr), .i32(Int32(ct2.count)),
+            .i32(outLenPtr)
+        ], runtime: runtime)
+        let dataPtr = results[0].i32
+        if dataPtr == 0 {
+            throw EncryptionError.heOperationFailed("heAdd returned null pointer")
+        }
+        let length = readUInt32(outLenPtr)
+        return readBytes(dataPtr, Int(length))
+    }
+
+    /// Subtracts two ciphertexts homomorphically. Returns the resulting ciphertext.
+    public func heSub(_ ctxId: Int32, ct1: [UInt8], ct2: [UInt8]) throws -> [UInt8] {
+        let f = try requireHEFunc(heSubFunc, name: "wasi_he_sub")
+        let ct1Ptr = try allocate(ct1.count)
+        let ct2Ptr = try allocate(ct2.count)
+        let outLenPtr = try allocate(4)
+        defer {
+            try? deallocate(ct1Ptr)
+            try? deallocate(ct2Ptr)
+            try? deallocate(outLenPtr)
+        }
+        writeBytes(ct1Ptr, ct1)
+        writeBytes(ct2Ptr, ct2)
+        writeUInt32(outLenPtr, 0)
+
+        let results = try f.invoke([
+            .i32(ctxId),
+            .i32(ct1Ptr), .i32(Int32(ct1.count)),
+            .i32(ct2Ptr), .i32(Int32(ct2.count)),
+            .i32(outLenPtr)
+        ], runtime: runtime)
+        let dataPtr = results[0].i32
+        if dataPtr == 0 {
+            throw EncryptionError.heOperationFailed("heSub returned null pointer")
+        }
+        let length = readUInt32(outLenPtr)
+        return readBytes(dataPtr, Int(length))
+    }
+
+    /// Multiplies two ciphertexts homomorphically. Returns the resulting ciphertext.
+    public func heMultiply(_ ctxId: Int32, ct1: [UInt8], ct2: [UInt8]) throws -> [UInt8] {
+        let f = try requireHEFunc(heMultiplyFunc, name: "wasi_he_multiply")
+        let ct1Ptr = try allocate(ct1.count)
+        let ct2Ptr = try allocate(ct2.count)
+        let outLenPtr = try allocate(4)
+        defer {
+            try? deallocate(ct1Ptr)
+            try? deallocate(ct2Ptr)
+            try? deallocate(outLenPtr)
+        }
+        writeBytes(ct1Ptr, ct1)
+        writeBytes(ct2Ptr, ct2)
+        writeUInt32(outLenPtr, 0)
+
+        let results = try f.invoke([
+            .i32(ctxId),
+            .i32(ct1Ptr), .i32(Int32(ct1.count)),
+            .i32(ct2Ptr), .i32(Int32(ct2.count)),
+            .i32(outLenPtr)
+        ], runtime: runtime)
+        let dataPtr = results[0].i32
+        if dataPtr == 0 {
+            throw EncryptionError.heOperationFailed("heMultiply returned null pointer")
+        }
+        let length = readUInt32(outLenPtr)
+        return readBytes(dataPtr, Int(length))
+    }
+
+    /// Negates a ciphertext homomorphically. Returns the resulting ciphertext.
+    public func heNegate(_ ctxId: Int32, ct: [UInt8]) throws -> [UInt8] {
+        let f = try requireHEFunc(heNegateFunc, name: "wasi_he_negate")
+        let ctPtr = try allocate(ct.count)
+        let outLenPtr = try allocate(4)
+        defer {
+            try? deallocate(ctPtr)
+            try? deallocate(outLenPtr)
+        }
+        writeBytes(ctPtr, ct)
+        writeUInt32(outLenPtr, 0)
+
+        let results = try f.invoke([
+            .i32(ctxId),
+            .i32(ctPtr), .i32(Int32(ct.count)),
+            .i32(outLenPtr)
+        ], runtime: runtime)
+        let dataPtr = results[0].i32
+        if dataPtr == 0 {
+            throw EncryptionError.heOperationFailed("heNegate returned null pointer")
+        }
+        let length = readUInt32(outLenPtr)
+        return readBytes(dataPtr, Int(length))
+    }
+
+    /// Adds a plaintext Int64 to a ciphertext homomorphically. Returns the resulting ciphertext.
+    public func heAddPlain(_ ctxId: Int32, ct: [UInt8], plain: Int64) throws -> [UInt8] {
+        let f = try requireHEFunc(heAddPlainFunc, name: "wasi_he_add_plain")
+        let ctPtr = try allocate(ct.count)
+        let outLenPtr = try allocate(4)
+        defer {
+            try? deallocate(ctPtr)
+            try? deallocate(outLenPtr)
+        }
+        writeBytes(ctPtr, ct)
+        writeUInt32(outLenPtr, 0)
+
+        let lo = Int32(truncatingIfNeeded: plain)
+        let hi = Int32(truncatingIfNeeded: plain >> 32)
+
+        let results = try f.invoke([
+            .i32(ctxId),
+            .i32(ctPtr), .i32(Int32(ct.count)),
+            .i32(lo), .i32(hi),
+            .i32(outLenPtr)
+        ], runtime: runtime)
+        let dataPtr = results[0].i32
+        if dataPtr == 0 {
+            throw EncryptionError.heOperationFailed("heAddPlain returned null pointer")
+        }
+        let length = readUInt32(outLenPtr)
+        return readBytes(dataPtr, Int(length))
+    }
+
+    /// Multiplies a ciphertext by a plaintext Int64 homomorphically. Returns the resulting ciphertext.
+    public func heMultiplyPlain(_ ctxId: Int32, ct: [UInt8], plain: Int64) throws -> [UInt8] {
+        let f = try requireHEFunc(heMultiplyPlainFunc, name: "wasi_he_multiply_plain")
+        let ctPtr = try allocate(ct.count)
+        let outLenPtr = try allocate(4)
+        defer {
+            try? deallocate(ctPtr)
+            try? deallocate(outLenPtr)
+        }
+        writeBytes(ctPtr, ct)
+        writeUInt32(outLenPtr, 0)
+
+        let lo = Int32(truncatingIfNeeded: plain)
+        let hi = Int32(truncatingIfNeeded: plain >> 32)
+
+        let results = try f.invoke([
+            .i32(ctxId),
+            .i32(ctPtr), .i32(Int32(ct.count)),
+            .i32(lo), .i32(hi),
+            .i32(outLenPtr)
+        ], runtime: runtime)
+        let dataPtr = results[0].i32
+        if dataPtr == 0 {
+            throw EncryptionError.heOperationFailed("heMultiplyPlain returned null pointer")
+        }
+        let length = readUInt32(outLenPtr)
+        return readBytes(dataPtr, Int(length))
+    }
+
     /// Generates random bytes using a secure random number generator.
     public static func randomBytes(_ count: Int) -> [UInt8] {
         var bytes = [UInt8](repeating: 0, count: count)
@@ -832,6 +1313,8 @@ public enum EncryptionError: Error, LocalizedError {
     case invalidKeySize(expected: Int, actual: Int)
     case invalidIvSize(expected: Int, actual: Int)
     case wasmError(String)
+    case heNotAvailable(String)
+    case heOperationFailed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -843,6 +1326,10 @@ public enum EncryptionError: Error, LocalizedError {
             return "Invalid IV size: expected \(expected), got \(actual)"
         case .wasmError(let message):
             return "WASM error: \(message)"
+        case .heNotAvailable(let name):
+            return "Homomorphic encryption function '\(name)' not available in WASM module"
+        case .heOperationFailed(let message):
+            return "Homomorphic encryption operation failed: \(message)"
         }
     }
 }

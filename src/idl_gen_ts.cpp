@@ -122,16 +122,7 @@ class TsGenerator : public BaseGenerator {
     return true;
   }
 
-  // Check if a struct has any encrypted fields.
-  bool HasEncryptedFields(const StructDef& struct_def) const {
-    for (auto it = struct_def.fields.vec.begin();
-         it != struct_def.fields.vec.end(); ++it) {
-      if ((*it)->attributes.Lookup("encrypted") != nullptr) {
-        return true;
-      }
-    }
-    return false;
-  }
+
 
   std::string GetTypeName(const EnumDef& def, const bool = false,
                           const bool force_ns_wrap = false) {
@@ -242,225 +233,14 @@ class TsGenerator : public BaseGenerator {
     }
   }
 
-  // Check if any struct has encrypted fields.
-  bool HasAnyEncryptedFields() const {
-    for (auto it = parser_.structs_.vec.begin();
-         it != parser_.structs_.vec.end(); ++it) {
-      if (HasEncryptedFields(**it)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Get the TypeScript encryption module code.
-  std::string GetEncryptionModuleCode() const {
-    std::string code;
-    code += "// " + std::string(FlatBuffersGeneratedWarning()) + "\n\n";
-    code += "/* eslint-disable @typescript-eslint/no-unused-vars, ";
-    code += "@typescript-eslint/no-explicit-any, ";
-    code += "@typescript-eslint/no-non-null-assertion */\n\n";
-    code += "/**\n";
-    code += " * FlatBuffers field-level encryption support using AES-256-CTR.\n";
-    code += " * Uses Web Crypto API (SubtleCrypto) for constant-time, hardware-accelerated encryption.\n";
-    code += " * Works in both browser and Node.js (>=15) environments.\n";
-    code += " */\n\n";
-
-    // SubtleCrypto detection for browser and Node.js
-    code += "// Get the SubtleCrypto instance - works in browser and Node.js\n";
-    code += "function getSubtleCrypto(): SubtleCrypto {\n";
-    code += "  // Browser or Node.js >= 19 with globalThis.crypto\n";
-    code += "  if (typeof globalThis !== 'undefined' && globalThis.crypto?.subtle) {\n";
-    code += "    return globalThis.crypto.subtle;\n";
-    code += "  }\n";
-    code += "  // Node.js >= 15 with webcrypto\n";
-    code += "  if (typeof require !== 'undefined') {\n";
-    code += "    try {\n";
-    code += "      const nodeCrypto = require('crypto');\n";
-    code += "      if (nodeCrypto.webcrypto?.subtle) {\n";
-    code += "        return nodeCrypto.webcrypto.subtle;\n";
-    code += "      }\n";
-    code += "    } catch {\n";
-    code += "      // Ignore require errors in non-Node environments\n";
-    code += "    }\n";
-    code += "  }\n";
-    code += "  throw new Error('SubtleCrypto not available. Requires browser with Web Crypto API or Node.js >= 15.');\n";
-    code += "}\n\n";
-
-    // Cached SubtleCrypto instance
-    code += "// Cache the SubtleCrypto instance\n";
-    code += "let _subtle: SubtleCrypto | null = null;\n";
-    code += "function subtle(): SubtleCrypto {\n";
-    code += "  if (!_subtle) {\n";
-    code += "    _subtle = getSubtleCrypto();\n";
-    code += "  }\n";
-    code += "  return _subtle;\n";
-    code += "}\n\n";
-
-    // Counter derivation
-    code += "// Derive a 16-byte counter/IV from encryption context and field offset\n";
-    code += "function deriveCounter(ctx: Uint8Array, fieldOffset: number): Uint8Array {\n";
-    code += "  if (ctx.length < 12) {\n";
-    code += "    throw new Error('Encryption context must be at least 12 bytes');\n";
-    code += "  }\n";
-    code += "  const counter = new Uint8Array(16);\n";
-    code += "  counter.set(ctx.slice(0, 12));\n";
-    code += "  const view = new DataView(counter.buffer, counter.byteOffset);\n";
-    code += "  view.setUint32(12, fieldOffset, true); // Little-endian\n";
-    code += "  return counter;\n";
-    code += "}\n\n";
-
-    // Key import
-    code += "// Import a raw key for AES-CTR\n";
-    code += "async function importKey(keyBytes: Uint8Array): Promise<CryptoKey> {\n";
-    code += "  return subtle().importKey(\n";
-    code += "    'raw',\n";
-    code += "    keyBytes,\n";
-    code += "    { name: 'AES-CTR' },\n";
-    code += "    false,\n";
-    code += "    ['encrypt', 'decrypt']\n";
-    code += "  );\n";
-    code += "}\n\n";
-
-    // Async encrypt function
-    code += "// Encrypt bytes using AES-256-CTR via SubtleCrypto\n";
-    code += "async function encryptBytes(data: Uint8Array, ctx: Uint8Array, fieldOffset: number): Promise<Uint8Array> {\n";
-    code += "  if (ctx.length < 32) {\n";
-    code += "    throw new Error('Encryption context must be at least 32 bytes');\n";
-    code += "  }\n";
-    code += "  const keyBytes = ctx.slice(0, 32);\n";
-    code += "  const counter = deriveCounter(ctx, fieldOffset);\n";
-    code += "  const key = await importKey(keyBytes);\n";
-    code += "  const encrypted = await subtle().encrypt(\n";
-    code += "    { name: 'AES-CTR', counter: counter, length: 64 },\n";
-    code += "    key,\n";
-    code += "    data\n";
-    code += "  );\n";
-    code += "  return new Uint8Array(encrypted);\n";
-    code += "}\n\n";
-
-    // Async decrypt function
-    code += "// Decrypt bytes using AES-256-CTR via SubtleCrypto\n";
-    code += "async function decryptBytes(data: Uint8Array, ctx: Uint8Array, fieldOffset: number): Promise<Uint8Array> {\n";
-    code += "  if (ctx.length < 32) {\n";
-    code += "    throw new Error('Encryption context must be at least 32 bytes');\n";
-    code += "  }\n";
-    code += "  const keyBytes = ctx.slice(0, 32);\n";
-    code += "  const counter = deriveCounter(ctx, fieldOffset);\n";
-    code += "  const key = await importKey(keyBytes);\n";
-    code += "  const decrypted = await subtle().decrypt(\n";
-    code += "    { name: 'AES-CTR', counter: counter, length: 64 },\n";
-    code += "    key,\n";
-    code += "    data\n";
-    code += "  );\n";
-    code += "  return new Uint8Array(decrypted);\n";
-    code += "}\n\n";
-
-    // Main encryption class
-    code += "export class FlatbuffersEncryption {\n";
-
-    // Async scalar decryption
-    code += "  static async decryptScalarAsync<T extends number>(\n";
-    code += "    value: T,\n";
-    code += "    ctx: Uint8Array | null,\n";
-    code += "    fieldOffset: number\n";
-    code += "  ): Promise<T> {\n";
-    code += "    if (!ctx) return value;\n";
-    code += "    const buffer = new ArrayBuffer(4);\n";
-    code += "    const view = new DataView(buffer);\n";
-    code += "    view.setFloat32(0, value as number, true);\n";
-    code += "    const encrypted = new Uint8Array(buffer);\n";
-    code += "    const decrypted = await decryptBytes(encrypted, ctx, fieldOffset);\n";
-    code += "    const decryptedView = new DataView(decrypted.buffer, decrypted.byteOffset);\n";
-    code += "    return decryptedView.getFloat32(0, true) as T;\n";
-    code += "  }\n\n";
-
-    // Async string decryption
-    code += "  static async decryptStringAsync(\n";
-    code += "    data: Uint8Array | null,\n";
-    code += "    ctx: Uint8Array | null,\n";
-    code += "    fieldOffset: number\n";
-    code += "  ): Promise<Uint8Array | null> {\n";
-    code += "    if (!ctx || !data) return data;\n";
-    code += "    return decryptBytes(data, ctx, fieldOffset);\n";
-    code += "  }\n\n";
-
-    // Async encrypt bytes
-    code += "  static async encryptBytes(\n";
-    code += "    data: Uint8Array,\n";
-    code += "    ctx: Uint8Array,\n";
-    code += "    fieldOffset: number\n";
-    code += "  ): Promise<Uint8Array> {\n";
-    code += "    return encryptBytes(data, ctx, fieldOffset);\n";
-    code += "  }\n\n";
-
-    // Async decrypt bytes
-    code += "  static async decryptBytes(\n";
-    code += "    data: Uint8Array,\n";
-    code += "    ctx: Uint8Array,\n";
-    code += "    fieldOffset: number\n";
-    code += "  ): Promise<Uint8Array> {\n";
-    code += "    return decryptBytes(data, ctx, fieldOffset);\n";
-    code += "  }\n\n";
-
-    // Legacy sync methods (deprecated)
-    code += "  /** @deprecated Use decryptScalarAsync instead */\n";
-    code += "  static decryptScalar<T extends number>(value: T, ctx: Uint8Array | null, fieldOffset: number): T {\n";
-    code += "    if (!ctx) return value;\n";
-    code += "    console.warn('FlatbuffersEncryption.decryptScalar is deprecated. Use decryptScalarAsync.');\n";
-    code += "    return value;\n";
-    code += "  }\n\n";
-
-    code += "  /** @deprecated Use decryptStringAsync instead */\n";
-    code += "  static decryptString(data: Uint8Array | null, ctx: Uint8Array | null, fieldOffset: number): Uint8Array | null {\n";
-    code += "    if (!ctx || !data) return data;\n";
-    code += "    console.warn('FlatbuffersEncryption.decryptString is deprecated. Use decryptStringAsync.');\n";
-    code += "    return data;\n";
-    code += "  }\n";
-
-    code += "}\n\n";
-
-    // Export utility functions
-    code += "export { encryptBytes, decryptBytes, deriveCounter };\n";
-
-    return code;
-  }
-
-  // Generate the encryption module for a namespace.
-  bool GenerateEncryptionModule(const Namespace& ns) const {
-    std::string code = GetEncryptionModuleCode();
-    auto dirs = namer_.Directories(ns);
-    EnsureDirExists(dirs);
-    std::string filename = dirs + "flatbuffers-encryption.ts";
-    return parser_.opts.file_saver->SaveFile(filename.c_str(), code, false);
-  }
-
   // Generate code for all structs.
   void generateStructs() {
-    // Track namespaces that need encryption module
-    std::set<std::string> encryption_namespaces;
-
     for (auto it = parser_.structs_.vec.begin();
          it != parser_.structs_.vec.end(); ++it) {
       import_set bare_imports;
       import_set imports;
       AddImport(bare_imports, "* as flatbuffers", "flatbuffers");
       auto& struct_def = **it;
-
-      // Generate encryption module for this namespace if needed
-      if (HasEncryptedFields(struct_def)) {
-        const std::string ns_key = namer_.Directories(*struct_def.defined_namespace);
-        if (encryption_namespaces.find(ns_key) == encryption_namespaces.end()) {
-          encryption_namespaces.insert(ns_key);
-          GenerateEncryptionModule(*struct_def.defined_namespace);
-        }
-        // Add import for FlatbuffersEncryption (use curly braces for named export)
-        ImportDefinition enc_import;
-        enc_import.name = "FlatbuffersEncryption";
-        std::string import_extension = parser_.opts.ts_no_import_ext ? "" : ".js";
-        enc_import.import_statement = "import { FlatbuffersEncryption } from './flatbuffers-encryption" + import_extension + "';";
-        imports.insert(std::make_pair(enc_import.name, enc_import));
-      }
 
       std::string declcode;
       GenStruct(parser_, struct_def, &declcode, imports);
@@ -996,29 +776,19 @@ class TsGenerator : public BaseGenerator {
                             std::string& code, const std::string& object_name,
                             bool size_prefixed) {
     if (!struct_def.fixed) {
-      bool has_encrypted = HasEncryptedFields(struct_def);
       GenDocComment(code_ptr);
       std::string sizePrefixed("SizePrefixed");
       code += "static get" + (size_prefixed ? sizePrefixed : "") + "Root" +
               GetPrefixedName(struct_def, "As");
-      if (has_encrypted) {
-        code += "(bb:flatbuffers.ByteBuffer, obj?:" + object_name +
-                ", encryptionCtx?: Uint8Array):" + object_name + " {\n";
-      } else {
-        code += "(bb:flatbuffers.ByteBuffer, obj?:" + object_name +
-                "):" + object_name + " {\n";
-      }
+      code += "(bb:flatbuffers.ByteBuffer, obj?:" + object_name +
+              "):" + object_name + " {\n";
       if (size_prefixed) {
         code +=
             "  bb.setPosition(bb.position() + "
             "flatbuffers.SIZE_PREFIX_LENGTH);\n";
       }
       code += "  return (obj || " + GenerateNewExpression(object_name);
-      if (has_encrypted) {
-        code += ").__init(bb.readInt32(bb.position()) + bb.position(), bb, encryptionCtx);\n";
-      } else {
-        code += ").__init(bb.readInt32(bb.position()) + bb.position(), bb);\n";
-      }
+      code += ").__init(bb.readInt32(bb.position()) + bb.position(), bb);\n";
       code += "}\n\n";
     }
   }
@@ -1865,23 +1635,12 @@ class TsGenerator : public BaseGenerator {
       code += " {\n";
     code += "  bb: flatbuffers.ByteBuffer|null = null;\n";
     code += "  bb_pos = 0;\n";
-    bool has_encrypted = HasEncryptedFields(struct_def);
-    if (has_encrypted) {
-      code += "  encryptionCtx: Uint8Array|null = null;\n";
-    }
 
     // Generate the __init method that sets the field in a pre-existing
     // accessor object. This is to allow object reuse.
-    if (has_encrypted) {
-      code += "  __init(i:number, bb:flatbuffers.ByteBuffer, encryptionCtx?: Uint8Array):" + object_name + " {\n";
-    } else {
-      code += "  __init(i:number, bb:flatbuffers.ByteBuffer):" + object_name + " {\n";
-    }
+    code += "  __init(i:number, bb:flatbuffers.ByteBuffer):" + object_name + " {\n";
     code += "  this.bb_pos = i;\n";
     code += "  this.bb = bb;\n";
-    if (has_encrypted) {
-      code += "  this.encryptionCtx = encryptionCtx || null;\n";
-    }
     code += "  return this;\n";
     code += "}\n\n";
 
@@ -1949,18 +1708,6 @@ class TsGenerator : public BaseGenerator {
         if (struct_def.fixed) {
           std::string getter_result = GenGetter(field.value.type,
                         "(this.bb_pos" + MaybeAdd(field.value.offset) + ")");
-          
-          if (field.attributes.Lookup("encrypted") != nullptr) {
-            std::string field_id = NumToString(field.value.offset);
-            if (is_string) {
-              getter_result = "FlatbuffersEncryption.decryptString(" + getter_result + 
-                            ", this.encryptionCtx, " + field_id + ")";
-            } else {
-              getter_result = "FlatbuffersEncryption.decryptScalar(" + getter_result + 
-                            ", this.encryptionCtx, " + field_id + ")";
-            }
-          }
-          
           code += "  return " + getter_result + ";\n";
         } else {
           std::string index = "this.bb_pos + offset";
@@ -1969,18 +1716,6 @@ class TsGenerator : public BaseGenerator {
           }
           
           std::string getter_result = GenGetter(field.value.type, "(" + index + ")");
-          
-          if (field.attributes.Lookup("encrypted") != nullptr) {
-            std::string field_id = NumToString(field.value.offset);
-            if (is_string) {
-              getter_result = "FlatbuffersEncryption.decryptString(" + getter_result + 
-                            ", this.encryptionCtx, " + field_id + ")";
-            } else {
-              getter_result = "FlatbuffersEncryption.decryptScalar(" + getter_result + 
-                            ", this.encryptionCtx, " + field_id + ")";
-            }
-          }
-          
           code += offset_prefix + getter_result;
           if (field.value.type.base_type != BASE_TYPE_ARRAY) {
             code += " : " + GenDefaultValue(field, imports);

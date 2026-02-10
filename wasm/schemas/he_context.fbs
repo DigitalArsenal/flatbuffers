@@ -1,0 +1,99 @@
+// Homomorphic Encryption Context Schema
+// Serialization format for HE parameters and keys
+
+namespace flatbuffers.he;
+
+/// Homomorphic encryption scheme type
+enum HEScheme : byte {
+  BFV = 0,  // Brakerski/Fan-Vercauteren (integer arithmetic)
+  BGV = 1,  // Brakerski-Gentry-Vaikuntanathan (integer arithmetic)
+}
+
+/// Encryption parameters (used by both client and server)
+table HEParams {
+  /// The HE scheme being used
+  scheme: HEScheme = BFV;
+
+  /// Polynomial modulus degree (power of 2: 4096, 8192, 16384)
+  /// Higher values = more security but larger ciphertexts and slower operations
+  poly_modulus_degree: uint32 = 4096;
+
+  /// Plain modulus (for BFV/BGV batching)
+  plain_modulus: uint64;
+
+  /// Coefficient modulus primes (for security level)
+  coeff_modulus: [uint64];
+
+  /// Scale factor for fixed-point encoding of floats (2^scale_bits)
+  /// Default: 2^20 (~6 decimal digits precision)
+  scale_bits: uint8 = 20;
+}
+
+/// Public key for encryption and HE operations
+table HEPublicKey {
+  /// Serialized SEAL public key data
+  data: [ubyte] (required);
+}
+
+/// Relinearization keys for multiplication
+table HERelinKeys {
+  /// Serialized SEAL relinearization key data
+  data: [ubyte] (required);
+}
+
+/// Secret key for decryption (client only)
+table HESecretKey {
+  /// Serialized SEAL secret key data
+  data: [ubyte] (required);
+}
+
+/// Complete key bundle for serialization
+table HEKeyBundle {
+  /// Encryption parameters
+  params: HEParams (required);
+
+  /// Public key (always present)
+  public_key: HEPublicKey (required);
+
+  /// Relinearization keys (for multiplication)
+  relin_keys: HERelinKeys;
+
+  /// Secret key (optional, only for client contexts)
+  /// WARNING: Secret key should only be stored securely!
+  secret_key: HESecretKey;
+
+  /// Version of the key bundle format
+  version: uint16 = 1;
+
+  /// Creation timestamp (Unix epoch seconds)
+  created_at: uint64;
+
+  /// Optional description/label
+  description: string;
+}
+
+/// Ciphertext metadata (stored alongside encrypted field data)
+table HECiphertext {
+  /// The encrypted data
+  data: [ubyte] (required);
+
+  /// Scheme used for encryption
+  scheme: HEScheme = BFV;
+
+  /// Polynomial modulus degree (for validation)
+  poly_modulus_degree: uint32;
+
+  /// Number of ciphertext polynomials
+  ciphertext_size: uint32;
+
+  /// Noise budget remaining (if tracked)
+  noise_budget: int32 = -1;
+
+  /// Scale (for CKKS-style fixed-point, if applicable)
+  scale: double;
+}
+
+root_type HEKeyBundle;
+
+file_identifier "HEBK";
+file_extension "hek";

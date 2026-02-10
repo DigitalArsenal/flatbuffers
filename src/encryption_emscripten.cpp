@@ -209,7 +209,7 @@ EMSCRIPTEN_KEEPALIVE
 void wasm_crypto_sha256(const uint8_t* data, uint32_t data_size,
                          uint8_t* hash) {
   if (data && hash) {
-    flatbuffers::SHA256(data, data_size, hash);
+    flatbuffers::Sha256Hash(data, data_size, hash);
   }
 }
 

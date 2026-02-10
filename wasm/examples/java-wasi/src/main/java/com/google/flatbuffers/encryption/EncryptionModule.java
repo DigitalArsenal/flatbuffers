@@ -86,6 +86,25 @@ public class EncryptionModule implements AutoCloseable {
     private final ExportFunction ed25519Verify;
     private final ExportFunction deriveSymmetricKey;
 
+    // Homomorphic Encryption (HE) exported functions (nullable - HE may not be available)
+    private final ExportFunction heContextCreateClient;
+    private final ExportFunction heContextCreateServer;
+    private final ExportFunction heContextDestroy;
+    private final ExportFunction heGetPublicKey;
+    private final ExportFunction heGetRelinKeys;
+    private final ExportFunction heGetSecretKey;
+    private final ExportFunction heSetRelinKeys;
+    private final ExportFunction heEncryptInt64;
+    private final ExportFunction heDecryptInt64;
+    private final ExportFunction heEncryptDouble;
+    private final ExportFunction heDecryptDouble;
+    private final ExportFunction heAdd;
+    private final ExportFunction heSub;
+    private final ExportFunction heMultiply;
+    private final ExportFunction heNegate;
+    private final ExportFunction heAddPlain;
+    private final ExportFunction heMultiplyPlain;
+
     // Exception state from Emscripten
     private volatile int threwValue = 0;
     private volatile int threwType = 0;
@@ -146,6 +165,47 @@ public class EncryptionModule implements AutoCloseable {
         this.ed25519Sign = instance.export("ed25519_sign");
         this.ed25519Verify = instance.export("ed25519_verify");
         this.deriveSymmetricKey = instance.export("derive_symmetric_key");
+
+        // HE exports are optional - the WASM module may not include HE support
+        this.heContextCreateClient = tryExport("wasi_he_context_create_client");
+        this.heContextCreateServer = tryExport("wasi_he_context_create_server");
+        this.heContextDestroy = tryExport("wasi_he_context_destroy");
+        this.heGetPublicKey = tryExport("wasi_he_get_public_key");
+        this.heGetRelinKeys = tryExport("wasi_he_get_relin_keys");
+        this.heGetSecretKey = tryExport("wasi_he_get_secret_key");
+        this.heSetRelinKeys = tryExport("wasi_he_set_relin_keys");
+        this.heEncryptInt64 = tryExport("wasi_he_encrypt_int64");
+        this.heDecryptInt64 = tryExport("wasi_he_decrypt_int64");
+        this.heEncryptDouble = tryExport("wasi_he_encrypt_double");
+        this.heDecryptDouble = tryExport("wasi_he_decrypt_double");
+        this.heAdd = tryExport("wasi_he_add");
+        this.heSub = tryExport("wasi_he_sub");
+        this.heMultiply = tryExport("wasi_he_multiply");
+        this.heNegate = tryExport("wasi_he_negate");
+        this.heAddPlain = tryExport("wasi_he_add_plain");
+        this.heMultiplyPlain = tryExport("wasi_he_multiply_plain");
+    }
+
+    /**
+     * Attempts to look up an exported function by name.
+     * Returns null if the export does not exist.
+     */
+    private ExportFunction tryExport(String name) {
+        try {
+            return instance.export(name);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Throws if HE support is not available in the loaded WASM module.
+     */
+    private void requireHE() {
+        if (heContextCreateClient == null) {
+            throw new UnsupportedOperationException(
+                "Homomorphic encryption is not available in this WASM module");
+        }
     }
 
     private HostImports createHostImports(WasiPreview1 wasi) {
@@ -984,6 +1044,464 @@ public class EncryptionModule implements AutoCloseable {
         byte[] bytes = new byte[length];
         random.nextBytes(bytes);
         return bytes;
+    }
+
+    // =========================================================================
+    // Homomorphic Encryption (HE) API
+    // =========================================================================
+
+    /**
+     * Returns true if homomorphic encryption support is available in the
+     * loaded WASM module (i.e., the wasi_he_context_create_client export exists).
+     */
+    public boolean hasHE() {
+        return heContextCreateClient != null;
+    }
+
+    /**
+     * Creates a client-side HE context with a full key pair (secret + public).
+     *
+     * @param polyDegree Polynomial modulus degree (e.g., 4096, 8192, 16384).
+     *                   Pass 0 for the default (4096).
+     * @return Context ID (&gt;0) on success
+     * @throws RuntimeException if context creation fails
+     */
+    public int heCreateClient(int polyDegree) {
+        requireHE();
+        Value[] result = heContextCreateClient.apply(Value.i32(polyDegree));
+        int ctxId = result[0].asInt();
+        if (ctxId < 0) {
+            throw new RuntimeException("Failed to create HE client context");
+        }
+        return ctxId;
+    }
+
+    /**
+     * Creates a server-side HE context from a serialized public key.
+     * The server can perform homomorphic operations but cannot decrypt.
+     *
+     * @param publicKey Serialized public key bytes from a client context
+     * @return Context ID (&gt;0) on success
+     * @throws RuntimeException if context creation fails
+     */
+    public int heCreateServer(byte[] publicKey) {
+        requireHE();
+        if (publicKey == null || publicKey.length == 0) {
+            throw new IllegalArgumentException("Public key must not be null or empty");
+        }
+
+        int pkPtr = allocate(publicKey.length);
+        try {
+            writeBytes(pkPtr, publicKey);
+            Value[] result = heContextCreateServer.apply(
+                Value.i32(pkPtr),
+                Value.i32(publicKey.length)
+            );
+            int ctxId = result[0].asInt();
+            if (ctxId < 0) {
+                throw new RuntimeException("Failed to create HE server context");
+            }
+            return ctxId;
+        } finally {
+            deallocate(pkPtr);
+        }
+    }
+
+    /**
+     * Destroys an HE context and frees its resources.
+     *
+     * @param ctxId Context ID to destroy
+     */
+    public void heDestroyContext(int ctxId) {
+        requireHE();
+        heContextDestroy.apply(Value.i32(ctxId));
+    }
+
+    /**
+     * Gets the serialized public key from an HE context.
+     *
+     * @param ctxId Context ID
+     * @return Serialized public key bytes
+     * @throws RuntimeException if the operation fails
+     */
+    public byte[] heGetPublicKey(int ctxId) {
+        requireHE();
+        return heGetVariableLengthData(heGetPublicKey, ctxId,
+            "Failed to get HE public key");
+    }
+
+    /**
+     * Gets the serialized relinearization keys from an HE context.
+     * Relin keys are needed for homomorphic multiplication.
+     *
+     * @param ctxId Context ID
+     * @return Serialized relinearization key bytes
+     * @throws RuntimeException if the operation fails
+     */
+    public byte[] heGetRelinKeys(int ctxId) {
+        requireHE();
+        return heGetVariableLengthData(heGetRelinKeys, ctxId,
+            "Failed to get HE relinearization keys");
+    }
+
+    /**
+     * Gets the serialized secret key from a client HE context.
+     *
+     * @param ctxId Context ID (must be a client context)
+     * @return Serialized secret key bytes
+     * @throws RuntimeException if the operation fails or context is server-only
+     */
+    public byte[] heGetSecretKey(int ctxId) {
+        requireHE();
+        return heGetVariableLengthData(heGetSecretKey, ctxId,
+            "Failed to get HE secret key");
+    }
+
+    /**
+     * Sets relinearization keys on a server HE context.
+     * Must be called before performing homomorphic multiplication.
+     *
+     * @param ctxId Context ID
+     * @param relinKeys Serialized relinearization key bytes
+     * @return 0 on success, -1 on error
+     */
+    public int heSetRelinKeys(int ctxId, byte[] relinKeys) {
+        requireHE();
+        if (relinKeys == null || relinKeys.length == 0) {
+            throw new IllegalArgumentException("Relin keys must not be null or empty");
+        }
+
+        int rkPtr = allocate(relinKeys.length);
+        try {
+            writeBytes(rkPtr, relinKeys);
+            Value[] result = heSetRelinKeys.apply(
+                Value.i32(ctxId),
+                Value.i32(rkPtr),
+                Value.i32(relinKeys.length)
+            );
+            return result[0].asInt();
+        } finally {
+            deallocate(rkPtr);
+        }
+    }
+
+    /**
+     * Encrypts a 64-bit integer using homomorphic encryption.
+     *
+     * @param ctxId Context ID
+     * @param value Integer value to encrypt
+     * @return Serialized ciphertext bytes
+     * @throws RuntimeException if encryption fails
+     */
+    public byte[] heEncryptInt64(int ctxId, long value) {
+        requireHE();
+        int outLenPtr = allocate(4);
+        try {
+            Value[] result = heEncryptInt64.apply(
+                Value.i32(ctxId),
+                Value.i64(value),
+                Value.i32(outLenPtr)
+            );
+            int dataPtr = result[0].asInt();
+            if (dataPtr == 0) {
+                throw new RuntimeException("HE int64 encryption failed");
+            }
+            int outLen = memory.readInt(outLenPtr);
+            return readBytes(dataPtr, outLen);
+        } finally {
+            deallocate(outLenPtr);
+        }
+    }
+
+    /**
+     * Decrypts a ciphertext to a 64-bit integer.
+     * Requires a client context with the secret key.
+     *
+     * @param ctxId Context ID (must be client context)
+     * @param ciphertext Serialized ciphertext bytes
+     * @return Decrypted integer value
+     */
+    public long heDecryptInt64(int ctxId, byte[] ciphertext) {
+        requireHE();
+        if (ciphertext == null || ciphertext.length == 0) {
+            throw new IllegalArgumentException("Ciphertext must not be null or empty");
+        }
+
+        int ctPtr = allocate(ciphertext.length);
+        try {
+            writeBytes(ctPtr, ciphertext);
+            Value[] result = heDecryptInt64.apply(
+                Value.i32(ctxId),
+                Value.i32(ctPtr),
+                Value.i32(ciphertext.length)
+            );
+            return result[0].asLong();
+        } finally {
+            deallocate(ctPtr);
+        }
+    }
+
+    /**
+     * Encrypts a double-precision floating-point value using homomorphic encryption.
+     *
+     * @param ctxId Context ID
+     * @param value Double value to encrypt
+     * @return Serialized ciphertext bytes
+     * @throws RuntimeException if encryption fails
+     */
+    public byte[] heEncryptDouble(int ctxId, double value) {
+        requireHE();
+        int outLenPtr = allocate(4);
+        try {
+            Value[] result = heEncryptDouble.apply(
+                Value.i32(ctxId),
+                Value.f64(value),
+                Value.i32(outLenPtr)
+            );
+            int dataPtr = result[0].asInt();
+            if (dataPtr == 0) {
+                throw new RuntimeException("HE double encryption failed");
+            }
+            int outLen = memory.readInt(outLenPtr);
+            return readBytes(dataPtr, outLen);
+        } finally {
+            deallocate(outLenPtr);
+        }
+    }
+
+    /**
+     * Decrypts a ciphertext to a double-precision floating-point value.
+     * Requires a client context with the secret key.
+     *
+     * @param ctxId Context ID (must be client context)
+     * @param ciphertext Serialized ciphertext bytes
+     * @return Decrypted double value
+     */
+    public double heDecryptDouble(int ctxId, byte[] ciphertext) {
+        requireHE();
+        if (ciphertext == null || ciphertext.length == 0) {
+            throw new IllegalArgumentException("Ciphertext must not be null or empty");
+        }
+
+        int ctPtr = allocate(ciphertext.length);
+        try {
+            writeBytes(ctPtr, ciphertext);
+            Value[] result = heDecryptDouble.apply(
+                Value.i32(ctxId),
+                Value.i32(ctPtr),
+                Value.i32(ciphertext.length)
+            );
+            return result[0].asDouble();
+        } finally {
+            deallocate(ctPtr);
+        }
+    }
+
+    /**
+     * Adds two ciphertexts homomorphically: result = ct1 + ct2.
+     *
+     * @param ctxId Context ID
+     * @param ct1 First ciphertext
+     * @param ct2 Second ciphertext
+     * @return Ciphertext containing the encrypted sum
+     * @throws RuntimeException if the operation fails
+     */
+    public byte[] heAdd(int ctxId, byte[] ct1, byte[] ct2) {
+        requireHE();
+        return heBinaryOp(heAdd, ctxId, ct1, ct2, "HE add");
+    }
+
+    /**
+     * Subtracts two ciphertexts homomorphically: result = ct1 - ct2.
+     *
+     * @param ctxId Context ID
+     * @param ct1 First ciphertext
+     * @param ct2 Second ciphertext
+     * @return Ciphertext containing the encrypted difference
+     * @throws RuntimeException if the operation fails
+     */
+    public byte[] heSub(int ctxId, byte[] ct1, byte[] ct2) {
+        requireHE();
+        return heBinaryOp(heSub, ctxId, ct1, ct2, "HE sub");
+    }
+
+    /**
+     * Multiplies two ciphertexts homomorphically: result = ct1 * ct2.
+     * Requires relinearization keys to be set on the context.
+     *
+     * @param ctxId Context ID (must have relin keys set)
+     * @param ct1 First ciphertext
+     * @param ct2 Second ciphertext
+     * @return Ciphertext containing the encrypted product
+     * @throws RuntimeException if the operation fails
+     */
+    public byte[] heMultiply(int ctxId, byte[] ct1, byte[] ct2) {
+        requireHE();
+        return heBinaryOp(heMultiply, ctxId, ct1, ct2, "HE multiply");
+    }
+
+    /**
+     * Negates a ciphertext homomorphically: result = -ct.
+     *
+     * @param ctxId Context ID
+     * @param ct Ciphertext to negate
+     * @return Ciphertext containing the encrypted negation
+     * @throws RuntimeException if the operation fails
+     */
+    public byte[] heNegate(int ctxId, byte[] ct) {
+        requireHE();
+        if (ct == null || ct.length == 0) {
+            throw new IllegalArgumentException("Ciphertext must not be null or empty");
+        }
+
+        int ctPtr = allocate(ct.length);
+        int outLenPtr = allocate(4);
+        try {
+            writeBytes(ctPtr, ct);
+            Value[] result = heNegate.apply(
+                Value.i32(ctxId),
+                Value.i32(ctPtr),
+                Value.i32(ct.length),
+                Value.i32(outLenPtr)
+            );
+            int dataPtr = result[0].asInt();
+            if (dataPtr == 0) {
+                throw new RuntimeException("HE negate failed");
+            }
+            int outLen = memory.readInt(outLenPtr);
+            return readBytes(dataPtr, outLen);
+        } finally {
+            deallocate(ctPtr);
+            deallocate(outLenPtr);
+        }
+    }
+
+    /**
+     * Adds a plaintext integer to a ciphertext homomorphically: result = ct + plain.
+     *
+     * @param ctxId Context ID
+     * @param ct Ciphertext
+     * @param plain Plaintext integer value to add
+     * @return Ciphertext containing the encrypted sum
+     * @throws RuntimeException if the operation fails
+     */
+    public byte[] heAddPlain(int ctxId, byte[] ct, long plain) {
+        requireHE();
+        return heCiphertextPlainOp(heAddPlain, ctxId, ct, plain, "HE add plain");
+    }
+
+    /**
+     * Multiplies a ciphertext by a plaintext integer homomorphically: result = ct * plain.
+     *
+     * @param ctxId Context ID
+     * @param ct Ciphertext
+     * @param plain Plaintext integer multiplier
+     * @return Ciphertext containing the encrypted product
+     * @throws RuntimeException if the operation fails
+     */
+    public byte[] heMultiplyPlain(int ctxId, byte[] ct, long plain) {
+        requireHE();
+        return heCiphertextPlainOp(heMultiplyPlain, ctxId, ct, plain, "HE multiply plain");
+    }
+
+    // =========================================================================
+    // HE internal helper methods
+    // =========================================================================
+
+    /**
+     * Helper for HE functions that return variable-length data via
+     * (ctx_id, out_len_ptr) -> data_ptr pattern (key retrieval).
+     */
+    private byte[] heGetVariableLengthData(ExportFunction func, int ctxId,
+                                            String errorMessage) {
+        int outLenPtr = allocate(4);
+        try {
+            Value[] result = func.apply(
+                Value.i32(ctxId),
+                Value.i32(outLenPtr)
+            );
+            int dataPtr = result[0].asInt();
+            if (dataPtr == 0) {
+                throw new RuntimeException(errorMessage);
+            }
+            int outLen = memory.readInt(outLenPtr);
+            return readBytes(dataPtr, outLen);
+        } finally {
+            deallocate(outLenPtr);
+        }
+    }
+
+    /**
+     * Helper for binary ciphertext-ciphertext HE operations:
+     * (ctx_id, ct1_ptr, ct1_len, ct2_ptr, ct2_len, out_len_ptr) -> data_ptr
+     */
+    private byte[] heBinaryOp(ExportFunction func, int ctxId,
+                               byte[] ct1, byte[] ct2, String opName) {
+        if (ct1 == null || ct1.length == 0) {
+            throw new IllegalArgumentException("First ciphertext must not be null or empty");
+        }
+        if (ct2 == null || ct2.length == 0) {
+            throw new IllegalArgumentException("Second ciphertext must not be null or empty");
+        }
+
+        int ct1Ptr = allocate(ct1.length);
+        int ct2Ptr = allocate(ct2.length);
+        int outLenPtr = allocate(4);
+        try {
+            writeBytes(ct1Ptr, ct1);
+            writeBytes(ct2Ptr, ct2);
+            Value[] result = func.apply(
+                Value.i32(ctxId),
+                Value.i32(ct1Ptr),
+                Value.i32(ct1.length),
+                Value.i32(ct2Ptr),
+                Value.i32(ct2.length),
+                Value.i32(outLenPtr)
+            );
+            int dataPtr = result[0].asInt();
+            if (dataPtr == 0) {
+                throw new RuntimeException(opName + " failed");
+            }
+            int outLen = memory.readInt(outLenPtr);
+            return readBytes(dataPtr, outLen);
+        } finally {
+            deallocate(ct1Ptr);
+            deallocate(ct2Ptr);
+            deallocate(outLenPtr);
+        }
+    }
+
+    /**
+     * Helper for ciphertext-plaintext HE operations:
+     * (ctx_id, ct_ptr, ct_len, plain_i64, out_len_ptr) -> data_ptr
+     */
+    private byte[] heCiphertextPlainOp(ExportFunction func, int ctxId,
+                                        byte[] ct, long plain, String opName) {
+        if (ct == null || ct.length == 0) {
+            throw new IllegalArgumentException("Ciphertext must not be null or empty");
+        }
+
+        int ctPtr = allocate(ct.length);
+        int outLenPtr = allocate(4);
+        try {
+            writeBytes(ctPtr, ct);
+            Value[] result = func.apply(
+                Value.i32(ctxId),
+                Value.i32(ctPtr),
+                Value.i32(ct.length),
+                Value.i64(plain),
+                Value.i32(outLenPtr)
+            );
+            int dataPtr = result[0].asInt();
+            if (dataPtr == 0) {
+                throw new RuntimeException(opName + " failed");
+            }
+            int outLen = memory.readInt(outLenPtr);
+            return readBytes(dataPtr, outLen);
+        } finally {
+            deallocate(ctPtr);
+            deallocate(outLenPtr);
+        }
     }
 
     @Override

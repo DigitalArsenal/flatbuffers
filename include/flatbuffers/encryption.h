@@ -525,7 +525,7 @@ void InjectEntropy(const uint8_t* seed, size_t size);
 /**
  * SHA-256 hash
  */
-void SHA256(const uint8_t* data, size_t size, uint8_t* hash);
+void Sha256Hash(const uint8_t* data, size_t size, uint8_t* hash);
 
 /**
  * HKDF-SHA256 key derivation

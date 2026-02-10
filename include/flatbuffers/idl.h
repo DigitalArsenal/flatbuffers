@@ -1061,6 +1061,11 @@ class Parser : public ParserState {
     // An attribute added to a field to indicate it should be encrypted.
     // Used by the encryption API (flatbuffers/encryption.h).
     known_attributes_["encrypted"] = true;
+
+    // An attribute for homomorphic encryption (BFV/BGV via SEAL).
+    // Stores ciphertext as offset-based vector (2-8KB per scalar).
+    // Used by the HE encryption API (flatbuffers/he_encryption.h).
+    known_attributes_["he_encrypted"] = true;
   }
 
   // Copying is not allowed

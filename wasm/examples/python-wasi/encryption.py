@@ -4,10 +4,14 @@ FlatBuffers WASI Encryption Module for Python using Wasmer.
 
 This module provides cryptographic operations via the Crypto++ WASM module:
 - AES-256-CTR symmetric encryption
+- HKDF-SHA256 key derivation
 - X25519 ECDH key exchange
 - secp256k1 ECDH and ECDSA signatures (Bitcoin/Ethereum compatible)
 - P-256 ECDH and ECDSA signatures (NIST)
+- P-384 ECDH and ECDSA signatures (NIST, higher security)
 - Ed25519 signatures
+- Field-level encryption context management
+- Homomorphic Encryption (HE) via SEAL (BFV/CKKS schemes)
 """
 
 from wasmer import engine, Store, Module, Instance, ImportObject, Function, FunctionType, Type, Memory
@@ -32,6 +36,11 @@ SECP256K1_SIGNATURE_SIZE = 72   # DER encoded max
 P256_PRIVATE_KEY_SIZE = 32
 P256_PUBLIC_KEY_SIZE = 33  # compressed
 P256_SIGNATURE_SIZE = 72   # DER encoded max
+
+P384_PRIVATE_KEY_SIZE = 48
+P384_PUBLIC_KEY_SIZE = 49  # compressed
+P384_SIGNATURE_SIZE = 104  # DER encoded max
+HKDF_DEFAULT_SIZE = 32
 
 ED25519_PRIVATE_KEY_SIZE = 64  # seed + public key
 ED25519_PUBLIC_KEY_SIZE = 32
@@ -460,6 +469,930 @@ class EncryptionModule:
             return check_fn() == 1
         except Exception:
             return False
+
+    # =========================================================================
+    # HKDF Key Derivation
+    # =========================================================================
+
+    def hkdf(self, ikm: bytes, salt: bytes, info: bytes, okm_size: int = 32) -> bytes:
+        """
+        Derive key material using HKDF-SHA256.
+
+        Args:
+            ikm: Input key material
+            salt: Salt value (can be empty)
+            info: Context/info value (can be empty)
+            okm_size: Desired output key material size
+
+        Returns:
+            Derived key material of okm_size bytes
+        """
+        if okm_size <= 0:
+            raise ValueError("Output size must be positive")
+
+        ikm_ptr = self._allocate(len(ikm)) if ikm else 0
+        salt_ptr = self._allocate(len(salt)) if salt else 0
+        info_ptr = self._allocate(len(info)) if info else 0
+        okm_ptr = self._allocate(okm_size)
+
+        try:
+            if ikm:
+                self._write_bytes(ikm_ptr, ikm)
+            if salt:
+                self._write_bytes(salt_ptr, salt)
+            if info:
+                self._write_bytes(info_ptr, info)
+
+            hkdf_fn = self._instance.exports.wasi_hkdf
+            hkdf_fn(ikm_ptr, len(ikm), salt_ptr, len(salt),
+                     info_ptr, len(info), okm_ptr, okm_size)
+
+            return self._read_bytes(okm_ptr, okm_size)
+        finally:
+            if ikm_ptr:
+                self._deallocate(ikm_ptr)
+            if salt_ptr:
+                self._deallocate(salt_ptr)
+            if info_ptr:
+                self._deallocate(info_ptr)
+            self._deallocate(okm_ptr)
+
+    def derive_symmetric_key(self, shared_secret: bytes, context: bytes = b"") -> bytes:
+        """
+        Derive a symmetric key from a shared secret using HKDF.
+
+        Args:
+            shared_secret: ECDH shared secret (32 bytes)
+            context: Optional context/info bytes
+
+        Returns:
+            32-byte symmetric key
+        """
+        secret_ptr = self._allocate(len(shared_secret))
+        context_ptr = self._allocate(len(context)) if context else 0
+        key_ptr = self._allocate(AES_KEY_SIZE)
+
+        try:
+            self._write_bytes(secret_ptr, shared_secret)
+            if context:
+                self._write_bytes(context_ptr, context)
+
+            derive_fn = self._instance.exports.wasi_derive_symmetric_key
+            derive_fn(secret_ptr, context_ptr, len(context), key_ptr)
+
+            return self._read_bytes(key_ptr, AES_KEY_SIZE)
+        finally:
+            self._deallocate(secret_ptr)
+            if context_ptr:
+                self._deallocate(context_ptr)
+            self._deallocate(key_ptr)
+
+    # =========================================================================
+    # secp256k1 Key Exchange and Signatures (Bitcoin/Ethereum)
+    # =========================================================================
+
+    def secp256k1_generate_keypair(self) -> Tuple[bytes, bytes]:
+        """Generate a secp256k1 key pair."""
+        priv_ptr = self._allocate(SECP256K1_PRIVATE_KEY_SIZE)
+        pub_ptr = self._allocate(SECP256K1_PUBLIC_KEY_SIZE)
+
+        try:
+            gen_fn = self._instance.exports.wasi_secp256k1_generate_keypair
+            result = gen_fn(priv_ptr, pub_ptr)
+
+            if result != 0:
+                raise RuntimeError("Key generation failed")
+
+            private_key = self._read_bytes(priv_ptr, SECP256K1_PRIVATE_KEY_SIZE)
+            public_key = self._read_bytes(pub_ptr, SECP256K1_PUBLIC_KEY_SIZE)
+            return private_key, public_key
+        finally:
+            self._deallocate(priv_ptr)
+            self._deallocate(pub_ptr)
+
+    def secp256k1_shared_secret(self, private_key: bytes, public_key: bytes) -> bytes:
+        """Perform secp256k1 ECDH key exchange."""
+        priv_ptr = self._allocate(SECP256K1_PRIVATE_KEY_SIZE)
+        pub_ptr = self._allocate(len(public_key))
+        secret_ptr = self._allocate(SHARED_SECRET_SIZE)
+
+        try:
+            self._write_bytes(priv_ptr, private_key)
+            self._write_bytes(pub_ptr, public_key)
+
+            ecdh_fn = self._instance.exports.wasi_secp256k1_shared_secret
+            result = ecdh_fn(priv_ptr, pub_ptr, len(public_key), secret_ptr)
+
+            if result != 0:
+                raise RuntimeError("ECDH failed")
+
+            return self._read_bytes(secret_ptr, SHARED_SECRET_SIZE)
+        finally:
+            self._deallocate(priv_ptr)
+            self._deallocate(pub_ptr)
+            self._deallocate(secret_ptr)
+
+    def secp256k1_sign(self, private_key: bytes, data: bytes) -> bytes:
+        """Sign data with secp256k1 ECDSA."""
+        priv_ptr = self._allocate(SECP256K1_PRIVATE_KEY_SIZE)
+        data_ptr = self._allocate(len(data))
+        sig_ptr = self._allocate(SECP256K1_SIGNATURE_SIZE)
+        sig_size_ptr = self._allocate(4)
+
+        try:
+            self._write_bytes(priv_ptr, private_key)
+            self._write_bytes(data_ptr, data)
+
+            sign_fn = self._instance.exports.wasi_secp256k1_sign
+            result = sign_fn(priv_ptr, data_ptr, len(data), sig_ptr, sig_size_ptr)
+
+            if result != 0:
+                raise RuntimeError("Signing failed")
+
+            sig_size = struct.unpack('<I', self._read_bytes(sig_size_ptr, 4))[0]
+            return self._read_bytes(sig_ptr, sig_size)
+        finally:
+            self._deallocate(priv_ptr)
+            self._deallocate(data_ptr)
+            self._deallocate(sig_ptr)
+            self._deallocate(sig_size_ptr)
+
+    def secp256k1_verify(self, public_key: bytes, data: bytes, signature: bytes) -> bool:
+        """Verify a secp256k1 ECDSA signature."""
+        pub_ptr = self._allocate(len(public_key))
+        data_ptr = self._allocate(len(data))
+        sig_ptr = self._allocate(len(signature))
+
+        try:
+            self._write_bytes(pub_ptr, public_key)
+            self._write_bytes(data_ptr, data)
+            self._write_bytes(sig_ptr, signature)
+
+            verify_fn = self._instance.exports.wasi_secp256k1_verify
+            result = verify_fn(pub_ptr, len(public_key), data_ptr, len(data),
+                               sig_ptr, len(signature))
+
+            return result == 0
+        finally:
+            self._deallocate(pub_ptr)
+            self._deallocate(data_ptr)
+            self._deallocate(sig_ptr)
+
+    # =========================================================================
+    # P-256 Key Exchange and Signatures (NIST)
+    # =========================================================================
+
+    def p256_generate_keypair(self) -> Tuple[bytes, bytes]:
+        """Generate a P-256 key pair."""
+        priv_ptr = self._allocate(P256_PRIVATE_KEY_SIZE)
+        pub_ptr = self._allocate(P256_PUBLIC_KEY_SIZE)
+
+        try:
+            gen_fn = self._instance.exports.wasi_p256_generate_keypair
+            result = gen_fn(priv_ptr, pub_ptr)
+
+            if result != 0:
+                raise RuntimeError("Key generation failed")
+
+            private_key = self._read_bytes(priv_ptr, P256_PRIVATE_KEY_SIZE)
+            public_key = self._read_bytes(pub_ptr, P256_PUBLIC_KEY_SIZE)
+            return private_key, public_key
+        finally:
+            self._deallocate(priv_ptr)
+            self._deallocate(pub_ptr)
+
+    def p256_shared_secret(self, private_key: bytes, public_key: bytes) -> bytes:
+        """Perform P-256 ECDH key exchange."""
+        priv_ptr = self._allocate(P256_PRIVATE_KEY_SIZE)
+        pub_ptr = self._allocate(len(public_key))
+        secret_ptr = self._allocate(SHARED_SECRET_SIZE)
+
+        try:
+            self._write_bytes(priv_ptr, private_key)
+            self._write_bytes(pub_ptr, public_key)
+
+            ecdh_fn = self._instance.exports.wasi_p256_shared_secret
+            result = ecdh_fn(priv_ptr, pub_ptr, len(public_key), secret_ptr)
+
+            if result != 0:
+                raise RuntimeError("ECDH failed")
+
+            return self._read_bytes(secret_ptr, SHARED_SECRET_SIZE)
+        finally:
+            self._deallocate(priv_ptr)
+            self._deallocate(pub_ptr)
+            self._deallocate(secret_ptr)
+
+    def p256_sign(self, private_key: bytes, data: bytes) -> bytes:
+        """Sign data with P-256 ECDSA."""
+        priv_ptr = self._allocate(P256_PRIVATE_KEY_SIZE)
+        data_ptr = self._allocate(len(data))
+        sig_ptr = self._allocate(P256_SIGNATURE_SIZE)
+        sig_size_ptr = self._allocate(4)
+
+        try:
+            self._write_bytes(priv_ptr, private_key)
+            self._write_bytes(data_ptr, data)
+
+            sign_fn = self._instance.exports.wasi_p256_sign
+            result = sign_fn(priv_ptr, data_ptr, len(data), sig_ptr, sig_size_ptr)
+
+            if result != 0:
+                raise RuntimeError("Signing failed")
+
+            sig_size = struct.unpack('<I', self._read_bytes(sig_size_ptr, 4))[0]
+            return self._read_bytes(sig_ptr, sig_size)
+        finally:
+            self._deallocate(priv_ptr)
+            self._deallocate(data_ptr)
+            self._deallocate(sig_ptr)
+            self._deallocate(sig_size_ptr)
+
+    def p256_verify(self, public_key: bytes, data: bytes, signature: bytes) -> bool:
+        """Verify a P-256 ECDSA signature."""
+        pub_ptr = self._allocate(len(public_key))
+        data_ptr = self._allocate(len(data))
+        sig_ptr = self._allocate(len(signature))
+
+        try:
+            self._write_bytes(pub_ptr, public_key)
+            self._write_bytes(data_ptr, data)
+            self._write_bytes(sig_ptr, signature)
+
+            verify_fn = self._instance.exports.wasi_p256_verify
+            result = verify_fn(pub_ptr, len(public_key), data_ptr, len(data),
+                               sig_ptr, len(signature))
+
+            return result == 0
+        finally:
+            self._deallocate(pub_ptr)
+            self._deallocate(data_ptr)
+            self._deallocate(sig_ptr)
+
+    # =========================================================================
+    # P-384 Key Exchange and Signatures (NIST, higher security)
+    # =========================================================================
+
+    def p384_generate_keypair(self) -> Tuple[bytes, bytes]:
+        """Generate a P-384 key pair."""
+        priv_ptr = self._allocate(P384_PRIVATE_KEY_SIZE)
+        pub_ptr = self._allocate(P384_PUBLIC_KEY_SIZE)
+
+        try:
+            gen_fn = self._instance.exports.wasi_p384_generate_keypair
+            result = gen_fn(priv_ptr, pub_ptr)
+
+            if result != 0:
+                raise RuntimeError("Key generation failed")
+
+            private_key = self._read_bytes(priv_ptr, P384_PRIVATE_KEY_SIZE)
+            public_key = self._read_bytes(pub_ptr, P384_PUBLIC_KEY_SIZE)
+            return private_key, public_key
+        finally:
+            self._deallocate(priv_ptr)
+            self._deallocate(pub_ptr)
+
+    def p384_shared_secret(self, private_key: bytes, public_key: bytes) -> bytes:
+        """Perform P-384 ECDH key exchange."""
+        priv_ptr = self._allocate(P384_PRIVATE_KEY_SIZE)
+        pub_ptr = self._allocate(len(public_key))
+        secret_ptr = self._allocate(SHARED_SECRET_SIZE)
+
+        try:
+            self._write_bytes(priv_ptr, private_key)
+            self._write_bytes(pub_ptr, public_key)
+
+            ecdh_fn = self._instance.exports.wasi_p384_shared_secret
+            result = ecdh_fn(priv_ptr, pub_ptr, len(public_key), secret_ptr)
+
+            if result != 0:
+                raise RuntimeError("ECDH failed")
+
+            return self._read_bytes(secret_ptr, SHARED_SECRET_SIZE)
+        finally:
+            self._deallocate(priv_ptr)
+            self._deallocate(pub_ptr)
+            self._deallocate(secret_ptr)
+
+    def p384_sign(self, private_key: bytes, data: bytes) -> bytes:
+        """Sign data with P-384 ECDSA."""
+        priv_ptr = self._allocate(P384_PRIVATE_KEY_SIZE)
+        data_ptr = self._allocate(len(data))
+        sig_ptr = self._allocate(P384_SIGNATURE_SIZE)
+        sig_size_ptr = self._allocate(4)
+
+        try:
+            self._write_bytes(priv_ptr, private_key)
+            self._write_bytes(data_ptr, data)
+
+            sign_fn = self._instance.exports.wasi_p384_sign
+            result = sign_fn(priv_ptr, data_ptr, len(data), sig_ptr, sig_size_ptr)
+
+            if result != 0:
+                raise RuntimeError("Signing failed")
+
+            sig_size = struct.unpack('<I', self._read_bytes(sig_size_ptr, 4))[0]
+            return self._read_bytes(sig_ptr, sig_size)
+        finally:
+            self._deallocate(priv_ptr)
+            self._deallocate(data_ptr)
+            self._deallocate(sig_ptr)
+            self._deallocate(sig_size_ptr)
+
+    def p384_verify(self, public_key: bytes, data: bytes, signature: bytes) -> bool:
+        """Verify a P-384 ECDSA signature."""
+        pub_ptr = self._allocate(len(public_key))
+        data_ptr = self._allocate(len(data))
+        sig_ptr = self._allocate(len(signature))
+
+        try:
+            self._write_bytes(pub_ptr, public_key)
+            self._write_bytes(data_ptr, data)
+            self._write_bytes(sig_ptr, signature)
+
+            verify_fn = self._instance.exports.wasi_p384_verify
+            result = verify_fn(pub_ptr, len(public_key), data_ptr, len(data),
+                               sig_ptr, len(signature))
+
+            return result == 0
+        finally:
+            self._deallocate(pub_ptr)
+            self._deallocate(data_ptr)
+            self._deallocate(sig_ptr)
+
+    # =========================================================================
+    # Entropy Management
+    # =========================================================================
+
+    def inject_entropy(self, seed: bytes) -> None:
+        """
+        Inject external entropy into the WASM RNG pool.
+
+        Args:
+            seed: Entropy bytes (recommended: 32-64 bytes)
+        """
+        seed_ptr = self._allocate(len(seed))
+
+        try:
+            self._write_bytes(seed_ptr, seed)
+
+            inject_fn = self._instance.exports.wasi_inject_entropy
+            result = inject_fn(seed_ptr, len(seed))
+
+            if result != 0:
+                raise RuntimeError("Entropy injection failed")
+        finally:
+            self._deallocate(seed_ptr)
+
+    # =========================================================================
+    # Field-level Encryption
+    # =========================================================================
+
+    def derive_field_key(self, ctx_ptr: int, field_id: int) -> bytes:
+        """
+        Derive a field-specific key from an encryption context.
+
+        Args:
+            ctx_ptr: Encryption context pointer (from EncryptionContext._ptr)
+            field_id: Field identifier for key derivation
+
+        Returns:
+            32-byte derived key
+        """
+        out_ptr = self._allocate(AES_KEY_SIZE)
+
+        try:
+            fn = self._instance.exports.wasi_derive_field_key
+            result = fn(ctx_ptr, field_id, out_ptr)
+
+            if result != 0:
+                raise RuntimeError("Field key derivation failed")
+
+            return self._read_bytes(out_ptr, AES_KEY_SIZE)
+        finally:
+            self._deallocate(out_ptr)
+
+    def derive_field_iv(self, ctx_ptr: int, field_id: int) -> bytes:
+        """
+        Derive a field-specific IV from an encryption context.
+
+        Args:
+            ctx_ptr: Encryption context pointer (from EncryptionContext._ptr)
+            field_id: Field identifier for IV derivation
+
+        Returns:
+            16-byte derived IV
+        """
+        out_ptr = self._allocate(AES_IV_SIZE)
+
+        try:
+            fn = self._instance.exports.wasi_derive_field_iv
+            result = fn(ctx_ptr, field_id, out_ptr)
+
+            if result != 0:
+                raise RuntimeError("Field IV derivation failed")
+
+            return self._read_bytes(out_ptr, AES_IV_SIZE)
+        finally:
+            self._deallocate(out_ptr)
+
+    def create_encryption_context(self, key: bytes) -> 'EncryptionContext':
+        """
+        Create a field-level encryption context.
+
+        Args:
+            key: 32-byte master encryption key
+
+        Returns:
+            EncryptionContext instance (use as context manager)
+        """
+        return EncryptionContext(self, key)
+
+    # =========================================================================
+    # Homomorphic Encryption (HE)
+    # =========================================================================
+
+    def has_he(self) -> bool:
+        """Check if the WASI module supports homomorphic encryption."""
+        try:
+            _ = self._instance.exports.wasi_he_context_create_client
+            return True
+        except Exception:
+            return False
+
+    def he_create_client(self, poly_degree: int = 0) -> int:
+        """
+        Create a client HE context with full key material (secret + public).
+
+        Args:
+            poly_degree: Polynomial modulus degree (0 = default 4096).
+
+        Returns:
+            Context ID (>0) for use with other HE methods.
+
+        Raises:
+            RuntimeError: If context creation fails.
+        """
+        fn = self._instance.exports.wasi_he_context_create_client
+        ctx_id = fn(poly_degree)
+        if ctx_id < 0:
+            raise RuntimeError("HE client context creation failed")
+        return ctx_id
+
+    def he_create_server(self, public_key: bytes) -> int:
+        """
+        Create a server HE context from a serialized public key.
+        The server context can encrypt and perform operations but cannot decrypt.
+
+        Args:
+            public_key: Serialized public key bytes from a client context.
+
+        Returns:
+            Context ID (>0) for use with other HE methods.
+
+        Raises:
+            RuntimeError: If context creation fails.
+        """
+        pk_ptr = self._allocate(len(public_key))
+
+        try:
+            self._write_bytes(pk_ptr, public_key)
+
+            fn = self._instance.exports.wasi_he_context_create_server
+            ctx_id = fn(pk_ptr, len(public_key))
+
+            if ctx_id < 0:
+                raise RuntimeError("HE server context creation failed")
+
+            return ctx_id
+        finally:
+            self._deallocate(pk_ptr)
+
+    def he_destroy_context(self, ctx_id: int) -> None:
+        """
+        Destroy an HE context and free its resources.
+
+        Args:
+            ctx_id: Context ID returned by he_create_client or he_create_server.
+        """
+        fn = self._instance.exports.wasi_he_context_destroy
+        fn(ctx_id)
+
+    def _he_get_variable_length_data(self, fn_name: str, ctx_id: int) -> bytes:
+        """
+        Helper for HE functions that return variable-length data.
+        Signature: fn(ctx_id i32, out_len_ptr i32) -> data_ptr i32
+        """
+        fn = getattr(self._instance.exports, fn_name)
+
+        # Allocate 4 bytes for output length
+        out_len_ptr = self._allocate(4)
+
+        try:
+            data_ptr = fn(ctx_id, out_len_ptr)
+            if data_ptr == 0:
+                raise RuntimeError(f"{fn_name} returned null")
+
+            # Read the output length (little-endian uint32)
+            data_len = struct.unpack('<I', self._read_bytes(out_len_ptr, 4))[0]
+            if data_len == 0:
+                raise RuntimeError(f"{fn_name} returned zero-length data")
+
+            # Read the data
+            return self._read_bytes(data_ptr, data_len)
+        finally:
+            self._deallocate(out_len_ptr)
+
+    def he_get_public_key(self, ctx_id: int) -> bytes:
+        """
+        Get the serialized public key from an HE context.
+
+        Args:
+            ctx_id: Context ID.
+
+        Returns:
+            Serialized public key bytes.
+        """
+        return self._he_get_variable_length_data("wasi_he_get_public_key", ctx_id)
+
+    def he_get_relin_keys(self, ctx_id: int) -> bytes:
+        """
+        Get the serialized relinearization keys from an HE context.
+
+        Args:
+            ctx_id: Context ID.
+
+        Returns:
+            Serialized relinearization key bytes.
+        """
+        return self._he_get_variable_length_data("wasi_he_get_relin_keys", ctx_id)
+
+    def he_get_secret_key(self, ctx_id: int) -> bytes:
+        """
+        Get the serialized secret key from a client HE context.
+
+        Args:
+            ctx_id: Context ID (must be a client context).
+
+        Returns:
+            Serialized secret key bytes.
+        """
+        return self._he_get_variable_length_data("wasi_he_get_secret_key", ctx_id)
+
+    def he_set_relin_keys(self, ctx_id: int, relin_keys: bytes) -> None:
+        """
+        Set relinearization keys on a server HE context.
+        Required before performing multiplication on the server side.
+
+        Args:
+            ctx_id: Context ID (server context).
+            relin_keys: Serialized relinearization key bytes.
+
+        Raises:
+            RuntimeError: If setting relin keys fails.
+        """
+        rk_ptr = self._allocate(len(relin_keys))
+
+        try:
+            self._write_bytes(rk_ptr, relin_keys)
+
+            fn = self._instance.exports.wasi_he_set_relin_keys
+            result = fn(ctx_id, rk_ptr, len(relin_keys))
+
+            if result != 0:
+                raise RuntimeError("HE set relin keys failed")
+        finally:
+            self._deallocate(rk_ptr)
+
+    def he_encrypt_int64(self, ctx_id: int, value: int) -> bytes:
+        """
+        Encrypt a 64-bit integer using the BFV scheme.
+
+        Args:
+            ctx_id: Context ID.
+            value: Integer value to encrypt.
+
+        Returns:
+            Serialized ciphertext bytes.
+        """
+        out_len_ptr = self._allocate(4)
+
+        try:
+            fn = self._instance.exports.wasi_he_encrypt_int64
+            data_ptr = fn(ctx_id, value, out_len_ptr)
+
+            if data_ptr == 0:
+                raise RuntimeError("HE encrypt int64 returned null")
+
+            data_len = struct.unpack('<I', self._read_bytes(out_len_ptr, 4))[0]
+            if data_len == 0:
+                raise RuntimeError("HE encrypt int64 returned zero-length ciphertext")
+
+            return self._read_bytes(data_ptr, data_len)
+        finally:
+            self._deallocate(out_len_ptr)
+
+    def he_decrypt_int64(self, ctx_id: int, ciphertext: bytes) -> int:
+        """
+        Decrypt a ciphertext to a 64-bit integer using the BFV scheme.
+
+        Args:
+            ctx_id: Context ID (must be a client context with secret key).
+            ciphertext: Serialized ciphertext bytes.
+
+        Returns:
+            Decrypted integer value.
+        """
+        ct_ptr = self._allocate(len(ciphertext))
+
+        try:
+            self._write_bytes(ct_ptr, ciphertext)
+
+            fn = self._instance.exports.wasi_he_decrypt_int64
+            return fn(ctx_id, ct_ptr, len(ciphertext))
+        finally:
+            self._deallocate(ct_ptr)
+
+    def he_encrypt_double(self, ctx_id: int, value: float) -> bytes:
+        """
+        Encrypt a double-precision float using the CKKS scheme.
+
+        Args:
+            ctx_id: Context ID.
+            value: Double value to encrypt.
+
+        Returns:
+            Serialized ciphertext bytes.
+        """
+        out_len_ptr = self._allocate(4)
+
+        try:
+            fn = self._instance.exports.wasi_he_encrypt_double
+            data_ptr = fn(ctx_id, value, out_len_ptr)
+
+            if data_ptr == 0:
+                raise RuntimeError("HE encrypt double returned null")
+
+            data_len = struct.unpack('<I', self._read_bytes(out_len_ptr, 4))[0]
+            if data_len == 0:
+                raise RuntimeError("HE encrypt double returned zero-length ciphertext")
+
+            return self._read_bytes(data_ptr, data_len)
+        finally:
+            self._deallocate(out_len_ptr)
+
+    def he_decrypt_double(self, ctx_id: int, ciphertext: bytes) -> float:
+        """
+        Decrypt a ciphertext to a double-precision float using the CKKS scheme.
+
+        Args:
+            ctx_id: Context ID (must be a client context with secret key).
+            ciphertext: Serialized ciphertext bytes.
+
+        Returns:
+            Decrypted double value.
+        """
+        ct_ptr = self._allocate(len(ciphertext))
+
+        try:
+            self._write_bytes(ct_ptr, ciphertext)
+
+            fn = self._instance.exports.wasi_he_decrypt_double
+            return fn(ctx_id, ct_ptr, len(ciphertext))
+        finally:
+            self._deallocate(ct_ptr)
+
+    def _he_binary_ct_op(self, fn_name: str, ctx_id: int, ct1: bytes, ct2: bytes) -> bytes:
+        """
+        Helper for HE binary ciphertext operations (add, sub, multiply).
+        Signature: fn(ctx_id, ct1_ptr, ct1_len, ct2_ptr, ct2_len, out_len_ptr) -> data_ptr
+        """
+        fn = getattr(self._instance.exports, fn_name)
+
+        ct1_ptr = self._allocate(len(ct1))
+        ct2_ptr = self._allocate(len(ct2))
+        out_len_ptr = self._allocate(4)
+
+        try:
+            self._write_bytes(ct1_ptr, ct1)
+            self._write_bytes(ct2_ptr, ct2)
+
+            data_ptr = fn(ctx_id, ct1_ptr, len(ct1), ct2_ptr, len(ct2), out_len_ptr)
+
+            if data_ptr == 0:
+                raise RuntimeError(f"{fn_name} returned null")
+
+            data_len = struct.unpack('<I', self._read_bytes(out_len_ptr, 4))[0]
+            if data_len == 0:
+                raise RuntimeError(f"{fn_name} returned zero-length ciphertext")
+
+            return self._read_bytes(data_ptr, data_len)
+        finally:
+            self._deallocate(ct1_ptr)
+            self._deallocate(ct2_ptr)
+            self._deallocate(out_len_ptr)
+
+    def he_add(self, ctx_id: int, ct1: bytes, ct2: bytes) -> bytes:
+        """
+        Perform homomorphic addition of two ciphertexts.
+
+        Args:
+            ctx_id: Context ID.
+            ct1: First ciphertext.
+            ct2: Second ciphertext.
+
+        Returns:
+            Ciphertext representing ct1 + ct2.
+        """
+        return self._he_binary_ct_op("wasi_he_add", ctx_id, ct1, ct2)
+
+    def he_sub(self, ctx_id: int, ct1: bytes, ct2: bytes) -> bytes:
+        """
+        Perform homomorphic subtraction of two ciphertexts.
+
+        Args:
+            ctx_id: Context ID.
+            ct1: First ciphertext.
+            ct2: Second ciphertext.
+
+        Returns:
+            Ciphertext representing ct1 - ct2.
+        """
+        return self._he_binary_ct_op("wasi_he_sub", ctx_id, ct1, ct2)
+
+    def he_multiply(self, ctx_id: int, ct1: bytes, ct2: bytes) -> bytes:
+        """
+        Perform homomorphic multiplication of two ciphertexts.
+        Relinearization keys should be set on the context for noise management.
+
+        Args:
+            ctx_id: Context ID.
+            ct1: First ciphertext.
+            ct2: Second ciphertext.
+
+        Returns:
+            Ciphertext representing ct1 * ct2.
+        """
+        return self._he_binary_ct_op("wasi_he_multiply", ctx_id, ct1, ct2)
+
+    def he_negate(self, ctx_id: int, ct: bytes) -> bytes:
+        """
+        Perform homomorphic negation of a ciphertext.
+
+        Args:
+            ctx_id: Context ID.
+            ct: Ciphertext to negate.
+
+        Returns:
+            Ciphertext representing -ct.
+        """
+        ct_ptr = self._allocate(len(ct))
+        out_len_ptr = self._allocate(4)
+
+        try:
+            self._write_bytes(ct_ptr, ct)
+
+            fn = self._instance.exports.wasi_he_negate
+            data_ptr = fn(ctx_id, ct_ptr, len(ct), out_len_ptr)
+
+            if data_ptr == 0:
+                raise RuntimeError("HE negate returned null")
+
+            data_len = struct.unpack('<I', self._read_bytes(out_len_ptr, 4))[0]
+            if data_len == 0:
+                raise RuntimeError("HE negate returned zero-length ciphertext")
+
+            return self._read_bytes(data_ptr, data_len)
+        finally:
+            self._deallocate(ct_ptr)
+            self._deallocate(out_len_ptr)
+
+    def _he_ct_plain_op(self, fn_name: str, ctx_id: int, ct: bytes, plain: int) -> bytes:
+        """
+        Helper for HE operations between a ciphertext and a plaintext int64.
+        Signature: fn(ctx_id, ct_ptr, ct_len, plain_i64, out_len_ptr) -> data_ptr
+        """
+        fn = getattr(self._instance.exports, fn_name)
+
+        ct_ptr = self._allocate(len(ct))
+        out_len_ptr = self._allocate(4)
+
+        try:
+            self._write_bytes(ct_ptr, ct)
+
+            data_ptr = fn(ctx_id, ct_ptr, len(ct), plain, out_len_ptr)
+
+            if data_ptr == 0:
+                raise RuntimeError(f"{fn_name} returned null")
+
+            data_len = struct.unpack('<I', self._read_bytes(out_len_ptr, 4))[0]
+            if data_len == 0:
+                raise RuntimeError(f"{fn_name} returned zero-length ciphertext")
+
+            return self._read_bytes(data_ptr, data_len)
+        finally:
+            self._deallocate(ct_ptr)
+            self._deallocate(out_len_ptr)
+
+    def he_add_plain(self, ctx_id: int, ct: bytes, plain: int) -> bytes:
+        """
+        Perform homomorphic addition of a ciphertext and a plaintext int64.
+
+        Args:
+            ctx_id: Context ID.
+            ct: Ciphertext.
+            plain: Plaintext integer value to add.
+
+        Returns:
+            Ciphertext representing ct + plain.
+        """
+        return self._he_ct_plain_op("wasi_he_add_plain", ctx_id, ct, plain)
+
+    def he_multiply_plain(self, ctx_id: int, ct: bytes, plain: int) -> bytes:
+        """
+        Perform homomorphic multiplication of a ciphertext by a plaintext int64.
+
+        Args:
+            ctx_id: Context ID.
+            ct: Ciphertext.
+            plain: Plaintext integer value to multiply by.
+
+        Returns:
+            Ciphertext representing ct * plain.
+        """
+        return self._he_ct_plain_op("wasi_he_multiply_plain", ctx_id, ct, plain)
+
+
+class EncryptionContext:
+    """Field-level encryption context wrapping a WASI encryption context handle."""
+
+    def __init__(self, module: 'EncryptionModule', key: bytes):
+        if len(key) != AES_KEY_SIZE:
+            raise ValueError("Key must be 32 bytes")
+        self._module = module
+        # Call wasi_encryption_create(key_ptr, key_size) -> ptr
+        key_ptr = module._allocate(AES_KEY_SIZE)
+        try:
+            module._write_bytes(key_ptr, key)
+            create_fn = module._instance.exports.wasi_encryption_create
+            self._ptr = create_fn(key_ptr, AES_KEY_SIZE)
+            if self._ptr == 0:
+                raise RuntimeError("Failed to create encryption context")
+        finally:
+            module._deallocate(key_ptr)
+
+    def close(self):
+        """Destroy the encryption context and free resources."""
+        if self._ptr != 0:
+            destroy_fn = self._module._instance.exports.wasi_encryption_destroy
+            destroy_fn(self._ptr)
+            self._ptr = 0
+
+    def derive_field_key(self, field_id: int) -> bytes:
+        """
+        Derive a field-specific key.
+
+        Args:
+            field_id: Field identifier for key derivation
+
+        Returns:
+            32-byte derived key
+        """
+        out_ptr = self._module._allocate(AES_KEY_SIZE)
+        try:
+            fn = self._module._instance.exports.wasi_derive_field_key
+            result = fn(self._ptr, field_id, out_ptr)
+            if result != 0:
+                raise RuntimeError("Field key derivation failed")
+            return self._module._read_bytes(out_ptr, AES_KEY_SIZE)
+        finally:
+            self._module._deallocate(out_ptr)
+
+    def derive_field_iv(self, field_id: int) -> bytes:
+        """
+        Derive a field-specific IV.
+
+        Args:
+            field_id: Field identifier for IV derivation
+
+        Returns:
+            16-byte derived IV
+        """
+        out_ptr = self._module._allocate(AES_IV_SIZE)
+        try:
+            fn = self._module._instance.exports.wasi_derive_field_iv
+            result = fn(self._ptr, field_id, out_ptr)
+            if result != 0:
+                raise RuntimeError("Field IV derivation failed")
+            return self._module._read_bytes(out_ptr, AES_IV_SIZE)
+        finally:
+            self._module._deallocate(out_ptr)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
 
 
 def main():

@@ -2831,6 +2831,61 @@ class CppGenerator : public BaseGenerator {
     if (type.base_type == BASE_TYPE_UNION) {
       GenTableUnionAsGetters(field, false);
     }
+
+    // Generate additional accessors for he_encrypted fields
+    if (field.attributes.Lookup("he_encrypted") != nullptr &&
+        IsScalar(type.base_type)) {
+      // Generate raw ciphertext accessor: field_ciphertext() returns Vector<uint8_t>*
+      code_ += "  const ::flatbuffers::Vector<uint8_t> *{{FIELD_NAME}}_ciphertext() const {";
+      code_ += "    return GetPointer<const ::flatbuffers::Vector<uint8_t> *>(" + offset_str + ");";
+      code_ += "  }";
+
+      // Generate decrypt accessor: field(const HEContext& ctx)
+      std::string face_type = GenTypeBasic(type, true);
+      code_ += "  " + face_type + " {{FIELD_NAME}}(const ::flatbuffers::he::HEContext &ctx) const {";
+      code_ += "    auto *ct = {{FIELD_NAME}}_ciphertext();";
+      code_ += "    if (!ct) return " + GenDefaultConstant(field) + ";";
+
+      // Generate appropriate decrypt call based on type
+      std::string decrypt_fn;
+      switch (type.base_type) {
+        case BASE_TYPE_CHAR:
+          decrypt_fn = "DecryptInt8";
+          break;
+        case BASE_TYPE_UCHAR:
+          decrypt_fn = "DecryptUInt8";
+          break;
+        case BASE_TYPE_SHORT:
+          decrypt_fn = "DecryptInt16";
+          break;
+        case BASE_TYPE_USHORT:
+          decrypt_fn = "DecryptUInt16";
+          break;
+        case BASE_TYPE_INT:
+          decrypt_fn = "DecryptInt32";
+          break;
+        case BASE_TYPE_UINT:
+          decrypt_fn = "DecryptUInt32";
+          break;
+        case BASE_TYPE_LONG:
+          decrypt_fn = "DecryptInt64";
+          break;
+        case BASE_TYPE_ULONG:
+          decrypt_fn = "DecryptUInt64";
+          break;
+        case BASE_TYPE_FLOAT:
+          decrypt_fn = "DecryptFloat";
+          break;
+        case BASE_TYPE_DOUBLE:
+          decrypt_fn = "DecryptDouble";
+          break;
+        default:
+          decrypt_fn = "DecryptInt64";
+          break;
+      }
+      code_ += "    return ctx." + decrypt_fn + "(ct->data(), ct->size());";
+      code_ += "  }";
+    }
   }
 
   void GenTableFieldType(const FieldDef& field) {

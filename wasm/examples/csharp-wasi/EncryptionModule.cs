@@ -18,6 +18,11 @@ namespace FlatBuffers.Encryption;
 /// - Ed25519 signatures
 /// - SHA-256 hashing
 /// - HKDF key derivation
+/// - Homomorphic Encryption (HE) operations via BFV scheme (optional, requires HE-enabled WASM):
+///   - Client/server context creation and key management
+///   - Integer (int64) and floating-point (double) encryption/decryption
+///   - Ciphertext-ciphertext arithmetic (add, sub, multiply, negate)
+///   - Ciphertext-plaintext arithmetic (add_plain, multiply_plain)
 /// </summary>
 public class EncryptionModule : IDisposable
 {
@@ -73,6 +78,25 @@ public class EncryptionModule : IDisposable
     private readonly Function _ed25519Sign;
     private readonly Function _ed25519Verify;
     private readonly Function _deriveSymmetricKey;
+
+    // HE (Homomorphic Encryption) functions - optional, may be null
+    private readonly Function? _heContextCreateClient;
+    private readonly Function? _heContextCreateServer;
+    private readonly Function? _heContextDestroy;
+    private readonly Function? _heGetPublicKey;
+    private readonly Function? _heGetRelinKeys;
+    private readonly Function? _heGetSecretKey;
+    private readonly Function? _heSetRelinKeys;
+    private readonly Function? _heEncryptInt64;
+    private readonly Function? _heDecryptInt64;
+    private readonly Function? _heEncryptDouble;
+    private readonly Function? _heDecryptDouble;
+    private readonly Function? _heAdd;
+    private readonly Function? _heSub;
+    private readonly Function? _heMultiply;
+    private readonly Function? _heNegate;
+    private readonly Function? _heAddPlain;
+    private readonly Function? _heMultiplyPlain;
 
     // Exception state
     private int _threwValue;
@@ -144,6 +168,25 @@ public class EncryptionModule : IDisposable
         _ed25519Sign = GetFunction("ed25519_sign");
         _ed25519Verify = GetFunction("ed25519_verify");
         _deriveSymmetricKey = GetFunction("derive_symmetric_key");
+
+        // HE functions are optional - only available with HE-enabled WASM module
+        _heContextCreateClient = _instance.GetFunction("wasi_he_context_create_client");
+        _heContextCreateServer = _instance.GetFunction("wasi_he_context_create_server");
+        _heContextDestroy = _instance.GetFunction("wasi_he_context_destroy");
+        _heGetPublicKey = _instance.GetFunction("wasi_he_get_public_key");
+        _heGetRelinKeys = _instance.GetFunction("wasi_he_get_relin_keys");
+        _heGetSecretKey = _instance.GetFunction("wasi_he_get_secret_key");
+        _heSetRelinKeys = _instance.GetFunction("wasi_he_set_relin_keys");
+        _heEncryptInt64 = _instance.GetFunction("wasi_he_encrypt_int64");
+        _heDecryptInt64 = _instance.GetFunction("wasi_he_decrypt_int64");
+        _heEncryptDouble = _instance.GetFunction("wasi_he_encrypt_double");
+        _heDecryptDouble = _instance.GetFunction("wasi_he_decrypt_double");
+        _heAdd = _instance.GetFunction("wasi_he_add");
+        _heSub = _instance.GetFunction("wasi_he_sub");
+        _heMultiply = _instance.GetFunction("wasi_he_multiply");
+        _heNegate = _instance.GetFunction("wasi_he_negate");
+        _heAddPlain = _instance.GetFunction("wasi_he_add_plain");
+        _heMultiplyPlain = _instance.GetFunction("wasi_he_multiply_plain");
     }
 
     private Function GetFunction(string name)
@@ -947,6 +990,475 @@ public class EncryptionModule : IDisposable
     public static byte[] RandomBytes(int length)
     {
         return RandomNumberGenerator.GetBytes(length);
+    }
+
+    // =========================================================================
+    // Homomorphic Encryption (HE) Operations
+    // =========================================================================
+
+    /// <summary>
+    /// Returns true if homomorphic encryption is available in the loaded WASM module.
+    /// </summary>
+    public bool HasHE()
+    {
+        return _heContextCreateClient != null;
+    }
+
+    /// <summary>
+    /// Creates a client HE context with full key pair (secret + public).
+    /// The client can encrypt, decrypt, and perform homomorphic operations.
+    /// </summary>
+    /// <param name="polyDegree">Polynomial modulus degree (0 = default 4096). Must be a power of 2.</param>
+    /// <returns>Context ID (positive integer) for use with other HE methods.</returns>
+    public int HECreateClient(uint polyDegree = 0)
+    {
+        if (_heContextCreateClient == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+
+        var result = (int)_heContextCreateClient.Invoke((int)polyDegree)!;
+        if (result < 0)
+            throw new InvalidOperationException("Failed to create HE client context");
+        return result;
+    }
+
+    /// <summary>
+    /// Creates a server HE context from a serialized public key.
+    /// The server can only perform homomorphic operations, not decrypt.
+    /// </summary>
+    /// <param name="publicKey">Serialized public key bytes from a client context.</param>
+    /// <returns>Context ID (positive integer) for use with other HE methods.</returns>
+    public int HECreateServer(byte[] publicKey)
+    {
+        if (_heContextCreateServer == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+        if (publicKey == null || publicKey.Length == 0)
+            throw new ArgumentException("Public key must not be empty", nameof(publicKey));
+
+        var pkPtr = Allocate(publicKey.Length);
+
+        try
+        {
+            WriteBytes(pkPtr, publicKey);
+
+            var result = (int)_heContextCreateServer.Invoke(pkPtr, publicKey.Length)!;
+            if (result < 0)
+                throw new InvalidOperationException("Failed to create HE server context");
+            return result;
+        }
+        finally
+        {
+            Deallocate(pkPtr);
+        }
+    }
+
+    /// <summary>
+    /// Destroys an HE context and frees its resources.
+    /// </summary>
+    /// <param name="ctxId">Context ID returned by HECreateClient or HECreateServer.</param>
+    public void HEDestroyContext(int ctxId)
+    {
+        if (_heContextDestroy == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+
+        _heContextDestroy.Invoke(ctxId);
+    }
+
+    /// <summary>
+    /// Gets the serialized public key from an HE context.
+    /// </summary>
+    /// <param name="ctxId">Context ID.</param>
+    /// <returns>Serialized public key bytes.</returns>
+    public byte[] HEGetPublicKey(int ctxId)
+    {
+        if (_heGetPublicKey == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+
+        return HECallWithOutputBuffer(ctxId, _heGetPublicKey);
+    }
+
+    /// <summary>
+    /// Gets the serialized relinearization keys from an HE context.
+    /// Relinearization keys are needed for homomorphic multiplication.
+    /// </summary>
+    /// <param name="ctxId">Context ID.</param>
+    /// <returns>Serialized relinearization key bytes.</returns>
+    public byte[] HEGetRelinKeys(int ctxId)
+    {
+        if (_heGetRelinKeys == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+
+        return HECallWithOutputBuffer(ctxId, _heGetRelinKeys);
+    }
+
+    /// <summary>
+    /// Gets the serialized secret key from an HE context (client context only).
+    /// </summary>
+    /// <param name="ctxId">Context ID (must be a client context).</param>
+    /// <returns>Serialized secret key bytes.</returns>
+    public byte[] HEGetSecretKey(int ctxId)
+    {
+        if (_heGetSecretKey == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+
+        return HECallWithOutputBuffer(ctxId, _heGetSecretKey);
+    }
+
+    /// <summary>
+    /// Sets relinearization keys on a server context.
+    /// Required before performing homomorphic multiplication.
+    /// </summary>
+    /// <param name="ctxId">Context ID (typically a server context).</param>
+    /// <param name="relinKeys">Serialized relinearization key bytes from a client context.</param>
+    public void HESetRelinKeys(int ctxId, byte[] relinKeys)
+    {
+        if (_heSetRelinKeys == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+        if (relinKeys == null || relinKeys.Length == 0)
+            throw new ArgumentException("Relinearization keys must not be empty", nameof(relinKeys));
+
+        var rkPtr = Allocate(relinKeys.Length);
+
+        try
+        {
+            WriteBytes(rkPtr, relinKeys);
+
+            var result = (int)_heSetRelinKeys.Invoke(ctxId, rkPtr, relinKeys.Length)!;
+            if (result != 0)
+                throw new InvalidOperationException("Failed to set relinearization keys");
+        }
+        finally
+        {
+            Deallocate(rkPtr);
+        }
+    }
+
+    /// <summary>
+    /// Encrypts a 64-bit integer using homomorphic encryption.
+    /// </summary>
+    /// <param name="ctxId">Context ID.</param>
+    /// <param name="value">Integer value to encrypt.</param>
+    /// <returns>Serialized ciphertext bytes.</returns>
+    public byte[] HEEncryptInt64(int ctxId, long value)
+    {
+        if (_heEncryptInt64 == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+
+        var outLenPtr = Allocate(4);
+
+        try
+        {
+            var dataPtr = (int)_heEncryptInt64.Invoke(ctxId, value, outLenPtr)!;
+            if (dataPtr == 0)
+                throw new InvalidOperationException("HE encryption of int64 failed");
+
+            var outLen = ReadUInt32LE(outLenPtr);
+            var result = ReadBytes(dataPtr, (int)outLen);
+            return result;
+        }
+        finally
+        {
+            Deallocate(outLenPtr);
+        }
+    }
+
+    /// <summary>
+    /// Decrypts a ciphertext to a 64-bit integer (requires client context with secret key).
+    /// </summary>
+    /// <param name="ctxId">Context ID (must be client context).</param>
+    /// <param name="ciphertext">Ciphertext bytes to decrypt.</param>
+    /// <returns>Decrypted integer value.</returns>
+    public long HEDecryptInt64(int ctxId, byte[] ciphertext)
+    {
+        if (_heDecryptInt64 == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+        if (ciphertext == null || ciphertext.Length == 0)
+            throw new ArgumentException("Ciphertext must not be empty", nameof(ciphertext));
+
+        var ctPtr = Allocate(ciphertext.Length);
+
+        try
+        {
+            WriteBytes(ctPtr, ciphertext);
+
+            var result = (long)_heDecryptInt64.Invoke(ctxId, ctPtr, ciphertext.Length)!;
+            return result;
+        }
+        finally
+        {
+            Deallocate(ctPtr);
+        }
+    }
+
+    /// <summary>
+    /// Encrypts a double-precision floating point value using homomorphic encryption.
+    /// Uses fixed-point encoding internally.
+    /// </summary>
+    /// <param name="ctxId">Context ID.</param>
+    /// <param name="value">Double value to encrypt.</param>
+    /// <returns>Serialized ciphertext bytes.</returns>
+    public byte[] HEEncryptDouble(int ctxId, double value)
+    {
+        if (_heEncryptDouble == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+
+        var outLenPtr = Allocate(4);
+
+        try
+        {
+            var dataPtr = (int)_heEncryptDouble.Invoke(ctxId, value, outLenPtr)!;
+            if (dataPtr == 0)
+                throw new InvalidOperationException("HE encryption of double failed");
+
+            var outLen = ReadUInt32LE(outLenPtr);
+            var result = ReadBytes(dataPtr, (int)outLen);
+            return result;
+        }
+        finally
+        {
+            Deallocate(outLenPtr);
+        }
+    }
+
+    /// <summary>
+    /// Decrypts a ciphertext to a double (requires client context with secret key).
+    /// </summary>
+    /// <param name="ctxId">Context ID (must be client context).</param>
+    /// <param name="ciphertext">Ciphertext bytes to decrypt.</param>
+    /// <returns>Decrypted double value.</returns>
+    public double HEDecryptDouble(int ctxId, byte[] ciphertext)
+    {
+        if (_heDecryptDouble == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+        if (ciphertext == null || ciphertext.Length == 0)
+            throw new ArgumentException("Ciphertext must not be empty", nameof(ciphertext));
+
+        var ctPtr = Allocate(ciphertext.Length);
+
+        try
+        {
+            WriteBytes(ctPtr, ciphertext);
+
+            var result = (double)_heDecryptDouble.Invoke(ctxId, ctPtr, ciphertext.Length)!;
+            return result;
+        }
+        finally
+        {
+            Deallocate(ctPtr);
+        }
+    }
+
+    /// <summary>
+    /// Adds two ciphertexts homomorphically: result = ct1 + ct2.
+    /// </summary>
+    /// <param name="ctxId">Context ID.</param>
+    /// <param name="ct1">First ciphertext.</param>
+    /// <param name="ct2">Second ciphertext.</param>
+    /// <returns>Ciphertext containing the encrypted sum.</returns>
+    public byte[] HEAdd(int ctxId, byte[] ct1, byte[] ct2)
+    {
+        if (_heAdd == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+
+        return HEBinaryOp(ctxId, ct1, ct2, _heAdd);
+    }
+
+    /// <summary>
+    /// Subtracts two ciphertexts homomorphically: result = ct1 - ct2.
+    /// </summary>
+    /// <param name="ctxId">Context ID.</param>
+    /// <param name="ct1">First ciphertext.</param>
+    /// <param name="ct2">Second ciphertext.</param>
+    /// <returns>Ciphertext containing the encrypted difference.</returns>
+    public byte[] HESub(int ctxId, byte[] ct1, byte[] ct2)
+    {
+        if (_heSub == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+
+        return HEBinaryOp(ctxId, ct1, ct2, _heSub);
+    }
+
+    /// <summary>
+    /// Multiplies two ciphertexts homomorphically: result = ct1 * ct2.
+    /// Requires relinearization keys to be set on the context.
+    /// </summary>
+    /// <param name="ctxId">Context ID (must have relin keys).</param>
+    /// <param name="ct1">First ciphertext.</param>
+    /// <param name="ct2">Second ciphertext.</param>
+    /// <returns>Ciphertext containing the encrypted product.</returns>
+    public byte[] HEMultiply(int ctxId, byte[] ct1, byte[] ct2)
+    {
+        if (_heMultiply == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+
+        return HEBinaryOp(ctxId, ct1, ct2, _heMultiply);
+    }
+
+    /// <summary>
+    /// Negates a ciphertext homomorphically: result = -ct.
+    /// </summary>
+    /// <param name="ctxId">Context ID.</param>
+    /// <param name="ct">Ciphertext to negate.</param>
+    /// <returns>Ciphertext containing the encrypted negation.</returns>
+    public byte[] HENegate(int ctxId, byte[] ct)
+    {
+        if (_heNegate == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+        if (ct == null || ct.Length == 0)
+            throw new ArgumentException("Ciphertext must not be empty", nameof(ct));
+
+        var ctPtr = Allocate(ct.Length);
+        var outLenPtr = Allocate(4);
+
+        try
+        {
+            WriteBytes(ctPtr, ct);
+
+            var dataPtr = (int)_heNegate.Invoke(ctxId, ctPtr, ct.Length, outLenPtr)!;
+            if (dataPtr == 0)
+                throw new InvalidOperationException("HE negate operation failed");
+
+            var outLen = ReadUInt32LE(outLenPtr);
+            return ReadBytes(dataPtr, (int)outLen);
+        }
+        finally
+        {
+            Deallocate(ctPtr);
+            Deallocate(outLenPtr);
+        }
+    }
+
+    /// <summary>
+    /// Adds a plaintext value to a ciphertext homomorphically: result = ct + plain.
+    /// </summary>
+    /// <param name="ctxId">Context ID.</param>
+    /// <param name="ct">Ciphertext.</param>
+    /// <param name="plain">Plaintext integer value to add.</param>
+    /// <returns>Ciphertext containing the encrypted result.</returns>
+    public byte[] HEAddPlain(int ctxId, byte[] ct, long plain)
+    {
+        if (_heAddPlain == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+
+        return HEPlainOp(ctxId, ct, plain, _heAddPlain);
+    }
+
+    /// <summary>
+    /// Multiplies a ciphertext by a plaintext value homomorphically: result = ct * plain.
+    /// </summary>
+    /// <param name="ctxId">Context ID.</param>
+    /// <param name="ct">Ciphertext.</param>
+    /// <param name="plain">Plaintext integer multiplier.</param>
+    /// <returns>Ciphertext containing the encrypted result.</returns>
+    public byte[] HEMultiplyPlain(int ctxId, byte[] ct, long plain)
+    {
+        if (_heMultiplyPlain == null)
+            throw new InvalidOperationException("HE not available in this WASM module");
+
+        return HEPlainOp(ctxId, ct, plain, _heMultiplyPlain);
+    }
+
+    // =========================================================================
+    // HE Helper Methods
+    // =========================================================================
+
+    /// <summary>
+    /// Reads a uint32 from WASM memory at the given pointer (little-endian).
+    /// </summary>
+    private uint ReadUInt32LE(int ptr)
+    {
+        var bytes = ReadBytes(ptr, 4);
+        return BitConverter.ToUInt32(bytes, 0);
+    }
+
+    /// <summary>
+    /// Helper for HE functions that take (ctxId, outLenPtr) and return a data pointer.
+    /// Used by HEGetPublicKey, HEGetRelinKeys, HEGetSecretKey.
+    /// </summary>
+    private byte[] HECallWithOutputBuffer(int ctxId, Function func)
+    {
+        var outLenPtr = Allocate(4);
+
+        try
+        {
+            var dataPtr = (int)func.Invoke(ctxId, outLenPtr)!;
+            if (dataPtr == 0)
+                throw new InvalidOperationException("HE operation returned null");
+
+            var outLen = ReadUInt32LE(outLenPtr);
+            if (outLen == 0)
+                throw new InvalidOperationException("HE operation returned zero-length data");
+
+            return ReadBytes(dataPtr, (int)outLen);
+        }
+        finally
+        {
+            Deallocate(outLenPtr);
+        }
+    }
+
+    /// <summary>
+    /// Helper for binary HE ciphertext-ciphertext operations (add, sub, multiply).
+    /// Signature: func(ctxId, ct1Ptr, ct1Len, ct2Ptr, ct2Len, outLenPtr) -> dataPtr
+    /// </summary>
+    private byte[] HEBinaryOp(int ctxId, byte[] ct1, byte[] ct2, Function func)
+    {
+        if (ct1 == null || ct1.Length == 0)
+            throw new ArgumentException("Ciphertext 1 must not be empty", nameof(ct1));
+        if (ct2 == null || ct2.Length == 0)
+            throw new ArgumentException("Ciphertext 2 must not be empty", nameof(ct2));
+
+        var ct1Ptr = Allocate(ct1.Length);
+        var ct2Ptr = Allocate(ct2.Length);
+        var outLenPtr = Allocate(4);
+
+        try
+        {
+            WriteBytes(ct1Ptr, ct1);
+            WriteBytes(ct2Ptr, ct2);
+
+            var dataPtr = (int)func.Invoke(ctxId, ct1Ptr, ct1.Length, ct2Ptr, ct2.Length, outLenPtr)!;
+            if (dataPtr == 0)
+                throw new InvalidOperationException("HE binary operation failed");
+
+            var outLen = ReadUInt32LE(outLenPtr);
+            return ReadBytes(dataPtr, (int)outLen);
+        }
+        finally
+        {
+            Deallocate(ct1Ptr);
+            Deallocate(ct2Ptr);
+            Deallocate(outLenPtr);
+        }
+    }
+
+    /// <summary>
+    /// Helper for HE ciphertext-plaintext operations (add_plain, multiply_plain).
+    /// Signature: func(ctxId, ctPtr, ctLen, plain, outLenPtr) -> dataPtr
+    /// </summary>
+    private byte[] HEPlainOp(int ctxId, byte[] ct, long plain, Function func)
+    {
+        if (ct == null || ct.Length == 0)
+            throw new ArgumentException("Ciphertext must not be empty", nameof(ct));
+
+        var ctPtr = Allocate(ct.Length);
+        var outLenPtr = Allocate(4);
+
+        try
+        {
+            WriteBytes(ctPtr, ct);
+
+            var dataPtr = (int)func.Invoke(ctxId, ctPtr, ct.Length, plain, outLenPtr)!;
+            if (dataPtr == 0)
+                throw new InvalidOperationException("HE plaintext operation failed");
+
+            var outLen = ReadUInt32LE(outLenPtr);
+            return ReadBytes(dataPtr, (int)outLen);
+        }
+        finally
+        {
+            Deallocate(ctPtr);
+            Deallocate(outLenPtr);
+        }
     }
 
     public void Dispose()

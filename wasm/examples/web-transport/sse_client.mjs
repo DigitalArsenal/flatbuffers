@@ -4,6 +4,7 @@
  *
  * Demonstrates receiving streaming FlatBuffers over SSE.
  * Supports both plaintext and encrypted streams.
+ * All crypto operations use WASM binary exports (Module._wasm_crypto_*).
  *
  * Session-Based Encryption:
  * - Receives header once at connection (or on rotation)
@@ -20,25 +21,137 @@
  */
 
 import {
-  x25519GenerateKeyPair,
-  EncryptionContext,
-  decryptBuffer,
-} from "flatc-wasm/encryption";
-import {
+  getWasmModule,
+  getRunner,
   schemaContent,
   schemaInput,
   plainSchemaInput,
-  getRunner,
   toHex,
+  fromHex,
 } from "./shared.mjs";
 
 const args = process.argv.slice(2);
 const encrypted = args.includes("--encrypted");
 const SERVER_URL = args.find((a) => !a.startsWith("--")) || "http://localhost:8081";
 
+// ---------------------------------------------------------------------------
+// WASM memory helpers
+// ---------------------------------------------------------------------------
+
+let Module;
+
+function allocBytes(data) {
+  const ptr = Module._malloc(data.length);
+  Module.HEAPU8.set(data, ptr);
+  return ptr;
+}
+
+function readBytes(ptr, len) {
+  return new Uint8Array(Module.HEAPU8.buffer, ptr, len).slice();
+}
+
+function freeBytes(ptr) {
+  Module._free(ptr);
+}
+
+// ---------------------------------------------------------------------------
+// Crypto helpers
+// ---------------------------------------------------------------------------
+
+function x25519GenerateKeyPair() {
+  const privPtr = Module._malloc(32);
+  const pubPtr = Module._malloc(32);
+  const rc = Module._wasm_crypto_x25519_generate_keypair(privPtr, pubPtr);
+  if (rc !== 0) throw new Error("x25519 keypair generation failed");
+  const privateKey = readBytes(privPtr, 32);
+  const publicKey = readBytes(pubPtr, 32);
+  freeBytes(privPtr);
+  freeBytes(pubPtr);
+  return { privateKey, publicKey };
+}
+
+function x25519SharedSecret(privateKey, myPublicKey, peerPublicKey) {
+  const privPtr = allocBytes(privateKey);
+  const myPubPtr = allocBytes(myPublicKey);
+  const peerPubPtr = allocBytes(peerPublicKey);
+  const secretPtr = Module._malloc(32);
+  const rc = Module._wasm_crypto_x25519_shared_secret(privPtr, myPubPtr, peerPubPtr, secretPtr);
+  if (rc !== 0) throw new Error("x25519 shared secret failed");
+  const secret = readBytes(secretPtr, 32);
+  freeBytes(privPtr);
+  freeBytes(myPubPtr);
+  freeBytes(peerPubPtr);
+  freeBytes(secretPtr);
+  return secret;
+}
+
+function deriveSymmetricKey(sharedSecret, context) {
+  const ssPtr = allocBytes(sharedSecret);
+  const ctxBytes = new TextEncoder().encode(context);
+  const ctxPtr = allocBytes(ctxBytes);
+  const outLen = 32;
+  const outPtr = Module._malloc(outLen);
+  Module._wasm_crypto_derive_symmetric_key(
+    ssPtr, sharedSecret.length,
+    ctxPtr, ctxBytes.length,
+    outPtr, outLen
+  );
+  const key = readBytes(outPtr, outLen);
+  freeBytes(ssPtr);
+  freeBytes(ctxPtr);
+  freeBytes(outPtr);
+  return key;
+}
+
+function decryptBytes(key, iv, data) {
+  const keyPtr = allocBytes(key);
+  const ivPtr = allocBytes(iv);
+  const dataPtr = allocBytes(data);
+  const rc = Module._wasm_crypto_decrypt_bytes(keyPtr, ivPtr, dataPtr, data.length);
+  if (rc !== 0) throw new Error("decryption failed");
+  const result = readBytes(dataPtr, data.length);
+  freeBytes(keyPtr);
+  freeBytes(ivPtr);
+  freeBytes(dataPtr);
+  return result;
+}
+
+function sha256(data) {
+  const dataPtr = allocBytes(data);
+  const hashPtr = Module._malloc(32);
+  Module._wasm_crypto_sha256(dataPtr, data.length, hashPtr);
+  const hash = readBytes(hashPtr, 32);
+  freeBytes(dataPtr);
+  freeBytes(hashPtr);
+  return hash;
+}
+
+// ---------------------------------------------------------------------------
+// Session key derivation from a received header
+// ---------------------------------------------------------------------------
+
+function deriveSessionKeys(privateKey, myPublicKey, header) {
+  const ephPub = typeof header.ephemeralPublicKey === "string"
+    ? fromHex(header.ephemeralPublicKey) : header.ephemeralPublicKey;
+  const shared = x25519SharedSecret(privateKey, myPublicKey, ephPub);
+  const key = deriveSymmetricKey(shared, "sse-stream-v1");
+  const iv = header.iv
+    ? (typeof header.iv === "string" ? fromHex(header.iv) : header.iv)
+    : sha256(ephPub).slice(0, 16);
+  return { key, iv };
+}
+
+// ---------------------------------------------------------------------------
+// Base64 helper
+// ---------------------------------------------------------------------------
+
 function fromBase64(base64) {
   return new Uint8Array(Buffer.from(base64, "base64"));
 }
+
+// ---------------------------------------------------------------------------
+// Plaintext client
+// ---------------------------------------------------------------------------
 
 async function runPlainClient() {
   const runner = await getRunner();
@@ -101,6 +214,10 @@ function handlePlainEvent(runner, eventType, eventData) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Encrypted client
+// ---------------------------------------------------------------------------
+
 async function runEncryptedClient() {
   const runner = await getRunner();
 
@@ -117,8 +234,8 @@ async function runEncryptedClient() {
   const decoder = new TextDecoder();
 
   let buffer = "";
-  let decryptCtx = null; // Current session decryption context
-  let messageCount = 0;
+  let sessionKey = null;
+  let sessionIv = null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -138,19 +255,42 @@ async function runEncryptedClient() {
       } else if (line.startsWith("data: ")) {
         eventData = line.substring(6);
       } else if (line === "" && eventType && eventData) {
-        const result = handleEncryptedEvent(
-          runner,
-          eventType,
-          eventData,
-          clientKeys.privateKey,
-          decryptCtx
-        );
-        if (result.decryptCtx) {
-          decryptCtx = result.decryptCtx;
+        const data = JSON.parse(eventData);
+
+        if (eventType === "connected") {
+          console.log(`Connected (encrypted, algo: ${data.algo})`);
+          const keys = deriveSessionKeys(
+            clientKeys.privateKey, clientKeys.publicKey, data.header
+          );
+          sessionKey = keys.key;
+          sessionIv = keys.iv;
+          console.log("Session header received, ready to decrypt\n");
+        } else if (eventType === "rotate") {
+          console.log(`\n[KEY ROTATION] Reason: ${data.reason}`);
+          const keys = deriveSessionKeys(
+            clientKeys.privateKey, clientKeys.publicKey, data.header
+          );
+          sessionKey = keys.key;
+          sessionIv = keys.iv;
+          console.log("New session header applied\n");
+        } else if (eventType === "message") {
+          if (!sessionKey) {
+            console.log("ERROR: No decryption context (missing header)");
+          } else {
+            const encryptedBuffer = fromBase64(data.buffer);
+            const decryptedBuffer = decryptBytes(sessionKey, sessionIv, encryptedBuffer);
+
+            const json = runner.generateJSON(schemaInput, {
+              path: "/msg.bin",
+              data: decryptedBuffer,
+            });
+            const message = JSON.parse(json);
+
+            console.log(`[${message.id}] ${message.sender}: ${message.content}`);
+            console.log(`  Tag: ${message.public_tag}, Time: ${new Date(Number(message.timestamp)).toISOString()}\n`);
+          }
         }
-        if (result.messageCount !== undefined) {
-          messageCount = result.messageCount;
-        }
+
         eventType = null;
         eventData = null;
       }
@@ -158,59 +298,13 @@ async function runEncryptedClient() {
   }
 }
 
-function handleEncryptedEvent(runner, eventType, eventData, privateKey, currentCtx) {
-  const data = JSON.parse(eventData);
-  let decryptCtx = currentCtx;
-  let messageCount;
-
-  if (eventType === "connected") {
-    console.log(`Connected (encrypted, algo: ${data.algo})`);
-
-    // Create decryption context from session header
-    decryptCtx = EncryptionContext.forDecryption(privateKey, data.header, "sse-stream-v1");
-    console.log("Session header received, ready to decrypt\n");
-
-    return { decryptCtx, messageCount: 0 };
-  }
-
-  if (eventType === "rotate") {
-    console.log(`\n[KEY ROTATION] Reason: ${data.reason}`);
-
-    // Create new decryption context from new header
-    decryptCtx = EncryptionContext.forDecryption(privateKey, data.header, "sse-stream-v1");
-    console.log("New session header applied\n");
-
-    return { decryptCtx, messageCount: 0 };
-  }
-
-  if (eventType === "message") {
-    if (!decryptCtx) {
-      console.log("ERROR: No decryption context (missing header)");
-      return {};
-    }
-
-    const encryptedBuffer = fromBase64(data.buffer);
-
-    // Decrypt using session context
-    const decryptedBuffer = new Uint8Array(encryptedBuffer);
-    decryptBuffer(decryptedBuffer, schemaContent, decryptCtx, "Message");
-
-    const json = runner.generateJSON(schemaInput, {
-      path: "/msg.bin",
-      data: decryptedBuffer,
-    });
-    const message = JSON.parse(json);
-
-    console.log(`[${message.id}] ${message.sender}: ${message.content}`);
-    console.log(`  Tag: ${message.public_tag}, Time: ${new Date(Number(message.timestamp)).toISOString()}\n`);
-
-    return {};
-  }
-
-  return {};
-}
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
 
 async function main() {
+  Module = await getWasmModule();
+
   try {
     if (encrypted) {
       await runEncryptedClient();

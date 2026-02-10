@@ -179,7 +179,7 @@ int32_t wasi_derive_field_iv(void* ctx, uint16_t field_id, uint8_t* out_iv) {
 // hash: output buffer (must be 32 bytes)
 void wasi_sha256(const uint8_t* data, uint32_t data_size, uint8_t* hash) {
   if (data && hash) {
-    flatbuffers::SHA256(data, data_size, hash);
+    flatbuffers::Sha256Hash(data, data_size, hash);
   }
 }
 

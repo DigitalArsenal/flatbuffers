@@ -4,6 +4,7 @@
  *
  * Demonstrates sending/receiving FlatBuffers over REST API.
  * Supports both encrypted and non-encrypted endpoints.
+ * All crypto operations use WASM binary exports (Module._wasm_crypto_*).
  *
  * Endpoints:
  *   POST /message          - Send plaintext FlatBuffer
@@ -17,32 +18,175 @@
 
 import { createServer } from "http";
 import {
-  x25519GenerateKeyPair,
-  secp256k1GenerateKeyPair,
-  p256GenerateKeyPair,
-  EncryptionContext,
-  KeyExchangeAlgorithm,
-  decryptBuffer,
-  encryptionHeaderFromJSON,
-} from "../../src/index.mjs";
-import {
+  getWasmModule,
+  getRunner,
   schemaContent,
   schemaInput,
   plainSchemaContent,
   plainSchemaInput,
-  getRunner,
   toHex,
+  fromHex,
   generateId,
 } from "./shared.mjs";
 
 const PORT = parseInt(process.argv[2]) || 8080;
 
-// Server's key pairs (for receiving encrypted messages)
-const serverKeys = {
-  x25519: x25519GenerateKeyPair(),
-  secp256k1: secp256k1GenerateKeyPair(),
-  p256: p256GenerateKeyPair(),
-};
+// ---------------------------------------------------------------------------
+// WASM memory helpers
+// ---------------------------------------------------------------------------
+
+let Module;
+
+function allocBytes(data) {
+  const ptr = Module._malloc(data.length);
+  Module.HEAPU8.set(data, ptr);
+  return ptr;
+}
+
+function readBytes(ptr, len) {
+  return new Uint8Array(Module.HEAPU8.buffer, ptr, len).slice();
+}
+
+function freeBytes(ptr) {
+  Module._free(ptr);
+}
+
+// ---------------------------------------------------------------------------
+// Crypto helpers
+// ---------------------------------------------------------------------------
+
+function x25519GenerateKeyPair() {
+  const privPtr = Module._malloc(32);
+  const pubPtr = Module._malloc(32);
+  const rc = Module._wasm_crypto_x25519_generate_keypair(privPtr, pubPtr);
+  if (rc !== 0) throw new Error("x25519 keypair generation failed");
+  const privateKey = readBytes(privPtr, 32);
+  const publicKey = readBytes(pubPtr, 32);
+  freeBytes(privPtr);
+  freeBytes(pubPtr);
+  return { privateKey, publicKey };
+}
+
+function secp256k1GenerateKeyPair() {
+  const privPtr = Module._malloc(32);
+  const pubPtr = Module._malloc(33);
+  const rc = Module._wasm_crypto_secp256k1_generate_keypair(privPtr, pubPtr);
+  if (rc !== 0) throw new Error("secp256k1 keypair generation failed");
+  const privateKey = readBytes(privPtr, 32);
+  const publicKey = readBytes(pubPtr, 33);
+  freeBytes(privPtr);
+  freeBytes(pubPtr);
+  return { privateKey, publicKey };
+}
+
+function x25519SharedSecret(privateKey, myPublicKey, peerPublicKey) {
+  const privPtr = allocBytes(privateKey);
+  const myPubPtr = allocBytes(myPublicKey);
+  const peerPubPtr = allocBytes(peerPublicKey);
+  const secretPtr = Module._malloc(32);
+  const rc = Module._wasm_crypto_x25519_shared_secret(privPtr, myPubPtr, peerPubPtr, secretPtr);
+  if (rc !== 0) throw new Error("x25519 shared secret failed");
+  const secret = readBytes(secretPtr, 32);
+  freeBytes(privPtr);
+  freeBytes(myPubPtr);
+  freeBytes(peerPubPtr);
+  freeBytes(secretPtr);
+  return secret;
+}
+
+function secp256k1SharedSecret(privateKey, peerPublicKey) {
+  const privPtr = allocBytes(privateKey);
+  const pubPtr = allocBytes(peerPublicKey);
+  const secretPtr = Module._malloc(32);
+  const rc = Module._wasm_crypto_secp256k1_shared_secret(
+    privPtr, privateKey.length, pubPtr, peerPublicKey.length, secretPtr
+  );
+  if (rc !== 0) throw new Error("secp256k1 shared secret failed");
+  const secret = readBytes(secretPtr, 32);
+  freeBytes(privPtr);
+  freeBytes(pubPtr);
+  freeBytes(secretPtr);
+  return secret;
+}
+
+function deriveSymmetricKey(sharedSecret, context) {
+  const ssPtr = allocBytes(sharedSecret);
+  const ctxBytes = new TextEncoder().encode(context);
+  const ctxPtr = allocBytes(ctxBytes);
+  const outLen = 32;
+  const outPtr = Module._malloc(outLen);
+  Module._wasm_crypto_derive_symmetric_key(
+    ssPtr, sharedSecret.length,
+    ctxPtr, ctxBytes.length,
+    outPtr, outLen
+  );
+  const key = readBytes(outPtr, outLen);
+  freeBytes(ssPtr);
+  freeBytes(ctxPtr);
+  freeBytes(outPtr);
+  return key;
+}
+
+function decryptBytes(key, iv, data) {
+  const keyPtr = allocBytes(key);
+  const ivPtr = allocBytes(iv);
+  const dataPtr = allocBytes(data);
+  const rc = Module._wasm_crypto_decrypt_bytes(keyPtr, ivPtr, dataPtr, data.length);
+  if (rc !== 0) throw new Error("decryption failed");
+  const decrypted = readBytes(dataPtr, data.length);
+  freeBytes(keyPtr);
+  freeBytes(ivPtr);
+  freeBytes(dataPtr);
+  return decrypted;
+}
+
+function sha256(data) {
+  const dataPtr = allocBytes(data);
+  const hashPtr = Module._malloc(32);
+  Module._wasm_crypto_sha256(dataPtr, data.length, hashPtr);
+  const hash = readBytes(hashPtr, 32);
+  freeBytes(dataPtr);
+  freeBytes(hashPtr);
+  return hash;
+}
+
+// ---------------------------------------------------------------------------
+// Header serialisation helpers
+// ---------------------------------------------------------------------------
+
+function headerFromJSONStr(json) {
+  const obj = typeof json === "string" ? JSON.parse(json) : json;
+  return {
+    ephemeralPublicKey: fromHex(obj.ephemeralPublicKey),
+    iv: fromHex(obj.iv),
+    algorithm: obj.algorithm,
+    context: obj.context,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Decrypt a FlatBuffer given our private key and the header
+// ---------------------------------------------------------------------------
+
+function decryptFlatBuffer(buffer, privateKey, myPublicKey, header) {
+  let shared;
+  if (header.algorithm === "secp256k1") {
+    shared = secp256k1SharedSecret(privateKey, header.ephemeralPublicKey);
+  } else {
+    // Default to x25519
+    shared = x25519SharedSecret(privateKey, myPublicKey, header.ephemeralPublicKey);
+  }
+  const key = deriveSymmetricKey(shared, header.context);
+  const iv = header.iv || sha256(header.ephemeralPublicKey).slice(0, 16);
+  return decryptBytes(key, iv, buffer);
+}
+
+// ---------------------------------------------------------------------------
+// Server setup
+// ---------------------------------------------------------------------------
+
+// Server's key pairs will be initialised after WASM module loads
+let serverKeys;
 
 // In-memory storage
 const plainMessages = new Map();
@@ -71,7 +215,6 @@ async function handleRequest(req, res) {
       const keys = {
         x25519: toHex(serverKeys.x25519.publicKey),
         secp256k1: toHex(serverKeys.secp256k1.publicKey),
-        p256: toHex(serverKeys.p256.publicKey),
       };
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify(keys, null, 2));
@@ -128,24 +271,20 @@ async function handleRequest(req, res) {
       }
 
       const body = await readBody(req);
-      const header = encryptionHeaderFromJSON(headerJSON);
+      const header = headerFromJSONStr(headerJSON);
       const id = generateId();
 
       // Select private key based on algorithm
-      let privateKey;
-      const algorithm = header.algorithm || 'x25519';
+      const algorithm = header.algorithm || "x25519";
+      let privateKey, myPublicKey;
       switch (algorithm) {
-        case KeyExchangeAlgorithm.X25519:
-        case 'x25519':
+        case "x25519":
           privateKey = serverKeys.x25519.privateKey;
+          myPublicKey = serverKeys.x25519.publicKey;
           break;
-        case KeyExchangeAlgorithm.SECP256K1:
-        case 'secp256k1':
+        case "secp256k1":
           privateKey = serverKeys.secp256k1.privateKey;
-          break;
-        case KeyExchangeAlgorithm.P256:
-        case 'p256':
-          privateKey = serverKeys.p256.privateKey;
+          myPublicKey = serverKeys.secp256k1.publicKey;
           break;
         default:
           res.writeHead(400, { "Content-Type": "application/json" });
@@ -153,11 +292,8 @@ async function handleRequest(req, res) {
           return;
       }
 
-      // Decrypt to verify and log (use context from header if available)
-      const appContext = header.context || "rest-api-v1";
-      const decryptCtx = EncryptionContext.forDecryption(privateKey, header, appContext);
-      const decrypted = new Uint8Array(body);
-      decryptBuffer(decrypted, schemaContent, decryptCtx, "Message");
+      // Decrypt to verify and log
+      const decrypted = decryptFlatBuffer(body, privateKey, myPublicKey, header);
 
       const json = runner.generateJSON(schemaInput, {
         path: "/msg.bin",
@@ -221,20 +357,31 @@ function readBody(req) {
   });
 }
 
-const server = createServer(handleRequest);
+async function start() {
+  Module = await getWasmModule();
 
-server.listen(PORT, () => {
-  console.log("=== REST Server ===\n");
-  console.log(`Listening on http://localhost:${PORT}\n`);
-  console.log("Endpoints:");
-  console.log("  GET  /keys           - Get server public keys");
-  console.log("  POST /message        - Send plaintext FlatBuffer");
-  console.log("  GET  /message/:id    - Get plaintext FlatBuffer");
-  console.log("  POST /encrypted      - Send encrypted FlatBuffer");
-  console.log("  GET  /encrypted/:id  - Get encrypted FlatBuffer");
-  console.log("\nServer public keys:");
-  console.log(`  X25519:    ${toHex(serverKeys.x25519.publicKey)}`);
-  console.log(`  secp256k1: ${toHex(serverKeys.secp256k1.publicKey)}`);
-  console.log(`  P-256:     ${toHex(serverKeys.p256.publicKey)}`);
-  console.log();
-});
+  // Generate server key pairs using WASM crypto
+  serverKeys = {
+    x25519: x25519GenerateKeyPair(),
+    secp256k1: secp256k1GenerateKeyPair(),
+  };
+
+  const server = createServer(handleRequest);
+
+  server.listen(PORT, () => {
+    console.log("=== REST Server ===\n");
+    console.log(`Listening on http://localhost:${PORT}\n`);
+    console.log("Endpoints:");
+    console.log("  GET  /keys           - Get server public keys");
+    console.log("  POST /message        - Send plaintext FlatBuffer");
+    console.log("  GET  /message/:id    - Get plaintext FlatBuffer");
+    console.log("  POST /encrypted      - Send encrypted FlatBuffer");
+    console.log("  GET  /encrypted/:id  - Get encrypted FlatBuffer");
+    console.log("\nServer public keys:");
+    console.log(`  X25519:    ${toHex(serverKeys.x25519.publicKey)}`);
+    console.log(`  secp256k1: ${toHex(serverKeys.secp256k1.publicKey)}`);
+    console.log();
+  });
+}
+
+start().catch(console.error);

@@ -226,15 +226,20 @@ NOT designed for:
 
 | Component | Status |
 |-----------|--------|
-| Schema attribute parsing | Planned |
-| C++ encryption library | Planned |
-| TypeScript encryption | Planned |
-| C++ code generator | Planned |
-| TypeScript code generator | Planned |
+| Schema attribute parsing | Complete |
+| C++ encryption library | Complete |
+| OpenSSL FIPS backend | Complete |
+| Crypto++ backend | Complete |
+| C++ code generator | Complete |
+| flatc-wasm integration | Complete |
+| TypeScript encryption | Complete |
 | Python code generator | Planned |
 | Rust code generator | Planned |
 | Go code generator | Planned |
-| flatc-wasm integration | Planned |
+
+!!! tip "Homomorphic Encryption"
+    For computation on encrypted data without decryption, see
+    [Homomorphic Encryption](homomorphic_encryption.md).
 
 ## Example
 

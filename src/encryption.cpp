@@ -140,7 +140,7 @@ void DeriveKey(const uint8_t* master_key, size_t master_key_size,
 }  // namespace internal
 
 // SHA-256 hash
-void SHA256(const uint8_t* data, size_t size, uint8_t* hash) {
+void Sha256Hash(const uint8_t* data, size_t size, uint8_t* hash) {
   CryptoPP::SHA256 sha;
   sha.CalculateDigest(hash, data, size);
 }
@@ -672,7 +672,7 @@ bool P384SharedSecret(
       return false;
     }
     // Hash the 48-byte secret down to 32 bytes for symmetric key use
-    SHA256(raw_secret.get(), raw_secret.size(), shared_secret);
+    Sha256Hash(raw_secret.get(), raw_secret.size(), shared_secret);
     return true;
   } catch (...) {
 #ifdef FLATBUFFERS_DEBUG
@@ -903,9 +903,16 @@ void EncryptBytes(uint8_t* data, size_t size,
 
 // --- SHA-256 ---
 
-void SHA256(const uint8_t* data, size_t size, uint8_t* hash) {
+void Sha256Hash(const uint8_t* data, size_t size, uint8_t* hash) {
   if (!data || !hash) return;
-  ::SHA256(data, size, hash);
+  unsigned int len = 32;
+  EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+  if (ctx) {
+    EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
+    EVP_DigestUpdate(ctx, data, size);
+    EVP_DigestFinal_ex(ctx, hash, &len);
+    EVP_MD_CTX_free(ctx);
+  }
 }
 
 // --- HKDF ---
@@ -1121,7 +1128,7 @@ static bool ECSharedSecret(int nid, const uint8_t* private_key, size_t priv_size
     std::vector<uint8_t> raw_secret(secret_len);
     if (EVP_PKEY_derive(dctx, raw_secret.data(), &secret_len) > 0) {
       // Hash to 32 bytes
-      ::SHA256(raw_secret.data(), secret_len, shared_secret);
+      Sha256Hash(raw_secret.data(), secret_len, shared_secret);
       ok = true;
     }
     SecureClearVector(raw_secret);
@@ -1619,7 +1626,7 @@ void DeriveKey(const uint8_t* master_key, size_t master_key_size,
 
 }  // namespace internal
 
-void SHA256(const uint8_t*, size_t, uint8_t* hash) {
+void Sha256Hash(const uint8_t*, size_t, uint8_t* hash) {
   // SECURITY FIX: Instead of silently returning garbage, we zero the output
   // and emit a warning. This makes failures detectable rather than silent.
   // Callers should check hasCryptopp() before using hash functions.
@@ -1808,8 +1815,10 @@ bool IsFIPSMode() { return false; }
 #endif  // FLATBUFFERS_USE_CRYPTOPP
 
 // =============================================================================
-// Common implementations (used by both Crypto++ and fallback)
+// Common implementations (used by both Crypto++ and fallback, but NOT OpenSSL
+// which defines its own versions of these dispatch functions)
 // =============================================================================
+#if !defined(FLATBUFFERS_USE_OPENSSL)
 
 KeyPair GenerateKeyPair(KeyExchangeAlgorithm algorithm) {
   switch (algorithm) {
@@ -1881,6 +1890,8 @@ bool Verify(
       return false;
   }
 }
+
+#endif  // !FLATBUFFERS_USE_OPENSSL
 
 // =============================================================================
 // EncryptionContext Implementation

@@ -1,18 +1,20 @@
 /**
- * Node.js Encryption Integration Test
+ * Node.js Encryption Example
  *
- * Demonstrates and tests field-level encryption with flatc-wasm
+ * Demonstrates field-level encryption using the WASM binary's exported
+ * wasm_crypto_* functions. All crypto lives in the compiled binary.
  */
 
 import { randomBytes } from "crypto";
-import { FlatcRunner } from "flatc-wasm";
-import {
-  EncryptionContext,
-  encryptBuffer,
-  decryptBuffer,
-  encryptBytes,
-  parseSchemaForEncryption,
-} from "flatc-wasm/encryption";
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Load the Emscripten module directly
+const wasmPath = path.join(__dirname, '..', '..', 'dist', 'flatc-wasm.js');
+const { default: createModule } = await import(wasmPath);
+const Module = await createModule({ noExitRuntime: true, noInitialRun: true });
 
 // Test utilities
 let passed = 0;
@@ -36,12 +38,6 @@ function assertEqual(actual, expected, msg) {
   }
 }
 
-function assertNotEqual(actual, expected, msg) {
-  if (actual === expected) {
-    throw new Error(`${msg}: expected different from ${expected}`);
-  }
-}
-
 function assertArrayEqual(a, b, msg) {
   if (a.length !== b.length) {
     throw new Error(`${msg}: length mismatch ${a.length} vs ${b.length}`);
@@ -53,367 +49,176 @@ function assertArrayEqual(a, b, msg) {
   }
 }
 
-// Schema for testing
-const testSchema = `
-namespace Test;
+// =============================================================================
+// WASM Memory Helpers
+// =============================================================================
 
-struct Coordinates {
-  lat: double;
-  lon: double;
+function allocBytes(data) {
+  const ptr = Module._malloc(data.length);
+  Module.HEAPU8.set(data, ptr);
+  return ptr;
 }
 
-table SensorReading {
-  device_id: string;
-  timestamp: uint64;
-  location: Coordinates (encrypted);
-  temperature: float (encrypted);
-  raw_data: [ubyte] (encrypted);
-  secret_message: string (encrypted);
+function readBytes(ptr, len) {
+  return new Uint8Array(Module.HEAPU8.buffer, ptr, len).slice();
 }
 
-root_type SensorReading;
-`;
-
-const simpleSchema = `
-table SimpleMessage {
-  public_text: string;
-  secret_number: int (encrypted);
-  secret_text: string (encrypted);
-}
-root_type SimpleMessage;
-`;
-
-// ============================================================================
+// =============================================================================
 // Tests
-// ============================================================================
+// =============================================================================
 
-console.log("\n=== Node.js Encryption Integration Tests ===\n");
+console.log("\n=== Node.js Encryption Example (WASM Binary) ===\n");
 
-// Test 1: EncryptionContext
-console.log("1. EncryptionContext:");
+// Test 1: WASM module info
+console.log("1. WASM Module Info:");
 
-test("creates valid context from Uint8Array", () => {
-  const key = randomBytes(32);
-  const ctx = new EncryptionContext(key);
-  assertEqual(ctx.isValid(), true, "context validity");
+test("has crypto version", () => {
+  const versionPtr = Module._wasm_crypto_get_version();
+  const version = Module.UTF8ToString(versionPtr);
+  assertEqual(typeof version, "string", "version type");
+  console.log(`    Version: ${version}`);
 });
 
-test("creates valid context from hex string", () => {
-  const hexKey =
-    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-  const ctx = new EncryptionContext(hexKey);
-  assertEqual(ctx.isValid(), true, "context validity");
+test("has Crypto++ available", () => {
+  const hasCryptopp = Module._wasm_crypto_has_cryptopp();
+  console.log(`    Crypto++: ${hasCryptopp ? "YES" : "NO"}`);
 });
 
-test("rejects invalid key size", () => {
-  const shortKey = new Uint8Array(16);
-  const ctx = new EncryptionContext(shortKey);
-  assertEqual(ctx.isValid(), false, "context should be invalid");
-});
-
-test("derives different keys for different fields", () => {
-  const key = randomBytes(32);
-  const ctx = new EncryptionContext(key);
-  const key1 = ctx.deriveFieldKey(1);
-  const key2 = ctx.deriveFieldKey(2);
-
-  let different = false;
-  for (let i = 0; i < 32; i++) {
-    if (key1[i] !== key2[i]) {
-      different = true;
-      break;
-    }
-  }
-  assertEqual(different, true, "derived keys should differ");
-});
-
-// Test 2: Low-level encryption
-console.log("\n2. Low-level byte encryption:");
+// Test 2: AES-256-CTR encrypt/decrypt
+console.log("\n2. AES-256-CTR via WASM:");
 
 test("encrypts and decrypts bytes", () => {
   const key = randomBytes(32);
   const iv = randomBytes(16);
-  const original = new TextEncoder().encode("Hello, World!");
-  const data = new Uint8Array(original);
+  const plaintext = new TextEncoder().encode("Hello, World!");
 
-  encryptBytes(data, key, iv);
+  const keyPtr = allocBytes(key);
+  const ivPtr = allocBytes(iv);
+  const dataPtr = allocBytes(plaintext);
 
-  // Should be different after encryption
+  // Encrypt in-place
+  const encResult = Module._wasm_crypto_encrypt_bytes(keyPtr, ivPtr, dataPtr, plaintext.length);
+  assertEqual(encResult, 0, "encrypt return code");
+
+  const encrypted = readBytes(dataPtr, plaintext.length);
+
+  // Should differ from plaintext
   let changed = false;
-  for (let i = 0; i < data.length; i++) {
-    if (data[i] !== original[i]) {
-      changed = true;
-      break;
-    }
+  for (let i = 0; i < plaintext.length; i++) {
+    if (encrypted[i] !== plaintext[i]) { changed = true; break; }
   }
   assertEqual(changed, true, "data should change after encryption");
 
-  // Decrypt (same operation for CTR)
-  encryptBytes(data, key, iv);
-  assertArrayEqual(data, original, "data should match after decryption");
+  // Decrypt in-place
+  const decResult = Module._wasm_crypto_decrypt_bytes(keyPtr, ivPtr, dataPtr, plaintext.length);
+  assertEqual(decResult, 0, "decrypt return code");
+
+  const decrypted = readBytes(dataPtr, plaintext.length);
+  assertArrayEqual(decrypted, plaintext, "round-trip");
+
+  Module._free(keyPtr);
+  Module._free(ivPtr);
+  Module._free(dataPtr);
 });
 
-test("different IVs produce different ciphertext", () => {
-  const key = randomBytes(32);
-  const iv1 = randomBytes(16);
-  const iv2 = randomBytes(16);
-  const plaintext = new TextEncoder().encode("Test data");
+// Test 3: X25519 key exchange
+console.log("\n3. X25519 Key Exchange via WASM:");
 
-  const data1 = new Uint8Array(plaintext);
-  const data2 = new Uint8Array(plaintext);
+test("generates key pair and computes shared secret", () => {
+  const privPtr1 = Module._malloc(32);
+  const pubPtr1 = Module._malloc(32);
+  const privPtr2 = Module._malloc(32);
+  const pubPtr2 = Module._malloc(32);
+  const secretPtr1 = Module._malloc(32);
+  const secretPtr2 = Module._malloc(32);
 
-  encryptBytes(data1, key, iv1);
-  encryptBytes(data2, key, iv2);
+  // Generate two key pairs
+  assertEqual(Module._wasm_crypto_x25519_generate_keypair(privPtr1, pubPtr1), 0, "keygen1");
+  assertEqual(Module._wasm_crypto_x25519_generate_keypair(privPtr2, pubPtr2), 0, "keygen2");
 
-  let different = false;
-  for (let i = 0; i < data1.length; i++) {
-    if (data1[i] !== data2[i]) {
-      different = true;
-      break;
-    }
-  }
-  assertEqual(different, true, "different IVs should produce different ciphertext");
+  // Compute shared secrets (should match)
+  assertEqual(Module._wasm_crypto_x25519_shared_secret(privPtr1, pubPtr1, pubPtr2, secretPtr1), 0, "ecdh1");
+  assertEqual(Module._wasm_crypto_x25519_shared_secret(privPtr2, pubPtr2, pubPtr1, secretPtr2), 0, "ecdh2");
+
+  const secret1 = readBytes(secretPtr1, 32);
+  const secret2 = readBytes(secretPtr2, 32);
+  assertArrayEqual(secret1, secret2, "shared secrets should match");
+
+  Module._free(privPtr1); Module._free(pubPtr1);
+  Module._free(privPtr2); Module._free(pubPtr2);
+  Module._free(secretPtr1); Module._free(secretPtr2);
 });
 
-// Test 3: Schema parsing
-console.log("\n3. Schema parsing:");
+// Test 4: SHA-256
+console.log("\n4. SHA-256 via WASM:");
 
-test("parses schema and identifies encrypted fields", () => {
-  const parsed = parseSchemaForEncryption(simpleSchema, "SimpleMessage");
+test("computes SHA-256 hash", () => {
+  const data = new TextEncoder().encode("test");
+  const dataPtr = allocBytes(data);
+  const hashPtr = Module._malloc(32);
 
-  assertEqual(parsed.fields.length, 3, "field count");
+  Module._wasm_crypto_sha256(dataPtr, data.length, hashPtr);
+  const hash = readBytes(hashPtr, 32);
+  assertEqual(hash.length, 32, "hash length");
 
-  const publicField = parsed.fields.find((f) => f.name === "public_text");
-  const secretNum = parsed.fields.find((f) => f.name === "secret_number");
-  const secretText = parsed.fields.find((f) => f.name === "secret_text");
+  // Known SHA-256 of "test"
+  const expected = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+  const actual = Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('');
+  assertEqual(actual, expected, "SHA-256 of 'test'");
 
-  assertEqual(publicField.encrypted, false, "public_text should not be encrypted");
-  assertEqual(secretNum.encrypted, true, "secret_number should be encrypted");
-  assertEqual(secretText.encrypted, true, "secret_text should be encrypted");
+  Module._free(dataPtr);
+  Module._free(hashPtr);
 });
 
-test("parses complex schema with structs and vectors", () => {
-  const parsed = parseSchemaForEncryption(testSchema, "SensorReading");
+// Test 5: HKDF
+console.log("\n5. HKDF via WASM:");
 
-  const location = parsed.fields.find((f) => f.name === "location");
-  const rawData = parsed.fields.find((f) => f.name === "raw_data");
+test("derives key material with HKDF", () => {
+  const ikm = randomBytes(32);
+  const salt = randomBytes(16);
+  const info = new TextEncoder().encode("flatbuffers-test");
 
-  assertEqual(location.encrypted, true, "location should be encrypted");
-  assertEqual(rawData.encrypted, true, "raw_data should be encrypted");
-  assertEqual(rawData.type, "vector", "raw_data should be vector type");
+  const ikmPtr = allocBytes(ikm);
+  const saltPtr = allocBytes(salt);
+  const infoPtr = allocBytes(info);
+  const outPtr = Module._malloc(32);
+
+  Module._wasm_crypto_hkdf(ikmPtr, ikm.length, saltPtr, salt.length, infoPtr, info.length, outPtr, 32);
+  const derived = readBytes(outPtr, 32);
+  assertEqual(derived.length, 32, "derived key length");
+
+  // Derive again — should be deterministic
+  Module._wasm_crypto_hkdf(ikmPtr, ikm.length, saltPtr, salt.length, infoPtr, info.length, outPtr, 32);
+  const derived2 = readBytes(outPtr, 32);
+  assertArrayEqual(derived, derived2, "HKDF should be deterministic");
+
+  Module._free(ikmPtr); Module._free(saltPtr);
+  Module._free(infoPtr); Module._free(outPtr);
 });
 
-// Test 4: Full buffer encryption with FlatcRunner
-console.log("\n4. Full buffer encryption:");
+// Test 6: secp256k1
+console.log("\n6. secp256k1 via WASM:");
 
-let flatc;
+test("generates key pair and signs/verifies", () => {
+  const privPtr = Module._malloc(32);
+  const pubPtr = Module._malloc(33);
 
-test("initializes FlatcRunner", async () => {
-  flatc = await FlatcRunner.init();
-  assertEqual(typeof flatc.version(), "string", "version should be string");
-});
+  assertEqual(Module._wasm_crypto_secp256k1_generate_keypair(privPtr, pubPtr), 0, "keygen");
 
-test("encrypts and decrypts FlatBuffer", () => {
-  const schemaInput = {
-    entry: "/simple.fbs",
-    files: { "/simple.fbs": simpleSchema },
-  };
+  const data = new TextEncoder().encode("message to sign");
+  const dataPtr = allocBytes(data);
+  const sigPtr = Module._malloc(72); // DER-encoded signature, max 72 bytes
+  const sigLenPtr = Module._malloc(4);
 
-  const json = JSON.stringify({
-    public_text: "Hello, public!",
-    secret_number: 42,
-    secret_text: "This is secret",
-  });
+  const signResult = Module._wasm_crypto_secp256k1_sign(privPtr, data.length, dataPtr, data.length, sigPtr, sigLenPtr);
+  assertEqual(signResult, 0, "sign");
 
-  // Create buffer
-  const buffer = flatc.generateBinary(schemaInput, json);
-  const original = new Uint8Array(buffer);
+  const sigLen = Module.getValue(sigLenPtr, 'i32');
+  const verifyResult = Module._wasm_crypto_secp256k1_verify(pubPtr, 33, dataPtr, data.length, sigPtr, sigLen);
+  assertEqual(verifyResult, 0, "verify");
 
-  // Encrypt - now returns { buffer, nonce }
-  const key = randomBytes(32);
-  const { buffer: encrypted, nonce } = encryptBuffer(buffer, simpleSchema, key, "SimpleMessage");
-
-  // Buffer should be modified (encrypted is same reference as buffer)
-  let changed = false;
-  for (let i = 0; i < encrypted.length; i++) {
-    if (encrypted[i] !== original[i]) {
-      changed = true;
-      break;
-    }
-  }
-  assertEqual(changed, true, "buffer should change after encryption");
-
-  // Decrypt - must pass the nonce
-  decryptBuffer(encrypted, simpleSchema, key, "SimpleMessage", nonce);
-
-  // Should be able to read JSON again
-  const recovered = flatc.generateJSON(schemaInput, {
-    path: "/msg.bin",
-    data: encrypted,
-  });
-  const recoveredObj = JSON.parse(recovered);
-
-  assertEqual(recoveredObj.public_text, "Hello, public!", "public_text");
-  assertEqual(recoveredObj.secret_number, 42, "secret_number");
-  assertEqual(recoveredObj.secret_text, "This is secret", "secret_text");
-});
-
-test("encrypted buffer is still a valid FlatBuffer", () => {
-  const schemaInput = {
-    entry: "/simple.fbs",
-    files: { "/simple.fbs": simpleSchema },
-  };
-
-  const json = JSON.stringify({
-    public_text: "Public data",
-    secret_number: 999,
-    secret_text: "Secret data",
-  });
-
-  const buffer = flatc.generateBinary(schemaInput, json);
-  const key = randomBytes(32);
-
-  const { nonce } = encryptBuffer(buffer, simpleSchema, key, "SimpleMessage");
-
-  // The buffer should still be parseable (though values will be garbage)
-  // This is the key property - binary layout is preserved
-  let threw = false;
-  try {
-    // This should not throw - the buffer structure is valid
-    const result = flatc.generateJSON(schemaInput, {
-      path: "/msg.bin",
-      data: buffer,
-    });
-    // The JSON will have garbage values but should parse
-    JSON.parse(result);
-  } catch (e) {
-    // Some encrypted values might produce invalid UTF-8 in strings
-    // That's expected - the test is that we don't corrupt the structure
-    threw = true;
-  }
-
-  // Either way, decrypt should restore original
-  decryptBuffer(buffer, simpleSchema, key, "SimpleMessage", nonce);
-  const recovered = flatc.generateJSON(schemaInput, {
-    path: "/msg.bin",
-    data: buffer,
-  });
-  const obj = JSON.parse(recovered);
-  assertEqual(obj.secret_number, 999, "secret_number after decrypt");
-});
-
-test("different keys produce different ciphertext", () => {
-  const schemaInput = {
-    entry: "/simple.fbs",
-    files: { "/simple.fbs": simpleSchema },
-  };
-
-  const json = JSON.stringify({
-    public_text: "Test",
-    secret_number: 123,
-    secret_text: "Same data",
-  });
-
-  const buffer1 = flatc.generateBinary(schemaInput, json);
-  const buffer2 = flatc.generateBinary(schemaInput, json);
-
-  const key1 = randomBytes(32);
-  const key2 = randomBytes(32);
-
-  // Use EncryptionContext with same nonce to ensure only key differs
-  const nonce = randomBytes(16);
-  const ctx1 = new EncryptionContext(key1, nonce);
-  const ctx2 = new EncryptionContext(key2, nonce);
-
-  encryptBuffer(buffer1, simpleSchema, ctx1, "SimpleMessage");
-  encryptBuffer(buffer2, simpleSchema, ctx2, "SimpleMessage");
-
-  let different = false;
-  for (let i = 0; i < buffer1.length; i++) {
-    if (buffer1[i] !== buffer2[i]) {
-      different = true;
-      break;
-    }
-  }
-  assertEqual(different, true, "different keys should produce different ciphertext");
-});
-
-test("public fields remain unchanged after encryption", () => {
-  const schemaInput = {
-    entry: "/simple.fbs",
-    files: { "/simple.fbs": simpleSchema },
-  };
-
-  const publicText = "This text should not change!";
-  const json = JSON.stringify({
-    public_text: publicText,
-    secret_number: 42,
-    secret_text: "secret",
-  });
-
-  const buffer = flatc.generateBinary(schemaInput, json);
-  const key = randomBytes(32);
-
-  const { buffer: encrypted } = encryptBuffer(buffer, simpleSchema, key, "SimpleMessage");
-
-  // The public_text string bytes should still be in the buffer
-  const bufferStr = new TextDecoder().decode(encrypted);
-
-  assertEqual(
-    bufferStr.includes(publicText),
-    true,
-    "public text should be readable in encrypted buffer"
-  );
-});
-
-// Test 5: Encryption context reuse
-console.log("\n5. Encryption context reuse:");
-
-test("EncryptionContext usage with unique nonces per message", () => {
-  const key = randomBytes(32);
-
-  const schemaInput = {
-    entry: "/simple.fbs",
-    files: { "/simple.fbs": simpleSchema },
-  };
-
-  const json1 = JSON.stringify({
-    public_text: "msg1",
-    secret_number: 1,
-    secret_text: "secret1",
-  });
-  const json2 = JSON.stringify({
-    public_text: "msg2",
-    secret_number: 2,
-    secret_text: "secret2",
-  });
-
-  const buffer1 = flatc.generateBinary(schemaInput, json1);
-  const buffer2 = flatc.generateBinary(schemaInput, json2);
-
-  // IMPORTANT: Use different nonces for each message (security requirement for CTR mode)
-  const nonce1 = randomBytes(16);
-  const nonce2 = randomBytes(16);
-  const ctx1 = new EncryptionContext(key, nonce1);
-  const ctx2 = new EncryptionContext(key, nonce2);
-
-  // Encrypt each buffer with its own context/nonce
-  encryptBuffer(buffer1, simpleSchema, ctx1, "SimpleMessage");
-  encryptBuffer(buffer2, simpleSchema, ctx2, "SimpleMessage");
-
-  // Decrypt with the matching context
-  decryptBuffer(buffer1, simpleSchema, ctx1, "SimpleMessage");
-  decryptBuffer(buffer2, simpleSchema, ctx2, "SimpleMessage");
-
-  const recovered1 = JSON.parse(
-    flatc.generateJSON(schemaInput, { path: "/m.bin", data: buffer1 })
-  );
-  const recovered2 = JSON.parse(
-    flatc.generateJSON(schemaInput, { path: "/m.bin", data: buffer2 })
-  );
-
-  assertEqual(recovered1.secret_number, 1, "first message");
-  assertEqual(recovered2.secret_number, 2, "second message");
+  Module._free(privPtr); Module._free(pubPtr);
+  Module._free(dataPtr); Module._free(sigPtr); Module._free(sigLenPtr);
 });
 
 // Summary
@@ -426,5 +231,5 @@ if (failed > 0) {
   process.exit(1);
 }
 
-console.log("\n✅ All Node.js encryption tests passed!\n");
+console.log("\nAll Node.js encryption tests passed!\n");
 process.exit(0);

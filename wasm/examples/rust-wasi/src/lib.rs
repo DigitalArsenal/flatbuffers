@@ -2,10 +2,17 @@
 //!
 //! This module provides cryptographic operations via the Crypto++ WASM module:
 //! - AES-256-CTR symmetric encryption
+//! - SHA-256 hashing
 //! - X25519 ECDH key exchange
 //! - secp256k1 ECDH and ECDSA signatures (Bitcoin/Ethereum compatible)
 //! - P-256 ECDH and ECDSA signatures (NIST)
+//! - P-384 ECDH and ECDSA signatures (NIST)
 //! - Ed25519 signatures
+//! - HKDF key derivation
+//! - Symmetric key derivation from shared secrets
+//! - Entropy injection for deterministic testing
+//! - Field-level encryption context management
+//! - Homomorphic Encryption (HE) via SEAL: encrypt, decrypt, add, sub, multiply
 
 use std::path::Path;
 use std::sync::Arc;
@@ -36,6 +43,11 @@ pub const ED25519_PRIVATE_KEY_SIZE: usize = 64;
 pub const ED25519_PUBLIC_KEY_SIZE: usize = 32;
 pub const ED25519_SIGNATURE_SIZE: usize = 64;
 
+pub const P384_PRIVATE_KEY_SIZE: usize = 48;
+pub const P384_PUBLIC_KEY_SIZE: usize = 49;
+pub const P384_SIGNATURE_SIZE: usize = 104;
+pub const HKDF_DEFAULT_SIZE: usize = 32;
+
 #[derive(Error, Debug)]
 pub enum EncryptionError {
     #[error("WASM module not found: {0}")]
@@ -60,6 +72,10 @@ pub enum EncryptionError {
     InvalidKeySize,
     #[error("Invalid IV size")]
     InvalidIVSize,
+    #[error("Homomorphic encryption operation failed")]
+    HEOperationFailed,
+    #[error("Homomorphic encryption not available")]
+    HENotAvailable,
     #[error("WASM runtime error: {0}")]
     RuntimeError(String),
 }
@@ -658,6 +674,1377 @@ impl EncryptionModule {
         };
 
         check_fn.call(&mut self.store).unwrap_or(0) == 1
+    }
+
+    // =========================================================================
+    // X25519 Key Exchange
+    // =========================================================================
+
+    /// Generate an X25519 keypair. Returns (private_key, public_key).
+    pub fn x25519_generate_keypair(&mut self) -> Result<(Vec<u8>, Vec<u8>)> {
+        let priv_ptr = self.allocate(X25519_PRIVATE_KEY_SIZE as u32)?;
+        let pub_ptr = self.allocate(X25519_PUBLIC_KEY_SIZE as u32)?;
+
+        let keygen_fn: TypedFunction<(u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_x25519_generate_keypair")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = keygen_fn
+            .call(&mut self.store, priv_ptr, pub_ptr)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let keypair = if result == 0 {
+            Ok((
+                self.read_bytes(priv_ptr, X25519_PRIVATE_KEY_SIZE),
+                self.read_bytes(pub_ptr, X25519_PUBLIC_KEY_SIZE),
+            ))
+        } else {
+            Err(EncryptionError::KeyGenerationFailed)
+        };
+
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+
+        keypair
+    }
+
+    /// Compute an X25519 shared secret from a private key and a peer's public key.
+    pub fn x25519_shared_secret(
+        &mut self,
+        private_key: &[u8],
+        public_key: &[u8],
+    ) -> Result<Vec<u8>> {
+        let priv_ptr = self.allocate(X25519_PRIVATE_KEY_SIZE as u32)?;
+        let pub_ptr = self.allocate(X25519_PUBLIC_KEY_SIZE as u32)?;
+        let secret_ptr = self.allocate(SHARED_SECRET_SIZE as u32)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        self.write_bytes(pub_ptr, public_key);
+
+        let ecdh_fn: TypedFunction<(u32, u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_x25519_shared_secret")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = ecdh_fn
+            .call(&mut self.store, priv_ptr, pub_ptr, secret_ptr)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let secret = if result == 0 {
+            Ok(self.read_bytes(secret_ptr, SHARED_SECRET_SIZE))
+        } else {
+            Err(EncryptionError::ECDHFailed)
+        };
+
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+        self.deallocate(secret_ptr);
+
+        secret
+    }
+
+    // =========================================================================
+    // secp256k1 Key Exchange and Signatures
+    // =========================================================================
+
+    /// Generate a secp256k1 keypair. Returns (private_key, public_key).
+    pub fn secp256k1_generate_keypair(&mut self) -> Result<(Vec<u8>, Vec<u8>)> {
+        let priv_ptr = self.allocate(SECP256K1_PRIVATE_KEY_SIZE as u32)?;
+        let pub_ptr = self.allocate(SECP256K1_PUBLIC_KEY_SIZE as u32)?;
+
+        let keygen_fn: TypedFunction<(u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_secp256k1_generate_keypair")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = keygen_fn
+            .call(&mut self.store, priv_ptr, pub_ptr)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let keypair = if result == 0 {
+            Ok((
+                self.read_bytes(priv_ptr, SECP256K1_PRIVATE_KEY_SIZE),
+                self.read_bytes(pub_ptr, SECP256K1_PUBLIC_KEY_SIZE),
+            ))
+        } else {
+            Err(EncryptionError::KeyGenerationFailed)
+        };
+
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+
+        keypair
+    }
+
+    /// Compute a secp256k1 shared secret from a private key and a peer's public key.
+    pub fn secp256k1_shared_secret(
+        &mut self,
+        private_key: &[u8],
+        public_key: &[u8],
+    ) -> Result<Vec<u8>> {
+        let priv_ptr = self.allocate(SECP256K1_PRIVATE_KEY_SIZE as u32)?;
+        let pub_ptr = self.allocate(public_key.len() as u32)?;
+        let secret_ptr = self.allocate(SHARED_SECRET_SIZE as u32)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        self.write_bytes(pub_ptr, public_key);
+
+        let ecdh_fn: TypedFunction<(u32, u32, u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_secp256k1_shared_secret")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = ecdh_fn
+            .call(
+                &mut self.store,
+                priv_ptr,
+                pub_ptr,
+                public_key.len() as u32,
+                secret_ptr,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let secret = if result == 0 {
+            Ok(self.read_bytes(secret_ptr, SHARED_SECRET_SIZE))
+        } else {
+            Err(EncryptionError::ECDHFailed)
+        };
+
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+        self.deallocate(secret_ptr);
+
+        secret
+    }
+
+    /// Sign data using secp256k1. Returns a DER-encoded signature.
+    pub fn secp256k1_sign(
+        &mut self,
+        private_key: &[u8],
+        data: &[u8],
+    ) -> Result<Vec<u8>> {
+        let priv_ptr = self.allocate(SECP256K1_PRIVATE_KEY_SIZE as u32)?;
+        let data_ptr = self.allocate(data.len() as u32)?;
+        let sig_ptr = self.allocate(SECP256K1_SIGNATURE_SIZE as u32)?;
+        let sig_size_ptr = self.allocate(4)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        self.write_bytes(data_ptr, data);
+
+        let sign_fn: TypedFunction<(u32, u32, u32, u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_secp256k1_sign")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = sign_fn
+            .call(
+                &mut self.store,
+                priv_ptr,
+                data_ptr,
+                data.len() as u32,
+                sig_ptr,
+                sig_size_ptr,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let signature = if result == 0 {
+            let sig_size_bytes = self.read_bytes(sig_size_ptr, 4);
+            let sig_size = u32::from_le_bytes([
+                sig_size_bytes[0],
+                sig_size_bytes[1],
+                sig_size_bytes[2],
+                sig_size_bytes[3],
+            ]) as usize;
+            Ok(self.read_bytes(sig_ptr, sig_size))
+        } else {
+            Err(EncryptionError::SigningFailed)
+        };
+
+        self.deallocate(priv_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+        self.deallocate(sig_size_ptr);
+
+        signature
+    }
+
+    /// Verify a secp256k1 signature.
+    pub fn secp256k1_verify(
+        &mut self,
+        public_key: &[u8],
+        data: &[u8],
+        signature: &[u8],
+    ) -> Result<bool> {
+        let pub_ptr = self.allocate(public_key.len() as u32)?;
+        let data_ptr = self.allocate(data.len() as u32)?;
+        let sig_ptr = self.allocate(signature.len() as u32)?;
+
+        self.write_bytes(pub_ptr, public_key);
+        self.write_bytes(data_ptr, data);
+        self.write_bytes(sig_ptr, signature);
+
+        let verify_fn: TypedFunction<(u32, u32, u32, u32, u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_secp256k1_verify")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = verify_fn
+            .call(
+                &mut self.store,
+                pub_ptr,
+                public_key.len() as u32,
+                data_ptr,
+                data.len() as u32,
+                sig_ptr,
+                signature.len() as u32,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        self.deallocate(pub_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+
+        Ok(result == 0)
+    }
+
+    // =========================================================================
+    // P-256 Key Exchange and Signatures
+    // =========================================================================
+
+    /// Generate a P-256 keypair. Returns (private_key, public_key).
+    pub fn p256_generate_keypair(&mut self) -> Result<(Vec<u8>, Vec<u8>)> {
+        let priv_ptr = self.allocate(P256_PRIVATE_KEY_SIZE as u32)?;
+        let pub_ptr = self.allocate(P256_PUBLIC_KEY_SIZE as u32)?;
+
+        let keygen_fn: TypedFunction<(u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_p256_generate_keypair")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = keygen_fn
+            .call(&mut self.store, priv_ptr, pub_ptr)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let keypair = if result == 0 {
+            Ok((
+                self.read_bytes(priv_ptr, P256_PRIVATE_KEY_SIZE),
+                self.read_bytes(pub_ptr, P256_PUBLIC_KEY_SIZE),
+            ))
+        } else {
+            Err(EncryptionError::KeyGenerationFailed)
+        };
+
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+
+        keypair
+    }
+
+    /// Compute a P-256 shared secret from a private key and a peer's public key.
+    pub fn p256_shared_secret(
+        &mut self,
+        private_key: &[u8],
+        public_key: &[u8],
+    ) -> Result<Vec<u8>> {
+        let priv_ptr = self.allocate(P256_PRIVATE_KEY_SIZE as u32)?;
+        let pub_ptr = self.allocate(public_key.len() as u32)?;
+        let secret_ptr = self.allocate(SHARED_SECRET_SIZE as u32)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        self.write_bytes(pub_ptr, public_key);
+
+        let ecdh_fn: TypedFunction<(u32, u32, u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_p256_shared_secret")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = ecdh_fn
+            .call(
+                &mut self.store,
+                priv_ptr,
+                pub_ptr,
+                public_key.len() as u32,
+                secret_ptr,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let secret = if result == 0 {
+            Ok(self.read_bytes(secret_ptr, SHARED_SECRET_SIZE))
+        } else {
+            Err(EncryptionError::ECDHFailed)
+        };
+
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+        self.deallocate(secret_ptr);
+
+        secret
+    }
+
+    /// Sign data using P-256. Returns a DER-encoded signature.
+    pub fn p256_sign(
+        &mut self,
+        private_key: &[u8],
+        data: &[u8],
+    ) -> Result<Vec<u8>> {
+        let priv_ptr = self.allocate(P256_PRIVATE_KEY_SIZE as u32)?;
+        let data_ptr = self.allocate(data.len() as u32)?;
+        let sig_ptr = self.allocate(P256_SIGNATURE_SIZE as u32)?;
+        let sig_size_ptr = self.allocate(4)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        self.write_bytes(data_ptr, data);
+
+        let sign_fn: TypedFunction<(u32, u32, u32, u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_p256_sign")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = sign_fn
+            .call(
+                &mut self.store,
+                priv_ptr,
+                data_ptr,
+                data.len() as u32,
+                sig_ptr,
+                sig_size_ptr,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let signature = if result == 0 {
+            let sig_size_bytes = self.read_bytes(sig_size_ptr, 4);
+            let sig_size = u32::from_le_bytes([
+                sig_size_bytes[0],
+                sig_size_bytes[1],
+                sig_size_bytes[2],
+                sig_size_bytes[3],
+            ]) as usize;
+            Ok(self.read_bytes(sig_ptr, sig_size))
+        } else {
+            Err(EncryptionError::SigningFailed)
+        };
+
+        self.deallocate(priv_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+        self.deallocate(sig_size_ptr);
+
+        signature
+    }
+
+    /// Verify a P-256 signature.
+    pub fn p256_verify(
+        &mut self,
+        public_key: &[u8],
+        data: &[u8],
+        signature: &[u8],
+    ) -> Result<bool> {
+        let pub_ptr = self.allocate(public_key.len() as u32)?;
+        let data_ptr = self.allocate(data.len() as u32)?;
+        let sig_ptr = self.allocate(signature.len() as u32)?;
+
+        self.write_bytes(pub_ptr, public_key);
+        self.write_bytes(data_ptr, data);
+        self.write_bytes(sig_ptr, signature);
+
+        let verify_fn: TypedFunction<(u32, u32, u32, u32, u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_p256_verify")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = verify_fn
+            .call(
+                &mut self.store,
+                pub_ptr,
+                public_key.len() as u32,
+                data_ptr,
+                data.len() as u32,
+                sig_ptr,
+                signature.len() as u32,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        self.deallocate(pub_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+
+        Ok(result == 0)
+    }
+
+    // =========================================================================
+    // P-384 Key Exchange and Signatures
+    // =========================================================================
+
+    /// Generate a P-384 keypair. Returns (private_key, public_key).
+    pub fn p384_generate_keypair(&mut self) -> Result<(Vec<u8>, Vec<u8>)> {
+        let priv_ptr = self.allocate(P384_PRIVATE_KEY_SIZE as u32)?;
+        let pub_ptr = self.allocate(P384_PUBLIC_KEY_SIZE as u32)?;
+
+        let keygen_fn: TypedFunction<(u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_p384_generate_keypair")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = keygen_fn
+            .call(&mut self.store, priv_ptr, pub_ptr)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let keypair = if result == 0 {
+            Ok((
+                self.read_bytes(priv_ptr, P384_PRIVATE_KEY_SIZE),
+                self.read_bytes(pub_ptr, P384_PUBLIC_KEY_SIZE),
+            ))
+        } else {
+            Err(EncryptionError::KeyGenerationFailed)
+        };
+
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+
+        keypair
+    }
+
+    /// Compute a P-384 shared secret from a private key and a peer's public key.
+    pub fn p384_shared_secret(
+        &mut self,
+        private_key: &[u8],
+        public_key: &[u8],
+    ) -> Result<Vec<u8>> {
+        let priv_ptr = self.allocate(P384_PRIVATE_KEY_SIZE as u32)?;
+        let pub_ptr = self.allocate(public_key.len() as u32)?;
+        let secret_ptr = self.allocate(SHARED_SECRET_SIZE as u32)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        self.write_bytes(pub_ptr, public_key);
+
+        let ecdh_fn: TypedFunction<(u32, u32, u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_p384_shared_secret")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = ecdh_fn
+            .call(
+                &mut self.store,
+                priv_ptr,
+                pub_ptr,
+                public_key.len() as u32,
+                secret_ptr,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let secret = if result == 0 {
+            Ok(self.read_bytes(secret_ptr, SHARED_SECRET_SIZE))
+        } else {
+            Err(EncryptionError::ECDHFailed)
+        };
+
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+        self.deallocate(secret_ptr);
+
+        secret
+    }
+
+    /// Sign data using P-384. Returns a DER-encoded signature.
+    pub fn p384_sign(
+        &mut self,
+        private_key: &[u8],
+        data: &[u8],
+    ) -> Result<Vec<u8>> {
+        let priv_ptr = self.allocate(P384_PRIVATE_KEY_SIZE as u32)?;
+        let data_ptr = self.allocate(data.len() as u32)?;
+        let sig_ptr = self.allocate(P384_SIGNATURE_SIZE as u32)?;
+        let sig_size_ptr = self.allocate(4)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        self.write_bytes(data_ptr, data);
+
+        let sign_fn: TypedFunction<(u32, u32, u32, u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_p384_sign")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = sign_fn
+            .call(
+                &mut self.store,
+                priv_ptr,
+                data_ptr,
+                data.len() as u32,
+                sig_ptr,
+                sig_size_ptr,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let signature = if result == 0 {
+            let sig_size_bytes = self.read_bytes(sig_size_ptr, 4);
+            let sig_size = u32::from_le_bytes([
+                sig_size_bytes[0],
+                sig_size_bytes[1],
+                sig_size_bytes[2],
+                sig_size_bytes[3],
+            ]) as usize;
+            Ok(self.read_bytes(sig_ptr, sig_size))
+        } else {
+            Err(EncryptionError::SigningFailed)
+        };
+
+        self.deallocate(priv_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+        self.deallocate(sig_size_ptr);
+
+        signature
+    }
+
+    /// Verify a P-384 signature.
+    pub fn p384_verify(
+        &mut self,
+        public_key: &[u8],
+        data: &[u8],
+        signature: &[u8],
+    ) -> Result<bool> {
+        let pub_ptr = self.allocate(public_key.len() as u32)?;
+        let data_ptr = self.allocate(data.len() as u32)?;
+        let sig_ptr = self.allocate(signature.len() as u32)?;
+
+        self.write_bytes(pub_ptr, public_key);
+        self.write_bytes(data_ptr, data);
+        self.write_bytes(sig_ptr, signature);
+
+        let verify_fn: TypedFunction<(u32, u32, u32, u32, u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_p384_verify")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = verify_fn
+            .call(
+                &mut self.store,
+                pub_ptr,
+                public_key.len() as u32,
+                data_ptr,
+                data.len() as u32,
+                sig_ptr,
+                signature.len() as u32,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        self.deallocate(pub_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+
+        Ok(result == 0)
+    }
+
+    // =========================================================================
+    // Ed25519 Signatures
+    // =========================================================================
+
+    /// Generate an Ed25519 keypair. Returns (private_key, public_key).
+    pub fn ed25519_generate_keypair(&mut self) -> Result<(Vec<u8>, Vec<u8>)> {
+        let priv_ptr = self.allocate(ED25519_PRIVATE_KEY_SIZE as u32)?;
+        let pub_ptr = self.allocate(ED25519_PUBLIC_KEY_SIZE as u32)?;
+
+        let keygen_fn: TypedFunction<(u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_ed25519_generate_keypair")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = keygen_fn
+            .call(&mut self.store, priv_ptr, pub_ptr)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let keypair = if result == 0 {
+            Ok((
+                self.read_bytes(priv_ptr, ED25519_PRIVATE_KEY_SIZE),
+                self.read_bytes(pub_ptr, ED25519_PUBLIC_KEY_SIZE),
+            ))
+        } else {
+            Err(EncryptionError::KeyGenerationFailed)
+        };
+
+        self.deallocate(priv_ptr);
+        self.deallocate(pub_ptr);
+
+        keypair
+    }
+
+    /// Sign data using Ed25519.
+    pub fn ed25519_sign(
+        &mut self,
+        private_key: &[u8],
+        data: &[u8],
+    ) -> Result<Vec<u8>> {
+        let priv_ptr = self.allocate(ED25519_PRIVATE_KEY_SIZE as u32)?;
+        let data_ptr = self.allocate(data.len() as u32)?;
+        let sig_ptr = self.allocate(ED25519_SIGNATURE_SIZE as u32)?;
+
+        self.write_bytes(priv_ptr, private_key);
+        self.write_bytes(data_ptr, data);
+
+        let sign_fn: TypedFunction<(u32, u32, u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_ed25519_sign")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = sign_fn
+            .call(
+                &mut self.store,
+                priv_ptr,
+                data_ptr,
+                data.len() as u32,
+                sig_ptr,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let signature = if result == 0 {
+            Ok(self.read_bytes(sig_ptr, ED25519_SIGNATURE_SIZE))
+        } else {
+            Err(EncryptionError::SigningFailed)
+        };
+
+        self.deallocate(priv_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+
+        signature
+    }
+
+    /// Verify an Ed25519 signature.
+    pub fn ed25519_verify(
+        &mut self,
+        public_key: &[u8],
+        data: &[u8],
+        signature: &[u8],
+    ) -> Result<bool> {
+        let pub_ptr = self.allocate(ED25519_PUBLIC_KEY_SIZE as u32)?;
+        let data_ptr = self.allocate(data.len() as u32)?;
+        let sig_ptr = self.allocate(ED25519_SIGNATURE_SIZE as u32)?;
+
+        self.write_bytes(pub_ptr, public_key);
+        self.write_bytes(data_ptr, data);
+        self.write_bytes(sig_ptr, signature);
+
+        let verify_fn: TypedFunction<(u32, u32, u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_ed25519_verify")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = verify_fn
+            .call(
+                &mut self.store,
+                pub_ptr,
+                data_ptr,
+                data.len() as u32,
+                sig_ptr,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        self.deallocate(pub_ptr);
+        self.deallocate(data_ptr);
+        self.deallocate(sig_ptr);
+
+        Ok(result == 0)
+    }
+
+    // =========================================================================
+    // Key Derivation
+    // =========================================================================
+
+    /// Derive key material using HKDF (HMAC-based Key Derivation Function).
+    pub fn hkdf(
+        &mut self,
+        ikm: &[u8],
+        salt: &[u8],
+        info: &[u8],
+        okm_size: usize,
+    ) -> Result<Vec<u8>> {
+        let ikm_ptr = self.allocate(ikm.len() as u32)?;
+        let salt_ptr = self.allocate(salt.len() as u32)?;
+        let info_ptr = self.allocate(info.len() as u32)?;
+        let okm_ptr = self.allocate(okm_size as u32)?;
+
+        self.write_bytes(ikm_ptr, ikm);
+        self.write_bytes(salt_ptr, salt);
+        self.write_bytes(info_ptr, info);
+
+        let hkdf_fn: TypedFunction<(u32, u32, u32, u32, u32, u32, u32, u32), ()> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_hkdf")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        hkdf_fn
+            .call(
+                &mut self.store,
+                ikm_ptr,
+                ikm.len() as u32,
+                salt_ptr,
+                salt.len() as u32,
+                info_ptr,
+                info.len() as u32,
+                okm_ptr,
+                okm_size as u32,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let okm = self.read_bytes(okm_ptr, okm_size);
+
+        self.deallocate(ikm_ptr);
+        self.deallocate(salt_ptr);
+        self.deallocate(info_ptr);
+        self.deallocate(okm_ptr);
+
+        Ok(okm)
+    }
+
+    /// Derive a symmetric key from a shared secret and context string.
+    /// Returns a 32-byte AES-256 key.
+    pub fn derive_symmetric_key(
+        &mut self,
+        shared_secret: &[u8],
+        context: &[u8],
+    ) -> Result<Vec<u8>> {
+        let secret_ptr = self.allocate(shared_secret.len() as u32)?;
+        let context_ptr = self.allocate(context.len() as u32)?;
+        let key_ptr = self.allocate(AES_KEY_SIZE as u32)?;
+
+        self.write_bytes(secret_ptr, shared_secret);
+        self.write_bytes(context_ptr, context);
+
+        let derive_fn: TypedFunction<(u32, u32, u32, u32), ()> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_derive_symmetric_key")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        derive_fn
+            .call(
+                &mut self.store,
+                secret_ptr,
+                context_ptr,
+                context.len() as u32,
+                key_ptr,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let key = self.read_bytes(key_ptr, AES_KEY_SIZE);
+
+        self.deallocate(secret_ptr);
+        self.deallocate(context_ptr);
+        self.deallocate(key_ptr);
+
+        Ok(key)
+    }
+
+    // =========================================================================
+    // Entropy Injection
+    // =========================================================================
+
+    /// Inject entropy seed for deterministic testing.
+    pub fn inject_entropy(&mut self, seed: &[u8]) -> Result<()> {
+        let seed_ptr = self.allocate(seed.len() as u32)?;
+
+        self.write_bytes(seed_ptr, seed);
+
+        let inject_fn: TypedFunction<(u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_inject_entropy")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let result = inject_fn
+            .call(&mut self.store, seed_ptr, seed.len() as u32)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        self.deallocate(seed_ptr);
+
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(EncryptionError::RuntimeError(
+                "Entropy injection failed".to_string(),
+            ))
+        }
+    }
+
+    // =========================================================================
+    // Field-Level Encryption Context
+    // =========================================================================
+
+    /// Create a new encryption context for field-level encryption.
+    /// Returns an opaque context pointer to be used with derive_field_key
+    /// and derive_field_iv.
+    pub fn encryption_create(&mut self, key: &[u8]) -> Result<u32> {
+        let key_ptr = self.allocate(key.len() as u32)?;
+
+        self.write_bytes(key_ptr, key);
+
+        let create_fn: TypedFunction<u32, u32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_encryption_create")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let ctx = create_fn
+            .call(&mut self.store, key_ptr)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        self.deallocate(key_ptr);
+
+        if ctx == 0 {
+            Err(EncryptionError::AllocationError)
+        } else {
+            Ok(ctx)
+        }
+    }
+
+    /// Destroy an encryption context.
+    pub fn encryption_destroy(&mut self, ctx: u32) {
+        if ctx == 0 {
+            return;
+        }
+        if let Ok(destroy_fn) = self
+            .instance
+            .exports
+            .get_typed_function::<u32, ()>(&self.store, "wasi_encryption_destroy")
+        {
+            let _ = destroy_fn.call(&mut self.store, ctx);
+        }
+    }
+
+    /// Derive a field-specific encryption key from an encryption context.
+    /// Returns a 32-byte key for the given field_id.
+    pub fn derive_field_key(&mut self, ctx: u32, field_id: u16) -> Result<Vec<u8>> {
+        let key_ptr = self.allocate(AES_KEY_SIZE as u32)?;
+
+        let derive_fn: TypedFunction<(u32, u32, u32), ()> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_derive_field_key")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        derive_fn
+            .call(&mut self.store, ctx, field_id as u32, key_ptr)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let key = self.read_bytes(key_ptr, AES_KEY_SIZE);
+
+        self.deallocate(key_ptr);
+
+        Ok(key)
+    }
+
+    /// Derive a field-specific IV from an encryption context.
+    /// Returns a 16-byte IV for the given field_id.
+    pub fn derive_field_iv(&mut self, ctx: u32, field_id: u16) -> Result<Vec<u8>> {
+        let iv_ptr = self.allocate(AES_IV_SIZE as u32)?;
+
+        let derive_fn: TypedFunction<(u32, u32, u32), ()> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_derive_field_iv")
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        derive_fn
+            .call(&mut self.store, ctx, field_id as u32, iv_ptr)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        let iv = self.read_bytes(iv_ptr, AES_IV_SIZE);
+
+        self.deallocate(iv_ptr);
+
+        Ok(iv)
+    }
+
+    // =========================================================================
+    // Homomorphic Encryption (HE)
+    // =========================================================================
+
+    /// Check if the WASI module supports homomorphic encryption.
+    pub fn has_he(&self) -> bool {
+        self.instance
+            .exports
+            .get_typed_function::<u32, i32>(&self.store, "wasi_he_context_create_client")
+            .is_ok()
+    }
+
+    /// Create a client HE context with full key material (secret + public).
+    /// `poly_degree` controls the polynomial modulus degree (e.g., 4096, 8192).
+    /// Pass 0 for the default (4096).
+    /// Returns a context ID that must be destroyed with `he_destroy_context`.
+    pub fn he_create_client(&mut self, poly_degree: u32) -> Result<i32> {
+        let create_fn: TypedFunction<u32, i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_he_context_create_client")
+            .map_err(|_| EncryptionError::HENotAvailable)?;
+
+        let ctx_id = create_fn
+            .call(&mut self.store, poly_degree)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()))?;
+
+        if ctx_id < 0 {
+            Err(EncryptionError::HEOperationFailed)
+        } else {
+            Ok(ctx_id)
+        }
+    }
+
+    /// Create a server HE context from a serialized public key.
+    /// The server context can encrypt and perform operations but cannot decrypt.
+    /// Returns a context ID that must be destroyed with `he_destroy_context`.
+    pub fn he_create_server(&mut self, public_key: &[u8]) -> Result<i32> {
+        let create_fn: TypedFunction<(u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_he_context_create_server")
+            .map_err(|_| EncryptionError::HENotAvailable)?;
+
+        let pk_ptr = self.allocate(public_key.len() as u32)?;
+        self.write_bytes(pk_ptr, public_key);
+
+        let ctx_id = create_fn
+            .call(&mut self.store, pk_ptr, public_key.len() as u32)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()));
+
+        self.deallocate(pk_ptr);
+
+        let ctx_id = ctx_id?;
+        if ctx_id < 0 {
+            Err(EncryptionError::HEOperationFailed)
+        } else {
+            Ok(ctx_id)
+        }
+    }
+
+    /// Destroy a previously created HE context and free resources.
+    pub fn he_destroy_context(&mut self, ctx_id: i32) {
+        if let Ok(destroy_fn) = self
+            .instance
+            .exports
+            .get_typed_function::<i32, ()>(&self.store, "wasi_he_context_destroy")
+        {
+            let _ = destroy_fn.call(&mut self.store, ctx_id);
+        }
+    }
+
+    /// Helper for HE functions that return variable-length data.
+    /// The WASI function signature is: fn(ctx_id: i32, out_len_ptr: u32) -> data_ptr: u32
+    fn he_get_variable_length_data(
+        &mut self,
+        fn_name: &str,
+        ctx_id: i32,
+    ) -> Result<Vec<u8>> {
+        let func: TypedFunction<(i32, u32), u32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, fn_name)
+            .map_err(|_| EncryptionError::HENotAvailable)?;
+
+        let out_len_ptr = self.allocate(4)?;
+
+        let data_ptr = func
+            .call(&mut self.store, ctx_id, out_len_ptr)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()));
+
+        let result = match data_ptr {
+            Ok(ptr) if ptr != 0 => {
+                let len_bytes = self.read_bytes(out_len_ptr, 4);
+                let data_len = u32::from_le_bytes([
+                    len_bytes[0],
+                    len_bytes[1],
+                    len_bytes[2],
+                    len_bytes[3],
+                ]) as usize;
+
+                if data_len == 0 {
+                    Err(EncryptionError::HEOperationFailed)
+                } else {
+                    Ok(self.read_bytes(ptr, data_len))
+                }
+            }
+            Ok(_) => Err(EncryptionError::HEOperationFailed),
+            Err(e) => Err(e),
+        };
+
+        self.deallocate(out_len_ptr);
+
+        result
+    }
+
+    /// Get the serialized public key from an HE context.
+    pub fn he_get_public_key(&mut self, ctx_id: i32) -> Result<Vec<u8>> {
+        self.he_get_variable_length_data("wasi_he_get_public_key", ctx_id)
+    }
+
+    /// Get the serialized relinearization keys from an HE context.
+    /// Relin keys are needed for multiplication on the server side.
+    pub fn he_get_relin_keys(&mut self, ctx_id: i32) -> Result<Vec<u8>> {
+        self.he_get_variable_length_data("wasi_he_get_relin_keys", ctx_id)
+    }
+
+    /// Get the serialized secret key from a client HE context.
+    pub fn he_get_secret_key(&mut self, ctx_id: i32) -> Result<Vec<u8>> {
+        self.he_get_variable_length_data("wasi_he_get_secret_key", ctx_id)
+    }
+
+    /// Set relinearization keys on a server HE context.
+    /// This is required before performing multiplication on the server side.
+    pub fn he_set_relin_keys(&mut self, ctx_id: i32, relin_keys: &[u8]) -> Result<()> {
+        let set_fn: TypedFunction<(i32, u32, u32), i32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_he_set_relin_keys")
+            .map_err(|_| EncryptionError::HENotAvailable)?;
+
+        let rk_ptr = self.allocate(relin_keys.len() as u32)?;
+        self.write_bytes(rk_ptr, relin_keys);
+
+        let result = set_fn
+            .call(&mut self.store, ctx_id, rk_ptr, relin_keys.len() as u32)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()));
+
+        self.deallocate(rk_ptr);
+
+        let result = result?;
+        if result != 0 {
+            Err(EncryptionError::HEOperationFailed)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Encrypt a 64-bit integer using the BFV scheme.
+    /// Returns the serialized ciphertext.
+    pub fn he_encrypt_int64(&mut self, ctx_id: i32, value: i64) -> Result<Vec<u8>> {
+        let encrypt_fn: TypedFunction<(i32, i64, u32), u32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_he_encrypt_int64")
+            .map_err(|_| EncryptionError::HENotAvailable)?;
+
+        let out_len_ptr = self.allocate(4)?;
+
+        let data_ptr = encrypt_fn
+            .call(&mut self.store, ctx_id, value, out_len_ptr)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()));
+
+        let result = match data_ptr {
+            Ok(ptr) if ptr != 0 => {
+                let len_bytes = self.read_bytes(out_len_ptr, 4);
+                let data_len = u32::from_le_bytes([
+                    len_bytes[0],
+                    len_bytes[1],
+                    len_bytes[2],
+                    len_bytes[3],
+                ]) as usize;
+
+                if data_len == 0 {
+                    Err(EncryptionError::HEOperationFailed)
+                } else {
+                    Ok(self.read_bytes(ptr, data_len))
+                }
+            }
+            Ok(_) => Err(EncryptionError::HEOperationFailed),
+            Err(e) => Err(e),
+        };
+
+        self.deallocate(out_len_ptr);
+
+        result
+    }
+
+    /// Decrypt a ciphertext to a 64-bit integer using the BFV scheme.
+    /// Requires a client context with a secret key.
+    pub fn he_decrypt_int64(&mut self, ctx_id: i32, ciphertext: &[u8]) -> Result<i64> {
+        let decrypt_fn: TypedFunction<(i32, u32, u32), i64> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_he_decrypt_int64")
+            .map_err(|_| EncryptionError::HENotAvailable)?;
+
+        let ct_ptr = self.allocate(ciphertext.len() as u32)?;
+        self.write_bytes(ct_ptr, ciphertext);
+
+        let result = decrypt_fn
+            .call(&mut self.store, ctx_id, ct_ptr, ciphertext.len() as u32)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()));
+
+        self.deallocate(ct_ptr);
+
+        result
+    }
+
+    /// Encrypt a double-precision float using the CKKS scheme.
+    /// Returns the serialized ciphertext.
+    pub fn he_encrypt_double(&mut self, ctx_id: i32, value: f64) -> Result<Vec<u8>> {
+        let encrypt_fn: TypedFunction<(i32, f64, u32), u32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_he_encrypt_double")
+            .map_err(|_| EncryptionError::HENotAvailable)?;
+
+        let out_len_ptr = self.allocate(4)?;
+
+        let data_ptr = encrypt_fn
+            .call(&mut self.store, ctx_id, value, out_len_ptr)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()));
+
+        let result = match data_ptr {
+            Ok(ptr) if ptr != 0 => {
+                let len_bytes = self.read_bytes(out_len_ptr, 4);
+                let data_len = u32::from_le_bytes([
+                    len_bytes[0],
+                    len_bytes[1],
+                    len_bytes[2],
+                    len_bytes[3],
+                ]) as usize;
+
+                if data_len == 0 {
+                    Err(EncryptionError::HEOperationFailed)
+                } else {
+                    Ok(self.read_bytes(ptr, data_len))
+                }
+            }
+            Ok(_) => Err(EncryptionError::HEOperationFailed),
+            Err(e) => Err(e),
+        };
+
+        self.deallocate(out_len_ptr);
+
+        result
+    }
+
+    /// Decrypt a ciphertext to a double-precision float using the CKKS scheme.
+    /// Requires a client context with a secret key.
+    pub fn he_decrypt_double(&mut self, ctx_id: i32, ciphertext: &[u8]) -> Result<f64> {
+        let decrypt_fn: TypedFunction<(i32, u32, u32), f64> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_he_decrypt_double")
+            .map_err(|_| EncryptionError::HENotAvailable)?;
+
+        let ct_ptr = self.allocate(ciphertext.len() as u32)?;
+        self.write_bytes(ct_ptr, ciphertext);
+
+        let result = decrypt_fn
+            .call(&mut self.store, ctx_id, ct_ptr, ciphertext.len() as u32)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()));
+
+        self.deallocate(ct_ptr);
+
+        result
+    }
+
+    /// Helper for binary ciphertext operations (add, sub, multiply).
+    /// WASI signature: fn(ctx_id, ct1_ptr, ct1_len, ct2_ptr, ct2_len, out_len_ptr) -> data_ptr
+    fn he_binary_ct_op(
+        &mut self,
+        fn_name: &str,
+        ctx_id: i32,
+        ct1: &[u8],
+        ct2: &[u8],
+    ) -> Result<Vec<u8>> {
+        let func: TypedFunction<(i32, u32, u32, u32, u32, u32), u32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, fn_name)
+            .map_err(|_| EncryptionError::HENotAvailable)?;
+
+        let ct1_ptr = self.allocate(ct1.len() as u32)?;
+        let ct2_ptr = self.allocate(ct2.len() as u32)?;
+        let out_len_ptr = self.allocate(4)?;
+
+        self.write_bytes(ct1_ptr, ct1);
+        self.write_bytes(ct2_ptr, ct2);
+
+        let data_ptr = func
+            .call(
+                &mut self.store,
+                ctx_id,
+                ct1_ptr,
+                ct1.len() as u32,
+                ct2_ptr,
+                ct2.len() as u32,
+                out_len_ptr,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()));
+
+        let result = match data_ptr {
+            Ok(ptr) if ptr != 0 => {
+                let len_bytes = self.read_bytes(out_len_ptr, 4);
+                let data_len = u32::from_le_bytes([
+                    len_bytes[0],
+                    len_bytes[1],
+                    len_bytes[2],
+                    len_bytes[3],
+                ]) as usize;
+
+                if data_len == 0 {
+                    Err(EncryptionError::HEOperationFailed)
+                } else {
+                    Ok(self.read_bytes(ptr, data_len))
+                }
+            }
+            Ok(_) => Err(EncryptionError::HEOperationFailed),
+            Err(e) => Err(e),
+        };
+
+        self.deallocate(ct1_ptr);
+        self.deallocate(ct2_ptr);
+        self.deallocate(out_len_ptr);
+
+        result
+    }
+
+    /// Perform homomorphic addition of two ciphertexts.
+    /// Returns a new ciphertext representing the sum of the encrypted values.
+    pub fn he_add(&mut self, ctx_id: i32, ct1: &[u8], ct2: &[u8]) -> Result<Vec<u8>> {
+        self.he_binary_ct_op("wasi_he_add", ctx_id, ct1, ct2)
+    }
+
+    /// Perform homomorphic subtraction of two ciphertexts.
+    /// Returns a new ciphertext representing ct1 - ct2.
+    pub fn he_sub(&mut self, ctx_id: i32, ct1: &[u8], ct2: &[u8]) -> Result<Vec<u8>> {
+        self.he_binary_ct_op("wasi_he_sub", ctx_id, ct1, ct2)
+    }
+
+    /// Perform homomorphic multiplication of two ciphertexts.
+    /// Returns a new ciphertext representing the product. Relinearization keys
+    /// should be set on the context for noise management.
+    pub fn he_multiply(&mut self, ctx_id: i32, ct1: &[u8], ct2: &[u8]) -> Result<Vec<u8>> {
+        self.he_binary_ct_op("wasi_he_multiply", ctx_id, ct1, ct2)
+    }
+
+    /// Perform homomorphic negation of a ciphertext.
+    /// Returns a new ciphertext representing the negated value.
+    pub fn he_negate(&mut self, ctx_id: i32, ct: &[u8]) -> Result<Vec<u8>> {
+        let negate_fn: TypedFunction<(i32, u32, u32, u32), u32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, "wasi_he_negate")
+            .map_err(|_| EncryptionError::HENotAvailable)?;
+
+        let ct_ptr = self.allocate(ct.len() as u32)?;
+        let out_len_ptr = self.allocate(4)?;
+
+        self.write_bytes(ct_ptr, ct);
+
+        let data_ptr = negate_fn
+            .call(&mut self.store, ctx_id, ct_ptr, ct.len() as u32, out_len_ptr)
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()));
+
+        let result = match data_ptr {
+            Ok(ptr) if ptr != 0 => {
+                let len_bytes = self.read_bytes(out_len_ptr, 4);
+                let data_len = u32::from_le_bytes([
+                    len_bytes[0],
+                    len_bytes[1],
+                    len_bytes[2],
+                    len_bytes[3],
+                ]) as usize;
+
+                if data_len == 0 {
+                    Err(EncryptionError::HEOperationFailed)
+                } else {
+                    Ok(self.read_bytes(ptr, data_len))
+                }
+            }
+            Ok(_) => Err(EncryptionError::HEOperationFailed),
+            Err(e) => Err(e),
+        };
+
+        self.deallocate(ct_ptr);
+        self.deallocate(out_len_ptr);
+
+        result
+    }
+
+    /// Helper for ciphertext-plaintext operations (add_plain, multiply_plain).
+    /// WASI signature: fn(ctx_id, ct_ptr, ct_len, plain_i64, out_len_ptr) -> data_ptr
+    fn he_ct_plain_op(
+        &mut self,
+        fn_name: &str,
+        ctx_id: i32,
+        ct: &[u8],
+        plain: i64,
+    ) -> Result<Vec<u8>> {
+        let func: TypedFunction<(i32, u32, u32, i64, u32), u32> = self
+            .instance
+            .exports
+            .get_typed_function(&self.store, fn_name)
+            .map_err(|_| EncryptionError::HENotAvailable)?;
+
+        let ct_ptr = self.allocate(ct.len() as u32)?;
+        let out_len_ptr = self.allocate(4)?;
+
+        self.write_bytes(ct_ptr, ct);
+
+        let data_ptr = func
+            .call(
+                &mut self.store,
+                ctx_id,
+                ct_ptr,
+                ct.len() as u32,
+                plain,
+                out_len_ptr,
+            )
+            .map_err(|e| EncryptionError::RuntimeError(e.to_string()));
+
+        let result = match data_ptr {
+            Ok(ptr) if ptr != 0 => {
+                let len_bytes = self.read_bytes(out_len_ptr, 4);
+                let data_len = u32::from_le_bytes([
+                    len_bytes[0],
+                    len_bytes[1],
+                    len_bytes[2],
+                    len_bytes[3],
+                ]) as usize;
+
+                if data_len == 0 {
+                    Err(EncryptionError::HEOperationFailed)
+                } else {
+                    Ok(self.read_bytes(ptr, data_len))
+                }
+            }
+            Ok(_) => Err(EncryptionError::HEOperationFailed),
+            Err(e) => Err(e),
+        };
+
+        self.deallocate(ct_ptr);
+        self.deallocate(out_len_ptr);
+
+        result
+    }
+
+    /// Perform homomorphic addition of a ciphertext and a plaintext int64.
+    /// Returns a new ciphertext representing the sum.
+    pub fn he_add_plain(&mut self, ctx_id: i32, ct: &[u8], plain: i64) -> Result<Vec<u8>> {
+        self.he_ct_plain_op("wasi_he_add_plain", ctx_id, ct, plain)
+    }
+
+    /// Perform homomorphic multiplication of a ciphertext by a plaintext int64.
+    /// Returns a new ciphertext representing the product.
+    pub fn he_multiply_plain(&mut self, ctx_id: i32, ct: &[u8], plain: i64) -> Result<Vec<u8>> {
+        self.he_ct_plain_op("wasi_he_multiply_plain", ctx_id, ct, plain)
     }
 }
 

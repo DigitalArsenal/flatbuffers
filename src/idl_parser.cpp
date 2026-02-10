@@ -1135,6 +1135,27 @@ CheckedError Parser::ParseField(StructDef& struct_def) {
     }
   }
 
+  // Validate he_encrypted attribute (homomorphic encryption).
+  // Only numeric types are supported (integers and floats, not bool).
+  if (field->attributes.Lookup("he_encrypted") != nullptr) {
+    // Check if this is a scalar numeric type (not bool)
+    const bool is_numeric_scalar =
+        (IsInteger(type.base_type) || IsFloat(type.base_type)) &&
+        type.base_type != BASE_TYPE_BOOL;
+    // Also support vectors of numeric scalars
+    const bool is_numeric_vector =
+        IsVector(type) &&
+        (IsInteger(type.element) || IsFloat(type.element)) &&
+        type.element != BASE_TYPE_BOOL;
+
+    if (!is_numeric_scalar && !is_numeric_vector) {
+      return Error(
+          "`he_encrypted` attribute can only be applied to numeric types "
+          "(int8-int64, uint8-uint64, float, double) or vectors of these. "
+          "Strings, structs, tables, unions, and bool are not supported.");
+    }
+  }
+
   field->key = field->attributes.Lookup("key") != nullptr;
 
   if (!struct_def.fixed) {

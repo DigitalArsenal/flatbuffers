@@ -1,6 +1,6 @@
 {
   "name": "flatc-wasm",
-  "version": "25.12.19-wasm.56",
+  "version": "25.12.19-wasm.57",
   "description": "FlatBuffers compiler (flatc) as a WebAssembly module - schema management, JSON/binary conversion, and code generation",
   "type": "module",
   "main": "src/index.mjs",
@@ -25,6 +25,26 @@
       "types": "./dist/flatc-wasm.d.ts",
       "import": "./dist/flatc-wasm.js",
       "require": "./dist/flatc-wasm.cjs"
+    },
+    "./pipeline": {
+      "types": "./src/pipeline.d.ts",
+      "import": "./src/pipeline.mjs"
+    },
+    "./he": {
+      "types": "./src/he-context.d.ts",
+      "import": "./src/he-context.mjs"
+    },
+    "./he-bridge": {
+      "types": "./src/he-key-bridge.d.ts",
+      "import": "./src/he-key-bridge.mjs"
+    },
+    "./he-encryptor": {
+      "types": "./src/he-field-encryptor.d.ts",
+      "import": "./src/he-field-encryptor.mjs"
+    },
+    "./format-detector": {
+      "types": "./src/format-detector.d.ts",
+      "import": "./src/format-detector.mjs"
     }
   },
   "files": [
@@ -37,6 +57,16 @@
     "src/hd-keys.mjs",
     "src/hd-keys.d.ts",
     "src/streaming-dispatcher.mjs",
+    "src/format-detector.mjs",
+    "src/format-detector.d.ts",
+    "src/he-context.mjs",
+    "src/he-context.d.ts",
+    "src/he-key-bridge.mjs",
+    "src/he-key-bridge.d.ts",
+    "src/he-field-encryptor.mjs",
+    "src/he-field-encryptor.d.ts",
+    "src/pipeline.mjs",
+    "src/pipeline.d.ts",
     "dist/flatc-wasm.js",
     "dist/flatc-wasm.cjs",
     "dist/flatc-wasm.d.ts",

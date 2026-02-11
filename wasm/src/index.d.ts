@@ -142,4 +142,57 @@ export interface FlatcModule {
  */
 export declare function createFlatcModule(options?: CreateModuleOptions): Promise<FlatcModule>;
 
+// Format detection exports
+export {
+  detectFormat,
+  detectStringFormat,
+  DataFormat,
+  StringFormat,
+} from "./format-detector.js";
+
+// HE Context exports
+export {
+  HEContext,
+  initHEModule,
+  getHEModule,
+  getLastError as getHELastError,
+  DEFAULT_POLY_MODULUS_DEGREE,
+  WasmHEModule,
+} from "./he-context.js";
+
+// HE Key Bridge exports
+export {
+  deriveHEContext,
+  getHEPublicBundle,
+  deriveHEContextFromManager,
+  HkdfFunction,
+  DeriveHEOptions,
+  KeyDerivationOptions,
+  HEPublicBundle,
+} from "./he-key-bridge.js";
+
+// HE Field Encryptor exports
+export {
+  identifyHEFields,
+  generateCompanionSchema,
+  encryptFields,
+  decryptFields,
+  buildEncryptedBinary,
+  HEFieldInfo,
+} from "./he-field-encryptor.js";
+
+// Pipeline exports
+export {
+  FlatBufferPipeline,
+  PipelineOptions,
+  PipelineKeyOptions,
+  PipelineHEOptions,
+  PushStreamOptions,
+  EncryptHEOptions,
+  DecryptHEOptions,
+  RecipientOptions,
+  AESEncryption,
+  AESDecryption,
+} from "./pipeline.js";
+
 export default createFlatcModule;

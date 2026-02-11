@@ -157,6 +157,21 @@ class HEContext {
       HEScheme scheme = HEScheme::BFV);
 
   /**
+   * Create a client context with deterministic key generation from a seed.
+   * The seed is used to initialize the PRNG, producing the same keys
+   * for the same seed. This enables HD wallet → HE key derivation.
+   * @param seed Seed bytes (at least 32 bytes)
+   * @param seed_len Length of seed data
+   * @param poly_modulus_degree Power of 2, typically 4096, 8192, or 16384
+   * @param scheme BFV or BGV scheme
+   * @return Client context with deterministic keys
+   */
+  static HEContext CreateClientSeeded(
+      const uint8_t* seed, size_t seed_len,
+      uint32_t poly_modulus_degree = kDefaultPolyModulusDegree,
+      HEScheme scheme = HEScheme::BFV);
+
+  /**
    * Create a server context from serialized public key.
    * Server can only perform homomorphic operations, not decrypt.
    * @param public_key Serialized public key from client

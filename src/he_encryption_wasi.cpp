@@ -63,6 +63,32 @@ int32_t wasi_he_context_create_client(uint32_t poly_degree) {
   }
 }
 
+// Create a client HE context with deterministic key generation from a seed.
+// poly_degree: polynomial modulus degree (0 = default 4096)
+// seed: seed bytes for deterministic PRNG (at least 32 bytes)
+// seed_len: length of seed data
+// Returns context ID (>0) on success, -1 on error.
+int32_t wasi_he_context_create_client_seeded(uint32_t poly_degree,
+                                              const uint8_t* seed,
+                                              uint32_t seed_len) {
+  using namespace flatbuffers::he;
+  if (!seed || seed_len < 32) return -1;
+  try {
+    auto ctx = std::make_unique<HEContext>(
+        HEContext::CreateClientSeeded(
+            seed, seed_len,
+            poly_degree > 0 ? poly_degree : kDefaultPolyModulusDegree));
+    if (!ctx->IsValid()) {
+      return -1;
+    }
+    int32_t id = g_next_he_context_id++;
+    g_he_contexts[id] = std::move(ctx);
+    return id;
+  } catch (...) {
+    return -1;
+  }
+}
+
 // Create a server HE context from a serialized public key.
 // Server can only perform homomorphic operations, not decrypt.
 // public_key: serialized public key bytes

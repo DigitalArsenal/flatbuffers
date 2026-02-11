@@ -109,6 +109,61 @@ class HEContextImpl {
     }
   }
 
+  // Initialize client context with deterministic key generation from seed
+  bool InitClientSeeded(const uint8_t* seed, size_t seed_len,
+                        uint32_t poly_modulus_degree, HEScheme scheme) {
+    scheme_ = scheme;
+    poly_modulus_degree_ = poly_modulus_degree;
+
+    try {
+      // Set up encryption parameters (same as InitClient)
+      seal::EncryptionParameters parms(
+          scheme == HEScheme::BFV ? seal::scheme_type::bfv
+                                   : seal::scheme_type::bgv);
+
+      parms.set_poly_modulus_degree(poly_modulus_degree);
+      parms.set_coeff_modulus(
+          seal::CoeffModulus::BFVDefault(poly_modulus_degree));
+      parms.set_plain_modulus(
+          seal::PlainModulus::Batching(poly_modulus_degree, 20));
+
+      context_ = std::make_shared<seal::SEALContext>(parms);
+      if (!context_->parameters_set()) {
+        return false;
+      }
+
+      // Create a seeded PRNG from the provided seed bytes.
+      // SEAL's KeyGenerator accepts a seed via prng_seed_type (array<uint64_t, 8>).
+      // We fill this from the seed bytes (up to 64 bytes = 8 * uint64_t).
+      seal::prng_seed_type prng_seed = {};
+      size_t copy_len = std::min(seed_len, sizeof(prng_seed));
+      std::memcpy(prng_seed.data(), seed, copy_len);
+
+      // Create KeyGenerator with seeded PRNG
+      auto prng = std::make_shared<seal::Blake2xbPRNGFactory>(prng_seed);
+      keygen_ = std::make_unique<seal::KeyGenerator>(*context_, prng->create());
+
+      secret_key_ = std::make_unique<seal::SecretKey>(keygen_->secret_key());
+      has_secret_key_ = true;
+
+      public_key_ = std::make_unique<seal::PublicKey>();
+      keygen_->create_public_key(*public_key_);
+
+      relin_keys_ = std::make_unique<seal::RelinKeys>();
+      keygen_->create_relin_keys(*relin_keys_);
+
+      encryptor_ = std::make_unique<seal::Encryptor>(*context_, *public_key_);
+      decryptor_ = std::make_unique<seal::Decryptor>(*context_, *secret_key_);
+      evaluator_ = std::make_unique<seal::Evaluator>(*context_);
+      batch_encoder_ = std::make_unique<seal::BatchEncoder>(*context_);
+
+      valid_ = true;
+      return true;
+    } catch (const std::exception&) {
+      return false;
+    }
+  }
+
   // Initialize server context from public key
   bool InitServer(const uint8_t* pk_data, size_t pk_len) {
     try {
@@ -540,6 +595,14 @@ class HEContextImpl {
     return false;
   }
 
+  bool InitClientSeeded(const uint8_t*, size_t, uint32_t poly_modulus_degree,
+                        HEScheme scheme) {
+    scheme_ = scheme;
+    poly_modulus_degree_ = poly_modulus_degree;
+    valid_ = false;
+    return false;
+  }
+
   bool InitServer(const uint8_t*, size_t) { return false; }
 
   std::vector<uint8_t> SerializePublicKey() const { return {}; }
@@ -589,6 +652,14 @@ HEContext HEContext::CreateClient(uint32_t poly_modulus_degree,
                                    HEScheme scheme) {
   HEContext ctx;
   ctx.impl_->InitClient(poly_modulus_degree, scheme);
+  return ctx;
+}
+
+HEContext HEContext::CreateClientSeeded(const uint8_t* seed, size_t seed_len,
+                                         uint32_t poly_modulus_degree,
+                                         HEScheme scheme) {
+  HEContext ctx;
+  ctx.impl_->InitClientSeeded(seed, seed_len, poly_modulus_degree, scheme);
   return ctx;
 }
 

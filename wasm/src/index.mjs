@@ -10,6 +10,17 @@
  * Use Module._wasm_crypto_* exports from the Emscripten module directly.
  */
 
+// Encryption context stubs for runner.mjs fallback encryption path.
+// These provide the imports that runner.mjs expects. The WASM C API is
+// the primary encryption path; these are only used as JS fallback.
+class EncryptionContext {
+  static forEncryption() { throw new Error('JS encryption fallback not available'); }
+  static forDecryption() { throw new Error('JS decryption fallback not available'); }
+}
+function serializeEncryptionHeader() { return new Uint8Array(0); }
+function deserializeEncryptionHeader() { return {}; }
+export { EncryptionContext, serializeEncryptionHeader, deserializeEncryptionHeader };
+
 export { FlatcRunner } from "./runner.mjs";
 import createFlatcModule from "../dist/flatc-wasm.js";
 
@@ -51,6 +62,40 @@ export {
   validateSigningKey,
   validateEncryptionKey,
 } from "./hd-keys.mjs";
+
+// Format detection
+export {
+  detectFormat,
+  detectStringFormat,
+} from "./format-detector.mjs";
+
+// HE Context (promoted from examples)
+export {
+  HEContext,
+  initHEModule,
+  getHEModule,
+  getLastError as getHELastError,
+  DEFAULT_POLY_MODULUS_DEGREE,
+} from "./he-context.mjs";
+
+// HE Key Bridge (HD wallet → HE keys)
+export {
+  deriveHEContext,
+  getHEPublicBundle,
+  deriveHEContextFromManager,
+} from "./he-key-bridge.mjs";
+
+// HE Field Encryptor (per-field encryption + companion schema)
+export {
+  identifyHEFields,
+  generateCompanionSchema,
+  encryptFields,
+  decryptFields,
+  buildEncryptedBinary,
+} from "./he-field-encryptor.mjs";
+
+// Unified Pipeline
+export { FlatBufferPipeline } from "./pipeline.mjs";
 
 export { createFlatcModule };
 export default createFlatcModule;

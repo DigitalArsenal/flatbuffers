@@ -273,16 +273,16 @@ if(EMSCRIPTEN)
   # Optional: OpenSSL for FIPS compliance (alternative to Crypto++)
   option(FLATBUFFERS_WASM_USE_OPENSSL "Use OpenSSL instead of Crypto++ for FIPS compliance" OFF)
   if(FLATBUFFERS_WASM_USE_OPENSSL)
-    # Emscripten-compatible OpenSSL build
-    if(NOT TARGET ssl)
+    if(NOT TARGET OpenSSL::SSL)
       message(STATUS "Fetching OpenSSL for WASM FIPS build...")
+      set(OPENSSL_CONFIGURE_OPTIONS no-asm no-tests no-threads no-engine no-dso enable-fips CACHE STRING "" FORCE)
       FetchContent_Declare(
-        openssl
-        GIT_REPOSITORY https://github.com/nicedoc/openssl-wasm.git
+        openssl-cmake
+        GIT_REPOSITORY https://github.com/jimmy-park/openssl-cmake.git
         GIT_TAG        main
-        GIT_SHALLOW    FALSE  # Pin for reproducibility (Task 46)
+        GIT_SHALLOW    TRUE
       )
-      FetchContent_MakeAvailable(openssl)
+      FetchContent_MakeAvailable(openssl-cmake)
     endif()
   endif()
 
@@ -356,7 +356,7 @@ if(EMSCRIPTEN)
   target_compile_options(flatc_wasm PRIVATE ${WASM_COMPILE_OPTIONS} -fexceptions)
   if(FLATBUFFERS_WASM_USE_OPENSSL)
     target_compile_definitions(flatc_wasm PRIVATE FLATBUFFERS_USE_OPENSSL=1)
-    target_link_libraries(flatc_wasm PRIVATE ssl crypto)
+    target_link_libraries(flatc_wasm PRIVATE OpenSSL::SSL OpenSSL::Crypto)
   else()
     target_compile_definitions(flatc_wasm PRIVATE FLATBUFFERS_USE_CRYPTOPP=1)
     target_link_libraries(flatc_wasm PRIVATE cryptopp)
@@ -393,7 +393,7 @@ if(EMSCRIPTEN)
   target_compile_options(flatc_wasm_inline PRIVATE ${WASM_COMPILE_OPTIONS} -fexceptions)
   if(FLATBUFFERS_WASM_USE_OPENSSL)
     target_compile_definitions(flatc_wasm_inline PRIVATE FLATBUFFERS_USE_OPENSSL=1)
-    target_link_libraries(flatc_wasm_inline PRIVATE ssl crypto)
+    target_link_libraries(flatc_wasm_inline PRIVATE OpenSSL::SSL OpenSSL::Crypto)
   else()
     target_compile_definitions(flatc_wasm_inline PRIVATE FLATBUFFERS_USE_CRYPTOPP=1)
     target_link_libraries(flatc_wasm_inline PRIVATE cryptopp)

@@ -138,6 +138,10 @@ jobs:
     - uses: actions/checkout@v6
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v2
+    - name: Set up Perl
+      uses: shogo82148/actions-setup-perl@v1
+    - name: Set up NASM
+      uses: ilammy/setup-nasm@v1
     - name: cmake
       run: >
         cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
@@ -163,6 +167,10 @@ jobs:
     - uses: actions/checkout@v6
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v2
+    - name: Set up Perl
+      uses: shogo82148/actions-setup-perl@v1
+    - name: Set up NASM
+      uses: ilammy/setup-nasm@v1
     - name: cmake
       run: cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_BUILD_CPP17=ON -DFLATBUFFERS_STRICT_MODE=ON .
     - name: build
@@ -275,8 +283,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: cmake
-      # Disable OpenSSL for universal builds: Homebrew only provides native-arch libs
-      run: cmake -G "Xcode" -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_STRICT_MODE=ON -DFLATBUFFERS_USE_OPENSSL=OFF .
+      run: cmake -G "Xcode" -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_STRICT_MODE=ON .
     - name: build
       run: xcodebuild -toolchain clang -configuration Release -target flattests
     - name: check that the binary is "universal"
@@ -353,6 +360,10 @@ jobs:
     - uses: actions/checkout@v6
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v2
+    - name: Set up Perl
+      uses: shogo82148/actions-setup-perl@v1
+    - name: Set up NASM
+      uses: ilammy/setup-nasm@v1
     - name: cmake
       run: cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_BUILD_CPP17=ON -DFLATBUFFERS_STRICT_MODE=ON .
     - name: build

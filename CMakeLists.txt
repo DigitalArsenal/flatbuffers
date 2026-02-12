@@ -195,21 +195,38 @@ if(FLATBUFFERS_USE_SEAL)
 endif()
 
 # =============================================================================
-# OpenSSL for FIPS-compliant encryption (optional, alternative to Crypto++)
+# OpenSSL for FIPS-compliant encryption (built from source via FetchContent)
 # =============================================================================
 if(FLATBUFFERS_USE_OPENSSL)
-  # When building a static flatc, prefer static OpenSSL libraries
+  include(FetchContent)
+  set(OPENSSL_CONFIGURE_OPTIONS no-tests enable-fips CACHE STRING "" FORCE)
   if(FLATBUFFERS_STATIC_FLATC)
-    set(OPENSSL_USE_STATIC_LIBS TRUE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
   endif()
-  find_package(OpenSSL QUIET)
-  if(NOT OPENSSL_FOUND)
-    message(STATUS "OpenSSL not found, disabling FLATBUFFERS_USE_OPENSSL")
-    set(FLATBUFFERS_USE_OPENSSL OFF)
-  else()
-    add_definitions(-DFLATBUFFERS_USE_OPENSSL=1)
-    message(STATUS "Using OpenSSL for FIPS-compliant encryption (version ${OPENSSL_VERSION})")
+  if(MSVC)
+    set(OPENSSL_MSVC_STATIC_RT ON CACHE BOOL "" FORCE)
   endif()
+  FetchContent_Declare(
+    openssl-cmake
+    GIT_REPOSITORY https://github.com/jimmy-park/openssl-cmake.git
+    GIT_TAG        main
+    GIT_SHALLOW    TRUE
+  )
+  FetchContent_MakeAvailable(openssl-cmake)
+
+  # Mark OpenSSL headers as SYSTEM to suppress third-party warnings with -Werror
+  foreach(_openssl_tgt OpenSSL::SSL OpenSSL::Crypto)
+    if(TARGET ${_openssl_tgt})
+      get_target_property(_openssl_inc ${_openssl_tgt} INTERFACE_INCLUDE_DIRECTORIES)
+      if(_openssl_inc)
+        set_target_properties(${_openssl_tgt} PROPERTIES
+          INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_openssl_inc}")
+      endif()
+    endif()
+  endforeach()
+
+  add_definitions(-DFLATBUFFERS_USE_OPENSSL=1)
+  message(STATUS "Using OpenSSL (built from source) for FIPS-compliant encryption")
 endif()
 
 set(FlatBuffers_Library_SRCS

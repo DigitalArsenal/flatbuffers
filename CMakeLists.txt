@@ -11,6 +11,15 @@ project(FlatBuffers
 # generate compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Use consistent MSVC runtime across all targets.
+# flatc uses /MT (static CRT) for Release; SEAL and other deps must match.
+if(POLICY CMP0091)
+  cmake_policy(SET CMP0091 NEW)
+endif()
+if(MSVC)
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 # NOTE: Code coverage only works on Linux & OSX.
 option(FLATBUFFERS_CODE_COVERAGE "Enable the code coverage build option." OFF)
 option(FLATBUFFERS_BUILD_TESTS "Enable the build of tests and samples." ON)
@@ -189,9 +198,18 @@ endif()
 # OpenSSL for FIPS-compliant encryption (optional, alternative to Crypto++)
 # =============================================================================
 if(FLATBUFFERS_USE_OPENSSL)
-  find_package(OpenSSL REQUIRED)
-  add_definitions(-DFLATBUFFERS_USE_OPENSSL=1)
-  message(STATUS "Using OpenSSL for FIPS-compliant encryption (version ${OPENSSL_VERSION})")
+  # When building a static flatc, prefer static OpenSSL libraries
+  if(FLATBUFFERS_STATIC_FLATC)
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
+  endif()
+  find_package(OpenSSL QUIET)
+  if(NOT OPENSSL_FOUND)
+    message(STATUS "OpenSSL not found, disabling FLATBUFFERS_USE_OPENSSL")
+    set(FLATBUFFERS_USE_OPENSSL OFF)
+  else()
+    add_definitions(-DFLATBUFFERS_USE_OPENSSL=1)
+    message(STATUS "Using OpenSSL for FIPS-compliant encryption (version ${OPENSSL_VERSION})")
+  endif()
 endif()
 
 set(FlatBuffers_Library_SRCS
@@ -579,9 +597,6 @@ if(FLATBUFFERS_BUILD_FLATC)
 
   target_compile_options(flatc
     PRIVATE
-      $<$<AND:$<BOOL:${MSVC_LIKE}>,$<CONFIG:Release>>:
-        /MT
-      >
       $<$<BOOL:${ENABLE_DEBUG_SYMBOLS}>:
         -g -O0
       >
@@ -596,7 +611,10 @@ if(FLATBUFFERS_BUILD_FLATC)
   endif()
 
   if(FLATBUFFERS_STATIC_FLATC AND NOT MSVC)
-    target_link_libraries(flatc PRIVATE -static)
+    # Use -static-libgcc -static-libstdc++ instead of -static for portability.
+    # Full -static requires static versions of all system libraries (OpenSSL, etc.)
+    # which are not always available.
+    target_link_options(flatc PRIVATE -static-libgcc -static-libstdc++)
   endif()
 endif()
 

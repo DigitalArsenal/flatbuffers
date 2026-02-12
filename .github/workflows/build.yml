@@ -275,7 +275,8 @@ jobs:
     steps:
     - uses: actions/checkout@v6
     - name: cmake
-      run: cmake -G "Xcode" -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_STRICT_MODE=ON .
+      # Disable OpenSSL for universal builds: Homebrew only provides native-arch libs
+      run: cmake -G "Xcode" -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_STRICT_MODE=ON -DFLATBUFFERS_USE_OPENSSL=OFF .
     - name: build
       run: xcodebuild -toolchain clang -configuration Release -target flattests
     - name: check that the binary is "universal"

@@ -199,20 +199,130 @@ endif()
 # =============================================================================
 if(FLATBUFFERS_USE_OPENSSL)
   include(FetchContent)
-  set(OPENSSL_CONFIGURE_OPTIONS no-tests enable-fips CACHE STRING "" FORCE)
-  if(FLATBUFFERS_STATIC_FLATC)
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
+  # Check if this is a multi-arch (universal) build on macOS.
+  # openssl-cmake only supports one architecture at a time, so for universal
+  # builds we download OpenSSL source, build for each arch, and lipo together.
+  list(LENGTH CMAKE_OSX_ARCHITECTURES _openssl_num_archs)
+  if(APPLE AND _openssl_num_archs GREATER 1)
+    set(_openssl_version "3.6.0")
+    FetchContent_Declare(
+      openssl-universal-src
+      URL https://github.com/openssl/openssl/releases/download/openssl-${_openssl_version}/openssl-${_openssl_version}.tar.gz
+      URL_HASH SHA256=b6a5f44b7eb69e3fa35dbf15524405b44837a481d43d81daddde3ff21fcbb8e9
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    # Use Populate to download without add_subdirectory (OpenSSL has no CMakeLists.txt)
+    FetchContent_GetProperties(openssl-universal-src)
+    if(NOT openssl-universal-src_POPULATED)
+      FetchContent_Populate(openssl-universal-src)
+    endif()
+
+    include(ProcessorCount)
+    ProcessorCount(_openssl_nproc)
+    if(_openssl_nproc EQUAL 0)
+      set(_openssl_nproc 1)
+    endif()
+
+    set(_openssl_crypto_inputs "")
+    set(_openssl_ssl_inputs "")
+    set(_openssl_first_build_dir "")
+
+    foreach(_arch IN LISTS CMAKE_OSX_ARCHITECTURES)
+      set(_build_dir "${CMAKE_BINARY_DIR}/openssl-${_arch}")
+      file(MAKE_DIRECTORY "${_build_dir}")
+      if(NOT _openssl_first_build_dir)
+        set(_openssl_first_build_dir "${_build_dir}")
+      endif()
+
+      if(_arch STREQUAL "arm64")
+        set(_openssl_target "darwin64-arm64-cc")
+      elseif(_arch STREQUAL "x86_64")
+        set(_openssl_target "darwin64-x86_64-cc")
+      else()
+        message(FATAL_ERROR "Unsupported macOS architecture for OpenSSL: ${_arch}")
+      endif()
+
+      # Configure at CMake configure time (fast, just runs perl)
+      if(NOT EXISTS "${_build_dir}/Makefile")
+        message(STATUS "Configuring OpenSSL for ${_arch}...")
+        execute_process(
+          COMMAND perl "${openssl-universal-src_SOURCE_DIR}/Configure"
+            ${_openssl_target} no-tests enable-fips no-shared
+          WORKING_DIRECTORY "${_build_dir}"
+          RESULT_VARIABLE _openssl_configure_result
+        )
+        if(NOT _openssl_configure_result EQUAL 0)
+          message(FATAL_ERROR "OpenSSL Configure failed for ${_arch}")
+        endif()
+      endif()
+
+      # Build at build time via custom command
+      add_custom_command(
+        OUTPUT "${_build_dir}/libcrypto.a" "${_build_dir}/libssl.a"
+        COMMAND make -s -j ${_openssl_nproc} build_libs
+        WORKING_DIRECTORY "${_build_dir}"
+        COMMENT "Building OpenSSL for ${_arch}..."
+      )
+      list(APPEND _openssl_crypto_inputs "${_build_dir}/libcrypto.a")
+      list(APPEND _openssl_ssl_inputs "${_build_dir}/libssl.a")
+    endforeach()
+
+    # Lipo at build time to create universal libraries
+    set(_openssl_universal_dir "${CMAKE_BINARY_DIR}/openssl-universal")
+    file(MAKE_DIRECTORY "${_openssl_universal_dir}")
+
+    add_custom_command(
+      OUTPUT "${_openssl_universal_dir}/libcrypto.a"
+      COMMAND lipo -create ${_openssl_crypto_inputs} -output "${_openssl_universal_dir}/libcrypto.a"
+      DEPENDS ${_openssl_crypto_inputs}
+      COMMENT "Creating universal libcrypto.a"
+    )
+    add_custom_command(
+      OUTPUT "${_openssl_universal_dir}/libssl.a"
+      COMMAND lipo -create ${_openssl_ssl_inputs} -output "${_openssl_universal_dir}/libssl.a"
+      DEPENDS ${_openssl_ssl_inputs}
+      COMMENT "Creating universal libssl.a"
+    )
+
+    add_custom_target(openssl-build DEPENDS
+      "${_openssl_universal_dir}/libcrypto.a"
+      "${_openssl_universal_dir}/libssl.a"
+    )
+
+    # Create imported targets (same names as openssl-cmake provides)
+    add_library(OpenSSL::Crypto STATIC IMPORTED GLOBAL)
+    set_target_properties(OpenSSL::Crypto PROPERTIES
+      IMPORTED_LOCATION "${_openssl_universal_dir}/libcrypto.a"
+      INTERFACE_INCLUDE_DIRECTORIES "${openssl-universal-src_SOURCE_DIR}/include;${_openssl_first_build_dir}/include"
+    )
+    add_dependencies(OpenSSL::Crypto openssl-build)
+
+    add_library(OpenSSL::SSL STATIC IMPORTED GLOBAL)
+    set_target_properties(OpenSSL::SSL PROPERTIES
+      IMPORTED_LOCATION "${_openssl_universal_dir}/libssl.a"
+      INTERFACE_INCLUDE_DIRECTORIES "${openssl-universal-src_SOURCE_DIR}/include;${_openssl_first_build_dir}/include"
+      INTERFACE_LINK_LIBRARIES "OpenSSL::Crypto"
+    )
+    add_dependencies(OpenSSL::SSL openssl-build)
+
+  else()
+    # Single architecture: use openssl-cmake wrapper
+    set(OPENSSL_CONFIGURE_OPTIONS no-tests enable-fips CACHE STRING "" FORCE)
+    if(FLATBUFFERS_STATIC_FLATC)
+      set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    endif()
+    if(MSVC)
+      set(OPENSSL_MSVC_STATIC_RT ON CACHE BOOL "" FORCE)
+    endif()
+    FetchContent_Declare(
+      openssl-cmake
+      GIT_REPOSITORY https://github.com/jimmy-park/openssl-cmake.git
+      GIT_TAG        main
+      GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(openssl-cmake)
   endif()
-  if(MSVC)
-    set(OPENSSL_MSVC_STATIC_RT ON CACHE BOOL "" FORCE)
-  endif()
-  FetchContent_Declare(
-    openssl-cmake
-    GIT_REPOSITORY https://github.com/jimmy-park/openssl-cmake.git
-    GIT_TAG        main
-    GIT_SHALLOW    TRUE
-  )
-  FetchContent_MakeAvailable(openssl-cmake)
 
   # Mark OpenSSL headers as SYSTEM to suppress third-party warnings with -Werror
   foreach(_openssl_tgt OpenSSL::SSL OpenSSL::Crypto)

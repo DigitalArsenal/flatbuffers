@@ -64,7 +64,7 @@ static int num_passed = 0;
   } while (0)
 
 // Test schema with he_encrypted attribute parsing
-void TestHESchemaAttribute() {
+static void TestHESchemaAttribute() {
   std::cout << "Testing he_encrypted attribute parsing..." << std::endl;
 
   flatbuffers::IDLOptions opts;
@@ -113,7 +113,7 @@ void TestHESchemaAttribute() {
 }
 
 // Test that he_encrypted fails on unsupported types
-void TestHESchemaValidation() {
+static void TestHESchemaValidation() {
   std::cout << "Testing he_encrypted validation..." << std::endl;
 
   flatbuffers::IDLOptions opts;
@@ -173,7 +173,7 @@ void TestHESchemaValidation() {
 using namespace flatbuffers::he;
 
 // Test HEContext creation
-void TestHEContextCreation() {
+static void TestHEContextCreation() {
   std::cout << "Testing HEContext creation..." << std::endl;
 
   // Create client context
@@ -203,7 +203,7 @@ void TestHEContextCreation() {
 }
 
 // Test encrypt/decrypt round-trip
-void TestHEEncryptDecrypt() {
+static void TestHEEncryptDecrypt() {
   std::cout << "Testing HE encrypt/decrypt..." << std::endl;
 
   auto client = HEContext::CreateClient();
@@ -242,7 +242,7 @@ void TestHEEncryptDecrypt() {
 }
 
 // Test homomorphic operations
-void TestHEOperations() {
+static void TestHEOperations() {
   std::cout << "Testing HE operations..." << std::endl;
 
   auto client = HEContext::CreateClient();
@@ -277,7 +277,7 @@ void TestHEOperations() {
 }
 
 // Test using free functions from he_operations.h
-void TestHEOperationsFunctions() {
+static void TestHEOperationsFunctions() {
   std::cout << "Testing HE operation functions..." << std::endl;
 
   auto client = HEContext::CreateClient();
@@ -301,7 +301,7 @@ void TestHEOperationsFunctions() {
 }
 
 // Test ciphertext validation
-void TestCiphertextValidation() {
+static void TestCiphertextValidation() {
   std::cout << "Testing ciphertext validation..." << std::endl;
 
   auto client = HEContext::CreateClient();
@@ -318,7 +318,7 @@ void TestCiphertextValidation() {
 }
 
 // Test key serialization/deserialization
-void TestHEKeySerialization() {
+static void TestHEKeySerialization() {
   std::cout << "Testing HE key serialization..." << std::endl;
 
   auto client1 = HEContext::CreateClient();
@@ -353,7 +353,7 @@ void TestHEKeySerialization() {
 //   3x Sub (dx, dy, dz)
 //   3x Multiply (dx^2, dy^2, dz^2)  -- one multiplicative depth
 //   2x Add (dx^2 + dy^2 + dz^2)
-void TestHEConjunctionAssessment() {
+static void TestHEConjunctionAssessment() {
   std::cout << "Testing HE conjunction assessment..." << std::endl;
 
   // --- Setup: Assessor creates HE context, server gets public key ---

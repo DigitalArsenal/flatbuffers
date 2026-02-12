@@ -1038,7 +1038,7 @@ bool X25519SharedSecret(const uint8_t* private_key,
 
 // --- P-256 ---
 
-static KeyPair ECGenerateKeyPair(int nid, size_t priv_size, size_t pub_size) {
+static KeyPair ECGenerateKeyPair(int nid, size_t priv_size, size_t /*pub_size*/) {
   KeyPair kp;
   EVP_PKEY_CTX* pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, nullptr);
   if (!pctx) return kp;
@@ -1363,7 +1363,7 @@ KeyPair GenerateKeyPair(KeyExchangeAlgorithm algorithm) {
 }
 
 bool ComputeSharedSecret(KeyExchangeAlgorithm algorithm,
-                         const uint8_t* private_key, size_t private_key_size,
+                         const uint8_t* private_key, size_t /*private_key_size*/,
                          const uint8_t* public_key, size_t public_key_size,
                          uint8_t* shared_secret) {
   switch (algorithm) {
@@ -1412,7 +1412,7 @@ KeyPair GenerateSigningKeyPair(SignatureAlgorithm algorithm) {
 }
 
 Signature Sign(SignatureAlgorithm algorithm,
-               const uint8_t* private_key, size_t private_key_size,
+               const uint8_t* private_key, size_t /*private_key_size*/,
                const uint8_t* data, size_t data_size) {
   switch (algorithm) {
     case SignatureAlgorithm::Ed25519:

@@ -162,6 +162,7 @@ if(FLATBUFFERS_USE_SEAL)
     GIT_REPOSITORY https://github.com/microsoft/SEAL.git
     GIT_TAG        v4.1.1
     GIT_SHALLOW    TRUE
+    SYSTEM
   )
   set(SEAL_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
   set(SEAL_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -172,6 +173,14 @@ if(FLATBUFFERS_USE_SEAL)
   set(SEAL_USE_ZSTD OFF CACHE BOOL "" FORCE)
   set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
   FetchContent_MakeAvailable(seal)
+
+  # Mark SEAL headers as SYSTEM to suppress third-party warnings with -Werror
+  get_target_property(_seal_inc seal INTERFACE_INCLUDE_DIRECTORIES)
+  if(_seal_inc)
+    set_target_properties(seal PROPERTIES
+      INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_seal_inc}")
+  endif()
+
   add_definitions(-DFLATBUFFERS_HE_USE_SEAL=1)
   message(STATUS "Using Microsoft SEAL for homomorphic encryption")
 endif()

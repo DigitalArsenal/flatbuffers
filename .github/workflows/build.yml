@@ -139,7 +139,7 @@ jobs:
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v2
     - name: Set up Perl
-      uses: shogo82148/actions-setup-perl@v1
+      uses: shogo82148/actions-setup-perl@v1.33.0
     - name: Set up NASM
       uses: ilammy/setup-nasm@v1
     - name: cmake
@@ -168,7 +168,7 @@ jobs:
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v2
     - name: Set up Perl
-      uses: shogo82148/actions-setup-perl@v1
+      uses: shogo82148/actions-setup-perl@v1.33.0
     - name: Set up NASM
       uses: ilammy/setup-nasm@v1
     - name: cmake
@@ -361,7 +361,7 @@ jobs:
     - name: Add msbuild to PATH
       uses: microsoft/setup-msbuild@v2
     - name: Set up Perl
-      uses: shogo82148/actions-setup-perl@v1
+      uses: shogo82148/actions-setup-perl@v1.33.0
     - name: Set up NASM
       uses: ilammy/setup-nasm@v1
     - name: cmake

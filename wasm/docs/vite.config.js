@@ -275,7 +275,7 @@ export default defineConfig({
       // Allow importing from wasm/src
       '@flatbuffers': resolve(__dirname, '../../src'),
       // Stub out @sds/lib (not needed for FlatBuffers demo, used by hd-wallet-ui internally)
-      '@sds/lib/js/ts/EME/EME.js': resolve(__dirname, 'sds-stub.mjs'),
+      '@sds/lib/js/EME/EME.js': resolve(__dirname, 'sds-stub.mjs'),
     },
   },
   optimizeDeps: {

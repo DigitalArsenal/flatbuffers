@@ -2478,6 +2478,284 @@ const { header, data } = flatc.generateBinaryEncrypted(schema, json, {
 | `p256` | 33 bytes (compressed) | NIST P-256 | FIPS compliance, broad support |
 | `p384` | 49 bytes (compressed) | NIST P-384 | Higher security margin |
 
+### Encryption Module API (`encryption.mjs`)
+
+The `encryption.mjs` module provides a complete JavaScript API for all cryptographic operations, wrapping the WASM binary with type-safe, memory-safe helpers. All functions are re-exported from the main `flatc-wasm` package entry point.
+
+#### Initialization
+
+```javascript
+import {
+  loadEncryptionWasm,
+  isInitialized,
+  hasCryptopp,
+  getVersion,
+} from 'flatc-wasm';
+
+// Must be called before any crypto operation
+await loadEncryptionWasm();
+
+console.log(isInitialized());  // true
+console.log(getVersion());     // "2.0.0"
+console.log(hasCryptopp());    // true (if built with Crypto++)
+```
+
+#### Constants
+
+```javascript
+import {
+  KEY_SIZE,              // 32 (AES-256 key)
+  IV_SIZE,               // 16 (AES-CTR IV)
+  NONCE_SIZE,            // 12 (nonce for derivation)
+  SHA256_SIZE,           // 32
+  HMAC_SIZE,             // 32
+  X25519_PRIVATE_KEY_SIZE,   // 32
+  X25519_PUBLIC_KEY_SIZE,    // 32
+  SECP256K1_PRIVATE_KEY_SIZE, // 32
+  SECP256K1_PUBLIC_KEY_SIZE,  // 33 (compressed)
+  P384_PRIVATE_KEY_SIZE,     // 48
+  P384_PUBLIC_KEY_SIZE,      // 49 (compressed)
+  ED25519_PRIVATE_KEY_SIZE,  // 64 (seed + public)
+  ED25519_PUBLIC_KEY_SIZE,   // 32
+  ED25519_SIGNATURE_SIZE,    // 64
+} from 'flatc-wasm';
+```
+
+#### Error Handling
+
+```javascript
+import { CryptoError, CryptoErrorCode } from 'flatc-wasm';
+
+try {
+  encryptBytes(data, shortKey, iv);
+} catch (e) {
+  if (e instanceof CryptoError) {
+    console.log(e.code);    // 'INVALID_KEY'
+    console.log(e.message); // 'Key must be 32 bytes, got 16'
+  }
+}
+
+// Available error codes:
+// UNINITIALIZED, INVALID_KEY, INVALID_IV, INVALID_INPUT,
+// WASM_ERROR, KEY_GENERATION_FAILED, ECDH_FAILED,
+// SIGN_FAILED, VERIFY_FAILED, AUTHENTICATION_FAILED
+```
+
+#### Hash Functions
+
+```javascript
+import { sha256, hkdf, hmacSha256, hmacSha256Verify } from 'flatc-wasm';
+
+// SHA-256
+const hash = sha256(new TextEncoder().encode('Hello'));
+
+// HKDF-SHA256 key derivation
+const derived = hkdf(inputKeyMaterial, salt, info, 32);
+
+// HMAC-SHA256
+const mac = hmacSha256(key, data);
+const valid = hmacSha256Verify(key, data, mac);
+```
+
+#### AES-256-CTR Encryption
+
+```javascript
+import {
+  encryptBytes, decryptBytes,           // In-place
+  encryptBytesCopy, decryptBytesCopy,   // Non-destructive
+  clearIVTracking, clearAllIVTracking,  // IV reuse tracking
+} from 'flatc-wasm';
+
+// In-place encryption (modifies buffer)
+const data = new TextEncoder().encode('Secret');
+encryptBytes(data, key, iv);
+decryptBytes(data, key, iv);  // data restored
+
+// Non-destructive (returns new buffer)
+const { ciphertext, iv: generatedIV } = encryptBytesCopy(plaintext, key);
+const decrypted = decryptBytesCopy(ciphertext, key, generatedIV);
+
+// IV tracking prevents accidental nonce reuse
+clearIVTracking(key);     // Clear tracking for one key
+clearAllIVTracking();     // Clear all tracking
+```
+
+#### Authenticated Encryption (AES-CTR + HMAC-SHA256)
+
+```javascript
+import { encryptAuthenticated, decryptAuthenticated } from 'flatc-wasm';
+
+// Encrypt with authentication (IV + ciphertext + MAC)
+const sealed = encryptAuthenticated(plaintext, key);
+const opened = decryptAuthenticated(sealed, key);
+
+// With additional authenticated data (AAD)
+const sealed = encryptAuthenticated(plaintext, key, aad);
+const opened = decryptAuthenticated(sealed, key, aad);
+// Throws CryptoError with code 'AUTHENTICATION_FAILED' on tampering
+```
+
+#### X25519 Key Exchange
+
+```javascript
+import {
+  x25519GenerateKeyPair,
+  x25519SharedSecret,
+  x25519DeriveKey,
+} from 'flatc-wasm';
+
+const alice = x25519GenerateKeyPair();
+const bob = x25519GenerateKeyPair();
+
+// ECDH shared secret (symmetric)
+const secret = x25519SharedSecret(alice.privateKey, bob.publicKey);
+
+// Derive AES-256 key with domain separation
+const aesKey = x25519DeriveKey(secret, 'my-app-encryption');
+```
+
+#### secp256k1 (Bitcoin/Ethereum compatible)
+
+```javascript
+import {
+  secp256k1GenerateKeyPair,
+  secp256k1SharedSecret,
+  secp256k1DeriveKey,
+  secp256k1Sign,
+  secp256k1Verify,
+} from 'flatc-wasm';
+
+const kp = secp256k1GenerateKeyPair();
+
+// ECDH
+const secret = secp256k1SharedSecret(kp.privateKey, peerPublicKey);
+const aesKey = secp256k1DeriveKey(secret, 'context');
+
+// ECDSA sign/verify (DER-encoded signatures)
+const sig = secp256k1Sign(kp.privateKey, message);
+const valid = secp256k1Verify(kp.publicKey, message, sig);
+```
+
+#### P-256 / P-384 (NIST, Web Crypto)
+
+P-256 and P-384 operations use the Web Crypto API (`crypto.subtle`) for FIPS-grade implementations. All functions are async.
+
+```javascript
+import {
+  p256GenerateKeyPairAsync, p256SharedSecretAsync,
+  p256DeriveKey, p256SignAsync, p256VerifyAsync,
+  p384GenerateKeyPairAsync, p384SharedSecretAsync,
+  p384DeriveKey, p384SignAsync, p384VerifyAsync,
+} from 'flatc-wasm';
+
+// P-256 ECDH + ECDSA
+const alice = await p256GenerateKeyPairAsync();
+// privateKey: PKCS8-encoded, publicKey: 65 bytes (uncompressed)
+
+const secret = await p256SharedSecretAsync(alice.privateKey, bob.publicKey);
+const aesKey = p256DeriveKey(secret, 'context');  // sync (uses WASM HKDF)
+
+const sig = await p256SignAsync(alice.privateKey, message);
+const valid = await p256VerifyAsync(alice.publicKey, message, sig);
+
+// P-384 has the same API shape
+const kp384 = await p384GenerateKeyPairAsync();
+// privateKey: PKCS8-encoded, publicKey: 97 bytes (uncompressed)
+```
+
+#### Ed25519 Signatures
+
+```javascript
+import { ed25519GenerateKeyPair, ed25519Sign, ed25519Verify } from 'flatc-wasm';
+
+const kp = ed25519GenerateKeyPair();
+const sig = ed25519Sign(kp.privateKey, message);   // 64-byte signature
+const valid = ed25519Verify(kp.publicKey, message, sig);
+```
+
+#### Nonce Generation & Derivation
+
+```javascript
+import { generateNonceStart, deriveNonce, NONCE_SIZE } from 'flatc-wasm';
+
+// Random 12-byte nonce via CSPRNG
+const nonce = generateNonceStart();
+
+// Deterministic 96-bit big-endian addition
+const derived = deriveNonce(nonce, 42);       // number
+const derived2 = deriveNonce(nonce, 42n);     // BigInt supported
+```
+
+#### EncryptionContext (ECIES)
+
+```javascript
+import { EncryptionContext, encryptionHeaderFromJSON } from 'flatc-wasm';
+
+// === Symmetric mode ===
+const ctx = new EncryptionContext(key);             // Uint8Array
+const ctx2 = new EncryptionContext('ab'.repeat(32)); // hex string
+const ctx3 = EncryptionContext.fromHex(hexKey);
+
+// === ECIES mode (sender) ===
+const encCtx = EncryptionContext.forEncryption(recipientPubKey, {
+  algorithm: 'x25519',  // or 'secp256k1'
+  context: 'app-v1',    // HKDF domain separation
+  nonceStart: customNonce, // optional (auto-generated if omitted)
+});
+
+// Encrypt fields
+encCtx.encryptScalar(buffer, offset, length, fieldId, recordIndex);
+
+// Get header for recipient
+const header = encCtx.getHeader();
+const headerJSON = encCtx.getHeaderJSON();
+
+// === ECIES mode (recipient) ===
+const decCtx = EncryptionContext.forDecryption(
+  myPrivateKey,
+  encryptionHeaderFromJSON(headerJSON),
+  'app-v1'
+);
+decCtx.decryptScalar(buffer, offset, length, fieldId, recordIndex);
+
+// Context methods
+ctx.isValid();                          // boolean
+ctx.getKey();                           // Uint8Array (copy)
+ctx.getNonceStart();                    // Uint8Array | null
+ctx.getRecordIndex();                   // number
+ctx.setRecordIndex(n);
+ctx.nextRecordIndex();                  // ++recordIndex
+ctx.deriveFieldKey(fieldId, recordIndex);   // Uint8Array(32)
+ctx.deriveFieldNonce(fieldId, recordIndex); // Uint8Array(12)
+ctx.getEphemeralPublicKey();            // Uint8Array (ECIES only)
+ctx.getAlgorithm();                     // string (ECIES only)
+ctx.getContext();                       // string | null
+```
+
+#### Header Utilities
+
+```javascript
+import {
+  createEncryptionHeader,
+  computeKeyId,
+  encryptionHeaderToJSON,
+  encryptionHeaderFromJSON,
+} from 'flatc-wasm';
+
+// Create header manually
+const header = createEncryptionHeader({
+  algorithm: 'x25519',
+  senderPublicKey: ephemeralPubKey,
+  recipientKeyId: computeKeyId(recipientPubKey),  // first 8 bytes of SHA-256
+  nonceStart: nonce,
+  context: 'app-v1',
+});
+
+// JSON round-trip
+const json = encryptionHeaderToJSON(header);
+const restored = encryptionHeaderFromJSON(json);
+```
+
 ---
 
 ## Embedded Language Runtimes

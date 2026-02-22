@@ -4155,7 +4155,7 @@ function setupMainAppHandlers() {
       'fields': 'security',
       'identity': 'security',
       'streaming': 'runtimes',
-      'aligned': 'runtimes',
+      'aligned': 'aligned',
       'runtimes': 'runtimes',
       'overview': 'overview',
       'schema': 'schema',
@@ -4698,30 +4698,6 @@ async function init() {
       }, 500);
     }
 
-    setupMainAppHandlers();
-    setupHelpModals();
-
-    // Handle initial hash navigation
-    const initialHash = window.location.hash.slice(1);
-    if (initialHash) {
-      const tabEl = $(`${initialHash}-tab`);
-      if (tabEl) {
-        setTimeout(() => {
-          tabEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          // Update active nav link
-          document.querySelectorAll('.nav-link[data-tab]').forEach(link => {
-            link.classList.remove('active');
-            if (link.dataset.tab === initialHash) {
-              link.classList.add('active');
-            }
-          });
-        }, 100);
-      }
-    } else {
-      // Trigger scroll handler to set initial hash
-      setTimeout(() => window.dispatchEvent(new Event('scroll')), 200);
-    }
-
     // Auto-login with temporary session keys if PKI keys are available
     if (hasSavedKeys) {
       const tempEd25519Seed = new Uint8Array(32);
@@ -4756,6 +4732,31 @@ async function init() {
     const loadingOverlay = $('loading-overlay');
     if (status) status.textContent = `Failed to load: ${err.message}`;
     if (loadingOverlay) loadingOverlay.classList.add('error');
+  } finally {
+    // Always set up UI handlers so navigation works even if WASM loading fails
+    setupMainAppHandlers();
+    setupHelpModals();
+
+    // Handle initial hash navigation
+    const initialHash = window.location.hash.slice(1);
+    if (initialHash) {
+      const tabEl = $(`${initialHash}-tab`);
+      if (tabEl) {
+        setTimeout(() => {
+          tabEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          // Update active nav link
+          document.querySelectorAll('.nav-link[data-tab]').forEach(link => {
+            link.classList.remove('active');
+            if (link.dataset.tab === initialHash) {
+              link.classList.add('active');
+            }
+          });
+        }, 100);
+      }
+    } else {
+      // Trigger scroll handler to set initial hash
+      setTimeout(() => window.dispatchEvent(new Event('scroll')), 200);
+    }
   }
 
   // Initialize Studio functionality

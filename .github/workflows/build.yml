@@ -205,8 +205,7 @@ jobs:
         configuration: [
           '',
           '-p:UnsafeByteBuffer=true',
-          # Fails two tests currently.
-          #'-p:EnableSpanT=true,UnsafeByteBuffer=true'
+          '-p:EnableSpanT=true,UnsafeByteBuffer=true'
           ]
     steps:
     - uses: actions/checkout@v6
@@ -219,7 +218,9 @@ jobs:
     - name: Build
       run: |
         cd tests\FlatBuffers.Test
-        dotnet build -c Release ${{matrix.configuration}} FlatBuffers.Test.csproj
+        dotnet new sln --force --name FlatBuffers.Test --format sln
+        dotnet sln FlatBuffers.Test.sln add FlatBuffers.Test.csproj
+        dotnet build -c Release ${{matrix.configuration}} FlatBuffers.Test.sln
     - name: Run net6.0
       run: |
         cd tests\FlatBuffers.Test\bin\Release\net6.0

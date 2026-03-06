@@ -4119,26 +4119,30 @@ function setupMainAppHandlers() {
     if (!button) return false;
 
     const now = Date.now();
-    if (event.type === 'click' && now - lastMobileMenuTouchAt < 500) {
-      return true;
-    }
+    const isDuplicateClick = event.type === 'click' && now - lastMobileMenuTouchAt < 500;
 
     if (event.type === 'touchend') {
       lastMobileMenuTouchAt = now;
     }
 
+    // Capture the event before hd-wallet-ui's legacy menu listener can re-toggle it.
     event.preventDefault();
+    event.stopPropagation();
+
+    if (isDuplicateClick) {
+      return true;
+    }
+
     toggleMobileMenu();
     return true;
   };
 
-  document.addEventListener('touchend', (event) => {
-    handleMobileMenuToggle(event);
-  }, { passive: false });
-
-  document.addEventListener('click', (event) => {
-    handleMobileMenuToggle(event);
+  document.addEventListener('touchend', handleMobileMenuToggle, {
+    passive: false,
+    capture: true,
   });
+
+  document.addEventListener('click', handleMobileMenuToggle, { capture: true });
 
   // Mobile login/logout handlers
   const mobileLogin = $('mobile-login');

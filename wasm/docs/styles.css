@@ -210,6 +210,8 @@ body:has(.modal.active) .nav-bar {
   color: var(--white-80);
   padding: 8px;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   transition: color 0.2s;
 }
 

@@ -107,6 +107,7 @@ if(EMSCRIPTEN)
     src/idl_gen_rust.cpp
     src/idl_gen_fbs.cpp
     src/idl_gen_json_schema.cpp
+    src/aligned_compiler.cpp
     src/idl_gen_aligned.cpp
     src/idl_gen_swift.cpp
     src/idl_gen_grpc.cpp
@@ -1048,4 +1049,3 @@ echo \"Streaming dispatcher WASM built: ${STREAMING_DISPATCHER_OUT}\"
   message(STATUS "  wasm_build_and_serve - Build WASM then start webserver")
   message(STATUS "")
 endif()
-

@@ -98,16 +98,16 @@
   - Java/C#/Kotlin/Dart/Swift/PHP smoke coverage
 
 ## Copy/Paste Todo
-- [ ] Replace the current aligned struct-only pipeline with a shared aligned-layout IR/compiler in `flatc`
-- [ ] Add official schema attrs `aligned_max_length` and `aligned_max_count`
-- [ ] Make aligned table lowering fixed-size and fully inline, with presence bitmaps
-- [ ] Encode strings as `uint8 length + 255 bytes`
-- [ ] Encode vectors as `uint32 length + fixed-capacity inline storage`
-- [ ] Encode unions as discriminator + fixed inline payload
-- [ ] Reject recursive/cyclic schemas in aligned mode v1
+- [x] Replace the current aligned struct-only pipeline with a shared aligned-layout IR/compiler in `flatc`
+- [x] Add official schema attrs `aligned_max_length` and `aligned_max_count`
+- [x] Make aligned table lowering fixed-size and fully inline, with presence bitmaps
+- [x] Encode strings as `uint8 length + 255 bytes`
+- [x] Encode vectors as `uint32 length + fixed-capacity inline storage`
+- [x] Encode unions as discriminator + fixed inline payload
+- [x] Reject recursive/cyclic schemas in aligned mode v1
 - [ ] Thread `--aligned` through standard language generators and `flatc_wasm`
-- [ ] Keep the legacy `aligned` generator only as a compatibility wrapper during transition
-- [ ] Add IR/unit tests for layout math, offsets, padding, stride, and bounds validation
+- [x] Keep the legacy `aligned` generator only as a compatibility wrapper during transition
+- [x] Add IR/unit tests for layout math, offsets, padding, stride, and bounds validation
 - [ ] Add end-to-end parity tests proving regular and aligned decoding yield the same logical values
 - [ ] Add CLI/WASM/native regression tests for positive and negative aligned cases
 - [ ] Rewrite aligned docs to match the new bounded fixed-layout table model

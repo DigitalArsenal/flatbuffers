@@ -34,6 +34,7 @@
 #include "third_party/absl/container/flat_hash_set.h"
 #endif
 #include "alignment_test.h"
+#include "aligned_layout_test.h"
 #include "default_vectors_strings_test.h"
 #include "evolution_test.h"
 #include "flatbuffers/flatbuffers.h"
@@ -1779,6 +1780,7 @@ int FlatBufferTests(const std::string& tests_data_path) {
   FuzzTest2();
 
   TriviallyCopyableTest();
+  AlignedLayoutTest();
   ErrorTest();
   ValueTest();
   EnumValueTest();

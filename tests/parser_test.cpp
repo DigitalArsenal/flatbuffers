@@ -153,6 +153,16 @@ void ErrorTest() {
             "only vectors of scalars are allowed to be 64-bit.");
   TestError("enum X:byte {Z} table X { y:[X] (offset64); }",
             "only vectors of scalars are allowed to be 64-bit.");
+
+  // Aligned mode attributes.
+  TestError("table X { y:int (aligned_max_length: 8); }",
+            "`aligned_max_length` attribute");
+  TestError("table X { y:string (aligned_max_length: 256); }",
+            "`aligned_max_length` attribute must be in the range [1, 255]");
+  TestError("table X { y:[int] (aligned_max_count: 0); }",
+            "`aligned_max_count` attribute must be in the range");
+  TestError("table X { y:string (aligned_max_count: 8); }",
+            "`aligned_max_count` attribute");
 }
 
 void EnumOutOfRangeTest() {

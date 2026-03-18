@@ -124,6 +124,25 @@ static CheckedError atot(const char* s, Parser& parser, T* val) {
     return parser.Error("invalid number: \"" + std::string(s) + "\"" +
                         ", constant does not fit " + TypeToIntervalString<T>());
 }
+
+template <typename T>
+static CheckedError ParseIntegerAttribute(Parser& parser, const Value* attr,
+                                          const char* attribute_name,
+                                          T min_value, T max_value, T* out) {
+  FLATBUFFERS_ASSERT(out);
+  if (!attr) { return NoError(); }
+  if (!StringToNumber(attr->constant.c_str(), out)) {
+    return parser.Error("invalid `" + std::string(attribute_name) +
+                        "` attribute: " + attr->constant);
+  }
+  if (*out < min_value || *out > max_value) {
+    return parser.Error("`" + std::string(attribute_name) +
+                        "` attribute must be in the range [" +
+                        NumToString(min_value) + ", " +
+                        NumToString(max_value) + "]");
+  }
+  return NoError();
+}
 template <>
 CheckedError atot<Offset<void>>(const char* s, Parser& parser,
                                 Offset<void>* val) {
@@ -1154,6 +1173,29 @@ CheckedError Parser::ParseField(StructDef& struct_def) {
           "(int8-int64, uint8-uint64, float, double) or vectors of these. "
           "Strings, structs, tables, unions, and bool are not supported.");
     }
+  }
+
+  if (auto aligned_max_length = field->attributes.Lookup("aligned_max_length")) {
+    if (!IsString(type)) {
+      return Error(
+          "`aligned_max_length` attribute can only be applied to string fields.");
+    }
+    uint32_t max_length = 0;
+    ECHECK(ParseIntegerAttribute(*this, aligned_max_length,
+                                 "aligned_max_length", static_cast<uint32_t>(1),
+                                 static_cast<uint32_t>(255), &max_length));
+  }
+
+  if (auto aligned_max_count = field->attributes.Lookup("aligned_max_count")) {
+    if (!IsVector(type) && type.base_type != BASE_TYPE_VECTOR64) {
+      return Error(
+          "`aligned_max_count` attribute can only be applied to vector fields.");
+    }
+    uint32_t max_count = 0;
+    ECHECK(ParseIntegerAttribute(*this, aligned_max_count, "aligned_max_count",
+                                 static_cast<uint32_t>(1),
+                                 flatbuffers::numeric_limits<uint32_t>::max(),
+                                 &max_count));
   }
 
   field->key = field->attributes.Lookup("key") != nullptr;
@@ -2822,6 +2864,7 @@ bool Parser::HasCircularStructDependency() {
 }
 
 bool Parser::SupportsOptionalScalars(const flatbuffers::IDLOptions& opts) {
+  if (opts.generate_aligned) { return true; }
   static FLATBUFFERS_CONSTEXPR unsigned long supported_langs =
       IDLOptions::kRust | IDLOptions::kSwift | IDLOptions::kLobster |
       IDLOptions::kKotlin | IDLOptions::kKotlinKmp | IDLOptions::kCpp |
@@ -2837,6 +2880,7 @@ bool Parser::SupportsOptionalScalars() const {
 }
 
 bool Parser::SupportsDefaultVectorsAndStrings() const {
+  if (opts.generate_aligned) { return true; }
   static FLATBUFFERS_CONSTEXPR unsigned long supported_langs =
       IDLOptions::kRust | IDLOptions::kSwift | IDLOptions::kNim |
       IDLOptions::kCpp | IDLOptions::kBinary | IDLOptions::kJson |
@@ -2845,6 +2889,7 @@ bool Parser::SupportsDefaultVectorsAndStrings() const {
 }
 
 bool Parser::SupportsAdvancedUnionFeatures() const {
+  if (opts.generate_aligned) { return true; }
   return (opts.lang_to_generate &
           ~(IDLOptions::kCpp | IDLOptions::kTs | IDLOptions::kPhp |
             IDLOptions::kJava | IDLOptions::kCSharp | IDLOptions::kKotlin |
@@ -2853,6 +2898,7 @@ bool Parser::SupportsAdvancedUnionFeatures() const {
 }
 
 bool Parser::SupportsAdvancedArrayFeatures() const {
+  if (opts.generate_aligned) { return true; }
   return (opts.lang_to_generate &
           ~(IDLOptions::kCpp | IDLOptions::kPython | IDLOptions::kJava |
             IDLOptions::kCSharp | IDLOptions::kJsonSchema | IDLOptions::kJson |

@@ -746,6 +746,7 @@ struct IDLOptions {
   bool require_json_eof;
   bool keep_proto_id;
   bool jsonschema_include_xflatbuffers;
+  bool generate_aligned;
 
   /********************************** Python **********************************/
   bool python_no_type_prefix_suffix;
@@ -904,6 +905,7 @@ struct IDLOptions {
         require_json_eof(true),
         keep_proto_id(false),
         jsonschema_include_xflatbuffers(false),
+        generate_aligned(false),
         python_no_type_prefix_suffix(false),
         python_typing(false),
         python_gen_numpy(true),
@@ -1077,6 +1079,8 @@ class Parser : public ParserState {
     // Stores ciphertext as offset-based vector (2-8KB per scalar).
     // Used by the HE encryption API (flatbuffers/he_encryption.h).
     known_attributes_["he_encrypted"] = true;
+    known_attributes_["aligned_max_length"] = true;
+    known_attributes_["aligned_max_count"] = true;
   }
 
   // Copying is not allowed

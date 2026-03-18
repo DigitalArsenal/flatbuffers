@@ -16,13 +16,15 @@
 
 #include "idl_gen_aligned.h"
 
-#include <cstdint>
-#include <iomanip>
-#include <iostream>
+#include <algorithm>
+#include <cctype>
+#include <cstddef>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
+#include "aligned_compiler.h"
 #include "flatbuffers/code_generators.h"
 #include "flatbuffers/idl.h"
 
@@ -32,646 +34,623 @@ namespace aligned {
 
 namespace {
 
-// Type information for layout calculation
-struct TypeInfo {
-  size_t size;
-  size_t align;
-  std::string cpp_type;
-  std::string ts_getter;
-  std::string ts_setter;
-  std::string ts_type;
-};
-
-static const TypeInfo* GetScalarTypeInfo(BaseType type) {
-  // clang-format off
-  static const TypeInfo type_info[] = {
-    // BASE_TYPE_NONE = 0
-    { 0, 0, "", "", "", "" },
-    // BASE_TYPE_UTYPE = 1
-    { 1, 1, "uint8_t", "getUint8", "setUint8", "number" },
-    // BASE_TYPE_BOOL = 2
-    { 1, 1, "bool", "getUint8", "setUint8", "boolean" },
-    // BASE_TYPE_CHAR = 3 (int8)
-    { 1, 1, "int8_t", "getInt8", "setInt8", "number" },
-    // BASE_TYPE_UCHAR = 4 (uint8)
-    { 1, 1, "uint8_t", "getUint8", "setUint8", "number" },
-    // BASE_TYPE_SHORT = 5 (int16)
-    { 2, 2, "int16_t", "getInt16", "setInt16", "number" },
-    // BASE_TYPE_USHORT = 6 (uint16)
-    { 2, 2, "uint16_t", "getUint16", "setUint16", "number" },
-    // BASE_TYPE_INT = 7 (int32)
-    { 4, 4, "int32_t", "getInt32", "setInt32", "number" },
-    // BASE_TYPE_UINT = 8 (uint32)
-    { 4, 4, "uint32_t", "getUint32", "setUint32", "number" },
-    // BASE_TYPE_LONG = 9 (int64)
-    { 8, 8, "int64_t", "getBigInt64", "setBigInt64", "bigint" },
-    // BASE_TYPE_ULONG = 10 (uint64)
-    { 8, 8, "uint64_t", "getBigUint64", "setBigUint64", "bigint" },
-    // BASE_TYPE_FLOAT = 11
-    { 4, 4, "float", "getFloat32", "setFloat32", "number" },
-    // BASE_TYPE_DOUBLE = 12
-    { 8, 8, "double", "getFloat64", "setFloat64", "number" },
-    // BASE_TYPE_STRING = 13 (not supported in aligned)
-    { 0, 0, "", "", "", "" },
-    // BASE_TYPE_VECTOR = 14 (not supported in aligned without fixed length)
-    { 0, 0, "", "", "", "" },
-    // BASE_TYPE_STRUCT = 15
-    { 0, 0, "", "", "", "" },
-    // BASE_TYPE_UNION = 16 (not supported in aligned)
-    { 0, 0, "", "", "", "" },
-    // BASE_TYPE_ARRAY = 17 (fixed-length arrays)
-    { 0, 0, "", "", "", "" },
-    // BASE_TYPE_VECTOR64 = 18 (not supported in aligned)
-    { 0, 0, "", "", "", "" },
-  };
-  // clang-format on
-
-  if (type >= 0 && type < static_cast<int>(sizeof(type_info) / sizeof(type_info[0]))) {
-    return &type_info[type];
+std::string CppNamespacePrefix(const StructDef& def) {
+  if (!def.defined_namespace || def.defined_namespace->components.empty()) {
+    return "::Aligned::";
   }
-  return nullptr;
+  std::string result = "::";
+  for (size_t i = 0; i < def.defined_namespace->components.size(); ++i) {
+    if (i) { result += "::"; }
+    result += def.defined_namespace->components[i];
+  }
+  result += "::Aligned::";
+  return result;
 }
 
-static size_t AlignTo(size_t offset, size_t alignment) {
-  return (offset + alignment - 1) & ~(alignment - 1);
+std::string CppQualifiedRecordName(const RecordLayout& record) {
+  return CppNamespacePrefix(*record.def) + record.name;
 }
 
-// Field layout information
-struct FieldLayout {
-  std::string name;
-  std::string cpp_type;
-  std::string ts_getter;
-  std::string ts_setter;
-  std::string ts_type;
-  size_t offset;
-  size_t size;
-  size_t align;
-  size_t array_length;  // 0 if not an array
-  bool is_struct;
-  std::string struct_name;
+std::string TsIdentifier(const std::string& value) {
+  std::string result;
+  result.reserve(value.size());
+  for (size_t i = 0; i < value.size(); ++i) {
+    const char c = value[i];
+    result += std::isalnum(static_cast<unsigned char>(c)) ? c : '_';
+  }
+  return result;
+}
+
+std::string CppScalarType(const InlineLayout& layout) {
+  if (layout.enum_def && layout.kind == InlineLayout::Kind::kScalar &&
+      layout.base_type != BASE_TYPE_UTYPE) {
+    return layout.enum_def->name;
+  }
+  switch (layout.base_type) {
+    case BASE_TYPE_BOOL: return "bool";
+    case BASE_TYPE_CHAR: return "int8_t";
+    case BASE_TYPE_UCHAR:
+    case BASE_TYPE_UTYPE: return "uint8_t";
+    case BASE_TYPE_SHORT: return "int16_t";
+    case BASE_TYPE_USHORT: return "uint16_t";
+    case BASE_TYPE_INT: return "int32_t";
+    case BASE_TYPE_UINT: return "uint32_t";
+    case BASE_TYPE_LONG: return "int64_t";
+    case BASE_TYPE_ULONG: return "uint64_t";
+    case BASE_TYPE_FLOAT: return "float";
+    case BASE_TYPE_DOUBLE: return "double";
+    default: return "uint8_t";
+  }
+}
+
+size_t ScalarByteWidth(BaseType base_type) {
+  switch (base_type) {
+    case BASE_TYPE_BOOL:
+    case BASE_TYPE_CHAR:
+    case BASE_TYPE_UCHAR:
+    case BASE_TYPE_UTYPE: return 1;
+    case BASE_TYPE_SHORT:
+    case BASE_TYPE_USHORT: return 2;
+    case BASE_TYPE_INT:
+    case BASE_TYPE_UINT:
+    case BASE_TYPE_FLOAT: return 4;
+    case BASE_TYPE_LONG:
+    case BASE_TYPE_ULONG:
+    case BASE_TYPE_DOUBLE: return 8;
+    default: return 1;
+  }
+}
+
+std::string TsScalarType(const InlineLayout& layout) {
+  if (layout.enum_def && layout.base_type != BASE_TYPE_UTYPE) { return "number"; }
+  switch (layout.base_type) {
+    case BASE_TYPE_BOOL: return "boolean";
+    case BASE_TYPE_LONG:
+    case BASE_TYPE_ULONG: return "bigint";
+    default: return "number";
+  }
+}
+
+std::string TsGetterName(BaseType base_type) {
+  switch (base_type) {
+    case BASE_TYPE_BOOL:
+    case BASE_TYPE_UCHAR:
+    case BASE_TYPE_UTYPE: return "getUint8";
+    case BASE_TYPE_CHAR: return "getInt8";
+    case BASE_TYPE_SHORT: return "getInt16";
+    case BASE_TYPE_USHORT: return "getUint16";
+    case BASE_TYPE_INT: return "getInt32";
+    case BASE_TYPE_UINT: return "getUint32";
+    case BASE_TYPE_LONG: return "getBigInt64";
+    case BASE_TYPE_ULONG: return "getBigUint64";
+    case BASE_TYPE_FLOAT: return "getFloat32";
+    case BASE_TYPE_DOUBLE: return "getFloat64";
+    default: return "getUint8";
+  }
+}
+
+std::string TsSetterName(BaseType base_type) {
+  switch (base_type) {
+    case BASE_TYPE_BOOL:
+    case BASE_TYPE_UCHAR:
+    case BASE_TYPE_UTYPE: return "setUint8";
+    case BASE_TYPE_CHAR: return "setInt8";
+    case BASE_TYPE_SHORT: return "setInt16";
+    case BASE_TYPE_USHORT: return "setUint16";
+    case BASE_TYPE_INT: return "setInt32";
+    case BASE_TYPE_UINT: return "setUint32";
+    case BASE_TYPE_LONG: return "setBigInt64";
+    case BASE_TYPE_ULONG: return "setBigUint64";
+    case BASE_TYPE_FLOAT: return "setFloat32";
+    case BASE_TYPE_DOUBLE: return "setFloat64";
+    default: return "setUint8";
+  }
+}
+
+std::string CppFieldType(const FieldLayout& field, const InlineLayout& layout,
+                         const std::string& union_cell_type);
+
+std::string CppInlineType(const InlineLayout& layout,
+                          const std::string& union_cell_type) {
+  switch (layout.kind) {
+    case InlineLayout::Kind::kScalar: return CppScalarType(layout);
+    case InlineLayout::Kind::kRecord: return CppQualifiedRecordName(*layout.record);
+    case InlineLayout::Kind::kString:
+      return "::flatbuffers::aligned_runtime::AlignedString<" +
+             NumToString(layout.max_length) + ">";
+    case InlineLayout::Kind::kVector: {
+      const std::string element_type =
+          CppInlineType(*layout.element, union_cell_type);
+      return "::flatbuffers::aligned_runtime::AlignedVector<" + element_type +
+             ", " + NumToString(layout.max_count) + ">";
+    }
+    case InlineLayout::Kind::kUnion: return union_cell_type;
+    case InlineLayout::Kind::kArray:
+      return CppInlineType(*layout.element, union_cell_type);
+  }
+  return "uint8_t";
+}
+
+std::string CppFieldType(const FieldLayout& field, const InlineLayout& layout,
+                         const std::string& union_cell_type) {
+  if (layout.kind == InlineLayout::Kind::kArray) {
+    return CppInlineType(*layout.element, union_cell_type) + " " + field.name +
+           "[" + NumToString(layout.fixed_length) + "]";
+  }
+  return CppInlineType(layout, union_cell_type) + " " + field.name;
+}
+
+std::string TsRecordType(const RecordLayout& record) { return record.name; }
+
+std::string BuildTsReadScalar(const std::string& view_expr,
+                              const InlineLayout& layout,
+                              const std::string& offset_expr) {
+  std::string result = view_expr + "." + TsGetterName(layout.base_type) + "(" +
+                       offset_expr + ", true)";
+  if (layout.base_type == BASE_TYPE_BOOL) { result = "(" + result + " !== 0)"; }
+  return result;
+}
+
+std::string BuildTsWriteScalar(const std::string& view_expr,
+                               const InlineLayout& layout,
+                               const std::string& offset_expr,
+                               const std::string& value_expr) {
+  std::string rhs = value_expr;
+  if (layout.base_type == BASE_TYPE_BOOL) { rhs = "(" + value_expr + " ? 1 : 0)"; }
+  return view_expr + "." + TsSetterName(layout.base_type) + "(" + offset_expr +
+         ", " + rhs + ", true);";
+}
+
+struct GeneratedOutputs {
+  std::string cpp;
+  std::string ts;
+  std::string js;
+  std::string layout_json;
 };
 
-// Struct layout information
-struct StructLayout {
-  std::string name;
-  std::string namespace_path;
-  std::vector<FieldLayout> fields;
-  size_t size;
-  size_t align;
-};
-
-}  // namespace
-
-class AlignedGenerator : public BaseGenerator {
- private:
-  std::string cpp_code_;
-  std::string ts_code_;
-  std::string js_code_;
-  std::string json_code_;
-  std::vector<StructLayout> layouts_;
-
-  bool ComputeLayout(const StructDef& struct_def, StructLayout& layout) {
-    layout.name = struct_def.name;
-    layout.namespace_path = "";
-    if (struct_def.defined_namespace) {
-      for (const auto& ns : struct_def.defined_namespace->components) {
-        if (!layout.namespace_path.empty()) layout.namespace_path += "::";
-        layout.namespace_path += ns;
-      }
-    }
-
-    size_t offset = 0;
-    size_t max_align = 1;
-
-    for (const auto* field : struct_def.fields.vec) {
-      FieldLayout fl;
-      fl.name = field->name;
-      fl.array_length = 0;
-      fl.is_struct = false;
-
-      const Type& type = field->value.type;
-
-      if (type.base_type == BASE_TYPE_STRUCT && type.struct_def) {
-        // Nested struct
-        fl.is_struct = true;
-        fl.struct_name = type.struct_def->name;
-        fl.size = type.struct_def->bytesize;
-        fl.align = type.struct_def->minalign;
-        fl.cpp_type = type.struct_def->name;
-        fl.ts_type = type.struct_def->name;
-      } else if (type.base_type == BASE_TYPE_ARRAY) {
-        // Fixed-length array
-        fl.array_length = type.fixed_length;
-        const TypeInfo* elem_info = GetScalarTypeInfo(type.element);
-        if (!elem_info || elem_info->size == 0) {
-          // Check if it's an array of structs
-          if (type.struct_def) {
-            fl.is_struct = true;
-            fl.struct_name = type.struct_def->name;
-            fl.size = type.struct_def->bytesize * type.fixed_length;
-            fl.align = type.struct_def->minalign;
-            fl.cpp_type = type.struct_def->name;
-            fl.ts_type = type.struct_def->name;
-          } else {
-            return false;  // Unsupported array element type
-          }
-        } else {
-          fl.size = elem_info->size * type.fixed_length;
-          fl.align = elem_info->align;
-          fl.cpp_type = elem_info->cpp_type;
-          fl.ts_getter = elem_info->ts_getter;
-          fl.ts_setter = elem_info->ts_setter;
-          fl.ts_type = elem_info->ts_type;
-        }
-      } else {
-        // Scalar type
-        const TypeInfo* info = GetScalarTypeInfo(type.base_type);
-        if (!info || info->size == 0) {
-          // Check for enum
-          if (type.enum_def) {
-            const TypeInfo* enum_info = GetScalarTypeInfo(type.enum_def->underlying_type.base_type);
-            if (enum_info && enum_info->size > 0) {
-              fl.size = enum_info->size;
-              fl.align = enum_info->align;
-              fl.cpp_type = type.enum_def->name;
-              fl.ts_getter = enum_info->ts_getter;
-              fl.ts_setter = enum_info->ts_setter;
-              fl.ts_type = "number";
-            } else {
-              return false;
-            }
-          } else {
-            return false;  // Unsupported type
-          }
-        } else {
-          fl.size = info->size;
-          fl.align = info->align;
-          fl.cpp_type = info->cpp_type;
-          fl.ts_getter = info->ts_getter;
-          fl.ts_setter = info->ts_setter;
-          fl.ts_type = info->ts_type;
-        }
-      }
-
-      // Align the offset
-      offset = AlignTo(offset, fl.align);
-      fl.offset = offset;
-      offset += fl.size;
-
-      if (fl.align > max_align) max_align = fl.align;
-
-      layout.fields.push_back(fl);
-    }
-
-    // Final size aligned to max alignment
-    layout.size = AlignTo(offset, max_align);
-    layout.align = max_align;
-    return true;
-  }
-
-  void GenerateCppHeader() {
-    std::ostringstream ss;
-
-    ss << "// Auto-generated aligned struct header for zero-copy WASM interop\n";
-    ss << "// DO NOT EDIT - Generated by flatc --aligned\n\n";
-
-    ss << "#pragma once\n\n";
-    ss << "#include <cstdint>\n";
-    ss << "#include <cstring>\n\n";
-
-    // Get namespace from first struct if available
-    std::string ns;
-    if (!layouts_.empty() && !layouts_[0].namespace_path.empty()) {
-      ns = layouts_[0].namespace_path;
-      // Convert :: to nested namespaces
-      std::string open_ns;
-      std::string current;
-      for (size_t i = 0; i < ns.size(); ++i) {
-        if (ns[i] == ':' && i + 1 < ns.size() && ns[i + 1] == ':') {
-          open_ns += "namespace " + current + " {\n";
-          current.clear();
-          ++i;  // Skip second :
-        } else {
-          current += ns[i];
-        }
-      }
-      if (!current.empty()) {
-        open_ns += "namespace " + current + " {\n";
-      }
-      ss << open_ns << "\n";
-    }
-
-    // Forward declarations
-    for (const auto& layout : layouts_) {
-      ss << "struct " << layout.name << ";\n";
-    }
-    ss << "\n";
-
-    // Struct definitions
-    for (const auto& layout : layouts_) {
-      ss << "#pragma pack(push, 1)\n";
-      ss << "struct alignas(" << layout.align << ") " << layout.name << " {\n";
-
-      size_t current_offset = 0;
-      int padding_count = 0;
-
-      for (const auto& field : layout.fields) {
-        // Add padding if needed
-        if (field.offset > current_offset) {
-          size_t padding = field.offset - current_offset;
-          ss << "  uint8_t _padding" << padding_count++ << "[" << padding << "];\n";
-        }
-
-        if (field.array_length > 0) {
-          if (field.is_struct) {
-            ss << "  " << field.cpp_type << " " << field.name << "[" << field.array_length << "];\n";
-          } else {
-            ss << "  " << field.cpp_type << " " << field.name << "[" << field.array_length << "];\n";
-          }
-        } else if (field.is_struct) {
-          ss << "  " << field.cpp_type << " " << field.name << ";\n";
-        } else {
-          ss << "  " << field.cpp_type << " " << field.name << ";\n";
-        }
-
-        current_offset = field.offset + field.size;
-      }
-
-      // Add tail padding if needed
-      if (layout.size > current_offset) {
-        size_t padding = layout.size - current_offset;
-        ss << "  uint8_t _padding" << padding_count << "[" << padding << "];\n";
-      }
-
-      ss << "};\n";
-      ss << "#pragma pack(pop)\n\n";
-
-      ss << "static_assert(sizeof(" << layout.name << ") == " << layout.size
-         << ", \"" << layout.name << " size mismatch\");\n";
-      ss << "static_assert(alignof(" << layout.name << ") == " << layout.align
-         << ", \"" << layout.name << " alignment mismatch\");\n\n";
-    }
-
-    // Close namespaces
-    if (!ns.empty()) {
-      size_t depth = 1;
-      for (char c : ns) {
-        if (c == ':') ++depth;
-      }
-      depth /= 2;  // Each :: counts as one namespace
-      for (size_t i = 0; i <= depth; ++i) {
-        ss << "}  // namespace\n";
-      }
-    }
-
-    cpp_code_ = ss.str();
-  }
-
-  void GenerateLayoutsJSON() {
-    std::ostringstream ss;
-    ss << "// __LAYOUTS_JSON_START__\n";
-    ss << "{\n";
-
-    bool first_struct = true;
-    for (const auto& layout : layouts_) {
-      if (!first_struct) ss << ",\n";
-      first_struct = false;
-
-      ss << "  \"" << layout.name << "\": {\n";
-      ss << "    \"size\": " << layout.size << ",\n";
-      ss << "    \"align\": " << layout.align << ",\n";
-      ss << "    \"fields\": [\n";
-
-      bool first_field = true;
-      for (const auto& field : layout.fields) {
-        if (!first_field) ss << ",\n";
-        first_field = false;
-
-        ss << "      {\n";
-        ss << "        \"name\": \"" << field.name << "\",\n";
-        ss << "        \"offset\": " << field.offset << ",\n";
-        ss << "        \"size\": " << field.size << ",\n";
-        ss << "        \"align\": " << field.align;
-        if (field.array_length > 0) {
-          ss << ",\n        \"arraySize\": " << field.array_length;
-        }
-        if (field.is_struct) {
-          ss << ",\n        \"isNestedStruct\": true";
-          ss << ",\n        \"type\": \"" << field.struct_name << "\"";
-        }
-        ss << "\n      }";
-      }
-
-      ss << "\n    ]\n";
-      ss << "  }";
-    }
-
-    ss << "\n}\n";
-    ss << "// __LAYOUTS_JSON_END__\n";
-
-    json_code_ = ss.str();
-  }
-
-  void GenerateTypeScript() {
-    std::ostringstream ss;
-
-    ss << "// Auto-generated aligned struct TypeScript views for zero-copy WASM interop\n";
-    ss << "// DO NOT EDIT - Generated by flatc --aligned\n\n";
-
-    for (const auto& layout : layouts_) {
-      ss << "/**\n";
-      ss << " * " << layout.name << " - Zero-copy view into WASM linear memory\n";
-      ss << " * Size: " << layout.size << " bytes, Alignment: " << layout.align << " bytes\n";
-      ss << " */\n";
-      ss << "export class " << layout.name << " {\n";
-      ss << "  static readonly SIZE = " << layout.size << ";\n";
-      ss << "  static readonly ALIGN = " << layout.align << ";\n\n";
-      ss << "  private readonly view: DataView;\n";
-      ss << "  private readonly offset: number;\n\n";
-
-      // Constructor
-      ss << "  constructor(buffer: ArrayBuffer, offset: number = 0) {\n";
-      ss << "    this.view = new DataView(buffer);\n";
-      ss << "    this.offset = offset;\n";
-      ss << "  }\n\n";
-
-      // Static factory from pointer
-      ss << "  static fromPointer(memory: WebAssembly.Memory, ptr: number): " << layout.name << " {\n";
-      ss << "    return new " << layout.name << "(memory.buffer, ptr);\n";
-      ss << "  }\n\n";
-
-      // Getters and setters
-      for (const auto& field : layout.fields) {
-        if (field.array_length > 0) {
-          // Array field
-          if (field.is_struct) {
-            ss << "  " << field.name << "(index: number): " << field.ts_type << " {\n";
-            ss << "    const elemSize = " << (field.size / field.array_length) << ";\n";
-            ss << "    return new " << field.struct_name << "(this.view.buffer, this.offset + " << field.offset << " + index * elemSize);\n";
-            ss << "  }\n\n";
-          } else {
-            // Getter for array element
-            ss << "  get" << field.name << "(index: number): " << field.ts_type << " {\n";
-            size_t elem_size = field.size / field.array_length;
-            ss << "    return this.view." << field.ts_getter << "(this.offset + " << field.offset << " + index * " << elem_size << ", true)";
-            if (field.ts_type == "boolean") {
-              ss << " !== 0";
-            }
-            ss << ";\n";
-            ss << "  }\n\n";
-
-            // Setter for array element
-            ss << "  set" << field.name << "(index: number, value: " << field.ts_type << "): void {\n";
-            ss << "    this.view." << field.ts_setter << "(this.offset + " << field.offset << " + index * " << elem_size << ", ";
-            if (field.ts_type == "boolean") {
-              ss << "value ? 1 : 0";
-            } else {
-              ss << "value";
-            }
-            ss << ", true);\n";
-            ss << "  }\n\n";
-
-            // Array length getter
-            ss << "  get " << field.name << "Length(): number { return " << field.array_length << "; }\n\n";
-          }
-        } else if (field.is_struct) {
-          // Nested struct field
-          ss << "  get " << field.name << "(): " << field.ts_type << " {\n";
-          ss << "    return new " << field.struct_name << "(this.view.buffer, this.offset + " << field.offset << ");\n";
-          ss << "  }\n\n";
-        } else {
-          // Scalar field getter
-          ss << "  get " << field.name << "(): " << field.ts_type << " {\n";
-          ss << "    return this.view." << field.ts_getter << "(this.offset + " << field.offset << ", true)";
-          if (field.ts_type == "boolean") {
-            ss << " !== 0";
-          }
-          ss << ";\n";
-          ss << "  }\n\n";
-
-          // Scalar field setter
-          ss << "  set " << field.name << "(value: " << field.ts_type << ") {\n";
-          ss << "    this.view." << field.ts_setter << "(this.offset + " << field.offset << ", ";
-          if (field.ts_type == "boolean") {
-            ss << "value ? 1 : 0";
-          } else {
-            ss << "value";
-          }
-          ss << ", true);\n";
-          ss << "  }\n\n";
-        }
-      }
-
-      ss << "}\n\n";
-    }
-
-    ts_code_ = ss.str();
-  }
-
-  void GenerateJavaScript() {
-    std::ostringstream ss;
-
-    ss << "// Auto-generated aligned struct JavaScript views for zero-copy WASM interop\n";
-    ss << "// DO NOT EDIT - Generated by flatc --aligned\n\n";
-
-    for (const auto& layout : layouts_) {
-      ss << "/**\n";
-      ss << " * " << layout.name << " - Zero-copy view into WASM linear memory\n";
-      ss << " * Size: " << layout.size << " bytes, Alignment: " << layout.align << " bytes\n";
-      ss << " */\n";
-      ss << "export class " << layout.name << " {\n";
-      ss << "  static SIZE = " << layout.size << ";\n";
-      ss << "  static ALIGN = " << layout.align << ";\n\n";
-
-      // Constructor
-      ss << "  constructor(buffer, offset = 0) {\n";
-      ss << "    this.view = new DataView(buffer);\n";
-      ss << "    this.offset = offset;\n";
-      ss << "  }\n\n";
-
-      // Static factory from pointer
-      ss << "  static fromPointer(memory, ptr) {\n";
-      ss << "    return new " << layout.name << "(memory.buffer, ptr);\n";
-      ss << "  }\n\n";
-
-      // Getters and setters
-      for (const auto& field : layout.fields) {
-        if (field.array_length > 0) {
-          // Array field
-          if (field.is_struct) {
-            ss << "  " << field.name << "(index) {\n";
-            ss << "    const elemSize = " << (field.size / field.array_length) << ";\n";
-            ss << "    return new " << field.struct_name << "(this.view.buffer, this.offset + " << field.offset << " + index * elemSize);\n";
-            ss << "  }\n\n";
-          } else {
-            // Getter for array element
-            ss << "  get" << field.name << "(index) {\n";
-            size_t elem_size = field.size / field.array_length;
-            ss << "    return this.view." << field.ts_getter << "(this.offset + " << field.offset << " + index * " << elem_size << ", true)";
-            if (field.ts_type == "boolean") {
-              ss << " !== 0";
-            }
-            ss << ";\n";
-            ss << "  }\n\n";
-
-            // Setter for array element
-            ss << "  set" << field.name << "(index, value) {\n";
-            ss << "    this.view." << field.ts_setter << "(this.offset + " << field.offset << " + index * " << elem_size << ", ";
-            if (field.ts_type == "boolean") {
-              ss << "value ? 1 : 0";
-            } else {
-              ss << "value";
-            }
-            ss << ", true);\n";
-            ss << "  }\n\n";
-
-            // Array length getter
-            ss << "  get " << field.name << "Length() { return " << field.array_length << "; }\n\n";
-          }
-        } else if (field.is_struct) {
-          // Nested struct field
-          ss << "  get " << field.name << "() {\n";
-          ss << "    return new " << field.struct_name << "(this.view.buffer, this.offset + " << field.offset << ");\n";
-          ss << "  }\n\n";
-        } else {
-          // Scalar field getter
-          ss << "  get " << field.name << "() {\n";
-          ss << "    return this.view." << field.ts_getter << "(this.offset + " << field.offset << ", true)";
-          if (field.ts_type == "boolean") {
-            ss << " !== 0";
-          }
-          ss << ";\n";
-          ss << "  }\n\n";
-
-          // Scalar field setter
-          ss << "  set " << field.name << "(value) {\n";
-          ss << "    this.view." << field.ts_setter << "(this.offset + " << field.offset << ", ";
-          if (field.ts_type == "boolean") {
-            ss << "value ? 1 : 0";
-          } else {
-            ss << "value";
-          }
-          ss << ", true);\n";
-          ss << "  }\n\n";
-        }
-      }
-
-      ss << "}\n\n";
-    }
-
-    js_code_ = ss.str();
-  }
-
+class Generator : public BaseGenerator {
  public:
-  AlignedGenerator(const Parser& parser, const std::string& path,
-                   const std::string& file_name)
+  Generator(const Parser& parser, const std::string& path,
+            const std::string& file_name)
       : BaseGenerator(parser, path, file_name, "", "::", "h") {}
 
   bool generate() override {
-    // Only process fixed structs (not tables)
-    for (const auto* struct_def : parser_.structs_.vec) {
-      if (!struct_def->fixed) {
-        // Skip tables - only process structs
-        continue;
-      }
-
-      StructLayout layout;
-      if (!ComputeLayout(*struct_def, layout)) {
-        std::cerr << "Warning: Skipping struct " << struct_def->name
-                  << " - contains unsupported types for aligned generation\n";
-        continue;
-      }
-      layouts_.push_back(layout);
-    }
-
-    if (layouts_.empty()) {
-      std::cerr << "No fixed structs found for aligned generation\n";
+    std::string error;
+    if (!CompileSchemaLayout(parser_, &schema_layout_, &error)) {
+      error_ = error;
       return false;
     }
-
-    GenerateCppHeader();
-    GenerateTypeScript();
-    GenerateJavaScript();
-    GenerateLayoutsJSON();
+    if (schema_layout_.records.empty()) {
+      error_ = "aligned mode requires at least one table or struct";
+      return false;
+    }
+    outputs_.layout_json = GenerateLayoutJson(schema_layout_);
+    outputs_.cpp = GenerateCpp();
+    outputs_.ts = GenerateTs(/*typescript=*/true);
+    outputs_.js = GenerateTs(/*typescript=*/false);
     return true;
   }
 
   bool save() const {
-    // Save C++ header
     const std::string cpp_path = path_ + file_name_ + "_aligned.h";
-    if (!parser_.opts.file_saver->SaveFile(cpp_path.c_str(), cpp_code_, false)) {
+    if (!parser_.opts.file_saver->SaveFile(cpp_path.c_str(), outputs_.cpp, false)) {
       return false;
     }
-
-    // Save TypeScript
     const std::string ts_path = path_ + file_name_ + "_aligned.ts";
-    if (!parser_.opts.file_saver->SaveFile(ts_path.c_str(), ts_code_, false)) {
+    if (!parser_.opts.file_saver->SaveFile(ts_path.c_str(), outputs_.ts, false)) {
       return false;
     }
-
-    // Save JavaScript
     const std::string js_path = path_ + file_name_ + "_aligned.js";
-    if (!parser_.opts.file_saver->SaveFile(js_path.c_str(), js_code_, false)) {
+    if (!parser_.opts.file_saver->SaveFile(js_path.c_str(), outputs_.js, false)) {
       return false;
     }
-
-    // Save JSON layouts
     const std::string json_path = path_ + file_name_ + "_layouts.json";
-    if (!parser_.opts.file_saver->SaveFile(json_path.c_str(), json_code_, false)) {
-      return false;
-    }
-
-    return true;
+    return parser_.opts.file_saver->SaveFile(json_path.c_str(),
+                                             outputs_.layout_json, false);
   }
 
-  const std::string& GetCppCode() const { return cpp_code_; }
-  const std::string& GetTsCode() const { return ts_code_; }
-  const std::string& GetJsCode() const { return js_code_; }
-  const std::string& GetJsonCode() const { return json_code_; }
+  const std::string& error() const { return error_; }
 
-  // Get combined output as single JSON object
-  std::string GetCombinedOutput() const {
+  std::string CombinedOutput() const {
     std::ostringstream ss;
     ss << "{";
-    ss << "\"cpp\":" << EscapeJsonString(cpp_code_) << ",";
-    ss << "\"ts\":" << EscapeJsonString(ts_code_) << ",";
-    ss << "\"js\":" << EscapeJsonString(js_code_) << ",";
-    // layouts is already JSON, just embed it directly
-    // Extract the JSON object from json_code_ (strip markers)
-    std::string layouts_json = "{}";
-    size_t start = json_code_.find('{');
-    size_t end = json_code_.rfind('}');
-    if (start != std::string::npos && end != std::string::npos && end > start) {
-      layouts_json = json_code_.substr(start, end - start + 1);
-    }
-    ss << "\"layouts\":" << layouts_json;
+    ss << "\"cpp\":" << EscapeJson(outputs_.cpp) << ",";
+    ss << "\"ts\":" << EscapeJson(outputs_.ts) << ",";
+    ss << "\"js\":" << EscapeJson(outputs_.js) << ",";
+    ss << "\"layouts\":" << outputs_.layout_json;
     ss << "}";
     return ss.str();
   }
 
  private:
-  static std::string EscapeJsonString(const std::string& s) {
+  static std::string EscapeJson(const std::string& value) {
     std::ostringstream ss;
     ss << '"';
-    for (char c : s) {
+    for (size_t i = 0; i < value.size(); ++i) {
+      const char c = value[i];
       switch (c) {
         case '"': ss << "\\\""; break;
         case '\\': ss << "\\\\"; break;
         case '\n': ss << "\\n"; break;
         case '\r': ss << "\\r"; break;
         case '\t': ss << "\\t"; break;
-        default:
-          if (static_cast<unsigned char>(c) < 0x20) {
-            ss << "\\u" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(c);
-          } else {
-            ss << c;
-          }
+        default: ss << c; break;
       }
     }
     ss << '"';
     return ss.str();
   }
+
+  std::string PresenceMask(const FieldLayout& field) const {
+    const size_t byte_index = field.presence_index / 8;
+    const size_t bit_index = field.presence_index % 8;
+    return "__presence[" + NumToString(byte_index) + "] & " +
+           NumToString(static_cast<uint32_t>(1u << bit_index));
+  }
+
+  std::string GenerateCpp() const {
+    std::ostringstream ss;
+    ss << "// Auto-generated aligned fixed-layout bindings.\n";
+    ss << "// DO NOT EDIT - Generated by flatc --aligned\n\n";
+    ss << "#pragma once\n\n";
+    ss << "#include <algorithm>\n";
+    ss << "#include <cstddef>\n";
+    ss << "#include <cstdint>\n";
+    ss << "#include <cstring>\n";
+    ss << "#include <string>\n\n";
+    ss << "namespace flatbuffers {\n";
+    ss << "namespace aligned_runtime {\n\n";
+    ss << "template <size_t MaxLength>\n";
+    ss << "struct AlignedString {\n";
+    ss << "  uint8_t length;\n";
+    ss << "  char data[MaxLength];\n\n";
+    ss << "  void clear() {\n";
+    ss << "    length = 0;\n";
+    ss << "    std::memset(data, 0, MaxLength);\n";
+    ss << "  }\n\n";
+    ss << "  std::string str() const {\n";
+    ss << "    const size_t size = std::min<size_t>(length, MaxLength);\n";
+    ss << "    return std::string(data, data + size);\n";
+    ss << "  }\n\n";
+    ss << "  void set(const std::string& value) {\n";
+    ss << "    const size_t size = std::min<size_t>(value.size(), MaxLength);\n";
+    ss << "    length = static_cast<uint8_t>(size);\n";
+    ss << "    if (size) { std::memcpy(data, value.data(), size); }\n";
+    ss << "    if (size < MaxLength) { std::memset(data + size, 0, MaxLength - size); }\n";
+    ss << "  }\n";
+    ss << "};\n\n";
+    ss << "template <typename T, size_t MaxCount>\n";
+    ss << "struct AlignedVector {\n";
+    ss << "  uint32_t length;\n";
+    ss << "  T values[MaxCount];\n\n";
+    ss << "  uint32_t size() const {\n";
+    ss << "    return std::min<uint32_t>(length, static_cast<uint32_t>(MaxCount));\n";
+    ss << "  }\n\n";
+    ss << "  void clear() { length = 0; }\n";
+    ss << "};\n\n";
+    ss << "}  // namespace aligned_runtime\n";
+    ss << "}  // namespace flatbuffers\n\n";
+
+    for (size_t i = 0; i < schema_layout_.records.size(); ++i) {
+      const RecordLayout& record = *schema_layout_.records[i];
+      const std::vector<std::string>& components =
+          record.def->defined_namespace ? record.def->defined_namespace->components
+                                        : std::vector<std::string>();
+      for (size_t c = 0; c < components.size(); ++c) {
+        ss << "namespace " << components[c] << " {\n";
+      }
+      ss << "namespace Aligned {\n\n";
+
+      for (size_t f = 0; f < record.fields.size(); ++f) {
+        const FieldLayout& field = record.fields[f];
+        const InlineLayout& layout = *field.layout;
+        if (layout.kind != InlineLayout::Kind::kUnion &&
+            !(layout.kind == InlineLayout::Kind::kVector &&
+              layout.element &&
+              layout.element->kind == InlineLayout::Kind::kUnion)) {
+          continue;
+        }
+        const std::string helper_name =
+            record.name + "_" + field.name + "_UnionCell";
+        const InlineLayout& union_layout =
+            layout.kind == InlineLayout::Kind::kUnion ? layout : *layout.element;
+        const size_t discrim_size = ScalarByteWidth(union_layout.base_type);
+        ss << "struct " << helper_name << " {\n";
+        ss << "  " << CppScalarType(union_layout) << " type;\n";
+        if (union_layout.payload_offset > discrim_size) {
+          ss << "  uint8_t __padding["
+             << NumToString(union_layout.payload_offset - discrim_size)
+             << "];\n";
+        }
+        ss << "  alignas(" << union_layout.payload_align << ") "
+           << "uint8_t payload[" << NumToString(union_layout.payload_size) << "];\n";
+        ss << "};\n";
+        ss << "static_assert(sizeof(" << helper_name << ") == "
+           << union_layout.size << ", \"" << helper_name
+           << " size mismatch\");\n";
+        ss << "static_assert(alignof(" << helper_name << ") == "
+           << union_layout.align << ", \"" << helper_name
+           << " alignment mismatch\");\n\n";
+      }
+
+      ss << "struct " << record.name << " {\n";
+      if (record.presence_bytes) {
+        ss << "  uint8_t __presence[" << record.presence_bytes << "];\n";
+      }
+      for (size_t f = 0; f < record.fields.size(); ++f) {
+        const FieldLayout& field = record.fields[f];
+        const std::string union_cell_type =
+            record.name + "_" + field.name + "_UnionCell";
+        ss << "  " << CppFieldType(field, *field.layout, union_cell_type) << ";\n";
+      }
+      ss << "\n";
+      for (size_t f = 0; f < record.fields.size(); ++f) {
+        const FieldLayout& field = record.fields[f];
+        if (field.presence_index == FieldLayout::kNoPresence) { continue; }
+        const size_t byte_index = field.presence_index / 8;
+        const size_t bit_index = field.presence_index % 8;
+        ss << "  bool has_" << field.name << "() const {\n";
+        ss << "    return (__presence[" << byte_index << "] & "
+           << NumToString(static_cast<uint32_t>(1u << bit_index))
+           << ") != 0;\n";
+        ss << "  }\n";
+        ss << "  void set_has_" << field.name << "(bool value) {\n";
+        ss << "    if (value) __presence[" << byte_index << "] |= "
+           << NumToString(static_cast<uint32_t>(1u << bit_index)) << ";\n";
+        ss << "    else __presence[" << byte_index << "] &= ~"
+           << NumToString(static_cast<uint32_t>(1u << bit_index)) << ";\n";
+        ss << "  }\n";
+      }
+      ss << "\n";
+      ss << "  static " << record.name << "* fromBytes(void* data) {\n";
+      ss << "    return reinterpret_cast<" << record.name << "*>(data);\n";
+      ss << "  }\n";
+      ss << "  static const " << record.name << "* fromBytes(const void* data) {\n";
+      ss << "    return reinterpret_cast<const " << record.name << "*>(data);\n";
+      ss << "  }\n";
+      ss << "  void copyTo(void* dest) const { std::memcpy(dest, this, "
+         << record.size << "); }\n";
+      ss << "  void copyFrom(const " << record.name
+         << "& src) { std::memcpy(this, &src, " << record.size << "); }\n";
+      ss << "};\n";
+      ss << "static_assert(sizeof(" << record.name << ") == " << record.size
+         << ", \"" << record.name << " size mismatch\");\n";
+      ss << "static_assert(alignof(" << record.name << ") == " << record.align
+         << ", \"" << record.name << " alignment mismatch\");\n";
+      for (size_t f = 0; f < record.fields.size(); ++f) {
+        const FieldLayout& field = record.fields[f];
+        ss << "static_assert(offsetof(" << record.name << ", " << field.name << ") == "
+           << field.offset << ", \"" << record.name << "." << field.name
+           << " offset mismatch\");\n";
+      }
+      ss << "constexpr size_t " << TsIdentifier(record.name) << "_SIZE = "
+         << record.size << ";\n";
+      ss << "constexpr size_t " << TsIdentifier(record.name) << "_ALIGN = "
+         << record.align << ";\n\n";
+      ss << "}  // namespace Aligned\n";
+      for (size_t c = components.size(); c > 0; --c) {
+        ss << "}  // namespace " << components[c - 1] << "\n";
+      }
+      ss << "\n";
+    }
+
+    return ss.str();
+  }
+
+  std::string GenerateTs(bool typescript) const {
+    std::ostringstream ss;
+    ss << "// Auto-generated aligned fixed-layout bindings.\n";
+    ss << "// DO NOT EDIT - Generated by flatc --aligned\n\n";
+    if (typescript) {
+      ss << "type BufferLike = ArrayBufferLike;\n\n";
+    }
+    ss << "function __readPresence(view, base, bitIndex) {\n";
+    ss << "  const byteIndex = Math.floor(bitIndex / 8);\n";
+    ss << "  const mask = 1 << (bitIndex % 8);\n";
+    ss << "  return (view.getUint8(base + byteIndex) & mask) !== 0;\n";
+    ss << "}\n\n";
+    ss << "function __writePresence(view, base, bitIndex, value) {\n";
+    ss << "  const byteIndex = Math.floor(bitIndex / 8);\n";
+    ss << "  const mask = 1 << (bitIndex % 8);\n";
+    ss << "  const current = view.getUint8(base + byteIndex);\n";
+    ss << "  view.setUint8(base + byteIndex, value ? (current | mask) : (current & ~mask));\n";
+    ss << "}\n\n";
+    ss << "function __decodeString(view, offset, maxLength) {\n";
+    ss << "  const length = Math.min(view.getUint8(offset), maxLength);\n";
+    ss << "  const bytes = new Uint8Array(view.buffer, view.byteOffset + offset + 1, length);\n";
+    ss << "  return new TextDecoder().decode(bytes);\n";
+    ss << "}\n\n";
+    ss << "function __encodeString(view, offset, maxLength, value) {\n";
+    ss << "  const encoder = new TextEncoder();\n";
+    ss << "  const bytes = encoder.encode(value);\n";
+    ss << "  const length = Math.min(bytes.length, maxLength);\n";
+    ss << "  view.setUint8(offset, length);\n";
+    ss << "  const target = new Uint8Array(view.buffer, view.byteOffset + offset + 1, maxLength);\n";
+    ss << "  target.fill(0);\n";
+    ss << "  target.set(bytes.subarray(0, length));\n";
+    ss << "}\n\n";
+
+    for (size_t i = 0; i < schema_layout_.records.size(); ++i) {
+      const RecordLayout& record = *schema_layout_.records[i];
+      const std::string class_name = TsRecordType(record);
+      if (typescript) {
+        ss << "export class " << class_name << " {\n";
+        ss << "  static readonly SIZE = " << record.size << ";\n";
+        ss << "  static readonly ALIGN = " << record.align << ";\n";
+        ss << "  static fromPointer(buffer: BufferLike, offset = 0): " << class_name
+           << " { return new " << class_name << "(buffer, offset); }\n\n";
+        ss << "  readonly view: DataView;\n";
+        ss << "  constructor(public readonly buffer: BufferLike, public readonly offset = 0) {\n";
+        ss << "    this.view = new DataView(buffer);\n";
+        ss << "  }\n\n";
+      } else {
+        ss << "export class " << class_name << " {\n";
+        ss << "  static SIZE = " << record.size << ";\n";
+        ss << "  static ALIGN = " << record.align << ";\n";
+        ss << "  static fromPointer(buffer, offset = 0) { return new " << class_name << "(buffer, offset); }\n\n";
+        ss << "  constructor(buffer, offset = 0) {\n";
+        ss << "    this.buffer = buffer;\n";
+        ss << "    this.offset = offset;\n";
+        ss << "    this.view = new DataView(buffer);\n";
+        ss << "  }\n\n";
+      }
+
+      for (size_t f = 0; f < record.fields.size(); ++f) {
+        const FieldLayout& field = record.fields[f];
+        const InlineLayout& layout = *field.layout;
+        const std::string field_offset = "this.offset + " + NumToString(field.offset);
+
+        if (field.presence_index != FieldLayout::kNoPresence) {
+          ss << "  " << (typescript ? "" : "") << "has" << field.name << "() {\n";
+          ss << "    return __readPresence(this.view, this.offset, "
+             << field.presence_index << ");\n";
+          ss << "  }\n\n";
+        }
+
+        if (layout.kind == InlineLayout::Kind::kScalar) {
+          ss << "  get " << field.name << "()";
+          if (typescript) { ss << ": " << TsScalarType(layout); }
+          ss << " {\n";
+          ss << "    return " << BuildTsReadScalar("this.view", layout, field_offset)
+             << ";\n";
+          ss << "  }\n\n";
+          ss << "  set " << field.name << "(value";
+          if (typescript) { ss << ": " << TsScalarType(layout); }
+          ss << ") {\n";
+          ss << "    " << BuildTsWriteScalar("this.view", layout, field_offset, "value")
+             << "\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "    __writePresence(this.view, this.offset, "
+               << field.presence_index << ", true);\n";
+          }
+          ss << "  }\n\n";
+          continue;
+        }
+
+        if (layout.kind == InlineLayout::Kind::kRecord) {
+          ss << "  get " << field.name << "()";
+          if (typescript) {
+            ss << ": " << layout.record->name;
+            if (field.presence_index != FieldLayout::kNoPresence) { ss << " | null"; }
+          }
+          ss << " {\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "    if (!this.has" << field.name << "()) { return null; }\n";
+          }
+          ss << "    return new " << layout.record->name << "(this.buffer, "
+             << field_offset << ");\n";
+          ss << "  }\n\n";
+          continue;
+        }
+
+        if (layout.kind == InlineLayout::Kind::kString) {
+          ss << "  get " << field.name << "()";
+          if (typescript) {
+            ss << ": string";
+            if (field.presence_index != FieldLayout::kNoPresence) { ss << " | null"; }
+          }
+          ss << " {\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "    if (!this.has" << field.name << "()) { return null; }\n";
+          }
+          ss << "    return __decodeString(this.view, " << field_offset << ", "
+             << layout.max_length << ");\n";
+          ss << "  }\n\n";
+          ss << "  set " << field.name << "(value";
+          if (typescript) { ss << ": string"; }
+          ss << ") {\n";
+          ss << "    __encodeString(this.view, " << field_offset << ", "
+             << layout.max_length << ", value);\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "    __writePresence(this.view, this.offset, "
+               << field.presence_index << ", true);\n";
+          }
+          ss << "  }\n\n";
+          continue;
+        }
+
+        if (layout.kind == InlineLayout::Kind::kArray) {
+          ss << "  get " << field.name << "()";
+          if (typescript) { ss << ": Array<any>"; }
+          ss << " {\n";
+          ss << "    const result = [];\n";
+          ss << "    for (let i = 0; i < " << layout.fixed_length << "; ++i) {\n";
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            ss << "      result.push(" << BuildTsReadScalar(
+                "this.view", *layout.element,
+                field_offset + " + i * " + NumToString(layout.stride))
+               << ");\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "      result.push(new " << layout.element->record->name
+               << "(this.buffer, " << field_offset << " + i * "
+               << layout.stride << "));\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "      result.push(__decodeString(this.view, " << field_offset
+               << " + i * " << layout.stride << ", "
+               << layout.element->max_length << "));\n";
+          }
+          ss << "    }\n";
+          ss << "    return result;\n";
+          ss << "  }\n\n";
+          continue;
+        }
+
+        if (layout.kind == InlineLayout::Kind::kVector) {
+          ss << "  get " << field.name << "()";
+          if (typescript) { ss << ": Array<any>"; }
+          ss << " {\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "    if (!this.has" << field.name << "()) { return []; }\n";
+          }
+          ss << "    const length = Math.min(this.view.getUint32(" << field_offset
+             << ", true), " << layout.max_count << ");\n";
+          ss << "    const result = [];\n";
+          ss << "    for (let i = 0; i < length; ++i) {\n";
+          const std::string elem_offset =
+              field_offset + " + " + NumToString(layout.data_offset) +
+              " + i * " + NumToString(layout.stride);
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            ss << "      result.push(" << BuildTsReadScalar("this.view",
+                                                             *layout.element,
+                                                             elem_offset)
+               << ");\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "      result.push(new " << layout.element->record->name
+               << "(this.buffer, " << elem_offset << "));\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "      result.push(__decodeString(this.view, " << elem_offset
+               << ", " << layout.element->max_length << "));\n";
+          } else {
+            ss << "      result.push({ offset: " << elem_offset << " });\n";
+          }
+          ss << "    }\n";
+          ss << "    return result;\n";
+          ss << "  }\n\n";
+          continue;
+        }
+
+        if (layout.kind == InlineLayout::Kind::kUnion) {
+          ss << "  get " << field.name << "Type()";
+          if (typescript) { ss << ": number"; }
+          ss << " {\n";
+          ss << "    return " << BuildTsReadScalar("this.view", layout, field_offset)
+             << ";\n";
+          ss << "  }\n\n";
+        }
+      }
+
+      ss << "}\n\n";
+    }
+
+    return ss.str();
+  }
+
+  SchemaLayout schema_layout_;
+  std::string error_;
+  GeneratedOutputs outputs_;
 };
+
+}  // namespace
 
 }  // namespace aligned
 
@@ -681,8 +660,9 @@ class AlignedCodeGenerator : public CodeGenerator {
  public:
   Status GenerateCode(const Parser& parser, const std::string& path,
                       const std::string& filename) override {
-    aligned::AlignedGenerator generator(parser, path, filename);
+    aligned::Generator generator(parser, path, filename);
     if (!generator.generate()) {
+      status_detail = ": " + generator.error();
       return Status::ERROR;
     }
     return generator.save() ? Status::OK : Status::ERROR;
@@ -694,56 +674,42 @@ class AlignedCodeGenerator : public CodeGenerator {
 
   Status GenerateCodeString(const Parser& parser, const std::string& filename,
                             std::string& output) override {
-    aligned::AlignedGenerator generator(parser, "", filename);
+    aligned::Generator generator(parser, "", filename);
     if (!generator.generate()) {
+      status_detail = ": " + generator.error();
       return Status::ERROR;
     }
-    output = generator.GetCombinedOutput();
+    output = generator.CombinedOutput();
     return Status::OK;
   }
 
-  Status GenerateMakeRule(const Parser& parser, const std::string& path,
-                          const std::string& filename,
-                          std::string& output) override {
-    (void)parser;
-    (void)path;
-    (void)filename;
-    (void)output;
+  Status GenerateMakeRule(const Parser&, const std::string&,
+                          const std::string&, std::string&) override {
     return Status::NOT_IMPLEMENTED;
   }
 
-  Status GenerateGrpcCode(const Parser& parser, const std::string& path,
-                          const std::string& filename) override {
-    (void)parser;
-    (void)path;
-    (void)filename;
+  Status GenerateGrpcCode(const Parser&, const std::string&,
+                          const std::string&) override {
     return Status::NOT_IMPLEMENTED;
   }
 
-  Status GenerateRootFile(const Parser& parser,
-                          const std::string& path) override {
-    (void)parser;
-    (void)path;
+  Status GenerateRootFile(const Parser&, const std::string&) override {
     return Status::NOT_IMPLEMENTED;
   }
 
   bool IsSchemaOnly() const override { return true; }
-
   bool SupportsBfbsGeneration() const override { return false; }
-
   bool SupportsRootFileGeneration() const override { return false; }
-
   IDLOptions::Language Language() const override {
-    return IDLOptions::kMAX;  // No specific language flag yet
+    return static_cast<IDLOptions::Language>(0);
   }
-
   std::string LanguageName() const override { return "Aligned"; }
 };
 
 }  // namespace
 
 std::unique_ptr<CodeGenerator> NewAlignedCodeGenerator() {
-  return std::unique_ptr<AlignedCodeGenerator>(new AlignedCodeGenerator());
+  return std::unique_ptr<CodeGenerator>(new AlignedCodeGenerator());
 }
 
 }  // namespace flatbuffers

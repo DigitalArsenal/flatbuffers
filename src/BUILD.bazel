@@ -124,6 +124,8 @@ cc_library(
         "idl_gen_java.h",
         "idl_gen_json_schema.cpp",
         "idl_gen_json_schema.h",
+        "aligned_compiler.cpp",
+        "aligned_compiler.h",
         "idl_gen_kotlin.cpp",
         "idl_gen_kotlin.h",
         "idl_gen_kotlin_kmp.cpp",

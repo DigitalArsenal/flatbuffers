@@ -12,6 +12,7 @@ function main() {
   testMapBuilder();
   testRoundTrip();
   testRoundTripWithBuilder();
+  testRoundTripWithBlobView();
   testDeduplicationOff();
   testBugWhereOffestWereStoredAsIntInsteadOfUInt();
   testRootVector();
@@ -378,6 +379,27 @@ function testRoundTripWithBuilder() {
   assert.strictEqual(address.get('city').stringValue(), 'Bla');
   assert.strictEqual(address.get('zip').stringValue(), '12345');
   assert.strictEqual(address.get('countryCode').stringValue(), 'XX');
+}
+
+function testRoundTripWithBlobView() {
+  const builder = flexbuffers.builder();
+  const source = new Uint8Array([9, 10, 11, 12]);
+  const view = new Uint8Array(source.buffer, 1, 2);
+
+  builder.startMap();
+  builder.addKey('blob');
+  builder.add(view);
+  builder.end();
+
+  const data = builder.finish();
+  const root = flexbuffers.toReference(data.buffer);
+  const blob = root.get('blob');
+
+  assert.strictEqual(blob.isBlob(), true);
+  assert.deepStrictEqual(blob.blobValue(), new Uint8Array([10, 11]));
+  assert.deepStrictEqual(flexbuffers.toObject(data.buffer), {
+    blob: new Uint8Array([10, 11]),
+  });
 }
 
 function testGoldBuffer() {

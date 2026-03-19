@@ -31,14 +31,25 @@ root_path = tests_path.parent.parent.absolute()
 # Windows works with subprocess.run a bit differently.
 is_windows = platform.system() == "Windows"
 
-# Get the location of the flatc executable
-flatc_exe = Path("flatc.exe" if is_windows else "flatc")
+def find_flatc() -> Path:
+  candidates = [
+      Path("flatc.exe" if is_windows else "flatc"),
+      Path("build/Release/flatc.exe" if is_windows else "build/flatc"),
+      Path("Release/flatc.exe" if is_windows else "Release/flatc"),
+  ]
+  for candidate in candidates:
+    if root_path in candidate.parents:
+      candidate = candidate.relative_to(root_path)
+    candidate_path = Path(root_path, candidate)
+    if candidate_path.exists():
+      return candidate_path
+  raise AssertionError(
+      "Cannot find the flatc compiler. Checked: "
+      + ", ".join(str(Path(root_path, candidate)) for candidate in candidates)
+  )
 
-# Find and assert flatc compiler is present.
-if root_path in flatc_exe.parents:
-  flatc_exe = flatc_exe.relative_to(root_path)
-flatc_path = Path(root_path, flatc_exe)
-assert flatc_path.exists(), "Cannot find the flatc compiler " + str(flatc_path)
+
+flatc_path = find_flatc()
 
 
 def check_call(args, cwd=tests_path):

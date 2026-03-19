@@ -7,6 +7,25 @@ on:
     types: [published]
 
 jobs:
+  publish-npm:
+    name: Publish NPM (flatbuffers)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.x'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Publish
+        run: npm publish --tag latest --provenance --access public
+
   publish-npm-wasm:
     name: Publish NPM (flatc-wasm)
     runs-on: ubuntu-latest
@@ -23,7 +42,11 @@ jobs:
           node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
 
-      - run: npm publish --tag latest --provenance --access public
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Publish
+        run: npm publish --tag latest --provenance --access public
 
   publish-pypi:
     name: Publish PyPi

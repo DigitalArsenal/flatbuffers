@@ -572,9 +572,6 @@ jobs:
   build-wasm-npm:
     name: Build WASM NPM Package
     runs-on: ubuntu-24.04
-    env:
-      EMSDK_DIR: ${{ runner.temp }}/emsdk
-      EMSDK_VERSION: "3.1.74"
     steps:
     - uses: actions/checkout@v6
     - uses: actions/setup-node@v6
@@ -582,13 +579,15 @@ jobs:
         node-version: 'latest'
     - name: Setup Emscripten
       run: |
+        EMSDK_DIR="${RUNNER_TEMP}/emsdk"
+        EMSDK_VERSION="3.1.74"
         git clone --branch "${EMSDK_VERSION}" --depth 1 https://github.com/emscripten-core/emsdk.git "${EMSDK_DIR}"
         cd "${EMSDK_DIR}"
         ./emsdk install "${EMSDK_VERSION}"
         ./emsdk activate "${EMSDK_VERSION}"
     - name: Configure and Build
       run: |
-        source "${EMSDK_DIR}/emsdk_env.sh"
+        source "${RUNNER_TEMP}/emsdk/emsdk_env.sh"
         emcmake cmake -B build/wasm -S . -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_BUILD_WASM=ON -DFLATBUFFERS_WASM_ENABLE_HE=ON
         cmake --build build/wasm --parallel $(nproc) --target flatc_wasm_npm
     - name: publish dry run

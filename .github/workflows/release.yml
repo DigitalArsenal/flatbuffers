@@ -83,8 +83,6 @@ jobs:
 
       - name: Publish
         run: npm publish --tag latest --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-npm-wasm:
     name: Publish NPM (flatc-wasm)
@@ -111,8 +109,6 @@ jobs:
 
       - name: Publish
         run: npm publish --tag latest --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-pypi:
     name: Publish PyPi

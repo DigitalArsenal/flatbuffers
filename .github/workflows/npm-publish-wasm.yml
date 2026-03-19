@@ -57,5 +57,3 @@ jobs:
       - name: Publish
         run: npm publish --access public --provenance --tag latest
         working-directory: wasm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

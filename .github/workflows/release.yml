@@ -3,18 +3,76 @@ permissions: read-all
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches:
+      - master
   release:
     types: [published]
 
 jobs:
+  plan-npm-publish:
+    name: Plan NPM Publish
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    outputs:
+      publish_npm: ${{ steps.check.outputs.publish_npm }}
+      publish_wasm: ${{ steps.check.outputs.publish_wasm }}
+      flatbuffers_version: ${{ steps.check.outputs.flatbuffers_version }}
+      flatc_wasm_version: ${{ steps.check.outputs.flatc_wasm_version }}
+      ref_to_publish: ${{ steps.ref.outputs.ref_to_publish }}
+    steps:
+      - id: ref
+        run: echo "ref_to_publish=${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.ref.outputs.ref_to_publish }}
+
+      - id: check
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          def load_version(path):
+              with open(path, encoding="utf-8") as f:
+                  return json.load(f)["version"]
+
+          def missing_from_registry(name, version):
+              with urllib.request.urlopen(f"https://registry.npmjs.org/{name}") as response:
+                  data = json.load(response)
+              return version not in data.get("versions", {})
+
+          flatbuffers_version = load_version("package.json")
+          flatc_wasm_version = load_version("wasm/package.json")
+          publish_npm = missing_from_registry("flatbuffers", flatbuffers_version)
+          publish_wasm = missing_from_registry("flatc-wasm", flatc_wasm_version)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"flatbuffers_version={flatbuffers_version}\n")
+              out.write(f"flatc_wasm_version={flatc_wasm_version}\n")
+              out.write(f"publish_npm={'true' if publish_npm else 'false'}\n")
+              out.write(f"publish_wasm={'true' if publish_wasm else 'false'}\n")
+          PY
+
   publish-npm:
     name: Publish NPM (flatbuffers)
+    needs: [plan-npm-publish]
+    if: needs.plan-npm-publish.outputs.publish_npm == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.plan-npm-publish.outputs.ref_to_publish }}
       - uses: actions/setup-node@v6
         with:
           node-version: '24.x'
@@ -30,6 +88,8 @@ jobs:
 
   publish-npm-wasm:
     name: Publish NPM (flatc-wasm)
+    needs: [plan-npm-publish]
+    if: needs.plan-npm-publish.outputs.publish_wasm == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,6 +99,8 @@ jobs:
         working-directory: ./wasm
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.plan-npm-publish.outputs.ref_to_publish }}
       - uses: actions/setup-node@v6
         with:
           node-version: '24.x'
@@ -54,6 +116,7 @@ jobs:
 
   publish-pypi:
     name: Publish PyPi
+    if: github.event_name != 'workflow_run'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -82,6 +145,7 @@ jobs:
 
   publish-nuget:
     name: Publish NuGet
+    if: github.event_name != 'workflow_run'
     runs-on: windows-latest
     defaults:
       run:
@@ -105,6 +169,7 @@ jobs:
 
   publish-maven:
     name: Publish Maven
+    if: github.event_name != 'workflow_run'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -133,6 +198,7 @@ jobs:
           
   publish-maven-kotlin:
     name: Publish Maven - Kotlin
+    if: github.event_name != 'workflow_run'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -161,6 +227,7 @@ jobs:
 
   publish-crates:
     name: Publish crates.io
+    if: github.event_name != 'workflow_run'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

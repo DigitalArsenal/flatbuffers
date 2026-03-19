@@ -2,14 +2,7 @@ name: Publish NPM Packages
 permissions: read-all
 
 on:
-  push:
-    tags:
-      - "npm-v*"
   workflow_dispatch:
-
-concurrency:
-  group: npm-publish-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   publish-npm:

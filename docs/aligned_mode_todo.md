@@ -110,7 +110,7 @@
 - [x] Add IR/unit tests for layout math, offsets, padding, stride, and bounds validation
 - [ ] Add end-to-end parity tests proving regular and aligned decoding yield the same logical values
 - [ ] Add CLI/WASM/native regression tests for positive and negative aligned cases
-- [ ] Rewrite aligned docs to match the new bounded fixed-layout table model
+- [x] Rewrite aligned docs to match the new bounded fixed-layout table model
 
 ## Assumptions
 - “Same object” means logical field names and decoded values match regular FlatBuffers behavior for supported schemas.

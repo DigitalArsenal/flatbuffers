@@ -473,12 +473,16 @@ set(FlatBuffers_Tests_SRCS
   tests/native_type_test_impl.cpp
   tests/alignment_test.h
   tests/alignment_test.cpp
+  tests/aligned_codegen_test.h
+  tests/aligned_codegen_test.cpp
   tests/64bit/offset64_test.h
   tests/64bit/offset64_test.cpp
   tests/aligned_layout_test.h
   tests/aligned_layout_test.cpp
   src/aligned_compiler.cpp
   src/aligned_compiler.h
+  src/idl_gen_aligned.cpp
+  src/idl_gen_aligned.h
   include/flatbuffers/code_generators.h
   src/code_generators.cpp
 )

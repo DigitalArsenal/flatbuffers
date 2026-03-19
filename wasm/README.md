@@ -1534,24 +1534,116 @@ const isValid: boolean = handle.valid();
 
 ## Aligned Binary Format
 
-The aligned binary format provides zero-overhead, fixed-size structs from FlatBuffers schemas, optimized for WASM/native interop and shared memory scenarios.
+Aligned mode is a fixed-layout alternate encoding for bounded FlatBuffers schemas. It lowers tables into inline records with deterministic offsets, alignments, and strides so generated code can read data directly from shared memory or WASM linear memory.
+
+This encoding is not the standard FlatBuffers wire format. It is a separate bounded layout that preserves the same logical field values for supported schemas.
 
 ### Why Use Aligned Format?
 
 | Standard FlatBuffers | Aligned Format |
 |---------------------|----------------|
-| Variable-size with vtables | Fixed-size structs |
-| Requires deserialization | Zero-copy TypedArray views |
-| Schema evolution support | No schema evolution |
-| Strings and vectors | Fixed-size arrays and strings |
+| Variable-size tables with vtables | Fixed-size inline records |
+| Offsets to heap objects | Constant field offsets |
+| Dynamic strings and vectors | Bounded inline storage |
+| Indirect table vectors | Constant-stride record arrays |
 
 Use aligned format when you need:
 - Direct TypedArray views into WASM linear memory
 - Zero deserialization overhead
-- Predictable memory layout for arrays of structs
+- Predictable memory layout for arrays of records
 - C++/WASM and JavaScript/TypeScript interop
 
-### Basic Usage
+### Schema Bounds
+
+Aligned mode requires bounded schemas for variable-length fields:
+
+- `string` fields may use `aligned_max_length`; if omitted they default to 255 bytes
+- `aligned_max_length` must be in the range `1..255`
+- vector fields must declare `aligned_max_count`
+- recursive or cyclic inline table graphs are rejected in v1
+
+```fbs
+namespace MyGame;
+
+table Item {
+  name:string (aligned_max_length: 32);
+  damage:int;
+}
+
+union Payload { Item }
+
+table Entity {
+  id:uint;
+  name:string (aligned_max_length: 24);
+  tags:[string] (aligned_max_count: 4);
+  inventory:[Item] (aligned_max_count: 8);
+  payload:Payload;
+}
+
+root_type Entity;
+```
+
+### Layout Rules
+
+- Every table becomes one fixed-size aligned record
+- Nullable and optional fields use a presence bitmap at the start of the record
+- Strings are stored as `uint8 length + data[MaxLength]`
+- Vectors are stored as `uint32 length + inline storage for aligned_max_count elements`
+- Vector element stride is constant, so arrays are indexable as `base + i * stride`
+- Unions are stored as discriminator plus inline payload sized to the maximum member
+- Nested tables are fully inlined into the parent record
+
+### Native CLI Usage
+
+Prefer the standard language flags with `--aligned`:
+
+```bash
+flatc --cpp --aligned schema.fbs
+flatc --ts --aligned schema.fbs
+```
+
+The legacy compatibility wrapper is still available and produces the combined aligned bundle:
+
+```bash
+flatc --aligned schema.fbs
+```
+
+### WASM Usage
+
+Use the same aligned mode through `FlatcRunner.generateCode()`:
+
+```javascript
+import { FlatcRunner } from 'flatc-wasm';
+
+const runner = await FlatcRunner.init();
+const schemaInput = {
+  entry: '/game.fbs',
+  files: {
+    '/game.fbs': `
+      namespace MyGame;
+      table Entity {
+        id:uint;
+        name:string (aligned_max_length: 24);
+        tags:[string] (aligned_max_count: 4);
+      }
+      root_type Entity;
+    `,
+  },
+};
+
+const cpp = runner.generateCode(schemaInput, 'cpp', { aligned: true });
+const ts = runner.generateCode(schemaInput, 'ts', { aligned: true });
+```
+
+The compatibility helper is still available if you want the historical bundle in one call:
+
+```javascript
+const { cpp, ts, js, layouts } = await runner.generateAlignedCode(schemaInput);
+```
+
+### Aligned Codegen Module
+
+`flatc-wasm/aligned-codegen` remains a convenience wrapper for the legacy bundled output:
 
 ```javascript
 import { generateAlignedCode, parseSchema } from 'flatc-wasm/aligned-codegen';
@@ -1559,41 +1651,18 @@ import { generateAlignedCode, parseSchema } from 'flatc-wasm/aligned-codegen';
 const schema = `
 namespace MyGame;
 
-struct Vec3 {
-  x:float;
-  y:float;
-  z:float;
-}
-
 table Entity {
-  position:Vec3;
+  id:uint;
+  name:string (aligned_max_length: 24);
+  tags:[string] (aligned_max_count: 4);
   health:int;
-  mana:int;
 }
 `;
 
-// Generate code for all languages
 const result = generateAlignedCode(schema);
-console.log(result.cpp);  // C++ header
-console.log(result.ts);   // TypeScript module
-console.log(result.js);   // JavaScript module
-```
-
-### Fixed-Length Strings
-
-By default, strings are variable-length and not supported. Enable fixed-length strings by setting `defaultStringLength`:
-
-```javascript
-const schema = `
-table Player {
-  name:string;
-  guild:string;
-  health:int;
-}
-`;
-
-// Strings become fixed-size char arrays (255 chars + null = 256 bytes)
-const result = generateAlignedCode(schema, { defaultStringLength: 255 });
+console.log(result.cpp);
+console.log(result.ts);
+console.log(result.js);
 ```
 
 ### Supported Types
@@ -1607,7 +1676,9 @@ const result = generateAlignedCode(schema, { defaultStringLength: 255 });
 | `long`, `ulong`, `int64`, `uint64`, `double` | 8 bytes | |
 | `[type:N]` | N × size | Fixed-size arrays |
 | `[ubyte:0x100]` | 256 bytes | Hex array sizes |
-| `string` | configurable | Requires `defaultStringLength` |
+| `string` | `1 + MaxLength` | Defaults to `1 + 255` in aligned mode |
+| `vector<T>` | `4 + MaxCount * stride` | Requires `aligned_max_count` |
+| `union` | variable | Discriminator plus max-sized inline payload |
 
 ### Generated Code Example
 
@@ -1615,57 +1686,47 @@ const result = generateAlignedCode(schema, { defaultStringLength: 255 });
 ```cpp
 #pragma once
 #include <cstdint>
-#include <cstring>
 
 namespace MyGame {
-
-struct Vec3 {
-  float x;
-  float y;
-  float z;
-};
-static_assert(sizeof(Vec3) == 12, "Vec3 size mismatch");
+namespace Aligned {
 
 struct Entity {
-  Vec3 position;
+  uint8_t __presence[1];
+  uint32_t id;
+  ::flatbuffers::aligned_runtime::AlignedString<24> name;
+  ::flatbuffers::aligned_runtime::AlignedVector<
+      ::flatbuffers::aligned_runtime::AlignedString<255>, 4> tags;
   int32_t health;
-  int32_t mana;
-};
-static_assert(sizeof(Entity) == 20, "Entity size mismatch");
 
-} // namespace MyGame
+  bool has_name() const;
+};
+
+}  // namespace Aligned
+}  // namespace MyGame
 ```
 
 **TypeScript:**
 ```typescript
-export const ENTITY_SIZE = 20;
-export const ENTITY_ALIGN = 4;
+export class Entity {
+  static readonly SIZE = 1056;
+  static readonly ALIGN = 4;
 
-export class EntityView {
-  private _view: DataView;
-  private _offset: number;
-
-  constructor(view: DataView, offset: number = 0) {
-    this._view = view;
-    this._offset = offset;
+  get id(): number {
+    return this.view.getUint32(this.offset + 4, true);
   }
 
-  get position(): Vec3View {
-    return new Vec3View(this._view, this._offset + 0);
+  get name(): string | null {
+    if (!this.hasname()) { return null; }
+    return __decodeString(this.view, this.offset + 8, 24);
   }
 
-  get health(): number {
-    return this._view.getInt32(this._offset + 12, true);
-  }
-  set health(value: number) {
-    this._view.setInt32(this._offset + 12, value, true);
-  }
-
-  get mana(): number {
-    return this._view.getInt32(this._offset + 16, true);
-  }
-  set mana(value: number) {
-    this._view.setInt32(this._offset + 16, value, true);
+  get tags(): Array<string> {
+    const length = Math.min(this.view.getUint32(this.offset + 36, true), 4);
+    const result = [];
+    for (let i = 0; i < length; ++i) {
+      result.push(__decodeString(this.view, this.offset + 40 + i * 256, 255));
+    }
+    return result;
   }
 }
 ```
@@ -1674,7 +1735,7 @@ export class EntityView {
 
 ```javascript
 // JavaScript side
-import { EntityView, ENTITY_SIZE } from './aligned_types.mjs';
+import { Entity } from './aligned_types.mjs';
 
 // Get WASM memory buffer
 const memory = wasmInstance.exports.memory;
@@ -1682,10 +1743,9 @@ const entityPtr = wasmInstance.exports.get_entity_array();
 const count = wasmInstance.exports.get_entity_count();
 
 // Create views directly into WASM memory
-const view = new DataView(memory.buffer, entityPtr);
 for (let i = 0; i < count; i++) {
-  const entity = new EntityView(view, i * ENTITY_SIZE);
-  console.log(`Entity ${i}: health=${entity.health}, mana=${entity.mana}`);
+  const entity = Entity.fromPointer(memory.buffer, entityPtr + i * Entity.SIZE);
+  console.log(`Entity ${i}: id=${entity.id}, name=${entity.name}`);
 }
 ```
 
@@ -1699,18 +1759,16 @@ extern "C" {
   Entity* get_entity_array() { return entities; }
   int get_entity_count() { return 1000; }
 
-  void update_entities(float dt) {
-    for (auto& e : entities) {
-      e.position.x += e.velocity.x * dt;
-      e.health = std::max(0, e.health - 1);
-    }
+  void set_entity_name(size_t index, const std::string& value) {
+    entities[index].name.set(value);
+    entities[index].set_has_name(true);
   }
 }
 ```
 
 ### Sharing Arrays Between WASM Modules
 
-Since aligned binary structs have no embedded length metadata (unlike FlatBuffers vectors), you need to communicate array bounds **out-of-band**. This section covers patterns for sharing arrays of aligned structs between WASM modules or across the JS/WASM boundary.
+Since aligned records are fixed-size, arrays are naturally constant-stride. For top-level arrays shared between WASM modules or across the JS/WASM boundary, you still need to communicate record counts **out-of-band**.
 
 #### Pattern 1: Pointer + Count (Recommended)
 

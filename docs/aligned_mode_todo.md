@@ -116,3 +116,26 @@
 - “Same object” means logical field names and decoded values match regular FlatBuffers behavior for supported schemas.
 - Fixed-size lowering is allowed to introduce internal presence metadata that is not part of standard FlatBuffers wire format.
 - V1 is required to be foundational and reusable across all generators, but recursion support is intentionally deferred and must fail fast instead of silently degrading.
+
+## Production Readiness Follow-Up
+- Turn every aligned backend from metadata/scaffold output into real generated APIs:
+  - typed record wrappers
+  - field getters/setters
+  - nested table access
+  - bounded string access
+  - bounded vector access with constant-stride indexing
+  - union accessors for payload type and inline payloads
+- Raise backend verification from marker checks to compile/runtime validation wherever toolchains are available locally.
+
+## Production Readiness Todo
+- [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for Go
+- [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for Python
+- [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for Rust
+- [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for Java
+- [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for C#
+- [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for Kotlin
+- [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for Dart
+- [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for Swift
+- [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for PHP
+- [ ] Bring C++/TypeScript aligned outputs up to the same production API level for vectors and unions
+- [ ] Add compile/runtime verification for aligned generated code in every locally available backend

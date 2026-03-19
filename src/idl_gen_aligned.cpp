@@ -69,6 +69,14 @@ std::string PascalCase(const std::string& value) {
   return result;
 }
 
+std::string LowerCamelCase(const std::string& value) {
+  if (value.empty()) { return value; }
+  std::string result = PascalCase(value);
+  result[0] = static_cast<char>(
+      std::tolower(static_cast<unsigned char>(result[0])));
+  return result;
+}
+
 std::string UpperSnake(const std::string& value) {
   std::string result;
   for (size_t i = 0; i < value.size(); ++i) {
@@ -81,6 +89,167 @@ std::string UpperSnake(const std::string& value) {
     }
   }
   return result;
+}
+
+std::string LowerCase(const std::string& value) {
+  std::string result = value;
+  for (size_t i = 0; i < result.size(); ++i) {
+    result[i] = static_cast<char>(
+        std::tolower(static_cast<unsigned char>(result[i])));
+  }
+  return result;
+}
+
+std::string ScalarHelperSuffix(BaseType base_type) {
+  switch (base_type) {
+    case BASE_TYPE_BOOL: return "Bool";
+    case BASE_TYPE_CHAR: return "Int8";
+    case BASE_TYPE_UCHAR:
+    case BASE_TYPE_UTYPE: return "UInt8";
+    case BASE_TYPE_SHORT: return "Int16";
+    case BASE_TYPE_USHORT: return "UInt16";
+    case BASE_TYPE_INT: return "Int32";
+    case BASE_TYPE_UINT: return "UInt32";
+    case BASE_TYPE_LONG: return "Int64";
+    case BASE_TYPE_ULONG: return "UInt64";
+    case BASE_TYPE_FLOAT: return "Float32";
+    case BASE_TYPE_DOUBLE: return "Float64";
+    default: return "UInt8";
+  }
+}
+
+std::string UnionCellName(const RecordLayout& record, const FieldLayout& field) {
+  return record.name + PascalCase(field.name) + "UnionCell";
+}
+
+bool IsUnionLayout(const InlineLayout& layout) {
+  return layout.kind == InlineLayout::Kind::kUnion;
+}
+
+bool IsVectorOfUnionLayout(const InlineLayout& layout) {
+  return layout.kind == InlineLayout::Kind::kVector && layout.element &&
+         layout.element->kind == InlineLayout::Kind::kUnion;
+}
+
+const InlineLayout& UnionLayoutForField(const InlineLayout& layout) {
+  return IsUnionLayout(layout) ? layout : *layout.element;
+}
+
+std::string GoScalarType(const InlineLayout& layout) {
+  switch (layout.base_type) {
+    case BASE_TYPE_BOOL: return "bool";
+    case BASE_TYPE_CHAR: return "int8";
+    case BASE_TYPE_UCHAR:
+    case BASE_TYPE_UTYPE: return "uint8";
+    case BASE_TYPE_SHORT: return "int16";
+    case BASE_TYPE_USHORT: return "uint16";
+    case BASE_TYPE_INT: return "int32";
+    case BASE_TYPE_UINT: return "uint32";
+    case BASE_TYPE_LONG: return "int64";
+    case BASE_TYPE_ULONG: return "uint64";
+    case BASE_TYPE_FLOAT: return "float32";
+    case BASE_TYPE_DOUBLE: return "float64";
+    default: return "uint8";
+  }
+}
+
+std::string RustScalarType(const InlineLayout& layout) {
+  switch (layout.base_type) {
+    case BASE_TYPE_BOOL: return "bool";
+    case BASE_TYPE_CHAR: return "i8";
+    case BASE_TYPE_UCHAR:
+    case BASE_TYPE_UTYPE: return "u8";
+    case BASE_TYPE_SHORT: return "i16";
+    case BASE_TYPE_USHORT: return "u16";
+    case BASE_TYPE_INT: return "i32";
+    case BASE_TYPE_UINT: return "u32";
+    case BASE_TYPE_LONG: return "i64";
+    case BASE_TYPE_ULONG: return "u64";
+    case BASE_TYPE_FLOAT: return "f32";
+    case BASE_TYPE_DOUBLE: return "f64";
+    default: return "u8";
+  }
+}
+
+std::string JavaScalarType(const InlineLayout& layout) {
+  switch (layout.base_type) {
+    case BASE_TYPE_BOOL: return "boolean";
+    case BASE_TYPE_CHAR: return "byte";
+    case BASE_TYPE_UCHAR:
+    case BASE_TYPE_UTYPE: return "short";
+    case BASE_TYPE_SHORT: return "short";
+    case BASE_TYPE_USHORT: return "int";
+    case BASE_TYPE_INT: return "int";
+    case BASE_TYPE_UINT: return "long";
+    case BASE_TYPE_LONG:
+    case BASE_TYPE_ULONG: return "long";
+    case BASE_TYPE_FLOAT: return "float";
+    case BASE_TYPE_DOUBLE: return "double";
+    default: return "byte";
+  }
+}
+
+std::string CSharpScalarType(const InlineLayout& layout) {
+  switch (layout.base_type) {
+    case BASE_TYPE_BOOL: return "bool";
+    case BASE_TYPE_CHAR: return "sbyte";
+    case BASE_TYPE_UCHAR:
+    case BASE_TYPE_UTYPE: return "byte";
+    case BASE_TYPE_SHORT: return "short";
+    case BASE_TYPE_USHORT: return "ushort";
+    case BASE_TYPE_INT: return "int";
+    case BASE_TYPE_UINT: return "uint";
+    case BASE_TYPE_LONG: return "long";
+    case BASE_TYPE_ULONG: return "ulong";
+    case BASE_TYPE_FLOAT: return "float";
+    case BASE_TYPE_DOUBLE: return "double";
+    default: return "byte";
+  }
+}
+
+std::string KotlinScalarType(const InlineLayout& layout) {
+  switch (layout.base_type) {
+    case BASE_TYPE_BOOL: return "Boolean";
+    case BASE_TYPE_CHAR: return "Byte";
+    case BASE_TYPE_UCHAR:
+    case BASE_TYPE_UTYPE: return "UByte";
+    case BASE_TYPE_SHORT: return "Short";
+    case BASE_TYPE_USHORT: return "UShort";
+    case BASE_TYPE_INT: return "Int";
+    case BASE_TYPE_UINT: return "UInt";
+    case BASE_TYPE_LONG: return "Long";
+    case BASE_TYPE_ULONG: return "ULong";
+    case BASE_TYPE_FLOAT: return "Float";
+    case BASE_TYPE_DOUBLE: return "Double";
+    default: return "Byte";
+  }
+}
+
+std::string DartScalarType(const InlineLayout& layout) {
+  switch (layout.base_type) {
+    case BASE_TYPE_BOOL: return "bool";
+    case BASE_TYPE_FLOAT:
+    case BASE_TYPE_DOUBLE: return "double";
+    default: return "int";
+  }
+}
+
+std::string SwiftScalarType(const InlineLayout& layout) {
+  switch (layout.base_type) {
+    case BASE_TYPE_BOOL: return "Bool";
+    case BASE_TYPE_CHAR: return "Int8";
+    case BASE_TYPE_UCHAR:
+    case BASE_TYPE_UTYPE: return "UInt8";
+    case BASE_TYPE_SHORT: return "Int16";
+    case BASE_TYPE_USHORT: return "UInt16";
+    case BASE_TYPE_INT: return "Int32";
+    case BASE_TYPE_UINT: return "UInt32";
+    case BASE_TYPE_LONG: return "Int64";
+    case BASE_TYPE_ULONG: return "UInt64";
+    case BASE_TYPE_FLOAT: return "Float";
+    case BASE_TYPE_DOUBLE: return "Double";
+    default: return "UInt8";
+  }
 }
 
 std::string CppScalarType(const InlineLayout& layout) {
@@ -723,17 +892,156 @@ class Generator : public BaseGenerator {
 
   std::string GenerateGo() const {
     std::ostringstream ss;
-    ss << "// Auto-generated aligned fixed-layout metadata scaffolds.\n";
+    ss << "// Auto-generated aligned fixed-layout bindings.\n";
     ss << "// DO NOT EDIT - Generated by flatc --aligned\n\n";
     ss << "package aligned\n\n";
+    ss << "import (\n";
+    ss << "  \"encoding/binary\"\n";
+    ss << "  \"math\"\n";
+    ss << ")\n\n";
     ss << "func __readPresence(buffer []byte, base int, bitIndex int) bool {\n";
     ss << "  byteIndex := bitIndex / 8\n";
     ss << "  mask := byte(1 << uint(bitIndex%8))\n";
     ss << "  return (buffer[base+byteIndex] & mask) != 0\n";
     ss << "}\n\n";
+    ss << "func __writePresence(buffer []byte, base int, bitIndex int, value bool) {\n";
+    ss << "  byteIndex := bitIndex / 8\n";
+    ss << "  mask := byte(1 << uint(bitIndex%8))\n";
+    ss << "  if value {\n";
+    ss << "    buffer[base+byteIndex] |= mask\n";
+    ss << "  } else {\n";
+    ss << "    buffer[base+byteIndex] &^= mask\n";
+    ss << "  }\n";
+    ss << "}\n\n";
+    ss << "func __readBool(buffer []byte, offset int) bool { return buffer[offset] != 0 }\n";
+    ss << "func __writeBool(buffer []byte, offset int, value bool) {\n";
+    ss << "  if value { buffer[offset] = 1 } else { buffer[offset] = 0 }\n";
+    ss << "}\n";
+    ss << "func __readInt8(buffer []byte, offset int) int8 { return int8(buffer[offset]) }\n";
+    ss << "func __writeInt8(buffer []byte, offset int, value int8) { buffer[offset] = byte(value) }\n";
+    ss << "func __readUInt8(buffer []byte, offset int) uint8 { return buffer[offset] }\n";
+    ss << "func __writeUInt8(buffer []byte, offset int, value uint8) { buffer[offset] = value }\n";
+    ss << "func __readInt16(buffer []byte, offset int) int16 { return int16(binary.LittleEndian.Uint16(buffer[offset:])) }\n";
+    ss << "func __writeInt16(buffer []byte, offset int, value int16) { binary.LittleEndian.PutUint16(buffer[offset:], uint16(value)) }\n";
+    ss << "func __readUInt16(buffer []byte, offset int) uint16 { return binary.LittleEndian.Uint16(buffer[offset:]) }\n";
+    ss << "func __writeUInt16(buffer []byte, offset int, value uint16) { binary.LittleEndian.PutUint16(buffer[offset:], value) }\n";
+    ss << "func __readInt32(buffer []byte, offset int) int32 { return int32(binary.LittleEndian.Uint32(buffer[offset:])) }\n";
+    ss << "func __writeInt32(buffer []byte, offset int, value int32) { binary.LittleEndian.PutUint32(buffer[offset:], uint32(value)) }\n";
+    ss << "func __readUInt32(buffer []byte, offset int) uint32 { return binary.LittleEndian.Uint32(buffer[offset:]) }\n";
+    ss << "func __writeUInt32(buffer []byte, offset int, value uint32) { binary.LittleEndian.PutUint32(buffer[offset:], value) }\n";
+    ss << "func __readInt64(buffer []byte, offset int) int64 { return int64(binary.LittleEndian.Uint64(buffer[offset:])) }\n";
+    ss << "func __writeInt64(buffer []byte, offset int, value int64) { binary.LittleEndian.PutUint64(buffer[offset:], uint64(value)) }\n";
+    ss << "func __readUInt64(buffer []byte, offset int) uint64 { return binary.LittleEndian.Uint64(buffer[offset:]) }\n";
+    ss << "func __writeUInt64(buffer []byte, offset int, value uint64) { binary.LittleEndian.PutUint64(buffer[offset:], value) }\n";
+    ss << "func __readFloat32(buffer []byte, offset int) float32 { return math.Float32frombits(binary.LittleEndian.Uint32(buffer[offset:])) }\n";
+    ss << "func __writeFloat32(buffer []byte, offset int, value float32) { binary.LittleEndian.PutUint32(buffer[offset:], math.Float32bits(value)) }\n";
+    ss << "func __readFloat64(buffer []byte, offset int) float64 { return math.Float64frombits(binary.LittleEndian.Uint64(buffer[offset:])) }\n";
+    ss << "func __writeFloat64(buffer []byte, offset int, value float64) { binary.LittleEndian.PutUint64(buffer[offset:], math.Float64bits(value)) }\n\n";
+    ss << "func __decodeString(buffer []byte, offset int, maxLength int) string {\n";
+    ss << "  length := int(buffer[offset])\n";
+    ss << "  if length > maxLength { length = maxLength }\n";
+    ss << "  return string(buffer[offset+1 : offset+1+length])\n";
+    ss << "}\n\n";
+    ss << "func __encodeString(buffer []byte, offset int, maxLength int, value string) {\n";
+    ss << "  raw := []byte(value)\n";
+    ss << "  length := len(raw)\n";
+    ss << "  if length > maxLength { length = maxLength }\n";
+    ss << "  buffer[offset] = byte(length)\n";
+    ss << "  target := buffer[offset+1 : offset+1+maxLength]\n";
+    ss << "  clear(target)\n";
+    ss << "  copy(target, raw[:length])\n";
+    ss << "}\n\n";
 
     for (size_t i = 0; i < schema_layout_.records.size(); ++i) {
       const RecordLayout& record = *schema_layout_.records[i];
+      for (size_t f = 0; f < record.fields.size(); ++f) {
+        const FieldLayout& field = record.fields[f];
+        const InlineLayout& layout = *field.layout;
+        if (!IsUnionLayout(layout) && !IsVectorOfUnionLayout(layout)) { continue; }
+
+        const InlineLayout& union_layout = UnionLayoutForField(layout);
+        const std::string helper_name = UnionCellName(record, field);
+        const std::string type_name = GoScalarType(union_layout);
+        ss << "type " << helper_name << " struct {\n";
+        ss << "  Buffer []byte\n";
+        ss << "  Offset int\n";
+        ss << "}\n\n";
+        if (!union_layout.union_members.empty()) {
+          ss << "const (\n";
+          for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+            const UnionMemberLayout& member = union_layout.union_members[m];
+            ss << "  " << helper_name << PascalCase(member.value->name)
+               << "Type = " << member.value->GetAsUInt64() << "\n";
+          }
+          ss << ")\n\n";
+        }
+        ss << "func " << helper_name
+           << "FromPointer(buffer []byte, offset int) " << helper_name << " {\n";
+        ss << "  return " << helper_name << "{Buffer: buffer, Offset: offset}\n";
+        ss << "}\n\n";
+        ss << "func (c " << helper_name << ") Type() " << type_name << " {\n";
+        ss << "  return __read" << ScalarHelperSuffix(union_layout.base_type)
+           << "(c.Buffer, c.Offset + " << union_layout.discriminator_offset << ")\n";
+        ss << "}\n\n";
+        ss << "func (c " << helper_name << ") MutateType(value " << type_name
+           << ") {\n";
+        ss << "  __write" << ScalarHelperSuffix(union_layout.base_type)
+           << "(c.Buffer, c.Offset + " << union_layout.discriminator_offset
+           << ", value)\n";
+        ss << "}\n\n";
+
+        for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+          const UnionMemberLayout& member = union_layout.union_members[m];
+          const InlineLayout& member_layout = *member.layout;
+          const std::string member_name = PascalCase(member.value->name);
+          const std::string payload_offset =
+              "c.Offset + " + NumToString(union_layout.payload_offset);
+          ss << "func (c " << helper_name << ") Is" << member_name
+             << "() bool {\n";
+          ss << "  return c.Type() == " << helper_name << member_name
+             << "Type\n";
+          ss << "}\n\n";
+          if (member_layout.kind == InlineLayout::Kind::kScalar) {
+            ss << "func (c " << helper_name << ") " << member_name << "() "
+               << GoScalarType(member_layout) << " {\n";
+            ss << "  return __read" << ScalarHelperSuffix(member_layout.base_type)
+               << "(c.Buffer, " << payload_offset << ")\n";
+            ss << "}\n\n";
+            ss << "func (c " << helper_name << ") Mutate" << member_name
+               << "(value " << GoScalarType(member_layout) << ") {\n";
+            ss << "  __write" << ScalarHelperSuffix(member_layout.base_type)
+               << "(c.Buffer, " << payload_offset << ", value)\n";
+            ss << "  c.MutateType(" << helper_name << member_name << "Type)\n";
+            ss << "}\n\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kRecord) {
+            ss << "func (c " << helper_name << ") " << member_name << "() "
+               << member_layout.record->name << " {\n";
+            ss << "  return " << member_layout.record->name
+               << "FromPointer(c.Buffer, " << payload_offset << ")\n";
+            ss << "}\n\n";
+            ss << "func (c " << helper_name << ") Mutate" << member_name
+               << "From(src " << member_layout.record->name << ") {\n";
+            ss << "  copy(c.Buffer[" << payload_offset << ":" << payload_offset
+               << " + " << member_layout.size << "], src.Buffer[src.Offset:src.Offset + "
+               << member_layout.size << "])\n";
+            ss << "  c.MutateType(" << helper_name << member_name << "Type)\n";
+            ss << "}\n\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kString) {
+            ss << "func (c " << helper_name << ") " << member_name
+               << "() string {\n";
+            ss << "  return __decodeString(c.Buffer, " << payload_offset << ", "
+               << member_layout.max_length << ")\n";
+            ss << "}\n\n";
+            ss << "func (c " << helper_name << ") Mutate" << member_name
+               << "(value string) {\n";
+            ss << "  __encodeString(c.Buffer, " << payload_offset << ", "
+               << member_layout.max_length << ", value)\n";
+            ss << "  c.MutateType(" << helper_name << member_name << "Type)\n";
+            ss << "}\n\n";
+          }
+        }
+      }
+
       ss << "type " << record.name << " struct {\n";
       ss << "  Buffer []byte\n";
       ss << "  Offset int\n";
@@ -780,12 +1088,198 @@ class Generator : public BaseGenerator {
       ss << "}\n\n";
       for (size_t f = 0; f < record.fields.size(); ++f) {
         const FieldLayout& field = record.fields[f];
-        if (field.presence_index == FieldLayout::kNoPresence) { continue; }
-        ss << "func (r " << record.name << ") Has" << PascalCase(field.name)
-           << "() bool {\n";
-        ss << "  return __readPresence(r.Buffer, r.Offset, "
-           << record.name << PascalCase(field.name) << "PresenceBit)\n";
-        ss << "}\n\n";
+        const InlineLayout& layout = *field.layout;
+        const std::string field_name = PascalCase(field.name);
+        const std::string field_offset =
+            "r.Offset + " + record.name + field_name + "Offset";
+        if (field.presence_index != FieldLayout::kNoPresence) {
+          ss << "func (r " << record.name << ") Has" << field_name
+             << "() bool {\n";
+          ss << "  return __readPresence(r.Buffer, r.Offset, "
+             << record.name << field_name << "PresenceBit)\n";
+          ss << "}\n\n";
+          ss << "func (r " << record.name << ") MutateHas" << field_name
+             << "(value bool) {\n";
+          ss << "  __writePresence(r.Buffer, r.Offset, " << record.name
+             << field_name << "PresenceBit, value)\n";
+          ss << "}\n\n";
+        }
+
+        if (layout.kind == InlineLayout::Kind::kScalar) {
+          ss << "func (r " << record.name << ") " << field_name << "() "
+             << GoScalarType(layout) << " {\n";
+          ss << "  return __read" << ScalarHelperSuffix(layout.base_type)
+             << "(r.Buffer, " << field_offset << ")\n";
+          ss << "}\n\n";
+          ss << "func (r " << record.name << ") Mutate" << field_name
+             << "(value " << GoScalarType(layout) << ") {\n";
+          ss << "  __write" << ScalarHelperSuffix(layout.base_type)
+             << "(r.Buffer, " << field_offset << ", value)\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "  r.MutateHas" << field_name << "(true)\n";
+          }
+          ss << "}\n\n";
+          continue;
+        }
+
+        if (layout.kind == InlineLayout::Kind::kRecord) {
+          ss << "func (r " << record.name << ") " << field_name << "() "
+             << layout.record->name << " {\n";
+          ss << "  return " << layout.record->name << "FromPointer(r.Buffer, "
+             << field_offset << ")\n";
+          ss << "}\n\n";
+          continue;
+        }
+
+        if (layout.kind == InlineLayout::Kind::kString) {
+          ss << "func (r " << record.name << ") " << field_name
+             << "() string {\n";
+          ss << "  return __decodeString(r.Buffer, " << field_offset << ", "
+             << layout.max_length << ")\n";
+          ss << "}\n\n";
+          ss << "func (r " << record.name << ") Mutate" << field_name
+             << "(value string) {\n";
+          ss << "  __encodeString(r.Buffer, " << field_offset << ", "
+             << layout.max_length << ", value)\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "  r.MutateHas" << field_name << "(true)\n";
+          }
+          ss << "}\n\n";
+          continue;
+        }
+
+        if (layout.kind == InlineLayout::Kind::kArray) {
+          ss << "func (r " << record.name << ") " << field_name
+             << "Length() int {\n";
+          ss << "  return " << layout.fixed_length << "\n";
+          ss << "}\n\n";
+          const std::string element_offset =
+              field_offset + " + j * " + NumToString(layout.stride);
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            ss << "func (r " << record.name << ") " << field_name
+               << "(j int) " << GoScalarType(*layout.element) << " {\n";
+            ss << "  return __read" << ScalarHelperSuffix(layout.element->base_type)
+               << "(r.Buffer, " << element_offset << ")\n";
+            ss << "}\n\n";
+            ss << "func (r " << record.name << ") Mutate" << field_name
+               << "(j int, value " << GoScalarType(*layout.element) << ") {\n";
+            ss << "  __write" << ScalarHelperSuffix(layout.element->base_type)
+               << "(r.Buffer, " << element_offset << ", value)\n";
+            ss << "}\n\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "func (r " << record.name << ") " << field_name
+               << "(j int) " << layout.element->record->name << " {\n";
+            ss << "  return " << layout.element->record->name
+               << "FromPointer(r.Buffer, " << element_offset << ")\n";
+            ss << "}\n\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "func (r " << record.name << ") " << field_name
+               << "(j int) string {\n";
+            ss << "  return __decodeString(r.Buffer, " << element_offset << ", "
+               << layout.element->max_length << ")\n";
+            ss << "}\n\n";
+            ss << "func (r " << record.name << ") Mutate" << field_name
+               << "(j int, value string) {\n";
+            ss << "  __encodeString(r.Buffer, " << element_offset << ", "
+               << layout.element->max_length << ", value)\n";
+            ss << "}\n\n";
+          }
+          continue;
+        }
+
+        if (layout.kind == InlineLayout::Kind::kVector) {
+          ss << "func (r " << record.name << ") " << field_name
+             << "Length() int {\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "  if !r.Has" << field_name << "() { return 0 }\n";
+          }
+          ss << "  length := int(__readUInt32(r.Buffer, " << field_offset << "))\n";
+          ss << "  if length > " << layout.max_count << " { length = "
+             << layout.max_count << " }\n";
+          ss << "  return length\n";
+          ss << "}\n\n";
+          ss << "func (r " << record.name << ") Mutate" << field_name
+             << "Length(length int) {\n";
+          ss << "  if length < 0 { length = 0 }\n";
+          ss << "  if length > " << layout.max_count << " { length = "
+             << layout.max_count << " }\n";
+          ss << "  __writeUInt32(r.Buffer, " << field_offset
+             << ", uint32(length))\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "  r.MutateHas" << field_name << "(true)\n";
+          }
+          ss << "}\n\n";
+          const std::string element_offset =
+              field_offset + " + " + record.name + field_name +
+              "DataOffset + j * " + record.name + field_name + "Stride";
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            ss << "func (r " << record.name << ") " << field_name
+               << "(j int) " << GoScalarType(*layout.element) << " {\n";
+            ss << "  return __read" << ScalarHelperSuffix(layout.element->base_type)
+               << "(r.Buffer, " << element_offset << ")\n";
+            ss << "}\n\n";
+            ss << "func (r " << record.name << ") Mutate" << field_name
+               << "(j int, value " << GoScalarType(*layout.element) << ") {\n";
+            ss << "  __write" << ScalarHelperSuffix(layout.element->base_type)
+               << "(r.Buffer, " << element_offset << ", value)\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "  r.MutateHas" << field_name << "(true)\n";
+            }
+            ss << "}\n\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "func (r " << record.name << ") " << field_name
+               << "(j int) " << layout.element->record->name << " {\n";
+            ss << "  return " << layout.element->record->name
+               << "FromPointer(r.Buffer, " << element_offset << ")\n";
+            ss << "}\n\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "func (r " << record.name << ") " << field_name
+               << "(j int) string {\n";
+            ss << "  return __decodeString(r.Buffer, " << element_offset << ", "
+               << layout.element->max_length << ")\n";
+            ss << "}\n\n";
+            ss << "func (r " << record.name << ") Mutate" << field_name
+               << "(j int, value string) {\n";
+            ss << "  __encodeString(r.Buffer, " << element_offset << ", "
+               << layout.element->max_length << ", value)\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "  r.MutateHas" << field_name << "(true)\n";
+            }
+            ss << "}\n\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kUnion) {
+            const std::string helper_name = UnionCellName(record, field);
+            ss << "func (r " << record.name << ") " << field_name
+               << "(j int) " << helper_name << " {\n";
+            ss << "  return " << helper_name << "FromPointer(r.Buffer, "
+               << element_offset << ")\n";
+            ss << "}\n\n";
+          }
+          continue;
+        }
+
+        if (layout.kind == InlineLayout::Kind::kUnion) {
+          const std::string helper_name = UnionCellName(record, field);
+          ss << "func (r " << record.name << ") " << field_name
+             << "Type() " << GoScalarType(layout) << " {\n";
+          ss << "  return __read" << ScalarHelperSuffix(layout.base_type)
+             << "(r.Buffer, " << field_offset << " + "
+             << layout.discriminator_offset << ")\n";
+          ss << "}\n\n";
+          ss << "func (r " << record.name << ") Mutate" << field_name
+             << "Type(value " << GoScalarType(layout) << ") {\n";
+          ss << "  __write" << ScalarHelperSuffix(layout.base_type)
+             << "(r.Buffer, " << field_offset << " + "
+             << layout.discriminator_offset << ", value)\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "  r.MutateHas" << field_name << "(true)\n";
+          }
+          ss << "}\n\n";
+          ss << "func (r " << record.name << ") " << field_name
+             << "() " << helper_name << " {\n";
+          ss << "  return " << helper_name << "FromPointer(r.Buffer, "
+             << field_offset << ")\n";
+          ss << "}\n\n";
+        }
       }
     }
 
@@ -794,15 +1288,125 @@ class Generator : public BaseGenerator {
 
   std::string GeneratePython() const {
     std::ostringstream ss;
-    ss << "# Auto-generated aligned fixed-layout metadata scaffolds.\n";
+    ss << "# Auto-generated aligned fixed-layout bindings.\n";
     ss << "# DO NOT EDIT - Generated by flatc --aligned\n\n";
+    ss << "import struct\n\n";
     ss << "def _read_presence(buffer, base, bit_index):\n";
     ss << "    byte_index = bit_index // 8\n";
     ss << "    mask = 1 << (bit_index % 8)\n";
     ss << "    return (buffer[base + byte_index] & mask) != 0\n\n";
+    ss << "def _write_presence(buffer, base, bit_index, value):\n";
+    ss << "    byte_index = bit_index // 8\n";
+    ss << "    mask = 1 << (bit_index % 8)\n";
+    ss << "    current = buffer[base + byte_index]\n";
+    ss << "    buffer[base + byte_index] = (current | mask) if value else (current & ~mask)\n\n";
+    ss << "def _read_bool(buffer, offset): return buffer[offset] != 0\n";
+    ss << "def _write_bool(buffer, offset, value): buffer[offset] = 1 if value else 0\n";
+    ss << "def _read_int8(buffer, offset): return int.from_bytes(buffer[offset:offset + 1], 'little', signed=True)\n";
+    ss << "def _write_int8(buffer, offset, value): buffer[offset:offset + 1] = int(value).to_bytes(1, 'little', signed=True)\n";
+    ss << "def _read_uint8(buffer, offset): return buffer[offset]\n";
+    ss << "def _write_uint8(buffer, offset, value): buffer[offset] = int(value) & 0xFF\n";
+    ss << "def _read_int16(buffer, offset): return int.from_bytes(buffer[offset:offset + 2], 'little', signed=True)\n";
+    ss << "def _write_int16(buffer, offset, value): buffer[offset:offset + 2] = int(value).to_bytes(2, 'little', signed=True)\n";
+    ss << "def _read_uint16(buffer, offset): return int.from_bytes(buffer[offset:offset + 2], 'little', signed=False)\n";
+    ss << "def _write_uint16(buffer, offset, value): buffer[offset:offset + 2] = int(value).to_bytes(2, 'little', signed=False)\n";
+    ss << "def _read_int32(buffer, offset): return int.from_bytes(buffer[offset:offset + 4], 'little', signed=True)\n";
+    ss << "def _write_int32(buffer, offset, value): buffer[offset:offset + 4] = int(value).to_bytes(4, 'little', signed=True)\n";
+    ss << "def _read_uint32(buffer, offset): return int.from_bytes(buffer[offset:offset + 4], 'little', signed=False)\n";
+    ss << "def _write_uint32(buffer, offset, value): buffer[offset:offset + 4] = int(value).to_bytes(4, 'little', signed=False)\n";
+    ss << "def _read_int64(buffer, offset): return int.from_bytes(buffer[offset:offset + 8], 'little', signed=True)\n";
+    ss << "def _write_int64(buffer, offset, value): buffer[offset:offset + 8] = int(value).to_bytes(8, 'little', signed=True)\n";
+    ss << "def _read_uint64(buffer, offset): return int.from_bytes(buffer[offset:offset + 8], 'little', signed=False)\n";
+    ss << "def _write_uint64(buffer, offset, value): buffer[offset:offset + 8] = int(value).to_bytes(8, 'little', signed=False)\n";
+    ss << "def _read_float32(buffer, offset): return struct.unpack_from('<f', buffer, offset)[0]\n";
+    ss << "def _write_float32(buffer, offset, value): struct.pack_into('<f', buffer, offset, value)\n";
+    ss << "def _read_float64(buffer, offset): return struct.unpack_from('<d', buffer, offset)[0]\n";
+    ss << "def _write_float64(buffer, offset, value): struct.pack_into('<d', buffer, offset, value)\n\n";
+    ss << "def _decode_string(buffer, offset, max_length):\n";
+    ss << "    length = min(buffer[offset], max_length)\n";
+    ss << "    return bytes(buffer[offset + 1:offset + 1 + length]).decode('utf-8')\n\n";
+    ss << "def _encode_string(buffer, offset, max_length, value):\n";
+    ss << "    raw = value.encode('utf-8')\n";
+    ss << "    length = min(len(raw), max_length)\n";
+    ss << "    buffer[offset] = length\n";
+    ss << "    buffer[offset + 1:offset + 1 + max_length] = b'\\x00' * max_length\n";
+    ss << "    buffer[offset + 1:offset + 1 + length] = raw[:length]\n\n";
 
     for (size_t i = 0; i < schema_layout_.records.size(); ++i) {
       const RecordLayout& record = *schema_layout_.records[i];
+      for (size_t f = 0; f < record.fields.size(); ++f) {
+        const FieldLayout& field = record.fields[f];
+        const InlineLayout& layout = *field.layout;
+        if (!IsUnionLayout(layout) && !IsVectorOfUnionLayout(layout)) { continue; }
+
+        const InlineLayout& union_layout = UnionLayoutForField(layout);
+        const std::string helper_name = UnionCellName(record, field);
+        ss << "class " << helper_name << ":\n";
+        if (!union_layout.union_members.empty()) {
+          for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+            const UnionMemberLayout& member = union_layout.union_members[m];
+            ss << "    " << UpperSnake(member.value->name) << "_TYPE = "
+               << member.value->GetAsUInt64() << "\n";
+          }
+          ss << "\n";
+        }
+        ss << "    def __init__(self, buffer, offset=0):\n";
+        ss << "        self.buffer = memoryview(buffer).cast('B')\n";
+        ss << "        self.offset = offset\n\n";
+        ss << "    @classmethod\n";
+        ss << "    def from_bytes(cls, buffer, offset=0):\n";
+        ss << "        return cls(buffer, offset)\n\n";
+        ss << "    def Type(self):\n";
+        ss << "        return _read_" << LowerCase(ScalarHelperSuffix(union_layout.base_type))
+           << "(self.buffer, self.offset + " << union_layout.discriminator_offset << ")\n\n";
+        ss << "    def MutateType(self, value):\n";
+        ss << "        _write_" << LowerCase(ScalarHelperSuffix(union_layout.base_type))
+           << "(self.buffer, self.offset + " << union_layout.discriminator_offset
+           << ", value)\n\n";
+        for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+          const UnionMemberLayout& member = union_layout.union_members[m];
+          const InlineLayout& member_layout = *member.layout;
+          const std::string member_name = PascalCase(member.value->name);
+          const std::string payload_offset =
+              "self.offset + " + NumToString(union_layout.payload_offset);
+          ss << "    def Is" << member_name << "(self):\n";
+          ss << "        return self.Type() == self." << UpperSnake(member.value->name)
+             << "_TYPE\n\n";
+          if (member_layout.kind == InlineLayout::Kind::kScalar) {
+            ss << "    def " << member_name << "(self):\n";
+            ss << "        return _read_"
+               << LowerCase(ScalarHelperSuffix(member_layout.base_type))
+               << "(self.buffer, " << payload_offset << ")\n\n";
+            ss << "    def Mutate" << member_name << "(self, value):\n";
+            ss << "        _write_"
+               << LowerCase(ScalarHelperSuffix(member_layout.base_type))
+               << "(self.buffer, " << payload_offset << ", value)\n";
+            ss << "        self.MutateType(self." << UpperSnake(member.value->name)
+               << "_TYPE)\n\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kRecord) {
+            ss << "    def " << member_name << "(self):\n";
+            ss << "        return " << member_layout.record->name
+               << ".from_bytes(self.buffer, " << payload_offset << ")\n\n";
+            ss << "    def Mutate" << member_name << "From(self, src):\n";
+            ss << "        self.buffer[" << payload_offset << ":" << payload_offset
+               << " + " << member_layout.size << "] = src.buffer[src.offset:src.offset + "
+               << member_layout.size << "]\n";
+            ss << "        self.MutateType(self." << UpperSnake(member.value->name)
+               << "_TYPE)\n\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kString) {
+            ss << "    def " << member_name << "(self):\n";
+            ss << "        return _decode_string(self.buffer, " << payload_offset
+               << ", " << member_layout.max_length << ")\n\n";
+            ss << "    def Mutate" << member_name << "(self, value):\n";
+            ss << "        _encode_string(self.buffer, " << payload_offset << ", "
+               << member_layout.max_length << ", value)\n";
+            ss << "        self.MutateType(self." << UpperSnake(member.value->name)
+               << "_TYPE)\n\n";
+          }
+        }
+
+      }
+
       ss << "class " << record.name << ":\n";
       ss << "    SIZE = " << record.size << "\n";
       ss << "    ALIGN = " << record.align << "\n";
@@ -841,17 +1445,157 @@ class Generator : public BaseGenerator {
       }
       ss << "\n";
       ss << "    def __init__(self, buffer, offset=0):\n";
-      ss << "        self.buffer = memoryview(buffer)\n";
+      ss << "        self.buffer = memoryview(buffer).cast('B')\n";
       ss << "        self.offset = offset\n\n";
       ss << "    @classmethod\n";
       ss << "    def from_bytes(cls, buffer, offset=0):\n";
       ss << "        return cls(buffer, offset)\n\n";
       for (size_t f = 0; f < record.fields.size(); ++f) {
         const FieldLayout& field = record.fields[f];
-        if (field.presence_index == FieldLayout::kNoPresence) { continue; }
-        ss << "    def has_" << field.name << "(self):\n";
-        ss << "        return _read_presence(self.buffer, self.offset, self."
-           << UpperSnake(field.name) << "_PRESENCE_BIT)\n\n";
+        const InlineLayout& layout = *field.layout;
+        const std::string field_name = PascalCase(field.name);
+        const std::string field_offset =
+            "self.offset + self." + UpperSnake(field.name) + "_OFFSET";
+        if (field.presence_index != FieldLayout::kNoPresence) {
+          ss << "    def Has" << field_name << "(self):\n";
+          ss << "        return _read_presence(self.buffer, self.offset, self."
+             << UpperSnake(field.name) << "_PRESENCE_BIT)\n\n";
+          ss << "    def MutateHas" << field_name << "(self, value):\n";
+          ss << "        _write_presence(self.buffer, self.offset, self."
+             << UpperSnake(field.name) << "_PRESENCE_BIT, value)\n\n";
+        }
+        if (layout.kind == InlineLayout::Kind::kScalar) {
+          ss << "    def " << field_name << "(self):\n";
+          ss << "        return _read_" << LowerCase(ScalarHelperSuffix(layout.base_type))
+             << "(self.buffer, " << field_offset << ")\n\n";
+          ss << "    def Mutate" << field_name << "(self, value):\n";
+          ss << "        _write_" << LowerCase(ScalarHelperSuffix(layout.base_type))
+             << "(self.buffer, " << field_offset << ", value)\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        self.MutateHas" << field_name << "(True)\n";
+          }
+          ss << "\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kRecord) {
+          ss << "    def " << field_name << "(self):\n";
+          ss << "        return " << layout.record->name << ".from_bytes(self.buffer, "
+             << field_offset << ")\n\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kString) {
+          ss << "    def " << field_name << "(self):\n";
+          ss << "        return _decode_string(self.buffer, " << field_offset << ", "
+             << layout.max_length << ")\n\n";
+          ss << "    def Mutate" << field_name << "(self, value):\n";
+          ss << "        _encode_string(self.buffer, " << field_offset << ", "
+             << layout.max_length << ", value)\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        self.MutateHas" << field_name << "(True)\n";
+          }
+          ss << "\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kArray) {
+          ss << "    def " << field_name << "Length(self):\n";
+          ss << "        return " << layout.fixed_length << "\n\n";
+          const std::string element_offset =
+              field_offset + " + j * " + NumToString(layout.stride);
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            ss << "    def " << field_name << "(self, j):\n";
+            ss << "        return _read_"
+               << LowerCase(ScalarHelperSuffix(layout.element->base_type))
+               << "(self.buffer, " << element_offset << ")\n\n";
+            ss << "    def Mutate" << field_name << "(self, j, value):\n";
+            ss << "        _write_"
+               << LowerCase(ScalarHelperSuffix(layout.element->base_type))
+               << "(self.buffer, " << element_offset << ", value)\n\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "    def " << field_name << "(self, j):\n";
+            ss << "        return " << layout.element->record->name
+               << ".from_bytes(self.buffer, " << element_offset << ")\n\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "    def " << field_name << "(self, j):\n";
+            ss << "        return _decode_string(self.buffer, " << element_offset
+               << ", " << layout.element->max_length << ")\n\n";
+            ss << "    def Mutate" << field_name << "(self, j, value):\n";
+            ss << "        _encode_string(self.buffer, " << element_offset << ", "
+               << layout.element->max_length << ", value)\n\n";
+          }
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kVector) {
+          ss << "    def " << field_name << "Length(self):\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        if not self.Has" << field_name << "():\n";
+            ss << "            return 0\n";
+          }
+          ss << "        length = _read_uint32(self.buffer, " << field_offset << ")\n";
+          ss << "        return min(length, " << layout.max_count << ")\n\n";
+          ss << "    def Mutate" << field_name << "Length(self, length):\n";
+          ss << "        length = max(0, min(int(length), " << layout.max_count << "))\n";
+          ss << "        _write_uint32(self.buffer, " << field_offset << ", length)\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        self.MutateHas" << field_name << "(True)\n";
+          }
+          ss << "\n";
+          const std::string element_offset =
+              field_offset + " + self." + UpperSnake(field.name) +
+              "_DATA_OFFSET + j * self." + UpperSnake(field.name) + "_STRIDE";
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            ss << "    def " << field_name << "(self, j):\n";
+            ss << "        return _read_"
+               << LowerCase(ScalarHelperSuffix(layout.element->base_type))
+               << "(self.buffer, " << element_offset << ")\n\n";
+            ss << "    def Mutate" << field_name << "(self, j, value):\n";
+            ss << "        _write_"
+               << LowerCase(ScalarHelperSuffix(layout.element->base_type))
+               << "(self.buffer, " << element_offset << ", value)\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "        self.MutateHas" << field_name << "(True)\n";
+            }
+            ss << "\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "    def " << field_name << "(self, j):\n";
+            ss << "        return " << layout.element->record->name
+               << ".from_bytes(self.buffer, " << element_offset << ")\n\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "    def " << field_name << "(self, j):\n";
+            ss << "        return _decode_string(self.buffer, " << element_offset
+               << ", " << layout.element->max_length << ")\n\n";
+            ss << "    def Mutate" << field_name << "(self, j, value):\n";
+            ss << "        _encode_string(self.buffer, " << element_offset << ", "
+               << layout.element->max_length << ", value)\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "        self.MutateHas" << field_name << "(True)\n";
+            }
+            ss << "\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kUnion) {
+            const std::string helper_name = UnionCellName(record, field);
+            ss << "    def " << field_name << "(self, j):\n";
+            ss << "        return " << helper_name
+               << ".from_bytes(self.buffer, " << element_offset << ")\n\n";
+          }
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kUnion) {
+          const std::string helper_name = UnionCellName(record, field);
+          ss << "    def " << field_name << "Type(self):\n";
+          ss << "        return _read_" << LowerCase(ScalarHelperSuffix(layout.base_type))
+             << "(self.buffer, " << field_offset << " + "
+             << layout.discriminator_offset << ")\n\n";
+          ss << "    def Mutate" << field_name << "Type(self, value):\n";
+          ss << "        _write_" << LowerCase(ScalarHelperSuffix(layout.base_type))
+             << "(self.buffer, " << field_offset << " + "
+             << layout.discriminator_offset << ", value)\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        self.MutateHas" << field_name << "(True)\n";
+          }
+          ss << "\n";
+          ss << "    def " << field_name << "(self):\n";
+          ss << "        return " << helper_name << ".from_bytes(self.buffer, "
+             << field_offset << ")\n\n";
+        }
       }
     }
 
@@ -860,19 +1604,177 @@ class Generator : public BaseGenerator {
 
   std::string GenerateRust() const {
     std::ostringstream ss;
-    ss << "// Auto-generated aligned fixed-layout metadata scaffolds.\n";
+    ss << "// Auto-generated aligned fixed-layout bindings.\n";
     ss << "// DO NOT EDIT - Generated by flatc --aligned\n\n";
+    ss << "use std::convert::TryInto;\n";
+    ss << "use std::marker::PhantomData;\n\n";
     ss << "fn __read_presence(buffer: &[u8], base: usize, bit_index: usize) -> bool {\n";
     ss << "    let byte_index = bit_index / 8;\n";
     ss << "    let mask = 1u8 << (bit_index % 8);\n";
     ss << "    (buffer[base + byte_index] & mask) != 0\n";
     ss << "}\n\n";
+    ss << "fn __write_presence(buffer: &mut [u8], base: usize, bit_index: usize, value: bool) {\n";
+    ss << "    let byte_index = bit_index / 8;\n";
+    ss << "    let mask = 1u8 << (bit_index % 8);\n";
+    ss << "    if value {\n";
+    ss << "        buffer[base + byte_index] |= mask;\n";
+    ss << "    } else {\n";
+    ss << "        buffer[base + byte_index] &= !mask;\n";
+    ss << "    }\n";
+    ss << "}\n\n";
+    ss << "fn __read_bool(buffer: &[u8], offset: usize) -> bool { buffer[offset] != 0 }\n";
+    ss << "fn __write_bool(buffer: &mut [u8], offset: usize, value: bool) { buffer[offset] = if value { 1 } else { 0 }; }\n";
+    ss << "fn __read_int8(buffer: &[u8], offset: usize) -> i8 { buffer[offset] as i8 }\n";
+    ss << "fn __write_int8(buffer: &mut [u8], offset: usize, value: i8) { buffer[offset] = value as u8; }\n";
+    ss << "fn __read_uint8(buffer: &[u8], offset: usize) -> u8 { buffer[offset] }\n";
+    ss << "fn __write_uint8(buffer: &mut [u8], offset: usize, value: u8) { buffer[offset] = value; }\n";
+    ss << "fn __read_int16(buffer: &[u8], offset: usize) -> i16 { i16::from_le_bytes(buffer[offset..offset + 2].try_into().unwrap()) }\n";
+    ss << "fn __write_int16(buffer: &mut [u8], offset: usize, value: i16) { buffer[offset..offset + 2].copy_from_slice(&value.to_le_bytes()); }\n";
+    ss << "fn __read_uint16(buffer: &[u8], offset: usize) -> u16 { u16::from_le_bytes(buffer[offset..offset + 2].try_into().unwrap()) }\n";
+    ss << "fn __write_uint16(buffer: &mut [u8], offset: usize, value: u16) { buffer[offset..offset + 2].copy_from_slice(&value.to_le_bytes()); }\n";
+    ss << "fn __read_int32(buffer: &[u8], offset: usize) -> i32 { i32::from_le_bytes(buffer[offset..offset + 4].try_into().unwrap()) }\n";
+    ss << "fn __write_int32(buffer: &mut [u8], offset: usize, value: i32) { buffer[offset..offset + 4].copy_from_slice(&value.to_le_bytes()); }\n";
+    ss << "fn __read_uint32(buffer: &[u8], offset: usize) -> u32 { u32::from_le_bytes(buffer[offset..offset + 4].try_into().unwrap()) }\n";
+    ss << "fn __write_uint32(buffer: &mut [u8], offset: usize, value: u32) { buffer[offset..offset + 4].copy_from_slice(&value.to_le_bytes()); }\n";
+    ss << "fn __read_int64(buffer: &[u8], offset: usize) -> i64 { i64::from_le_bytes(buffer[offset..offset + 8].try_into().unwrap()) }\n";
+    ss << "fn __write_int64(buffer: &mut [u8], offset: usize, value: i64) { buffer[offset..offset + 8].copy_from_slice(&value.to_le_bytes()); }\n";
+    ss << "fn __read_uint64(buffer: &[u8], offset: usize) -> u64 { u64::from_le_bytes(buffer[offset..offset + 8].try_into().unwrap()) }\n";
+    ss << "fn __write_uint64(buffer: &mut [u8], offset: usize, value: u64) { buffer[offset..offset + 8].copy_from_slice(&value.to_le_bytes()); }\n";
+    ss << "fn __read_float32(buffer: &[u8], offset: usize) -> f32 { f32::from_le_bytes(buffer[offset..offset + 4].try_into().unwrap()) }\n";
+    ss << "fn __write_float32(buffer: &mut [u8], offset: usize, value: f32) { buffer[offset..offset + 4].copy_from_slice(&value.to_le_bytes()); }\n";
+    ss << "fn __read_float64(buffer: &[u8], offset: usize) -> f64 { f64::from_le_bytes(buffer[offset..offset + 8].try_into().unwrap()) }\n";
+    ss << "fn __write_float64(buffer: &mut [u8], offset: usize, value: f64) { buffer[offset..offset + 8].copy_from_slice(&value.to_le_bytes()); }\n\n";
+    ss << "fn __decode_string(buffer: &[u8], offset: usize, max_length: usize) -> String {\n";
+    ss << "    let length = usize::min(buffer[offset] as usize, max_length);\n";
+    ss << "    String::from_utf8_lossy(&buffer[offset + 1..offset + 1 + length]).into_owned()\n";
+    ss << "}\n\n";
+    ss << "fn __encode_string(buffer: &mut [u8], offset: usize, max_length: usize, value: &str) {\n";
+    ss << "    let raw = value.as_bytes();\n";
+    ss << "    let length = usize::min(raw.len(), max_length);\n";
+    ss << "    buffer[offset] = length as u8;\n";
+    ss << "    buffer[offset + 1..offset + 1 + max_length].fill(0);\n";
+    ss << "    buffer[offset + 1..offset + 1 + length].copy_from_slice(&raw[..length]);\n";
+    ss << "}\n\n";
 
     for (size_t i = 0; i < schema_layout_.records.size(); ++i) {
       const RecordLayout& record = *schema_layout_.records[i];
+      for (size_t f = 0; f < record.fields.size(); ++f) {
+        const FieldLayout& field = record.fields[f];
+        const InlineLayout& layout = *field.layout;
+        if (!IsUnionLayout(layout) && !IsVectorOfUnionLayout(layout)) { continue; }
+        const InlineLayout& union_layout = UnionLayoutForField(layout);
+        const std::string helper_name = UnionCellName(record, field);
+        ss << "#[derive(Copy, Clone)]\n";
+        ss << "pub struct " << helper_name << "<'a> {\n";
+        ss << "    ptr: *mut u8,\n";
+        ss << "    len: usize,\n";
+        ss << "    offset: usize,\n";
+        ss << "    _marker: PhantomData<&'a mut [u8]>,\n";
+        ss << "}\n\n";
+        ss << "impl<'a> " << helper_name << "<'a> {\n";
+        if (!union_layout.union_members.empty()) {
+          for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+            const UnionMemberLayout& member = union_layout.union_members[m];
+            ss << "    pub const " << UpperSnake(member.value->name) << "_TYPE: "
+               << RustScalarType(union_layout) << " = "
+               << member.value->GetAsUInt64() << ";\n";
+          }
+          ss << "\n";
+        }
+        ss << "    fn from_raw_parts(ptr: *mut u8, len: usize, offset: usize) -> Self {\n";
+        ss << "        Self { ptr, len, offset, _marker: PhantomData }\n";
+        ss << "    }\n\n";
+        ss << "    pub fn from_pointer(buffer: &'a mut [u8], offset: usize) -> Self {\n";
+        ss << "        Self::from_raw_parts(buffer.as_mut_ptr(), buffer.len(), offset)\n";
+        ss << "    }\n\n";
+        ss << "    fn bytes(&self) -> &[u8] {\n";
+        ss << "        unsafe { std::slice::from_raw_parts(self.ptr as *const u8, self.len) }\n";
+        ss << "    }\n\n";
+        ss << "    fn bytes_mut(&mut self) -> &mut [u8] {\n";
+        ss << "        unsafe { std::slice::from_raw_parts_mut(self.ptr, self.len) }\n";
+        ss << "    }\n\n";
+        ss << "    pub fn type_(&self) -> " << RustScalarType(union_layout) << " {\n";
+        ss << "        __read_" << LowerCase(ScalarHelperSuffix(union_layout.base_type))
+           << "(self.bytes(), self.offset + " << union_layout.discriminator_offset
+           << ")\n";
+        ss << "    }\n\n";
+        ss << "    pub fn mutate_type(&mut self, value: " << RustScalarType(union_layout)
+           << ") {\n";
+        ss << "        let offset = self.offset + "
+           << union_layout.discriminator_offset << ";\n";
+        ss << "        __write_" << LowerCase(ScalarHelperSuffix(union_layout.base_type))
+           << "(self.bytes_mut(), offset, value);\n";
+        ss << "    }\n";
+        for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+          const UnionMemberLayout& member = union_layout.union_members[m];
+          const InlineLayout& member_layout = *member.layout;
+          const std::string member_fn = LowerCamelCase(member.value->name);
+          const std::string payload_offset =
+              "self.offset + " + NumToString(union_layout.payload_offset);
+          ss << "\n";
+          ss << "    pub fn is_" << member_fn << "(&self) -> bool {\n";
+          ss << "        self.type_() == Self::" << UpperSnake(member.value->name)
+             << "_TYPE\n";
+          ss << "    }\n";
+          if (member_layout.kind == InlineLayout::Kind::kScalar) {
+            ss << "\n";
+            ss << "    pub fn " << member_fn << "(&self) -> "
+               << RustScalarType(member_layout) << " {\n";
+            ss << "        __read_" << LowerCase(ScalarHelperSuffix(member_layout.base_type))
+               << "(self.bytes(), " << payload_offset << ")\n";
+            ss << "    }\n";
+            ss << "\n";
+            ss << "    pub fn mutate_" << member_fn << "(&mut self, value: "
+               << RustScalarType(member_layout) << ") {\n";
+            ss << "        let offset = " << payload_offset << ";\n";
+            ss << "        __write_" << LowerCase(ScalarHelperSuffix(member_layout.base_type))
+               << "(self.bytes_mut(), offset, value);\n";
+            ss << "        self.mutate_type(Self::" << UpperSnake(member.value->name)
+               << "_TYPE);\n";
+            ss << "    }\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kRecord) {
+            ss << "\n";
+            ss << "    pub fn " << member_fn << "(&self) -> "
+               << member_layout.record->name << "<'a> {\n";
+            ss << "        " << member_layout.record->name
+               << "::from_raw_parts(self.ptr, self.len, " << payload_offset << ")\n";
+            ss << "    }\n";
+            ss << "\n";
+            ss << "    pub fn mutate_" << member_fn << "_from(&mut self, src: "
+               << member_layout.record->name << "<'a>) {\n";
+            ss << "        let start = " << payload_offset << ";\n";
+            ss << "        let end = start + " << member_layout.size << ";\n";
+            ss << "        self.bytes_mut()[start..end].copy_from_slice(&src.bytes()[src.offset..src.offset + "
+               << member_layout.size << "]);\n";
+            ss << "        self.mutate_type(Self::" << UpperSnake(member.value->name)
+               << "_TYPE);\n";
+            ss << "    }\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kString) {
+            ss << "\n";
+            ss << "    pub fn " << member_fn << "(&self) -> String {\n";
+            ss << "        __decode_string(self.bytes(), " << payload_offset << ", "
+               << member_layout.max_length << ")\n";
+            ss << "    }\n";
+            ss << "\n";
+            ss << "    pub fn mutate_" << member_fn
+               << "(&mut self, value: &str) {\n";
+            ss << "        let offset = " << payload_offset << ";\n";
+            ss << "        __encode_string(self.bytes_mut(), offset, "
+               << member_layout.max_length << ", value);\n";
+            ss << "        self.mutate_type(Self::" << UpperSnake(member.value->name)
+               << "_TYPE);\n";
+            ss << "    }\n";
+          }
+        }
+        ss << "}\n\n";
+      }
+
+      ss << "#[derive(Copy, Clone)]\n";
       ss << "pub struct " << record.name << "<'a> {\n";
-      ss << "    pub buffer: &'a [u8],\n";
-      ss << "    pub offset: usize,\n";
+      ss << "    ptr: *mut u8,\n";
+      ss << "    len: usize,\n";
+      ss << "    offset: usize,\n";
+      ss << "    _marker: PhantomData<&'a mut [u8]>,\n";
       ss << "}\n\n";
       ss << "impl<'a> " << record.name << "<'a> {\n";
       ss << "    pub const SIZE: usize = " << record.size << ";\n";
@@ -918,17 +1820,231 @@ class Generator : public BaseGenerator {
         }
       }
       ss << "\n";
-      ss << "    pub fn from_pointer(buffer: &'a [u8], offset: usize) -> Self {\n";
-      ss << "        Self { buffer, offset }\n";
+      ss << "    fn from_raw_parts(ptr: *mut u8, len: usize, offset: usize) -> Self {\n";
+      ss << "        Self { ptr, len, offset, _marker: PhantomData }\n";
+      ss << "    }\n\n";
+      ss << "    pub fn from_pointer(buffer: &'a mut [u8], offset: usize) -> Self {\n";
+      ss << "        Self::from_raw_parts(buffer.as_mut_ptr(), buffer.len(), offset)\n";
+      ss << "    }\n\n";
+      ss << "    fn bytes(&self) -> &[u8] {\n";
+      ss << "        unsafe { std::slice::from_raw_parts(self.ptr as *const u8, self.len) }\n";
+      ss << "    }\n\n";
+      ss << "    fn bytes_mut(&mut self) -> &mut [u8] {\n";
+      ss << "        unsafe { std::slice::from_raw_parts_mut(self.ptr, self.len) }\n";
       ss << "    }\n";
       for (size_t f = 0; f < record.fields.size(); ++f) {
         const FieldLayout& field = record.fields[f];
-        if (field.presence_index == FieldLayout::kNoPresence) { continue; }
-        ss << "\n";
-        ss << "    pub fn has_" << field.name << "(&self) -> bool {\n";
-        ss << "        __read_presence(self.buffer, self.offset, Self::"
-           << UpperSnake(field.name) << "_PRESENCE_BIT)\n";
-        ss << "    }\n";
+        const InlineLayout& layout = *field.layout;
+        const std::string field_name = field.name;
+        const std::string field_offset =
+            "self.offset + Self::" + UpperSnake(field.name) + "_OFFSET";
+        if (field.presence_index != FieldLayout::kNoPresence) {
+          ss << "\n";
+          ss << "    pub fn has_" << field_name << "(&self) -> bool {\n";
+          ss << "        __read_presence(self.bytes(), self.offset, Self::"
+             << UpperSnake(field.name) << "_PRESENCE_BIT)\n";
+          ss << "    }\n";
+          ss << "\n";
+          ss << "    pub fn mutate_has_" << field_name << "(&mut self, value: bool) {\n";
+          ss << "        let base = self.offset;\n";
+          ss << "        __write_presence(self.bytes_mut(), base, Self::"
+             << UpperSnake(field.name) << "_PRESENCE_BIT, value);\n";
+          ss << "    }\n";
+        }
+        if (layout.kind == InlineLayout::Kind::kScalar) {
+          ss << "\n";
+          ss << "    pub fn " << field_name << "(&self) -> "
+             << RustScalarType(layout) << " {\n";
+          ss << "        __read_" << LowerCase(ScalarHelperSuffix(layout.base_type))
+             << "(self.bytes(), " << field_offset << ")\n";
+          ss << "    }\n";
+          ss << "\n";
+          ss << "    pub fn mutate_" << field_name << "(&mut self, value: "
+             << RustScalarType(layout) << ") {\n";
+          ss << "        let offset = " << field_offset << ";\n";
+          ss << "        __write_" << LowerCase(ScalarHelperSuffix(layout.base_type))
+             << "(self.bytes_mut(), offset, value);\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        self.mutate_has_" << field_name << "(true);\n";
+          }
+          ss << "    }\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kRecord) {
+          ss << "\n";
+          ss << "    pub fn " << field_name << "(&self) -> "
+             << layout.record->name << "<'a> {\n";
+          ss << "        " << layout.record->name
+             << "::from_raw_parts(self.ptr, self.len, " << field_offset << ")\n";
+          ss << "    }\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kString) {
+          ss << "\n";
+          ss << "    pub fn " << field_name << "(&self) -> String {\n";
+          ss << "        __decode_string(self.bytes(), " << field_offset << ", "
+             << layout.max_length << ")\n";
+          ss << "    }\n";
+          ss << "\n";
+          ss << "    pub fn mutate_" << field_name
+             << "(&mut self, value: &str) {\n";
+          ss << "        let offset = " << field_offset << ";\n";
+          ss << "        __encode_string(self.bytes_mut(), offset, "
+             << layout.max_length << ", value);\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        self.mutate_has_" << field_name << "(true);\n";
+          }
+          ss << "    }\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kArray) {
+          const std::string element_offset =
+              field_offset + " + j * " + NumToString(layout.stride);
+          ss << "\n";
+          ss << "    pub fn " << field_name << "_length(&self) -> usize {\n";
+          ss << "        " << layout.fixed_length << "\n";
+          ss << "    }\n";
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            ss << "\n";
+            ss << "    pub fn " << field_name << "(&self, j: usize) -> "
+               << RustScalarType(*layout.element) << " {\n";
+            ss << "        __read_"
+               << LowerCase(ScalarHelperSuffix(layout.element->base_type))
+               << "(self.bytes(), " << element_offset << ")\n";
+            ss << "    }\n";
+            ss << "\n";
+            ss << "    pub fn mutate_" << field_name << "(&mut self, j: usize, value: "
+               << RustScalarType(*layout.element) << ") {\n";
+            ss << "        let offset = " << element_offset << ";\n";
+            ss << "        __write_"
+               << LowerCase(ScalarHelperSuffix(layout.element->base_type))
+               << "(self.bytes_mut(), offset, value);\n";
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "\n";
+            ss << "    pub fn " << field_name << "(&self, j: usize) -> "
+               << layout.element->record->name << "<'a> {\n";
+            ss << "        " << layout.element->record->name
+               << "::from_raw_parts(self.ptr, self.len, " << element_offset << ")\n";
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "\n";
+            ss << "    pub fn " << field_name << "(&self, j: usize) -> String {\n";
+            ss << "        __decode_string(self.bytes(), " << element_offset << ", "
+               << layout.element->max_length << ")\n";
+            ss << "    }\n";
+            ss << "\n";
+            ss << "    pub fn mutate_" << field_name
+               << "(&mut self, j: usize, value: &str) {\n";
+            ss << "        let offset = " << element_offset << ";\n";
+            ss << "        __encode_string(self.bytes_mut(), offset, "
+               << layout.element->max_length << ", value);\n";
+            ss << "    }\n";
+          }
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kVector) {
+          const std::string element_offset =
+              field_offset + " + Self::" + UpperSnake(field.name) +
+              "_DATA_OFFSET + j * Self::" + UpperSnake(field.name) + "_STRIDE";
+          ss << "\n";
+          ss << "    pub fn " << field_name << "_length(&self) -> usize {\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        if !self.has_" << field_name << "() { return 0; }\n";
+          }
+          ss << "        usize::min(__read_uint32(self.bytes(), " << field_offset
+             << ") as usize, " << layout.max_count << ")\n";
+          ss << "    }\n";
+          ss << "\n";
+          ss << "    pub fn mutate_" << field_name
+             << "_length(&mut self, length: usize) {\n";
+          ss << "        let offset = " << field_offset << ";\n";
+          ss << "        __write_uint32(self.bytes_mut(), offset, usize::min(length, "
+             << layout.max_count << ") as u32);\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        self.mutate_has_" << field_name << "(true);\n";
+          }
+          ss << "    }\n";
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            ss << "\n";
+            ss << "    pub fn " << field_name << "(&self, j: usize) -> "
+               << RustScalarType(*layout.element) << " {\n";
+            ss << "        __read_"
+               << LowerCase(ScalarHelperSuffix(layout.element->base_type))
+               << "(self.bytes(), " << element_offset << ")\n";
+            ss << "    }\n";
+            ss << "\n";
+            ss << "    pub fn mutate_" << field_name << "(&mut self, j: usize, value: "
+               << RustScalarType(*layout.element) << ") {\n";
+            ss << "        let offset = " << element_offset << ";\n";
+            ss << "        __write_"
+               << LowerCase(ScalarHelperSuffix(layout.element->base_type))
+               << "(self.bytes_mut(), offset, value);\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "        self.mutate_has_" << field_name << "(true);\n";
+            }
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "\n";
+            ss << "    pub fn " << field_name << "(&self, j: usize) -> "
+               << layout.element->record->name << "<'a> {\n";
+            ss << "        " << layout.element->record->name
+               << "::from_raw_parts(self.ptr, self.len, " << element_offset << ")\n";
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "\n";
+            ss << "    pub fn " << field_name << "(&self, j: usize) -> String {\n";
+            ss << "        __decode_string(self.bytes(), " << element_offset << ", "
+               << layout.element->max_length << ")\n";
+            ss << "    }\n";
+            ss << "\n";
+            ss << "    pub fn mutate_" << field_name
+               << "(&mut self, j: usize, value: &str) {\n";
+            ss << "        let offset = " << element_offset << ";\n";
+            ss << "        __encode_string(self.bytes_mut(), offset, "
+               << layout.element->max_length << ", value);\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "        self.mutate_has_" << field_name << "(true);\n";
+            }
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kUnion) {
+            const std::string helper_name = UnionCellName(record, field);
+            ss << "\n";
+            ss << "    pub fn " << field_name << "(&self, j: usize) -> "
+               << helper_name << "<'a> {\n";
+            ss << "        " << helper_name
+               << "::from_raw_parts(self.ptr, self.len, " << element_offset << ")\n";
+            ss << "    }\n";
+          }
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kUnion) {
+          const std::string helper_name = UnionCellName(record, field);
+          ss << "\n";
+          ss << "    pub fn " << field_name << "_type(&self) -> "
+             << RustScalarType(layout) << " {\n";
+          ss << "        __read_" << LowerCase(ScalarHelperSuffix(layout.base_type))
+             << "(self.bytes(), " << field_offset << " + "
+             << layout.discriminator_offset << ")\n";
+          ss << "    }\n";
+          ss << "\n";
+          ss << "    pub fn mutate_" << field_name << "_type(&mut self, value: "
+             << RustScalarType(layout) << ") {\n";
+          ss << "        let offset = " << field_offset << " + "
+             << layout.discriminator_offset << ";\n";
+          ss << "        __write_" << LowerCase(ScalarHelperSuffix(layout.base_type))
+             << "(self.bytes_mut(), offset, value);\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        self.mutate_has_" << field_name << "(true);\n";
+          }
+          ss << "    }\n";
+          ss << "\n";
+          ss << "    pub fn " << field_name << "(&self) -> " << helper_name
+             << "<'a> {\n";
+          ss << "        " << helper_name << "::from_raw_parts(self.ptr, self.len, "
+             << field_offset << ")\n";
+          ss << "    }\n";
+        }
       }
       ss << "}\n\n";
     }

@@ -337,6 +337,16 @@ std::string TsGetterName(BaseType base_type) {
   }
 }
 
+bool TsScalarUsesEndian(BaseType base_type) {
+  switch (base_type) {
+    case BASE_TYPE_BOOL:
+    case BASE_TYPE_CHAR:
+    case BASE_TYPE_UCHAR:
+    case BASE_TYPE_UTYPE: return false;
+    default: return true;
+  }
+}
+
 std::string TsSetterName(BaseType base_type) {
   switch (base_type) {
     case BASE_TYPE_BOOL:
@@ -394,7 +404,9 @@ std::string BuildTsReadScalar(const std::string& view_expr,
                               const InlineLayout& layout,
                               const std::string& offset_expr) {
   std::string result = view_expr + "." + TsGetterName(layout.base_type) + "(" +
-                       offset_expr + ", true)";
+                       offset_expr;
+  if (TsScalarUsesEndian(layout.base_type)) { result += ", true"; }
+  result += ")";
   if (layout.base_type == BASE_TYPE_BOOL) { result = "(" + result + " !== 0)"; }
   return result;
 }
@@ -405,8 +417,12 @@ std::string BuildTsWriteScalar(const std::string& view_expr,
                                const std::string& value_expr) {
   std::string rhs = value_expr;
   if (layout.base_type == BASE_TYPE_BOOL) { rhs = "(" + value_expr + " ? 1 : 0)"; }
-  return view_expr + "." + TsSetterName(layout.base_type) + "(" + offset_expr +
-         ", " + rhs + ", true);";
+  std::string result =
+      view_expr + "." + TsSetterName(layout.base_type) + "(" + offset_expr +
+      ", " + rhs;
+  if (TsScalarUsesEndian(layout.base_type)) { result += ", true"; }
+  result += ");";
+  return result;
 }
 
 struct GeneratedOutputs {
@@ -589,6 +605,11 @@ class Generator : public BaseGenerator {
     ss << "    return std::min<uint32_t>(length, static_cast<uint32_t>(MaxCount));\n";
     ss << "  }\n\n";
     ss << "  void clear() { length = 0; }\n";
+    ss << "  void set_length(uint32_t value) {\n";
+    ss << "    length = std::min<uint32_t>(value, static_cast<uint32_t>(MaxCount));\n";
+    ss << "  }\n";
+    ss << "  T &at(size_t index) { return values[index]; }\n";
+    ss << "  const T &at(size_t index) const { return values[index]; }\n";
     ss << "};\n\n";
     ss << "}  // namespace aligned_runtime\n";
     ss << "}  // namespace flatbuffers\n\n";
@@ -612,12 +633,18 @@ class Generator : public BaseGenerator {
               layout.element->kind == InlineLayout::Kind::kUnion)) {
           continue;
         }
-        const std::string helper_name =
-            record.name + "_" + field.name + "_UnionCell";
+        const std::string helper_name = UnionCellName(record, field);
         const InlineLayout& union_layout =
             layout.kind == InlineLayout::Kind::kUnion ? layout : *layout.element;
         const size_t discrim_size = ScalarByteWidth(union_layout.base_type);
         ss << "struct " << helper_name << " {\n";
+        for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+          const UnionMemberLayout& member = union_layout.union_members[m];
+          ss << "  static constexpr " << CppScalarType(union_layout) << " "
+             << UpperSnake(member.value->name) << "_TYPE = "
+             << member.value->GetAsUInt64() << ";\n";
+        }
+        if (!union_layout.union_members.empty()) { ss << "\n"; }
         ss << "  " << CppScalarType(union_layout) << " type;\n";
         if (union_layout.payload_offset > discrim_size) {
           ss << "  uint8_t __padding["
@@ -626,6 +653,61 @@ class Generator : public BaseGenerator {
         }
         ss << "  alignas(" << union_layout.payload_align << ") "
            << "uint8_t payload[" << NumToString(union_layout.payload_size) << "];\n";
+        ss << "\n";
+        ss << "  " << CppScalarType(union_layout) << " get_type() const { return type; }\n";
+        ss << "  void set_type(" << CppScalarType(union_layout) << " value) { type = value; }\n";
+        for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+          const UnionMemberLayout& member = union_layout.union_members[m];
+          const InlineLayout& member_layout = *member.layout;
+          const std::string member_name = LowerCamelCase(member.value->name);
+          const std::string member_pascal = PascalCase(member.value->name);
+          const std::string member_const = NumToString(member.value->GetAsUInt64());
+          if (member_layout.kind == InlineLayout::Kind::kScalar) {
+            const std::string scalar_type = CppScalarType(member_layout);
+            ss << "  bool is_" << member_name << "() const { return type == "
+               << member_const << "; }\n";
+            ss << "  " << scalar_type << " " << member_name << "() const {\n";
+            ss << "    return *reinterpret_cast<const " << scalar_type
+               << " *>(payload);\n";
+            ss << "  }\n";
+            ss << "  void set_" << member_name << "(" << scalar_type << " value) {\n";
+            ss << "    *reinterpret_cast<" << scalar_type << " *>(payload) = value;\n";
+            ss << "    type = " << member_const << ";\n";
+            ss << "  }\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kRecord) {
+            ss << "  bool is_" << member_name << "() const { return type == "
+               << member_const << "; }\n";
+            ss << "  " << member_layout.record->name << " *" << member_name << "() {\n";
+            ss << "    return reinterpret_cast<" << member_layout.record->name
+               << " *>(payload);\n";
+            ss << "  }\n";
+            ss << "  const " << member_layout.record->name << " *" << member_name
+               << "() const {\n";
+            ss << "    return reinterpret_cast<const "
+               << member_layout.record->name << " *>(payload);\n";
+            ss << "  }\n";
+            ss << "  void set_" << member_name << "_from(const "
+               << member_layout.record->name << " &value) {\n";
+            ss << "    std::memcpy(payload, &value, " << member_layout.size << ");\n";
+            ss << "    type = " << member_const << ";\n";
+            ss << "  }\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kString) {
+            const std::string string_type = CppInlineType(member_layout, helper_name);
+            ss << "  bool is_" << member_name << "() const { return type == "
+               << member_const << "; }\n";
+            ss << "  " << string_type << " *" << member_name << "() {\n";
+            ss << "    return reinterpret_cast<" << string_type << " *>(payload);\n";
+            ss << "  }\n";
+            ss << "  const " << string_type << " *" << member_name << "() const {\n";
+            ss << "    return reinterpret_cast<const " << string_type
+               << " *>(payload);\n";
+            ss << "  }\n";
+            ss << "  void set_" << member_name << "(const std::string &value) {\n";
+            ss << "    " << member_name << "()->set(value);\n";
+            ss << "    type = " << member_const << ";\n";
+            ss << "  }\n";
+          }
+        }
         ss << "};\n";
         ss << "static_assert(sizeof(" << helper_name << ") == "
            << union_layout.size << ", \"" << helper_name
@@ -641,8 +723,7 @@ class Generator : public BaseGenerator {
       }
       for (size_t f = 0; f < record.fields.size(); ++f) {
         const FieldLayout& field = record.fields[f];
-        const std::string union_cell_type =
-            record.name + "_" + field.name + "_UnionCell";
+        const std::string union_cell_type = UnionCellName(record, field);
         ss << "  " << CppFieldType(field, *field.layout, union_cell_type) << ";\n";
       }
       ss << "\n";
@@ -706,23 +787,35 @@ class Generator : public BaseGenerator {
     if (typescript) {
       ss << "type BufferLike = ArrayBufferLike;\n\n";
     }
-    ss << "function __readPresence(view, base, bitIndex) {\n";
+    ss << "function __readPresence(view";
+    if (typescript) { ss << ": DataView, base: number, bitIndex: number): boolean"; }
+    else { ss << ", base, bitIndex)"; }
+    ss << " {\n";
     ss << "  const byteIndex = Math.floor(bitIndex / 8);\n";
     ss << "  const mask = 1 << (bitIndex % 8);\n";
     ss << "  return (view.getUint8(base + byteIndex) & mask) !== 0;\n";
     ss << "}\n\n";
-    ss << "function __writePresence(view, base, bitIndex, value) {\n";
+    ss << "function __writePresence(view";
+    if (typescript) { ss << ": DataView, base: number, bitIndex: number, value: boolean): void"; }
+    else { ss << ", base, bitIndex, value)"; }
+    ss << " {\n";
     ss << "  const byteIndex = Math.floor(bitIndex / 8);\n";
     ss << "  const mask = 1 << (bitIndex % 8);\n";
     ss << "  const current = view.getUint8(base + byteIndex);\n";
     ss << "  view.setUint8(base + byteIndex, value ? (current | mask) : (current & ~mask));\n";
     ss << "}\n\n";
-    ss << "function __decodeString(view, offset, maxLength) {\n";
+    ss << "function __decodeString(view";
+    if (typescript) { ss << ": DataView, offset: number, maxLength: number): string"; }
+    else { ss << ", offset, maxLength)"; }
+    ss << " {\n";
     ss << "  const length = Math.min(view.getUint8(offset), maxLength);\n";
     ss << "  const bytes = new Uint8Array(view.buffer, view.byteOffset + offset + 1, length);\n";
     ss << "  return new TextDecoder().decode(bytes);\n";
     ss << "}\n\n";
-    ss << "function __encodeString(view, offset, maxLength, value) {\n";
+    ss << "function __encodeString(view";
+    if (typescript) { ss << ": DataView, offset: number, maxLength: number, value: string): void"; }
+    else { ss << ", offset, maxLength, value)"; }
+    ss << " {\n";
     ss << "  const encoder = new TextEncoder();\n";
     ss << "  const bytes = encoder.encode(value);\n";
     ss << "  const length = Math.min(bytes.length, maxLength);\n";
@@ -734,6 +827,127 @@ class Generator : public BaseGenerator {
 
     for (size_t i = 0; i < schema_layout_.records.size(); ++i) {
       const RecordLayout& record = *schema_layout_.records[i];
+      for (size_t f = 0; f < record.fields.size(); ++f) {
+        const FieldLayout& field = record.fields[f];
+        const InlineLayout& layout = *field.layout;
+        if (!IsUnionLayout(layout) && !IsVectorOfUnionLayout(layout)) { continue; }
+        const InlineLayout& union_layout = UnionLayoutForField(layout);
+        const std::string helper_name = UnionCellName(record, field);
+        if (typescript) {
+          ss << "export class " << helper_name << " {\n";
+          for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+            const UnionMemberLayout& member = union_layout.union_members[m];
+            ss << "  static readonly " << UpperSnake(member.value->name)
+               << "_TYPE = " << member.value->GetAsUInt64() << ";\n";
+          }
+          ss << "  readonly view: DataView;\n";
+          ss << "  constructor(public readonly buffer: BufferLike, public readonly offset = 0) {\n";
+          ss << "    this.view = new DataView(buffer);\n";
+          ss << "  }\n";
+          ss << "  static fromPointer(buffer: BufferLike, offset = 0): " << helper_name
+             << " { return new " << helper_name << "(buffer, offset); }\n\n";
+        } else {
+          ss << "export class " << helper_name << " {\n";
+          for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+            const UnionMemberLayout& member = union_layout.union_members[m];
+            ss << "  static " << UpperSnake(member.value->name)
+               << "_TYPE = " << member.value->GetAsUInt64() << ";\n";
+          }
+          ss << "  constructor(buffer, offset = 0) {\n";
+          ss << "    this.buffer = buffer;\n";
+          ss << "    this.offset = offset;\n";
+          ss << "    this.view = new DataView(buffer);\n";
+          ss << "  }\n";
+          ss << "  static fromPointer(buffer, offset = 0) { return new " << helper_name
+             << "(buffer, offset); }\n\n";
+        }
+        ss << "  type()";
+        if (typescript) { ss << ": number"; }
+        ss << " {\n";
+        ss << "    return " << BuildTsReadScalar("this.view", union_layout,
+                                                  "this.offset + " +
+                                                      NumToString(union_layout.discriminator_offset))
+           << ";\n";
+        ss << "  }\n\n";
+        ss << "  setType(value";
+        if (typescript) { ss << ": number"; }
+        ss << ") {\n";
+        ss << "    " << BuildTsWriteScalar(
+            "this.view", union_layout,
+            "this.offset + " + NumToString(union_layout.discriminator_offset), "value")
+           << "\n";
+        ss << "  }\n";
+        for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+          const UnionMemberLayout& member = union_layout.union_members[m];
+          const InlineLayout& member_layout = *member.layout;
+          const std::string member_name = LowerCamelCase(member.value->name);
+          const std::string member_pascal = PascalCase(member.value->name);
+          const std::string payload_offset =
+              "this.offset + " + NumToString(union_layout.payload_offset);
+          ss << "\n";
+          ss << "  is" << member_pascal << "()";
+          if (typescript) { ss << ": boolean"; }
+          ss << " {\n";
+          ss << "    return this.type() === " << helper_name << "."
+             << UpperSnake(member.value->name) << "_TYPE;\n";
+          ss << "  }\n";
+          if (member_layout.kind == InlineLayout::Kind::kScalar) {
+            ss << "\n";
+            ss << "  " << member_name << "()";
+            if (typescript) { ss << ": " << TsScalarType(member_layout); }
+            ss << " {\n";
+            ss << "    return "
+               << BuildTsReadScalar("this.view", member_layout, payload_offset) << ";\n";
+            ss << "  }\n\n";
+            ss << "  set" << member_pascal << "(value";
+            if (typescript) { ss << ": " << TsScalarType(member_layout); }
+            ss << ") {\n";
+            ss << "    " << BuildTsWriteScalar("this.view", member_layout,
+                                              payload_offset, "value")
+               << "\n";
+            ss << "    this.setType(" << helper_name << "."
+               << UpperSnake(member.value->name) << "_TYPE);\n";
+            ss << "  }\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kRecord) {
+            ss << "\n";
+            ss << "  " << member_name << "()";
+            if (typescript) { ss << ": " << member_layout.record->name; }
+            ss << " {\n";
+            ss << "    return new " << member_layout.record->name << "(this.buffer, "
+               << payload_offset << ");\n";
+            ss << "  }\n\n";
+            ss << "  set" << member_pascal << "From(value";
+            if (typescript) { ss << ": " << member_layout.record->name; }
+            ss << ") {\n";
+            ss << "    const dest = new Uint8Array(this.buffer, " << payload_offset
+               << ", " << member_layout.size << ");\n";
+            ss << "    const src = new Uint8Array(value.buffer, value.offset, "
+               << member_layout.size << ");\n";
+            ss << "    dest.set(src);\n";
+            ss << "    this.setType(" << helper_name << "."
+               << UpperSnake(member.value->name) << "_TYPE);\n";
+            ss << "  }\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kString) {
+            ss << "\n";
+            ss << "  " << member_name << "()";
+            if (typescript) { ss << ": string"; }
+            ss << " {\n";
+            ss << "    return __decodeString(this.view, " << payload_offset << ", "
+               << member_layout.max_length << ");\n";
+            ss << "  }\n\n";
+            ss << "  set" << member_pascal << "(value";
+            if (typescript) { ss << ": string"; }
+            ss << ") {\n";
+            ss << "    __encodeString(this.view, " << payload_offset << ", "
+               << member_layout.max_length << ", value);\n";
+            ss << "    this.setType(" << helper_name << "."
+               << UpperSnake(member.value->name) << "_TYPE);\n";
+            ss << "  }\n";
+          }
+        }
+        ss << "}\n\n";
+      }
+
       const std::string class_name = TsRecordType(record);
       if (typescript) {
         ss << "export class " << class_name << " {\n";
@@ -760,143 +974,227 @@ class Generator : public BaseGenerator {
       for (size_t f = 0; f < record.fields.size(); ++f) {
         const FieldLayout& field = record.fields[f];
         const InlineLayout& layout = *field.layout;
+        const std::string field_name = LowerCamelCase(field.name);
+        const std::string field_pascal = PascalCase(field.name);
         const std::string field_offset = "this.offset + " + NumToString(field.offset);
-
         if (field.presence_index != FieldLayout::kNoPresence) {
-          ss << "  " << (typescript ? "" : "") << "has" << field.name << "() {\n";
+          ss << "  has" << field_pascal << "()";
+          if (typescript) { ss << ": boolean"; }
+          ss << " {\n";
           ss << "    return __readPresence(this.view, this.offset, "
              << field.presence_index << ");\n";
           ss << "  }\n\n";
+          ss << "  setHas" << field_pascal << "(value";
+          if (typescript) { ss << ": boolean"; }
+          ss << ") {\n";
+          ss << "    __writePresence(this.view, this.offset, "
+             << field.presence_index << ", value);\n";
+          ss << "  }\n\n";
         }
-
         if (layout.kind == InlineLayout::Kind::kScalar) {
-          ss << "  get " << field.name << "()";
+          ss << "  " << field_name << "()";
           if (typescript) { ss << ": " << TsScalarType(layout); }
           ss << " {\n";
           ss << "    return " << BuildTsReadScalar("this.view", layout, field_offset)
              << ";\n";
           ss << "  }\n\n";
-          ss << "  set " << field.name << "(value";
+          ss << "  set" << field_pascal << "(value";
           if (typescript) { ss << ": " << TsScalarType(layout); }
           ss << ") {\n";
           ss << "    " << BuildTsWriteScalar("this.view", layout, field_offset, "value")
              << "\n";
           if (field.presence_index != FieldLayout::kNoPresence) {
-            ss << "    __writePresence(this.view, this.offset, "
-               << field.presence_index << ", true);\n";
+            ss << "    this.setHas" << field_pascal << "(true);\n";
           }
           ss << "  }\n\n";
           continue;
         }
-
         if (layout.kind == InlineLayout::Kind::kRecord) {
-          ss << "  get " << field.name << "()";
-          if (typescript) {
-            ss << ": " << layout.record->name;
-            if (field.presence_index != FieldLayout::kNoPresence) { ss << " | null"; }
-          }
+          ss << "  " << field_name << "()";
+          if (typescript) { ss << ": " << layout.record->name; }
           ss << " {\n";
-          if (field.presence_index != FieldLayout::kNoPresence) {
-            ss << "    if (!this.has" << field.name << "()) { return null; }\n";
-          }
           ss << "    return new " << layout.record->name << "(this.buffer, "
              << field_offset << ");\n";
           ss << "  }\n\n";
           continue;
         }
-
         if (layout.kind == InlineLayout::Kind::kString) {
-          ss << "  get " << field.name << "()";
-          if (typescript) {
-            ss << ": string";
-            if (field.presence_index != FieldLayout::kNoPresence) { ss << " | null"; }
-          }
+          ss << "  " << field_name << "()";
+          if (typescript) { ss << ": string"; }
           ss << " {\n";
-          if (field.presence_index != FieldLayout::kNoPresence) {
-            ss << "    if (!this.has" << field.name << "()) { return null; }\n";
-          }
           ss << "    return __decodeString(this.view, " << field_offset << ", "
              << layout.max_length << ");\n";
           ss << "  }\n\n";
-          ss << "  set " << field.name << "(value";
+          ss << "  set" << field_pascal << "(value";
           if (typescript) { ss << ": string"; }
           ss << ") {\n";
           ss << "    __encodeString(this.view, " << field_offset << ", "
              << layout.max_length << ", value);\n";
           if (field.presence_index != FieldLayout::kNoPresence) {
-            ss << "    __writePresence(this.view, this.offset, "
-               << field.presence_index << ", true);\n";
+            ss << "    this.setHas" << field_pascal << "(true);\n";
           }
           ss << "  }\n\n";
           continue;
         }
-
         if (layout.kind == InlineLayout::Kind::kArray) {
-          ss << "  get " << field.name << "()";
-          if (typescript) { ss << ": Array<any>"; }
-          ss << " {\n";
-          ss << "    const result = [];\n";
-          ss << "    for (let i = 0; i < " << layout.fixed_length << "; ++i) {\n";
+          const std::string element_offset =
+              field_offset + " + i * " + NumToString(layout.stride);
+          ss << "  " << field_name << "Length()";
+          if (typescript) { ss << ": number"; }
+          ss << " { return " << layout.fixed_length << "; }\n\n";
           if (layout.element->kind == InlineLayout::Kind::kScalar) {
-            ss << "      result.push(" << BuildTsReadScalar(
-                "this.view", *layout.element,
-                field_offset + " + i * " + NumToString(layout.stride))
-               << ");\n";
+            ss << "  " << field_name << "At(i";
+            if (typescript) { ss << ": number"; }
+            ss << ")";
+            if (typescript) { ss << ": " << TsScalarType(*layout.element); }
+            ss << " {\n";
+            ss << "    return "
+               << BuildTsReadScalar("this.view", *layout.element, element_offset)
+               << ";\n";
+            ss << "  }\n\n";
+            ss << "  set" << field_pascal << "At(i";
+            if (typescript) { ss << ": number, value: " << TsScalarType(*layout.element); }
+            else { ss << ", value"; }
+            ss << ") {\n";
+            ss << "    " << BuildTsWriteScalar("this.view", *layout.element, element_offset,
+                                              "value")
+               << "\n";
+            ss << "  }\n\n";
           } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
-            ss << "      result.push(new " << layout.element->record->name
-               << "(this.buffer, " << field_offset << " + i * "
-               << layout.stride << "));\n";
+            ss << "  " << field_name << "At(i";
+            if (typescript) { ss << ": number"; }
+            ss << ")";
+            if (typescript) { ss << ": " << layout.element->record->name; }
+            ss << " {\n";
+            ss << "    return new " << layout.element->record->name << "(this.buffer, "
+               << element_offset << ");\n";
+            ss << "  }\n\n";
           } else if (layout.element->kind == InlineLayout::Kind::kString) {
-            ss << "      result.push(__decodeString(this.view, " << field_offset
-               << " + i * " << layout.stride << ", "
-               << layout.element->max_length << "));\n";
+            ss << "  " << field_name << "At(i";
+            if (typescript) { ss << ": number"; }
+            ss << ")";
+            if (typescript) { ss << ": string"; }
+            ss << " {\n";
+            ss << "    return __decodeString(this.view, " << element_offset << ", "
+               << layout.element->max_length << ");\n";
+            ss << "  }\n\n";
+            ss << "  set" << field_pascal << "At(i";
+            if (typescript) { ss << ": number, value: string"; }
+            else { ss << ", value"; }
+            ss << ") {\n";
+            ss << "    __encodeString(this.view, " << element_offset << ", "
+               << layout.element->max_length << ", value);\n";
+            ss << "  }\n\n";
           }
-          ss << "    }\n";
-          ss << "    return result;\n";
-          ss << "  }\n\n";
           continue;
         }
-
         if (layout.kind == InlineLayout::Kind::kVector) {
-          ss << "  get " << field.name << "()";
-          if (typescript) { ss << ": Array<any>"; }
-          ss << " {\n";
-          if (field.presence_index != FieldLayout::kNoPresence) {
-            ss << "    if (!this.has" << field.name << "()) { return []; }\n";
-          }
-          ss << "    const length = Math.min(this.view.getUint32(" << field_offset
-             << ", true), " << layout.max_count << ");\n";
-          ss << "    const result = [];\n";
-          ss << "    for (let i = 0; i < length; ++i) {\n";
-          const std::string elem_offset =
+          const std::string element_offset =
               field_offset + " + " + NumToString(layout.data_offset) +
               " + i * " + NumToString(layout.stride);
-          if (layout.element->kind == InlineLayout::Kind::kScalar) {
-            ss << "      result.push(" << BuildTsReadScalar("this.view",
-                                                             *layout.element,
-                                                             elem_offset)
-               << ");\n";
-          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
-            ss << "      result.push(new " << layout.element->record->name
-               << "(this.buffer, " << elem_offset << "));\n";
-          } else if (layout.element->kind == InlineLayout::Kind::kString) {
-            ss << "      result.push(__decodeString(this.view, " << elem_offset
-               << ", " << layout.element->max_length << "));\n";
-          } else {
-            ss << "      result.push({ offset: " << elem_offset << " });\n";
+          ss << "  " << field_name << "Length()";
+          if (typescript) { ss << ": number"; }
+          ss << " {\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "    if (!this.has" << field_pascal << "()) { return 0; }\n";
           }
-          ss << "    }\n";
-          ss << "    return result;\n";
+          ss << "    return Math.min(this.view.getUint32(" << field_offset << ", true), "
+             << layout.max_count << ");\n";
           ss << "  }\n\n";
+          ss << "  set" << field_pascal << "Length(length";
+          if (typescript) { ss << ": number"; }
+          ss << ") {\n";
+          ss << "    const bounded = Math.max(0, Math.min(length, " << layout.max_count
+             << "));\n";
+          ss << "    this.view.setUint32(" << field_offset << ", bounded, true);\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "    this.setHas" << field_pascal << "(true);\n";
+          }
+          ss << "  }\n\n";
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            ss << "  " << field_name << "At(i";
+            if (typescript) { ss << ": number"; }
+            ss << ")";
+            if (typescript) { ss << ": " << TsScalarType(*layout.element); }
+            ss << " {\n";
+            ss << "    return "
+               << BuildTsReadScalar("this.view", *layout.element, element_offset)
+               << ";\n";
+            ss << "  }\n\n";
+            ss << "  set" << field_pascal << "At(i";
+            if (typescript) { ss << ": number, value: " << TsScalarType(*layout.element); }
+            else { ss << ", value"; }
+            ss << ") {\n";
+            ss << "    " << BuildTsWriteScalar("this.view", *layout.element, element_offset,
+                                              "value")
+               << "\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "    this.setHas" << field_pascal << "(true);\n";
+            }
+            ss << "  }\n\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "  " << field_name << "At(i";
+            if (typescript) { ss << ": number"; }
+            ss << ")";
+            if (typescript) { ss << ": " << layout.element->record->name; }
+            ss << " {\n";
+            ss << "    return new " << layout.element->record->name << "(this.buffer, "
+               << element_offset << ");\n";
+            ss << "  }\n\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "  " << field_name << "At(i";
+            if (typescript) { ss << ": number"; }
+            ss << ")";
+            if (typescript) { ss << ": string"; }
+            ss << " {\n";
+            ss << "    return __decodeString(this.view, " << element_offset << ", "
+               << layout.element->max_length << ");\n";
+            ss << "  }\n\n";
+            ss << "  set" << field_pascal << "At(i";
+            if (typescript) { ss << ": number, value: string"; }
+            else { ss << ", value"; }
+            ss << ") {\n";
+            ss << "    __encodeString(this.view, " << element_offset << ", "
+               << layout.element->max_length << ", value);\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "    this.setHas" << field_pascal << "(true);\n";
+            }
+            ss << "  }\n\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kUnion) {
+            const std::string helper_name = UnionCellName(record, field);
+            ss << "  " << field_name << "At(i";
+            if (typescript) { ss << ": number"; }
+            ss << ")";
+            if (typescript) { ss << ": " << helper_name; }
+            ss << " {\n";
+            ss << "    return new " << helper_name << "(this.buffer, "
+               << element_offset << ");\n";
+            ss << "  }\n\n";
+          }
           continue;
         }
-
         if (layout.kind == InlineLayout::Kind::kUnion) {
-          ss << "  get " << field.name << "Type()";
+          const std::string helper_name = UnionCellName(record, field);
+          ss << "  " << field_name << "Type()";
           if (typescript) { ss << ": number"; }
           ss << " {\n";
           ss << "    return " << BuildTsReadScalar("this.view", layout, field_offset)
              << ";\n";
+          ss << "  }\n\n";
+          ss << "  set" << field_pascal << "Type(value";
+          if (typescript) { ss << ": number"; }
+          ss << ") {\n";
+          ss << "    " << BuildTsWriteScalar("this.view", layout, field_offset, "value")
+             << "\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "    this.setHas" << field_pascal << "(true);\n";
+          }
+          ss << "  }\n\n";
+          ss << "  " << field_name << "()";
+          if (typescript) { ss << ": " << helper_name; }
+          ss << " {\n";
+          ss << "    return new " << helper_name << "(this.buffer, " << field_offset
+             << ");\n";
           ss << "  }\n\n";
         }
       }
@@ -3252,17 +3550,133 @@ class Generator : public BaseGenerator {
 
   std::string GenerateDart() const {
     std::ostringstream ss;
-    ss << "// Auto-generated aligned fixed-layout metadata scaffolds.\n";
+    ss << "// Auto-generated aligned fixed-layout bindings.\n";
     ss << "// DO NOT EDIT - Generated by flatc --aligned\n\n";
+    ss << "import 'dart:convert';\n";
     ss << "import 'dart:typed_data';\n\n";
     ss << "bool _readPresence(ByteData data, int base, int bitIndex) {\n";
     ss << "  final byteIndex = bitIndex ~/ 8;\n";
     ss << "  final mask = 1 << (bitIndex % 8);\n";
     ss << "  return (data.getUint8(base + byteIndex) & mask) != 0;\n";
     ss << "}\n\n";
+    ss << "void _writePresence(ByteData data, int base, int bitIndex, bool value) {\n";
+    ss << "  final byteIndex = bitIndex ~/ 8;\n";
+    ss << "  final mask = 1 << (bitIndex % 8);\n";
+    ss << "  final current = data.getUint8(base + byteIndex);\n";
+    ss << "  data.setUint8(base + byteIndex, value ? (current | mask) : (current & ~mask));\n";
+    ss << "}\n\n";
+    ss << "bool _readBool(ByteData data, int offset) => data.getUint8(offset) != 0;\n";
+    ss << "void _writeBool(ByteData data, int offset, bool value) => data.setUint8(offset, value ? 1 : 0);\n";
+    ss << "int _readInt8(ByteData data, int offset) => data.getInt8(offset);\n";
+    ss << "void _writeInt8(ByteData data, int offset, int value) => data.setInt8(offset, value);\n";
+    ss << "int _readUInt8(ByteData data, int offset) => data.getUint8(offset);\n";
+    ss << "void _writeUInt8(ByteData data, int offset, int value) => data.setUint8(offset, value);\n";
+    ss << "int _readInt16(ByteData data, int offset) => data.getInt16(offset, Endian.little);\n";
+    ss << "void _writeInt16(ByteData data, int offset, int value) => data.setInt16(offset, value, Endian.little);\n";
+    ss << "int _readUInt16(ByteData data, int offset) => data.getUint16(offset, Endian.little);\n";
+    ss << "void _writeUInt16(ByteData data, int offset, int value) => data.setUint16(offset, value, Endian.little);\n";
+    ss << "int _readInt32(ByteData data, int offset) => data.getInt32(offset, Endian.little);\n";
+    ss << "void _writeInt32(ByteData data, int offset, int value) => data.setInt32(offset, value, Endian.little);\n";
+    ss << "int _readUInt32(ByteData data, int offset) => data.getUint32(offset, Endian.little);\n";
+    ss << "void _writeUInt32(ByteData data, int offset, int value) => data.setUint32(offset, value, Endian.little);\n";
+    ss << "int _readInt64(ByteData data, int offset) => data.getInt64(offset, Endian.little);\n";
+    ss << "void _writeInt64(ByteData data, int offset, int value) => data.setInt64(offset, value, Endian.little);\n";
+    ss << "int _readUInt64(ByteData data, int offset) => data.getUint64(offset, Endian.little);\n";
+    ss << "void _writeUInt64(ByteData data, int offset, int value) => data.setUint64(offset, value, Endian.little);\n";
+    ss << "double _readFloat32(ByteData data, int offset) => data.getFloat32(offset, Endian.little);\n";
+    ss << "void _writeFloat32(ByteData data, int offset, double value) => data.setFloat32(offset, value, Endian.little);\n";
+    ss << "double _readFloat64(ByteData data, int offset) => data.getFloat64(offset, Endian.little);\n";
+    ss << "void _writeFloat64(ByteData data, int offset, double value) => data.setFloat64(offset, value, Endian.little);\n";
+    ss << "String _decodeString(Uint8List buffer, int offset, int maxLength) {\n";
+    ss << "  final length = buffer[offset] < maxLength ? buffer[offset] : maxLength;\n";
+    ss << "  return utf8.decode(buffer.sublist(offset + 1, offset + 1 + length));\n";
+    ss << "}\n\n";
+    ss << "void _encodeString(Uint8List buffer, int offset, int maxLength, String value) {\n";
+    ss << "  final raw = utf8.encode(value);\n";
+    ss << "  final length = raw.length < maxLength ? raw.length : maxLength;\n";
+    ss << "  buffer[offset] = length;\n";
+    ss << "  for (var i = 0; i < maxLength; ++i) { buffer[offset + 1 + i] = 0; }\n";
+    ss << "  buffer.setRange(offset + 1, offset + 1 + length, raw);\n";
+    ss << "}\n\n";
 
     for (size_t i = 0; i < schema_layout_.records.size(); ++i) {
       const RecordLayout& record = *schema_layout_.records[i];
+      for (size_t f = 0; f < record.fields.size(); ++f) {
+        const FieldLayout& field = record.fields[f];
+        const InlineLayout& layout = *field.layout;
+        if (!IsUnionLayout(layout) && !IsVectorOfUnionLayout(layout)) { continue; }
+        const InlineLayout& union_layout = UnionLayoutForField(layout);
+        const std::string helper_name = UnionCellName(record, field);
+        ss << "class " << helper_name << " {\n";
+        for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+          const UnionMemberLayout& member = union_layout.union_members[m];
+          ss << "  static const int " << UpperSnake(member.value->name)
+             << "_TYPE = " << member.value->GetAsUInt64() << ";\n";
+        }
+        if (!union_layout.union_members.empty()) { ss << "\n"; }
+        ss << "  final Uint8List buffer;\n";
+        ss << "  final ByteData data;\n";
+        ss << "  final int offset;\n\n";
+        ss << "  " << helper_name << "(this.buffer, [this.offset = 0])\n";
+        ss << "      : data = ByteData.sublistView(buffer);\n\n";
+        ss << "  factory " << helper_name
+           << ".fromPointer(Uint8List buffer, [int offset = 0]) {\n";
+        ss << "    return " << helper_name << "(buffer, offset);\n";
+        ss << "  }\n\n";
+        ss << "  int type() => _read" << ScalarHelperSuffix(union_layout.base_type)
+           << "(data, offset + " << union_layout.discriminator_offset << ");\n\n";
+        ss << "  void mutateType(int value) {\n";
+        ss << "    _write" << ScalarHelperSuffix(union_layout.base_type)
+           << "(data, offset + " << union_layout.discriminator_offset << ", value);\n";
+        ss << "  }\n";
+        for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+          const UnionMemberLayout& member = union_layout.union_members[m];
+          const InlineLayout& member_layout = *member.layout;
+          const std::string member_name = LowerCamelCase(member.value->name);
+          const std::string member_pascal = PascalCase(member.value->name);
+          const std::string payload_offset =
+              "offset + " + NumToString(union_layout.payload_offset);
+          ss << "\n";
+          ss << "  bool is" << member_pascal << "() => type() == "
+             << UpperSnake(member.value->name) << "_TYPE;\n";
+          if (member_layout.kind == InlineLayout::Kind::kScalar) {
+            ss << "\n";
+            ss << "  " << DartScalarType(member_layout) << " " << member_name
+               << "() => _read" << ScalarHelperSuffix(member_layout.base_type)
+               << "(data, " << payload_offset << ");\n\n";
+            ss << "  void mutate" << member_pascal << "("
+               << DartScalarType(member_layout) << " value) {\n";
+            ss << "    _write" << ScalarHelperSuffix(member_layout.base_type)
+               << "(data, " << payload_offset << ", value"
+               << (member_layout.base_type == BASE_TYPE_BOOL ? " ? 1 : 0" : "")
+               << ");\n";
+            ss << "    mutateType(" << UpperSnake(member.value->name) << "_TYPE);\n";
+            ss << "  }\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kRecord) {
+            ss << "\n";
+            ss << "  " << member_layout.record->name << " " << member_name << "() => "
+               << member_layout.record->name << ".fromPointer(buffer, "
+               << payload_offset << ");\n\n";
+            ss << "  void mutate" << member_pascal << "From("
+               << member_layout.record->name << " src) {\n";
+            ss << "    buffer.setRange(" << payload_offset << ", " << payload_offset
+               << " + " << member_layout.size << ", src.buffer, src.offset);\n";
+            ss << "    mutateType(" << UpperSnake(member.value->name) << "_TYPE);\n";
+            ss << "  }\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kString) {
+            ss << "\n";
+            ss << "  String " << member_name << "() => _decodeString(buffer, "
+               << payload_offset << ", " << member_layout.max_length << ");\n\n";
+            ss << "  void mutate" << member_pascal << "(String value) {\n";
+            ss << "    _encodeString(buffer, " << payload_offset << ", "
+               << member_layout.max_length << ", value);\n";
+            ss << "    mutateType(" << UpperSnake(member.value->name) << "_TYPE);\n";
+            ss << "  }\n";
+          }
+        }
+        ss << "}\n\n";
+      }
+
       ss << "class " << record.name << " {\n";
       ss << "  static const int SIZE = " << record.size << ";\n";
       ss << "  static const int ALIGN = " << record.align << ";\n";
@@ -3307,21 +3721,179 @@ class Generator : public BaseGenerator {
         }
       }
       ss << "\n";
+      ss << "  final Uint8List buffer;\n";
       ss << "  final ByteData data;\n";
       ss << "  final int offset;\n\n";
-      ss << "  " << record.name << "(this.data, [this.offset = 0]);\n\n";
+      ss << "  " << record.name << "(this.buffer, [this.offset = 0])\n";
+      ss << "      : data = ByteData.sublistView(buffer);\n\n";
       ss << "  factory " << record.name
-         << ".fromPointer(ByteData data, [int offset = 0]) {\n";
-      ss << "    return " << record.name << "(data, offset);\n";
+         << ".fromPointer(Uint8List buffer, [int offset = 0]) {\n";
+      ss << "    return " << record.name << "(buffer, offset);\n";
       ss << "  }\n";
       for (size_t f = 0; f < record.fields.size(); ++f) {
         const FieldLayout& field = record.fields[f];
-        if (field.presence_index == FieldLayout::kNoPresence) { continue; }
-        ss << "\n";
-        ss << "  bool has" << PascalCase(field.name) << "() {\n";
-        ss << "    return _readPresence(data, offset, " << UpperSnake(field.name)
-           << "_PRESENCE_BIT);\n";
-        ss << "  }\n";
+        const InlineLayout& layout = *field.layout;
+        const std::string field_name = LowerCamelCase(field.name);
+        const std::string field_pascal = PascalCase(field.name);
+        const std::string field_offset =
+            "offset + " + UpperSnake(field.name) + "_OFFSET";
+        if (field.presence_index != FieldLayout::kNoPresence) {
+          ss << "\n";
+          ss << "  bool has" << field_pascal << "() => _readPresence(data, offset, "
+             << UpperSnake(field.name) << "_PRESENCE_BIT);\n\n";
+          ss << "  void mutateHas" << field_pascal << "(bool value) {\n";
+          ss << "    _writePresence(data, offset, " << UpperSnake(field.name)
+             << "_PRESENCE_BIT, value);\n";
+          ss << "  }\n";
+        }
+        if (layout.kind == InlineLayout::Kind::kScalar) {
+          ss << "\n";
+          ss << "  " << DartScalarType(layout) << " " << field_name
+             << "() => _read" << ScalarHelperSuffix(layout.base_type)
+             << "(data, " << field_offset << ");\n\n";
+          ss << "  void mutate" << field_pascal << "(" << DartScalarType(layout)
+             << " value) {\n";
+          ss << "    _write" << ScalarHelperSuffix(layout.base_type)
+             << "(data, " << field_offset << ", value"
+             << (layout.base_type == BASE_TYPE_BOOL ? " ? 1 : 0" : "")
+             << ");\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "    mutateHas" << field_pascal << "(true);\n";
+          }
+          ss << "  }\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kRecord) {
+          ss << "\n";
+          ss << "  " << layout.record->name << " " << field_name << "() => "
+             << layout.record->name << ".fromPointer(buffer, " << field_offset
+             << ");\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kString) {
+          ss << "\n";
+          ss << "  String " << field_name << "() => _decodeString(buffer, "
+             << field_offset << ", " << layout.max_length << ");\n\n";
+          ss << "  void mutate" << field_pascal << "(String value) {\n";
+          ss << "    _encodeString(buffer, " << field_offset << ", "
+             << layout.max_length << ", value);\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "    mutateHas" << field_pascal << "(true);\n";
+          }
+          ss << "  }\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kArray) {
+          const std::string element_offset =
+              field_offset + " + j * " + NumToString(layout.stride);
+          ss << "\n";
+          ss << "  int " << field_name << "Length() => " << layout.fixed_length << ";\n";
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            ss << "\n";
+            ss << "  " << DartScalarType(*layout.element) << " " << field_name
+               << "(int j) => _read" << ScalarHelperSuffix(layout.element->base_type)
+               << "(data, " << element_offset << ");\n\n";
+            ss << "  void mutate" << field_pascal << "(int j, "
+               << DartScalarType(*layout.element) << " value) {\n";
+            ss << "    _write" << ScalarHelperSuffix(layout.element->base_type)
+               << "(data, " << element_offset << ", value"
+               << (layout.element->base_type == BASE_TYPE_BOOL ? " ? 1 : 0" : "")
+               << ");\n";
+            ss << "  }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "\n";
+            ss << "  " << layout.element->record->name << " " << field_name
+               << "(int j) => " << layout.element->record->name
+               << ".fromPointer(buffer, " << element_offset << ");\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "\n";
+            ss << "  String " << field_name << "(int j) => _decodeString(buffer, "
+               << element_offset << ", " << layout.element->max_length << ");\n\n";
+            ss << "  void mutate" << field_pascal << "(int j, String value) {\n";
+            ss << "    _encodeString(buffer, " << element_offset << ", "
+               << layout.element->max_length << ", value);\n";
+            ss << "  }\n";
+          }
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kVector) {
+          const std::string element_offset =
+              field_offset + " + " + UpperSnake(field.name) +
+              "_DATA_OFFSET + j * " + UpperSnake(field.name) + "_STRIDE";
+          ss << "\n";
+          ss << "  int " << field_name << "Length() {\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "    if (!has" << field_pascal << "()) return 0;\n";
+          }
+          ss << "    final length = _readUInt32(data, " << field_offset << ");\n";
+          ss << "    return length < " << layout.max_count << " ? length : "
+             << layout.max_count << ";\n";
+          ss << "  }\n\n";
+          ss << "  void mutate" << field_pascal << "Length(int length) {\n";
+          ss << "    final bounded = length < 0 ? 0 : (length > "
+             << layout.max_count << " ? " << layout.max_count << " : length);\n";
+          ss << "    _writeUInt32(data, " << field_offset << ", bounded);\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "    mutateHas" << field_pascal << "(true);\n";
+          }
+          ss << "  }\n";
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            ss << "\n";
+            ss << "  " << DartScalarType(*layout.element) << " " << field_name
+               << "(int j) => _read" << ScalarHelperSuffix(layout.element->base_type)
+               << "(data, " << element_offset << ");\n\n";
+            ss << "  void mutate" << field_pascal << "(int j, "
+               << DartScalarType(*layout.element) << " value) {\n";
+            ss << "    _write" << ScalarHelperSuffix(layout.element->base_type)
+               << "(data, " << element_offset << ", value"
+               << (layout.element->base_type == BASE_TYPE_BOOL ? " ? 1 : 0" : "")
+               << ");\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "    mutateHas" << field_pascal << "(true);\n";
+            }
+            ss << "  }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "\n";
+            ss << "  " << layout.element->record->name << " " << field_name
+               << "(int j) => " << layout.element->record->name
+               << ".fromPointer(buffer, " << element_offset << ");\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "\n";
+            ss << "  String " << field_name << "(int j) => _decodeString(buffer, "
+               << element_offset << ", " << layout.element->max_length << ");\n\n";
+            ss << "  void mutate" << field_pascal << "(int j, String value) {\n";
+            ss << "    _encodeString(buffer, " << element_offset << ", "
+               << layout.element->max_length << ", value);\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "    mutateHas" << field_pascal << "(true);\n";
+            }
+            ss << "  }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kUnion) {
+            const std::string helper_name = UnionCellName(record, field);
+            ss << "\n";
+            ss << "  " << helper_name << " " << field_name << "(int j) => "
+               << helper_name << ".fromPointer(buffer, " << element_offset << ");\n";
+          }
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kUnion) {
+          const std::string helper_name = UnionCellName(record, field);
+          ss << "\n";
+          ss << "  int " << field_name << "Type() => _read"
+             << ScalarHelperSuffix(layout.base_type)
+             << "(data, " << field_offset << " + "
+             << layout.discriminator_offset << ");\n\n";
+          ss << "  void mutate" << field_pascal << "Type(int value) {\n";
+          ss << "    _write" << ScalarHelperSuffix(layout.base_type)
+             << "(data, " << field_offset << " + "
+             << layout.discriminator_offset << ", value);\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "    mutateHas" << field_pascal << "(true);\n";
+          }
+          ss << "  }\n\n";
+          ss << "  " << helper_name << " " << field_name << "() => "
+             << helper_name << ".fromPointer(buffer, " << field_offset << ");\n";
+        }
       }
       ss << "}\n\n";
     }
@@ -3331,18 +3903,170 @@ class Generator : public BaseGenerator {
 
   std::string GenerateSwift() const {
     std::ostringstream ss;
-    ss << "// Auto-generated aligned fixed-layout metadata scaffolds.\n";
+    ss << "// Auto-generated aligned fixed-layout bindings.\n";
     ss << "// DO NOT EDIT - Generated by flatc --aligned\n\n";
     ss << "import Foundation\n\n";
-    ss << "private func __readPresence(_ buffer: [UInt8], _ base: Int, _ bitIndex: Int) -> Bool {\n";
+    ss << "final class AlignedBuffer {\n";
+    ss << "    var bytes: [UInt8]\n\n";
+    ss << "    init(size: Int) {\n";
+    ss << "        self.bytes = Array(repeating: 0, count: size)\n";
+    ss << "    }\n\n";
+    ss << "    init(_ bytes: [UInt8]) {\n";
+    ss << "        self.bytes = bytes\n";
+    ss << "    }\n";
+    ss << "}\n\n";
+    ss << "private func __readPresence(_ buffer: AlignedBuffer, _ base: Int, _ bitIndex: Int) -> Bool {\n";
     ss << "    let byteIndex = bitIndex / 8\n";
     ss << "    let mask = UInt8(1 << (bitIndex % 8))\n";
-    ss << "    return (buffer[base + byteIndex] & mask) != 0\n";
+    ss << "    return (buffer.bytes[base + byteIndex] & mask) != 0\n";
+    ss << "}\n\n";
+    ss << "private func __writePresence(_ buffer: AlignedBuffer, _ base: Int, _ bitIndex: Int, _ value: Bool) {\n";
+    ss << "    let byteIndex = bitIndex / 8\n";
+    ss << "    let mask = UInt8(1 << (bitIndex % 8))\n";
+    ss << "    if value { buffer.bytes[base + byteIndex] |= mask } else { buffer.bytes[base + byteIndex] &= ~mask }\n";
+    ss << "}\n\n";
+    ss << "private func __readBool(_ buffer: AlignedBuffer, _ offset: Int) -> Bool { buffer.bytes[offset] != 0 }\n";
+    ss << "private func __writeBool(_ buffer: AlignedBuffer, _ offset: Int, _ value: Bool) { buffer.bytes[offset] = value ? 1 : 0 }\n";
+    ss << "private func __readInt8(_ buffer: AlignedBuffer, _ offset: Int) -> Int8 { Int8(bitPattern: buffer.bytes[offset]) }\n";
+    ss << "private func __writeInt8(_ buffer: AlignedBuffer, _ offset: Int, _ value: Int8) { buffer.bytes[offset] = UInt8(bitPattern: value) }\n";
+    ss << "private func __readUInt8(_ buffer: AlignedBuffer, _ offset: Int) -> UInt8 { buffer.bytes[offset] }\n";
+    ss << "private func __writeUInt8(_ buffer: AlignedBuffer, _ offset: Int, _ value: UInt8) { buffer.bytes[offset] = value }\n";
+    ss << "private func __readUInt16(_ buffer: AlignedBuffer, _ offset: Int) -> UInt16 {\n";
+    ss << "    UInt16(buffer.bytes[offset]) | (UInt16(buffer.bytes[offset + 1]) << 8)\n";
+    ss << "}\n";
+    ss << "private func __writeUInt16(_ buffer: AlignedBuffer, _ offset: Int, _ value: UInt16) {\n";
+    ss << "    buffer.bytes[offset] = UInt8(value & 0xFF)\n";
+    ss << "    buffer.bytes[offset + 1] = UInt8((value >> 8) & 0xFF)\n";
+    ss << "}\n";
+    ss << "private func __readInt16(_ buffer: AlignedBuffer, _ offset: Int) -> Int16 { Int16(bitPattern: __readUInt16(buffer, offset)) }\n";
+    ss << "private func __writeInt16(_ buffer: AlignedBuffer, _ offset: Int, _ value: Int16) { __writeUInt16(buffer, offset, UInt16(bitPattern: value)) }\n";
+    ss << "private func __readUInt32(_ buffer: AlignedBuffer, _ offset: Int) -> UInt32 {\n";
+    ss << "    UInt32(buffer.bytes[offset]) | (UInt32(buffer.bytes[offset + 1]) << 8) | (UInt32(buffer.bytes[offset + 2]) << 16) | (UInt32(buffer.bytes[offset + 3]) << 24)\n";
+    ss << "}\n";
+    ss << "private func __writeUInt32(_ buffer: AlignedBuffer, _ offset: Int, _ value: UInt32) {\n";
+    ss << "    for i in 0..<4 { buffer.bytes[offset + i] = UInt8((value >> UInt32(i * 8)) & 0xFF) }\n";
+    ss << "}\n";
+    ss << "private func __readInt32(_ buffer: AlignedBuffer, _ offset: Int) -> Int32 { Int32(bitPattern: __readUInt32(buffer, offset)) }\n";
+    ss << "private func __writeInt32(_ buffer: AlignedBuffer, _ offset: Int, _ value: Int32) { __writeUInt32(buffer, offset, UInt32(bitPattern: value)) }\n";
+    ss << "private func __readUInt64(_ buffer: AlignedBuffer, _ offset: Int) -> UInt64 {\n";
+    ss << "    var result: UInt64 = 0\n";
+    ss << "    for i in 0..<8 { result |= UInt64(buffer.bytes[offset + i]) << UInt64(i * 8) }\n";
+    ss << "    return result\n";
+    ss << "}\n";
+    ss << "private func __writeUInt64(_ buffer: AlignedBuffer, _ offset: Int, _ value: UInt64) {\n";
+    ss << "    for i in 0..<8 { buffer.bytes[offset + i] = UInt8((value >> UInt64(i * 8)) & 0xFF) }\n";
+    ss << "}\n";
+    ss << "private func __readInt64(_ buffer: AlignedBuffer, _ offset: Int) -> Int64 { Int64(bitPattern: __readUInt64(buffer, offset)) }\n";
+    ss << "private func __writeInt64(_ buffer: AlignedBuffer, _ offset: Int, _ value: Int64) { __writeUInt64(buffer, offset, UInt64(bitPattern: value)) }\n";
+    ss << "private func __readFloat32(_ buffer: AlignedBuffer, _ offset: Int) -> Float { Float(bitPattern: __readUInt32(buffer, offset)) }\n";
+    ss << "private func __writeFloat32(_ buffer: AlignedBuffer, _ offset: Int, _ value: Float) { __writeUInt32(buffer, offset, value.bitPattern) }\n";
+    ss << "private func __readFloat64(_ buffer: AlignedBuffer, _ offset: Int) -> Double { Double(bitPattern: __readUInt64(buffer, offset)) }\n";
+    ss << "private func __writeFloat64(_ buffer: AlignedBuffer, _ offset: Int, _ value: Double) { __writeUInt64(buffer, offset, value.bitPattern) }\n";
+    ss << "private func __decodeString(_ buffer: AlignedBuffer, _ offset: Int, _ maxLength: Int) -> String {\n";
+    ss << "    let length = min(Int(buffer.bytes[offset]), maxLength)\n";
+    ss << "    return String(decoding: buffer.bytes[(offset + 1)..<(offset + 1 + length)], as: UTF8.self)\n";
+    ss << "}\n";
+    ss << "private func __encodeString(_ buffer: AlignedBuffer, _ offset: Int, _ maxLength: Int, _ value: String) {\n";
+    ss << "    let raw = Array(value.utf8)\n";
+    ss << "    let length = min(raw.count, maxLength)\n";
+    ss << "    buffer.bytes[offset] = UInt8(length)\n";
+    ss << "    for i in 0..<maxLength { buffer.bytes[offset + 1 + i] = 0 }\n";
+    ss << "    for i in 0..<length { buffer.bytes[offset + 1 + i] = raw[i] }\n";
     ss << "}\n\n";
 
     for (size_t i = 0; i < schema_layout_.records.size(); ++i) {
       const RecordLayout& record = *schema_layout_.records[i];
-      ss << "struct " << record.name << " {\n";
+      for (size_t f = 0; f < record.fields.size(); ++f) {
+        const FieldLayout& field = record.fields[f];
+        const InlineLayout& layout = *field.layout;
+        if (!IsUnionLayout(layout) && !IsVectorOfUnionLayout(layout)) { continue; }
+        const InlineLayout& union_layout = UnionLayoutForField(layout);
+        const std::string helper_name = UnionCellName(record, field);
+        ss << "final class " << helper_name << " {\n";
+        for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+          const UnionMemberLayout& member = union_layout.union_members[m];
+          ss << "    static let " << UpperSnake(member.value->name) << "_TYPE = "
+             << member.value->GetAsUInt64() << "\n";
+        }
+        if (!union_layout.union_members.empty()) { ss << "\n"; }
+        ss << "    let buffer: AlignedBuffer\n";
+        ss << "    let offset: Int\n\n";
+        ss << "    init(_ buffer: AlignedBuffer, _ offset: Int = 0) {\n";
+        ss << "        self.buffer = buffer\n";
+        ss << "        self.offset = offset\n";
+        ss << "    }\n\n";
+        ss << "    static func fromPointer(_ buffer: AlignedBuffer, _ offset: Int = 0) -> "
+           << helper_name << " {\n";
+        ss << "        return " << helper_name << "(buffer, offset)\n";
+        ss << "    }\n\n";
+        ss << "    func type() -> Int {\n";
+        ss << "        Int(__read" << ScalarHelperSuffix(union_layout.base_type)
+           << "(buffer, offset + " << union_layout.discriminator_offset << "))\n";
+        ss << "    }\n\n";
+        ss << "    func mutateType(_ value: Int) {\n";
+        ss << "        __write" << ScalarHelperSuffix(union_layout.base_type)
+           << "(buffer, offset + " << union_layout.discriminator_offset << ", "
+           << (union_layout.base_type == BASE_TYPE_UTYPE ? "UInt8(value)" : "value")
+           << ")\n";
+        ss << "    }\n";
+        for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+          const UnionMemberLayout& member = union_layout.union_members[m];
+          const InlineLayout& member_layout = *member.layout;
+          const std::string member_name = LowerCamelCase(member.value->name);
+          const std::string member_pascal = PascalCase(member.value->name);
+          const std::string payload_offset =
+              "offset + " + NumToString(union_layout.payload_offset);
+          ss << "\n";
+          ss << "    func is" << member_pascal << "() -> Bool {\n";
+          ss << "        type() == Self." << UpperSnake(member.value->name) << "_TYPE\n";
+          ss << "    }\n";
+          if (member_layout.kind == InlineLayout::Kind::kScalar) {
+            ss << "\n";
+            ss << "    func " << member_name << "() -> " << SwiftScalarType(member_layout)
+               << " {\n";
+            ss << "        __read" << ScalarHelperSuffix(member_layout.base_type)
+               << "(buffer, " << payload_offset << ")\n";
+            ss << "    }\n\n";
+            ss << "    func mutate" << member_pascal << "(_ value: "
+               << SwiftScalarType(member_layout) << ") {\n";
+            ss << "        __write" << ScalarHelperSuffix(member_layout.base_type)
+               << "(buffer, " << payload_offset << ", value)\n";
+            ss << "        mutateType(Self." << UpperSnake(member.value->name)
+               << "_TYPE)\n";
+            ss << "    }\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kRecord) {
+            ss << "\n";
+            ss << "    func " << member_name << "() -> " << member_layout.record->name
+               << " {\n";
+            ss << "        " << member_layout.record->name
+               << ".fromPointer(buffer, " << payload_offset << ")\n";
+            ss << "    }\n\n";
+            ss << "    func mutate" << member_pascal << "From(_ src: "
+               << member_layout.record->name << ") {\n";
+            ss << "        for i in 0..<" << member_layout.size << " {\n";
+            ss << "            buffer.bytes[" << payload_offset << " + i] = src.buffer.bytes[src.offset + i]\n";
+            ss << "        }\n";
+            ss << "        mutateType(Self." << UpperSnake(member.value->name)
+               << "_TYPE)\n";
+            ss << "    }\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kString) {
+            ss << "\n";
+            ss << "    func " << member_name << "() -> String {\n";
+            ss << "        __decodeString(buffer, " << payload_offset << ", "
+               << member_layout.max_length << ")\n";
+            ss << "    }\n\n";
+            ss << "    func mutate" << member_pascal << "(_ value: String) {\n";
+            ss << "        __encodeString(buffer, " << payload_offset << ", "
+               << member_layout.max_length << ", value)\n";
+            ss << "        mutateType(Self." << UpperSnake(member.value->name)
+               << "_TYPE)\n";
+            ss << "    }\n";
+          }
+        }
+        ss << "}\n\n";
+      }
+
+      ss << "final class " << record.name << " {\n";
       ss << "    static let SIZE = " << record.size << "\n";
       ss << "    static let ALIGN = " << record.align << "\n";
       ss << "    static let PRESENCE_BYTES = " << record.presence_bytes << "\n";
@@ -3384,24 +4108,201 @@ class Generator : public BaseGenerator {
         }
       }
       ss << "\n";
-      ss << "    let buffer: [UInt8]\n";
+      ss << "    let buffer: AlignedBuffer\n";
       ss << "    let offset: Int\n\n";
-      ss << "    init(_ buffer: [UInt8], _ offset: Int = 0) {\n";
+      ss << "    init(_ buffer: AlignedBuffer, _ offset: Int = 0) {\n";
       ss << "        self.buffer = buffer\n";
       ss << "        self.offset = offset\n";
       ss << "    }\n\n";
-      ss << "    static func fromPointer(_ buffer: [UInt8], _ offset: Int = 0) -> "
+      ss << "    static func fromPointer(_ buffer: AlignedBuffer, _ offset: Int = 0) -> "
          << record.name << " {\n";
       ss << "        return " << record.name << "(buffer, offset)\n";
       ss << "    }\n";
       for (size_t f = 0; f < record.fields.size(); ++f) {
         const FieldLayout& field = record.fields[f];
-        if (field.presence_index == FieldLayout::kNoPresence) { continue; }
-        ss << "\n";
-        ss << "    func has" << PascalCase(field.name) << "() -> Bool {\n";
-        ss << "        return __readPresence(buffer, offset, Self."
-           << UpperSnake(field.name) << "_PRESENCE_BIT)\n";
-        ss << "    }\n";
+        const InlineLayout& layout = *field.layout;
+        const std::string field_name = LowerCamelCase(field.name);
+        const std::string field_pascal = PascalCase(field.name);
+        const std::string field_offset =
+            "offset + Self." + UpperSnake(field.name) + "_OFFSET";
+        if (field.presence_index != FieldLayout::kNoPresence) {
+          ss << "\n";
+          ss << "    func has" << field_pascal << "() -> Bool {\n";
+          ss << "        __readPresence(buffer, offset, Self."
+             << UpperSnake(field.name) << "_PRESENCE_BIT)\n";
+          ss << "    }\n\n";
+          ss << "    func mutateHas" << field_pascal << "(_ value: Bool) {\n";
+          ss << "        __writePresence(buffer, offset, Self."
+             << UpperSnake(field.name) << "_PRESENCE_BIT, value)\n";
+          ss << "    }\n";
+        }
+        if (layout.kind == InlineLayout::Kind::kScalar) {
+          ss << "\n";
+          ss << "    func " << field_name << "() -> " << SwiftScalarType(layout)
+             << " {\n";
+          ss << "        __read" << ScalarHelperSuffix(layout.base_type)
+             << "(buffer, " << field_offset << ")\n";
+          ss << "    }\n\n";
+          ss << "    func mutate" << field_pascal << "(_ value: "
+             << SwiftScalarType(layout) << ") {\n";
+          ss << "        __write" << ScalarHelperSuffix(layout.base_type)
+             << "(buffer, " << field_offset << ", value)\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        mutateHas" << field_pascal << "(true)\n";
+          }
+          ss << "    }\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kRecord) {
+          ss << "\n";
+          ss << "    func " << field_name << "() -> " << layout.record->name << " {\n";
+          ss << "        " << layout.record->name
+             << ".fromPointer(buffer, " << field_offset << ")\n";
+          ss << "    }\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kString) {
+          ss << "\n";
+          ss << "    func " << field_name << "() -> String {\n";
+          ss << "        __decodeString(buffer, " << field_offset << ", "
+             << layout.max_length << ")\n";
+          ss << "    }\n\n";
+          ss << "    func mutate" << field_pascal << "(_ value: String) {\n";
+          ss << "        __encodeString(buffer, " << field_offset << ", "
+             << layout.max_length << ", value)\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        mutateHas" << field_pascal << "(true)\n";
+          }
+          ss << "    }\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kArray) {
+          const std::string element_offset =
+              field_offset + " + j * " + NumToString(layout.stride);
+          ss << "\n";
+          ss << "    func " << field_name << "Length() -> Int {\n";
+          ss << "        " << layout.fixed_length << "\n";
+          ss << "    }\n";
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            ss << "\n";
+            ss << "    func " << field_name << "(_ j: Int) -> "
+               << SwiftScalarType(*layout.element) << " {\n";
+            ss << "        __read" << ScalarHelperSuffix(layout.element->base_type)
+               << "(buffer, " << element_offset << ")\n";
+            ss << "    }\n\n";
+            ss << "    func mutate" << field_pascal << "(_ j: Int, _ value: "
+               << SwiftScalarType(*layout.element) << ") {\n";
+            ss << "        __write" << ScalarHelperSuffix(layout.element->base_type)
+               << "(buffer, " << element_offset << ", value)\n";
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "\n";
+            ss << "    func " << field_name << "(_ j: Int) -> "
+               << layout.element->record->name << " {\n";
+            ss << "        " << layout.element->record->name
+               << ".fromPointer(buffer, " << element_offset << ")\n";
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "\n";
+            ss << "    func " << field_name << "(_ j: Int) -> String {\n";
+            ss << "        __decodeString(buffer, " << element_offset << ", "
+               << layout.element->max_length << ")\n";
+            ss << "    }\n\n";
+            ss << "    func mutate" << field_pascal << "(_ j: Int, _ value: String) {\n";
+            ss << "        __encodeString(buffer, " << element_offset << ", "
+               << layout.element->max_length << ", value)\n";
+            ss << "    }\n";
+          }
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kVector) {
+          const std::string element_offset =
+              field_offset + " + Self." + UpperSnake(field.name) +
+              "_DATA_OFFSET + j * Self." + UpperSnake(field.name) + "_STRIDE";
+          ss << "\n";
+          ss << "    func " << field_name << "Length() -> Int {\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        if !has" << field_pascal << "() { return 0 }\n";
+          }
+          ss << "        return min(Int(__readUInt32(buffer, " << field_offset << ")), "
+             << layout.max_count << ")\n";
+          ss << "    }\n\n";
+          ss << "    func mutate" << field_pascal << "Length(_ length: Int) {\n";
+          ss << "        __writeUInt32(buffer, " << field_offset
+             << ", UInt32(min(max(length, 0), " << layout.max_count << ")))\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        mutateHas" << field_pascal << "(true)\n";
+          }
+          ss << "    }\n";
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            ss << "\n";
+            ss << "    func " << field_name << "(_ j: Int) -> "
+               << SwiftScalarType(*layout.element) << " {\n";
+            ss << "        __read" << ScalarHelperSuffix(layout.element->base_type)
+               << "(buffer, " << element_offset << ")\n";
+            ss << "    }\n\n";
+            ss << "    func mutate" << field_pascal << "(_ j: Int, _ value: "
+               << SwiftScalarType(*layout.element) << ") {\n";
+            ss << "        __write" << ScalarHelperSuffix(layout.element->base_type)
+               << "(buffer, " << element_offset << ", value)\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "        mutateHas" << field_pascal << "(true)\n";
+            }
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "\n";
+            ss << "    func " << field_name << "(_ j: Int) -> "
+               << layout.element->record->name << " {\n";
+            ss << "        " << layout.element->record->name
+               << ".fromPointer(buffer, " << element_offset << ")\n";
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "\n";
+            ss << "    func " << field_name << "(_ j: Int) -> String {\n";
+            ss << "        __decodeString(buffer, " << element_offset << ", "
+               << layout.element->max_length << ")\n";
+            ss << "    }\n\n";
+            ss << "    func mutate" << field_pascal << "(_ j: Int, _ value: String) {\n";
+            ss << "        __encodeString(buffer, " << element_offset << ", "
+               << layout.element->max_length << ", value)\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "        mutateHas" << field_pascal << "(true)\n";
+            }
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kUnion) {
+            const std::string helper_name = UnionCellName(record, field);
+            ss << "\n";
+            ss << "    func " << field_name << "(_ j: Int) -> " << helper_name
+               << " {\n";
+            ss << "        " << helper_name << ".fromPointer(buffer, "
+               << element_offset << ")\n";
+            ss << "    }\n";
+          }
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kUnion) {
+          const std::string helper_name = UnionCellName(record, field);
+          ss << "\n";
+          ss << "    func " << field_name << "Type() -> Int {\n";
+          ss << "        Int(__read" << ScalarHelperSuffix(layout.base_type)
+             << "(buffer, " << field_offset << " + "
+             << layout.discriminator_offset << "))\n";
+          ss << "    }\n\n";
+          ss << "    func mutate" << field_pascal << "Type(_ value: Int) {\n";
+          ss << "        __write" << ScalarHelperSuffix(layout.base_type)
+             << "(buffer, " << field_offset << " + "
+             << layout.discriminator_offset << ", "
+             << (layout.base_type == BASE_TYPE_UTYPE ? "UInt8(value)" : "value")
+             << ")\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        mutateHas" << field_pascal << "(true)\n";
+          }
+          ss << "    }\n\n";
+          ss << "    func " << field_name << "() -> " << helper_name << " {\n";
+          ss << "        " << helper_name << ".fromPointer(buffer, " << field_offset
+             << ")\n";
+          ss << "    }\n";
+        }
       }
       ss << "}\n\n";
     }
@@ -3412,18 +4313,195 @@ class Generator : public BaseGenerator {
   std::string GeneratePhp() const {
     std::ostringstream ss;
     ss << "<?php\n";
-    ss << "// Auto-generated aligned fixed-layout metadata scaffolds.\n";
+    ss << "// Auto-generated aligned fixed-layout bindings.\n";
     ss << "// DO NOT EDIT - Generated by flatc --aligned\n\n";
+    ss << "final class AlignedBuffer {\n";
+    ss << "    public array $bytes;\n\n";
+    ss << "    public function __construct(int|array $value) {\n";
+    ss << "        $this->bytes = is_int($value) ? array_fill(0, $value, 0) : $value;\n";
+    ss << "    }\n";
+    ss << "}\n\n";
     ss << "final class AlignedSupport {\n";
-    ss << "    public static function readPresence(string $buffer, int $base, int $bitIndex): bool {\n";
+    ss << "    private static function readUnsigned(AlignedBuffer $buffer, int $offset, int $size): int {\n";
+    ss << "        $value = 0;\n";
+    ss << "        for ($i = 0; $i < $size; ++$i) {\n";
+    ss << "            $value |= (($buffer->bytes[$offset + $i] ?? 0) & 0xFF) << ($i * 8);\n";
+    ss << "        }\n";
+    ss << "        return $value;\n";
+    ss << "    }\n\n";
+    ss << "    private static function writeUnsigned(AlignedBuffer $buffer, int $offset, int $size, int $value): void {\n";
+    ss << "        for ($i = 0; $i < $size; ++$i) {\n";
+    ss << "            $buffer->bytes[$offset + $i] = ($value >> ($i * 8)) & 0xFF;\n";
+    ss << "        }\n";
+    ss << "    }\n\n";
+    ss << "    public static function readPresence(AlignedBuffer $buffer, int $base, int $bitIndex): bool {\n";
     ss << "        $byteIndex = intdiv($bitIndex, 8);\n";
     ss << "        $mask = 1 << ($bitIndex % 8);\n";
-    ss << "        return (ord($buffer[$base + $byteIndex]) & $mask) !== 0;\n";
+    ss << "        return (($buffer->bytes[$base + $byteIndex] ?? 0) & $mask) !== 0;\n";
+    ss << "    }\n\n";
+    ss << "    public static function writePresence(AlignedBuffer $buffer, int $base, int $bitIndex, bool $value): void {\n";
+    ss << "        $byteIndex = intdiv($bitIndex, 8);\n";
+    ss << "        $mask = 1 << ($bitIndex % 8);\n";
+    ss << "        $current = $buffer->bytes[$base + $byteIndex] ?? 0;\n";
+    ss << "        $buffer->bytes[$base + $byteIndex] = $value ? ($current | $mask) : ($current & ~$mask);\n";
+    ss << "    }\n\n";
+    ss << "    public static function readBool(AlignedBuffer $buffer, int $offset): bool { return (($buffer->bytes[$offset] ?? 0) !== 0); }\n";
+    ss << "    public static function writeBool(AlignedBuffer $buffer, int $offset, bool $value): void { $buffer->bytes[$offset] = $value ? 1 : 0; }\n";
+    ss << "    public static function readInt8(AlignedBuffer $buffer, int $offset): int { $value = $buffer->bytes[$offset] ?? 0; return $value >= 128 ? $value - 256 : $value; }\n";
+    ss << "    public static function writeInt8(AlignedBuffer $buffer, int $offset, int $value): void { $buffer->bytes[$offset] = $value & 0xFF; }\n";
+    ss << "    public static function readUInt8(AlignedBuffer $buffer, int $offset): int { return $buffer->bytes[$offset] ?? 0; }\n";
+    ss << "    public static function writeUInt8(AlignedBuffer $buffer, int $offset, int $value): void { $buffer->bytes[$offset] = $value & 0xFF; }\n";
+    ss << "    public static function readInt16(AlignedBuffer $buffer, int $offset): int { $value = self::readUnsigned($buffer, $offset, 2); return $value >= 0x8000 ? $value - 0x10000 : $value; }\n";
+    ss << "    public static function writeInt16(AlignedBuffer $buffer, int $offset, int $value): void { self::writeUnsigned($buffer, $offset, 2, $value); }\n";
+    ss << "    public static function readUInt16(AlignedBuffer $buffer, int $offset): int { return self::readUnsigned($buffer, $offset, 2); }\n";
+    ss << "    public static function writeUInt16(AlignedBuffer $buffer, int $offset, int $value): void { self::writeUnsigned($buffer, $offset, 2, $value); }\n";
+    ss << "    public static function readInt32(AlignedBuffer $buffer, int $offset): int { $value = self::readUnsigned($buffer, $offset, 4); return $value >= 0x80000000 ? $value - 0x100000000 : $value; }\n";
+    ss << "    public static function writeInt32(AlignedBuffer $buffer, int $offset, int $value): void { self::writeUnsigned($buffer, $offset, 4, $value); }\n";
+    ss << "    public static function readUInt32(AlignedBuffer $buffer, int $offset): int { return self::readUnsigned($buffer, $offset, 4); }\n";
+    ss << "    public static function writeUInt32(AlignedBuffer $buffer, int $offset, int $value): void { self::writeUnsigned($buffer, $offset, 4, $value); }\n";
+    ss << "    public static function readInt64(AlignedBuffer $buffer, int $offset): int { return self::readUnsigned($buffer, $offset, 8); }\n";
+    ss << "    public static function writeInt64(AlignedBuffer $buffer, int $offset, int $value): void { self::writeUnsigned($buffer, $offset, 8, $value); }\n";
+    ss << "    public static function readUInt64(AlignedBuffer $buffer, int $offset): int { return self::readUnsigned($buffer, $offset, 8); }\n";
+    ss << "    public static function writeUInt64(AlignedBuffer $buffer, int $offset, int $value): void { self::writeUnsigned($buffer, $offset, 8, $value); }\n";
+    ss << "    public static function readFloat32(AlignedBuffer $buffer, int $offset): float {\n";
+    ss << "        $bytes = '';\n";
+    ss << "        for ($i = 0; $i < 4; ++$i) $bytes .= chr($buffer->bytes[$offset + $i] ?? 0);\n";
+    ss << "        return unpack('g', $bytes)[1];\n";
+    ss << "    }\n";
+    ss << "    public static function writeFloat32(AlignedBuffer $buffer, int $offset, float $value): void {\n";
+    ss << "        $bytes = array_values(unpack('C*', pack('g', $value)));\n";
+    ss << "        for ($i = 0; $i < 4; ++$i) $buffer->bytes[$offset + $i] = $bytes[$i];\n";
+    ss << "    }\n";
+    ss << "    public static function readFloat64(AlignedBuffer $buffer, int $offset): float {\n";
+    ss << "        $bytes = '';\n";
+    ss << "        for ($i = 0; $i < 8; ++$i) $bytes .= chr($buffer->bytes[$offset + $i] ?? 0);\n";
+    ss << "        return unpack('e', $bytes)[1];\n";
+    ss << "    }\n";
+    ss << "    public static function writeFloat64(AlignedBuffer $buffer, int $offset, float $value): void {\n";
+    ss << "        $bytes = array_values(unpack('C*', pack('e', $value)));\n";
+    ss << "        for ($i = 0; $i < 8; ++$i) $buffer->bytes[$offset + $i] = $bytes[$i];\n";
+    ss << "    }\n";
+    ss << "    public static function decodeString(AlignedBuffer $buffer, int $offset, int $maxLength): string {\n";
+    ss << "        $length = min($buffer->bytes[$offset] ?? 0, $maxLength);\n";
+    ss << "        $result = '';\n";
+    ss << "        for ($i = 0; $i < $length; ++$i) $result .= chr($buffer->bytes[$offset + 1 + $i] ?? 0);\n";
+    ss << "        return $result;\n";
+    ss << "    }\n";
+    ss << "    public static function encodeString(AlignedBuffer $buffer, int $offset, int $maxLength, string $value): void {\n";
+    ss << "        $raw = array_values(unpack('C*', $value));\n";
+    ss << "        $length = min(count($raw), $maxLength);\n";
+    ss << "        $buffer->bytes[$offset] = $length;\n";
+    ss << "        for ($i = 0; $i < $maxLength; ++$i) $buffer->bytes[$offset + 1 + $i] = 0;\n";
+    ss << "        for ($i = 0; $i < $length; ++$i) $buffer->bytes[$offset + 1 + $i] = $raw[$i];\n";
     ss << "    }\n";
     ss << "}\n\n";
 
     for (size_t i = 0; i < schema_layout_.records.size(); ++i) {
       const RecordLayout& record = *schema_layout_.records[i];
+      for (size_t f = 0; f < record.fields.size(); ++f) {
+        const FieldLayout& field = record.fields[f];
+        const InlineLayout& layout = *field.layout;
+        if (!IsUnionLayout(layout) && !IsVectorOfUnionLayout(layout)) { continue; }
+        const InlineLayout& union_layout = UnionLayoutForField(layout);
+        const std::string helper_name = UnionCellName(record, field);
+        ss << "final class " << helper_name << " {\n";
+        for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+          const UnionMemberLayout& member = union_layout.union_members[m];
+          ss << "    public const " << UpperSnake(member.value->name) << "_TYPE = "
+             << member.value->GetAsUInt64() << ";\n";
+        }
+        if (!union_layout.union_members.empty()) { ss << "\n"; }
+        ss << "    public AlignedBuffer $buffer;\n";
+        ss << "    public int $offset;\n\n";
+        ss << "    private function __construct(AlignedBuffer $buffer, int $offset = 0) {\n";
+        ss << "        $this->buffer = $buffer;\n";
+        ss << "        $this->offset = $offset;\n";
+        ss << "    }\n\n";
+        ss << "    public static function fromPointer(AlignedBuffer $buffer, int $offset = 0): self {\n";
+        ss << "        return new self($buffer, $offset);\n";
+        ss << "    }\n\n";
+        ss << "    public function type(): int {\n";
+        ss << "        return AlignedSupport::read" << ScalarHelperSuffix(union_layout.base_type)
+           << "($this->buffer, $this->offset + " << union_layout.discriminator_offset
+           << ");\n";
+        ss << "    }\n\n";
+        ss << "    public function mutateType(int $value): void {\n";
+        ss << "        AlignedSupport::write" << ScalarHelperSuffix(union_layout.base_type)
+           << "($this->buffer, $this->offset + " << union_layout.discriminator_offset
+           << ", $value);\n";
+        ss << "    }\n";
+        for (size_t m = 0; m < union_layout.union_members.size(); ++m) {
+          const UnionMemberLayout& member = union_layout.union_members[m];
+          const InlineLayout& member_layout = *member.layout;
+          const std::string member_name = PascalCase(member.value->name);
+          const std::string payload_offset =
+              "$this->offset + " + NumToString(union_layout.payload_offset);
+          ss << "\n";
+          ss << "    public function is" << member_name << "(): bool {\n";
+          ss << "        return $this->type() === self::" << UpperSnake(member.value->name)
+             << "_TYPE;\n";
+          ss << "    }\n";
+          if (member_layout.kind == InlineLayout::Kind::kScalar) {
+            ss << "\n";
+            ss << "    public function " << LowerCamelCase(member.value->name)
+               << "()";
+            ss << ": " << (member_layout.base_type == BASE_TYPE_BOOL ? "bool" :
+                             (member_layout.base_type == BASE_TYPE_FLOAT ||
+                                      member_layout.base_type == BASE_TYPE_DOUBLE
+                                  ? "float"
+                                  : "int"));
+            ss << " {\n";
+            ss << "        return AlignedSupport::read" << ScalarHelperSuffix(member_layout.base_type)
+               << "($this->buffer, " << payload_offset << ");\n";
+            ss << "    }\n\n";
+            ss << "    public function mutate" << member_name << "("
+               << (member_layout.base_type == BASE_TYPE_BOOL ? "bool" :
+                     (member_layout.base_type == BASE_TYPE_FLOAT ||
+                              member_layout.base_type == BASE_TYPE_DOUBLE
+                          ? "float"
+                          : "int"))
+               << " $value): void {\n";
+            ss << "        AlignedSupport::write" << ScalarHelperSuffix(member_layout.base_type)
+               << "($this->buffer, " << payload_offset << ", $value);\n";
+            ss << "        $this->mutateType(self::" << UpperSnake(member.value->name)
+               << "_TYPE);\n";
+            ss << "    }\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kRecord) {
+            ss << "\n";
+            ss << "    public function " << LowerCamelCase(member.value->name)
+               << "(): " << member_layout.record->name << " {\n";
+            ss << "        return " << member_layout.record->name
+               << "::fromPointer($this->buffer, " << payload_offset << ");\n";
+            ss << "    }\n\n";
+            ss << "    public function mutate" << member_name << "From("
+               << member_layout.record->name << " $src): void {\n";
+            ss << "        for ($i = 0; $i < " << member_layout.size << "; ++$i) {\n";
+            ss << "            $this->buffer->bytes[" << payload_offset
+               << " + $i] = $src->buffer->bytes[$src->offset + $i];\n";
+            ss << "        }\n";
+            ss << "        $this->mutateType(self::" << UpperSnake(member.value->name)
+               << "_TYPE);\n";
+            ss << "    }\n";
+          } else if (member_layout.kind == InlineLayout::Kind::kString) {
+            ss << "\n";
+            ss << "    public function " << LowerCamelCase(member.value->name)
+               << "(): string {\n";
+            ss << "        return AlignedSupport::decodeString($this->buffer, "
+               << payload_offset << ", " << member_layout.max_length << ");\n";
+            ss << "    }\n\n";
+            ss << "    public function mutate" << member_name
+               << "(string $value): void {\n";
+            ss << "        AlignedSupport::encodeString($this->buffer, "
+               << payload_offset << ", " << member_layout.max_length
+               << ", $value);\n";
+            ss << "        $this->mutateType(self::" << UpperSnake(member.value->name)
+               << "_TYPE);\n";
+            ss << "    }\n";
+          }
+        }
+        ss << "}\n\n";
+      }
+
       ss << "final class " << record.name << " {\n";
       ss << "    public const SIZE = " << record.size << ";\n";
       ss << "    public const ALIGN = " << record.align << ";\n";
@@ -3468,24 +4546,238 @@ class Generator : public BaseGenerator {
         }
       }
       ss << "\n";
-      ss << "    private string $buffer;\n";
-      ss << "    private int $offset;\n\n";
-      ss << "    private function __construct(string $buffer, int $offset = 0) {\n";
+      ss << "    public AlignedBuffer $buffer;\n";
+      ss << "    public int $offset;\n\n";
+      ss << "    private function __construct(AlignedBuffer $buffer, int $offset = 0) {\n";
       ss << "        $this->buffer = $buffer;\n";
       ss << "        $this->offset = $offset;\n";
       ss << "    }\n\n";
-      ss << "    public static function fromPointer(string $buffer, int $offset = 0): self {\n";
+      ss << "    public static function fromPointer(AlignedBuffer $buffer, int $offset = 0): self {\n";
       ss << "        return new self($buffer, $offset);\n";
       ss << "    }\n";
       for (size_t f = 0; f < record.fields.size(); ++f) {
         const FieldLayout& field = record.fields[f];
-        if (field.presence_index == FieldLayout::kNoPresence) { continue; }
-        ss << "\n";
-        ss << "    public function has" << PascalCase(field.name)
-           << "(): bool {\n";
-        ss << "        return AlignedSupport::readPresence($this->buffer, $this->offset, self::"
-           << UpperSnake(field.name) << "_PRESENCE_BIT);\n";
-        ss << "    }\n";
+        const InlineLayout& layout = *field.layout;
+        const std::string field_name = PascalCase(field.name);
+        const std::string field_offset =
+            "$this->offset + self::" + UpperSnake(field.name) + "_OFFSET";
+        if (field.presence_index != FieldLayout::kNoPresence) {
+          ss << "\n";
+          ss << "    public function has" << field_name << "(): bool {\n";
+          ss << "        return AlignedSupport::readPresence($this->buffer, $this->offset, self::"
+             << UpperSnake(field.name) << "_PRESENCE_BIT);\n";
+          ss << "    }\n\n";
+          ss << "    public function mutateHas" << field_name
+             << "(bool $value): void {\n";
+          ss << "        AlignedSupport::writePresence($this->buffer, $this->offset, self::"
+             << UpperSnake(field.name) << "_PRESENCE_BIT, $value);\n";
+          ss << "    }\n";
+        }
+        if (layout.kind == InlineLayout::Kind::kScalar) {
+          const char* php_type =
+              layout.base_type == BASE_TYPE_BOOL
+                  ? "bool"
+                  : (layout.base_type == BASE_TYPE_FLOAT ||
+                             layout.base_type == BASE_TYPE_DOUBLE
+                         ? "float"
+                         : "int");
+          ss << "\n";
+          ss << "    public function " << LowerCamelCase(field.name) << "(): "
+             << php_type << " {\n";
+          ss << "        return AlignedSupport::read" << ScalarHelperSuffix(layout.base_type)
+             << "($this->buffer, " << field_offset << ");\n";
+          ss << "    }\n\n";
+          ss << "    public function mutate" << field_name << "(" << php_type
+             << " $value): void {\n";
+          ss << "        AlignedSupport::write" << ScalarHelperSuffix(layout.base_type)
+             << "($this->buffer, " << field_offset << ", $value);\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        $this->mutateHas" << field_name << "(true);\n";
+          }
+          ss << "    }\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kRecord) {
+          ss << "\n";
+          ss << "    public function " << LowerCamelCase(field.name) << "(): "
+             << layout.record->name << " {\n";
+          ss << "        return " << layout.record->name
+             << "::fromPointer($this->buffer, " << field_offset << ");\n";
+          ss << "    }\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kString) {
+          ss << "\n";
+          ss << "    public function " << LowerCamelCase(field.name) << "(): string {\n";
+          ss << "        return AlignedSupport::decodeString($this->buffer, "
+             << field_offset << ", " << layout.max_length << ");\n";
+          ss << "    }\n\n";
+          ss << "    public function mutate" << field_name
+             << "(string $value): void {\n";
+          ss << "        AlignedSupport::encodeString($this->buffer, "
+             << field_offset << ", " << layout.max_length << ", $value);\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        $this->mutateHas" << field_name << "(true);\n";
+          }
+          ss << "    }\n";
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kArray) {
+          const std::string element_offset =
+              field_offset + " + $j * " + NumToString(layout.stride);
+          ss << "\n";
+          ss << "    public function " << LowerCamelCase(field.name)
+             << "Length(): int {\n";
+          ss << "        return " << layout.fixed_length << ";\n";
+          ss << "    }\n";
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            const char* php_type =
+                layout.element->base_type == BASE_TYPE_BOOL
+                    ? "bool"
+                    : (layout.element->base_type == BASE_TYPE_FLOAT ||
+                               layout.element->base_type == BASE_TYPE_DOUBLE
+                           ? "float"
+                           : "int");
+            ss << "\n";
+            ss << "    public function " << LowerCamelCase(field.name) << "(int $j): "
+               << php_type << " {\n";
+            ss << "        return AlignedSupport::read"
+               << ScalarHelperSuffix(layout.element->base_type)
+               << "($this->buffer, " << element_offset << ");\n";
+            ss << "    }\n\n";
+            ss << "    public function mutate" << field_name << "(int $j, "
+               << php_type << " $value): void {\n";
+            ss << "        AlignedSupport::write"
+               << ScalarHelperSuffix(layout.element->base_type)
+               << "($this->buffer, " << element_offset << ", $value);\n";
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "\n";
+            ss << "    public function " << LowerCamelCase(field.name)
+               << "(int $j): " << layout.element->record->name << " {\n";
+            ss << "        return " << layout.element->record->name
+               << "::fromPointer($this->buffer, " << element_offset << ");\n";
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "\n";
+            ss << "    public function " << LowerCamelCase(field.name)
+               << "(int $j): string {\n";
+            ss << "        return AlignedSupport::decodeString($this->buffer, "
+               << element_offset << ", " << layout.element->max_length << ");\n";
+            ss << "    }\n\n";
+            ss << "    public function mutate" << field_name
+               << "(int $j, string $value): void {\n";
+            ss << "        AlignedSupport::encodeString($this->buffer, "
+               << element_offset << ", " << layout.element->max_length
+               << ", $value);\n";
+            ss << "    }\n";
+          }
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kVector) {
+          const std::string element_offset =
+              field_offset + " + self::" + UpperSnake(field.name) +
+              "_DATA_OFFSET + $j * self::" + UpperSnake(field.name) + "_STRIDE";
+          ss << "\n";
+          ss << "    public function " << LowerCamelCase(field.name)
+             << "Length(): int {\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        if (!$this->has" << field_name << "()) return 0;\n";
+          }
+          ss << "        return min(AlignedSupport::readUInt32($this->buffer, "
+             << field_offset << "), " << layout.max_count << ");\n";
+          ss << "    }\n\n";
+          ss << "    public function mutate" << field_name
+             << "Length(int $length): void {\n";
+          ss << "        $bounded = max(0, min($length, " << layout.max_count << "));\n";
+          ss << "        AlignedSupport::writeUInt32($this->buffer, " << field_offset
+             << ", $bounded);\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        $this->mutateHas" << field_name << "(true);\n";
+          }
+          ss << "    }\n";
+          if (layout.element->kind == InlineLayout::Kind::kScalar) {
+            const char* php_type =
+                layout.element->base_type == BASE_TYPE_BOOL
+                    ? "bool"
+                    : (layout.element->base_type == BASE_TYPE_FLOAT ||
+                               layout.element->base_type == BASE_TYPE_DOUBLE
+                           ? "float"
+                           : "int");
+            ss << "\n";
+            ss << "    public function " << LowerCamelCase(field.name) << "(int $j): "
+               << php_type << " {\n";
+            ss << "        return AlignedSupport::read"
+               << ScalarHelperSuffix(layout.element->base_type)
+               << "($this->buffer, " << element_offset << ");\n";
+            ss << "    }\n\n";
+            ss << "    public function mutate" << field_name << "(int $j, "
+               << php_type << " $value): void {\n";
+            ss << "        AlignedSupport::write"
+               << ScalarHelperSuffix(layout.element->base_type)
+               << "($this->buffer, " << element_offset << ", $value);\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "        $this->mutateHas" << field_name << "(true);\n";
+            }
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kRecord) {
+            ss << "\n";
+            ss << "    public function " << LowerCamelCase(field.name)
+               << "(int $j): " << layout.element->record->name << " {\n";
+            ss << "        return " << layout.element->record->name
+               << "::fromPointer($this->buffer, " << element_offset << ");\n";
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kString) {
+            ss << "\n";
+            ss << "    public function " << LowerCamelCase(field.name)
+               << "(int $j): string {\n";
+            ss << "        return AlignedSupport::decodeString($this->buffer, "
+               << element_offset << ", " << layout.element->max_length << ");\n";
+            ss << "    }\n\n";
+            ss << "    public function mutate" << field_name
+               << "(int $j, string $value): void {\n";
+            ss << "        AlignedSupport::encodeString($this->buffer, "
+               << element_offset << ", " << layout.element->max_length
+               << ", $value);\n";
+            if (field.presence_index != FieldLayout::kNoPresence) {
+              ss << "        $this->mutateHas" << field_name << "(true);\n";
+            }
+            ss << "    }\n";
+          } else if (layout.element->kind == InlineLayout::Kind::kUnion) {
+            const std::string helper_name = UnionCellName(record, field);
+            ss << "\n";
+            ss << "    public function " << LowerCamelCase(field.name)
+               << "(int $j): " << helper_name << " {\n";
+            ss << "        return " << helper_name
+               << "::fromPointer($this->buffer, " << element_offset << ");\n";
+            ss << "    }\n";
+          }
+          continue;
+        }
+        if (layout.kind == InlineLayout::Kind::kUnion) {
+          const std::string helper_name = UnionCellName(record, field);
+          ss << "\n";
+          ss << "    public function " << LowerCamelCase(field.name)
+             << "Type(): int {\n";
+          ss << "        return AlignedSupport::read" << ScalarHelperSuffix(layout.base_type)
+             << "($this->buffer, " << field_offset << " + "
+             << layout.discriminator_offset << ");\n";
+          ss << "    }\n\n";
+          ss << "    public function mutate" << field_name
+             << "Type(int $value): void {\n";
+          ss << "        AlignedSupport::write" << ScalarHelperSuffix(layout.base_type)
+             << "($this->buffer, " << field_offset << " + "
+             << layout.discriminator_offset << ", $value);\n";
+          if (field.presence_index != FieldLayout::kNoPresence) {
+            ss << "        $this->mutateHas" << field_name << "(true);\n";
+          }
+          ss << "    }\n\n";
+          ss << "    public function " << LowerCamelCase(field.name)
+             << "(): " << helper_name << " {\n";
+          ss << "        return " << helper_name << "::fromPointer($this->buffer, "
+             << field_offset << ");\n";
+          ss << "    }\n";
+        }
       }
       ss << "}\n\n";
     }

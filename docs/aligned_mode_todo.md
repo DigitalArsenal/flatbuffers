@@ -134,8 +134,8 @@
 - [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for Java
 - [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for C#
 - [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for Kotlin
-- [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for Dart
-- [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for Swift
-- [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for PHP
-- [ ] Bring C++/TypeScript aligned outputs up to the same production API level for vectors and unions
+- [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for Dart
+- [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for Swift
+- [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for PHP
+- [x] Bring C++/TypeScript aligned outputs up to the same production API level for vectors and unions
 - [ ] Add compile/runtime verification for aligned generated code in every locally available backend

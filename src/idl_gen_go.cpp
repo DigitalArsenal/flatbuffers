@@ -829,6 +829,33 @@ class GoGenerator : public BaseGenerator {
     }
   }
 
+  void GetMemberOfVectorOfUnion(const StructDef& struct_def,
+                                const FieldDef& field,
+                                std::string* code_ptr) {
+    std::string& code = *code_ptr;
+    auto vectortype = field.value.type.VectorType();
+
+    const std::string base_name = namer_.Function(field);
+    const std::string compat_name = CompatFieldUpper(field);
+
+    GenReceiver(struct_def, code_ptr);
+    code += " " + base_name;
+    code += "(obj *flatbuffers.Table, j int) bool " + OffsetPrefix(field);
+    code += "\t\ta := rcv._tab.Vector(o)\n";
+    code += "\t\trcv._tab.Union(obj, a+flatbuffers.UOffsetT(j*";
+    code += NumToString(InlineSize(vectortype)) + "))\n";
+    code += "\t\treturn true\n\t}\n";
+    code += "\treturn false\n";
+    code += "}\n\n";
+
+    if (NeedsCompat(base_name, compat_name)) {
+      code += "func (rcv *" + namer_.Type(struct_def) + ") " + compat_name +
+              "(obj *flatbuffers.Table, j int) bool {\n";
+      code += "\treturn rcv." + base_name + "(obj, j)\n";
+      code += "}\n\n";
+    }
+  }
+
   void GetMemberOfVectorOfStructByKey(const StructDef& struct_def,
                                       const FieldDef& field,
                                       std::string* code_ptr) {
@@ -1113,6 +1140,8 @@ class GoGenerator : public BaseGenerator {
                 vectortype.struct_def->has_key) {
               GetMemberOfVectorOfStructByKey(struct_def, field, code_ptr);
             }
+          } else if (vectortype.base_type == BASE_TYPE_UNION) {
+            GetMemberOfVectorOfUnion(struct_def, field, code_ptr);
           } else {
             GetMemberOfVectorOfNonStruct(struct_def, field, code_ptr);
           }

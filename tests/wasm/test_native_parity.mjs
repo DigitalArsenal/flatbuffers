@@ -646,8 +646,12 @@ console.log(`Failed:  ${failed}`);
 console.log(`Skipped: ${skipped}`);
 console.log(`Total:   ${passed + failed + skipped}`);
 
-if (failed > 0) {
-  console.log("\n❌ Some tests failed!");
+if (failed > 0 || skipped > 0) {
+  if (failed > 0) {
+    console.log("\n❌ Some tests failed!");
+  } else {
+    console.log("\n❌ Some tests were skipped!");
+  }
   process.exit(1);
 } else {
   console.log("\n✅ All tests passed!");

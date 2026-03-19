@@ -214,8 +214,7 @@ static FullType GetFullType(const Type& type) {
       }
       case ftUnionKey:
       case ftUnionValue: {
-        FLATBUFFERS_ASSERT(false && "vectors of unions are unsupported");
-        break;
+        return ftVectorOfUnionValue;
       }
       default: {
         FLATBUFFERS_ASSERT(false && "vector of vectors are unsupported");
@@ -1532,8 +1531,8 @@ class RustGenerator : public BaseGenerator {
         break;
       }
       case ftVectorOfUnionValue: {
-        FLATBUFFERS_ASSERT(false && "vectors of unions are not yet supported");
-        return "INVALID_CODE_GENERATION";  // OH NO!
+        ty = "alloc::vec::Vec<" + NamespacedNativeName(*type.enum_def) + ">";
+        break;
       }
       case ftArrayOfEnum: {
         ty = "[" + WrapInNameSpace(*type.VectorType().enum_def) + "; " +
@@ -1756,10 +1755,9 @@ class RustGenerator : public BaseGenerator {
                           " str>>");
       }
       case ftVectorOfUnionValue: {
-        FLATBUFFERS_ASSERT(false && "vectors of unions are not yet supported");
-        // TODO(rw): when we do support these, we should consider using the
-        //           Into trait to convert tables to typesafe union values.
-        return "INVALID_CODE_GENERATION";  // for return analysis
+        return WrapOption("::flatbuffers::Vector<" + lifetime +
+                          ", ::flatbuffers::ForwardsUOffset<::flatbuffers::Table<" +
+                          lifetime + ">>>");
       }
       case ftArrayOfEnum:
       case ftArrayOfStruct:
@@ -1830,8 +1828,8 @@ class RustGenerator : public BaseGenerator {
             WrapVector(WrapForwardsUOffset("&" + lifetime + " str")));
       }
       case ftVectorOfUnionValue: {
-        FLATBUFFERS_ASSERT(false && "vectors of unions are not yet supported");
-        return "INVALID_CODE_GENERATION";  // for return analysis
+        return WrapForwardsUOffset(WrapVector(
+            WrapForwardsUOffset("::flatbuffers::Table<" + lifetime + ">")));
       }
       case ftArrayOfEnum: {
         const auto typname = WrapInNameSpace(*type.VectorType().enum_def);

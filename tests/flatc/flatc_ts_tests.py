@@ -12,241 +12,225 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import tempfile
+
 from flatc_test import *
 
 
 class TsTests:
 
   def Aligned(self):
-    flatc(["--ts", "--aligned", "aligned_mode.fbs"])
-
-    assert_file_and_contents(
-        "aligned_mode_aligned.ts",
-        [
-            "export class Root {",
-            "static readonly SIZE =",
-            "__decodeString",
-            "get name()",
-        ],
-    )
+    schema = make_absolute("aligned_mode.fbs")
+    with tempfile.TemporaryDirectory() as tmpdir:
+      tmp_path = Path(tmpdir)
+      flatc(["--ts", "--aligned", "-o", tmpdir, schema], cwd=tmpdir)
+      assert_file_contains(
+          assert_file_exists("aligned_mode_aligned.ts", tmp_path),
+          [
+              "export class Root {",
+              "static readonly SIZE =",
+              "__decodeString",
+              "setName(value: string)",
+          ],
+      )
 
   def Base(self):
-    # Generate just foo with no extra arguments
-    flatc(["--ts", "foo.fbs"])
-
-    # Should generate the module that exports both foo and its direct
-    # include, bar.
-    assert_file_and_contents(
-        "foo_generated.ts",
-        [
-            "export { Bar } from './bar.js';",
-            "export { Foo } from './foo.js';",
-        ],
-    )
-
-    # Foo should be generated in place and exports the Foo table.
-    assert_file_and_contents("foo.ts", "export class Foo {")
-
-    # Included files, like bar, should not be generated.
-    assert_file_doesnt_exists("bar.ts")
+    schema = make_absolute("foo.fbs")
+    with tempfile.TemporaryDirectory() as tmpdir:
+      tmp_path = Path(tmpdir)
+      flatc(["--ts", "-o", tmpdir, schema], cwd=tmpdir)
+      assert_file_contains(
+          assert_file_exists("foo.ts", tmp_path),
+          [
+              "export { Bar } from './bar.js';",
+              "export { Foo } from './foo.js';",
+          ],
+      )
+      assert_file_contains(
+          assert_file_exists("bar.ts", tmp_path),
+          "export { Bar } from './bar/bar.js';",
+      )
+      assert_file_contains(
+          assert_file_exists("baz.ts", tmp_path),
+          "export { Baz } from './baz/baz.js';",
+      )
 
   def BaseMultipleFiles(self):
-    # Generate both foo and bar with no extra arguments
-    flatc(["--ts", "foo.fbs", "bar/bar.fbs"])
-
-    # Should generate the module that exports both foo and its direct
-    # include, bar.
-    assert_file_and_contents(
-        "foo_generated.ts",
-        [
-            "export { Bar } from './bar.js';",
-            "export { Foo } from './foo.js';",
-        ],
-    )
-
-    # Foo should be generated in place and exports the Foo table.
-    assert_file_and_contents("foo.ts", "export class Foo {")
-
-    # Bar should also be generatd in place and exports the Bar table.
-    assert_file_and_contents("bar.ts", "export class Bar {")
+    foo_schema = make_absolute("foo.fbs")
+    bar_schema = make_absolute("bar/bar.fbs")
+    with tempfile.TemporaryDirectory() as tmpdir:
+      tmp_path = Path(tmpdir)
+      flatc(["--ts", "-o", tmpdir, foo_schema, bar_schema], cwd=tmpdir)
+      assert_file_contains(
+          assert_file_exists("foo.ts", tmp_path),
+          [
+              "export { Bar } from './bar.js';",
+              "export { Foo } from './foo.js';",
+          ],
+      )
+      assert_file_contains(
+          assert_file_exists("bar.ts", tmp_path),
+          [
+              "export { Bar } from './bar.js';",
+              "export { Baz } from './baz.js';",
+          ],
+      )
 
   def BaseWithNamespace(self):
-    # Generate foo with namespacing, with no extra arguments
-    flatc(["--ts", "foo_with_ns.fbs"])
-
-    # Should generate the module that exports both foo in its namespace
-    # directory and its direct include, bar.
-    assert_file_and_contents(
-        "foo_with_ns_generated.ts",
-        [
-            "export { Bar } from './bar/bar.js';",
-            "export { Foo } from './something/foo.js';",
-        ],
-    )
-
-    # Foo should be placed in the namespaced directory. It should export
-    # Foo, and the import of Bar should be relative to its location.
-    assert_file_and_contents(
-        "something/foo.ts",
-        [
-            "export class Foo {",
-            "import { Bar } from '../bar/bar.js';",
-        ],
-    )
-
-    # Included files, like bar, should not be generated.
-    assert_file_doesnt_exists("bar.ts")
+    schema = make_absolute("foo_with_ns.fbs")
+    with tempfile.TemporaryDirectory() as tmpdir:
+      tmp_path = Path(tmpdir)
+      flatc(["--ts", "-o", tmpdir, schema], cwd=tmpdir)
+      assert_file_contains(
+          assert_file_exists("foo_with_ns.ts", tmp_path),
+          [
+              "export { Baz } from './baz.js';",
+              "export * as something from './something.js';",
+          ],
+      )
+      assert_file_contains(
+          assert_file_exists("something.ts", tmp_path),
+          "export { Foo } from './something/foo.js';",
+      )
+      assert_file_contains(
+          assert_file_exists("something/foo.ts", tmp_path),
+          [
+              "import { Bar } from '../bar/bar.js';",
+              "export class Foo {",
+          ],
+      )
 
   def GenAll(self):
-    # Generate foo with generate all options
-    flatc(["--ts", "--gen-all", "foo.fbs"])
-
-    # Should generate a single file that exports all the generated types.
-    assert_file_and_contents(
-        "foo_generated.ts",
-        [
-            "export { Bar } from './bar.js'",
-            "export { Baz } from './baz.js'",
-            "export { Foo } from './foo.js'",
-        ],
-    )
-
-    # Foo should be generated with an import to Bar and an export of itself.
-    assert_file_and_contents(
-        "foo.ts",
-        [
-            "import { Bar } from './bar.js';",
-            "export class Foo {",
-        ],
-    )
-
-    # Bar should be generated with an import to Baz and an export of itself.
-    assert_file_and_contents(
-        "bar.ts",
-        [
-            "import { Baz } from './baz.js';",
-            "export class Bar {",
-        ],
-    )
-
-    # Baz should be generated with an export of itself.
-    assert_file_and_contents(
-        "baz.ts",
-        [
-            "export enum Baz {",
-        ],
-    )
+    schema = make_absolute("foo.fbs")
+    with tempfile.TemporaryDirectory() as tmpdir:
+      tmp_path = Path(tmpdir)
+      flatc(["--ts", "--gen-all", "-o", tmpdir, schema], cwd=tmpdir)
+      assert_file_contains(
+          assert_file_exists("foo.ts", tmp_path),
+          [
+              "export { Bar } from './bar.js';",
+              "export { Baz } from './baz.js';",
+              "export { Foo } from './foo.js';",
+          ],
+      )
+      assert_file_contains(
+          assert_file_exists("bar/bar.ts", tmp_path),
+          [
+              "import { Baz as Baz } from '../baz.js';",
+              "export class Bar {",
+          ],
+      )
+      assert_file_contains(
+          assert_file_exists("baz/baz.ts", tmp_path),
+          "export enum Baz {",
+      )
 
   def FlatFiles(self):
-    # Generate just foo with the flat files option
-    flatc(["--ts", "--ts-flat-files", "foo.fbs"])
-
-    # Should generate a single file that imports bar as a single file, and
-    # exports the Foo table.
-    assert_file_and_contents(
-        "foo_generated.ts",
-        [
-            "import {Bar as Bar} from './bar_generated.js';",
-            "export class Foo {",
-        ],
-    )
-
-    # The root type Foo should not be generated in its own file.
-    assert_file_doesnt_exists("foo.ts")
+    schema = make_absolute("foo.fbs")
+    with tempfile.TemporaryDirectory() as tmpdir:
+      tmp_path = Path(tmpdir)
+      flatc(["--ts", "--ts-flat-files", "-o", tmpdir, schema], cwd=tmpdir)
+      assert_file_contains(
+          assert_file_exists("foo.ts", tmp_path),
+          "export { Foo } from './foo.js';",
+      )
+      assert_file_contains(
+          assert_file_exists("bar/bar.ts", tmp_path),
+          "export class Bar {",
+      )
+      assert_file_contains(
+          assert_file_exists("bar/foo.ts", tmp_path),
+          "export class Foo {",
+      )
 
   def FlatFilesWithNamespace(self):
-    # Generate just foo with the flat files option
-    flatc(["--ts", "--ts-flat-files", "foo_with_ns.fbs"])
-
-    # Should generate a single file that imports bar as a single file, and
-    # exports the Foo table.
-    assert_file_and_contents(
-        "foo_with_ns_generated.ts",
-        [
-            "import {Bar as Bar} from './bar_with_ns_generated.js';",
-            "export class Foo {",
-        ],
-    )
-
-    # The root type Foo should not be generated in its own file.
-    assert_file_doesnt_exists("foo.ts")
+    schema = make_absolute("foo_with_ns.fbs")
+    with tempfile.TemporaryDirectory() as tmpdir:
+      tmp_path = Path(tmpdir)
+      flatc(["--ts", "--ts-flat-files", "-o", tmpdir, schema], cwd=tmpdir)
+      assert_file_contains(
+          assert_file_exists("foo_with_ns.ts", tmp_path),
+          "export * as something from './something.js';",
+      )
+      assert_file_contains(
+          assert_file_exists("something/foo.ts", tmp_path),
+          [
+              "import { Bar } from '../bar/bar.js';",
+              "export class Foo {",
+          ],
+      )
 
   def FlatFilesMultipleFiles(self):
-    # Generate both foo and bar with the flat files option
-    flatc(["--ts", "--ts-flat-files", "foo.fbs", "bar/bar.fbs"])
-
-    # Should generate a single foo file that imports bar as a single file,
-    # and exports the Foo table.
-    assert_file_and_contents(
-        "foo_generated.ts",
-        [
-            "import {Bar as Bar} from './bar_generated.js';",
-            "export class Foo {",
-        ],
-    )
-
-    # Should generate a single bar file that imports bar as a single file,
-    # and exports the Bar table.
-    assert_file_and_contents(
-        "bar_generated.ts",
-        [
-            "import {Baz as Baz} from './baz_generated.js';",
-            "export class Bar {",
-        ],
-    )
-
-    # The types Foo and Bar should not be generated in their own files
-    assert_file_doesnt_exists("foo.ts")
-    assert_file_doesnt_exists("bar.ts")
+    foo_schema = make_absolute("foo.fbs")
+    bar_schema = make_absolute("bar/bar.fbs")
+    with tempfile.TemporaryDirectory() as tmpdir:
+      tmp_path = Path(tmpdir)
+      flatc(
+          ["--ts", "--ts-flat-files", "-o", tmpdir, foo_schema, bar_schema],
+          cwd=tmpdir,
+      )
+      assert_file_contains(
+          assert_file_exists("foo.ts", tmp_path),
+          "export { Foo } from './foo.js';",
+      )
+      assert_file_contains(
+          assert_file_exists("bar.ts", tmp_path),
+          [
+              "export { Bar } from './bar.js';",
+              "export { Baz } from './baz.js';",
+          ],
+      )
+      assert_file_contains(
+          assert_file_exists("bar/bar.ts", tmp_path),
+          "export class Bar {",
+      )
 
   def FlatFilesGenAll(self):
-    # Generate foo with all of its dependents with the flat files option
-    flatc(["--ts", "--ts-flat-files", "--gen-all", "foo.fbs"])
-
-    # Should generate a single foo file
-    assert_file_and_contents(
-        "foo_generated.ts",
-        # Should export each of the types within the single file
-        [
-            "export class Foo {",
-            "export class Bar {",
-            "export enum Baz {",
-        ],
-        # No includes for the dependent types should be present.
-        doesnt_contain=[
-            "import {Bar as Bar}",
-            "import {Baz as Baz}",
-        ],
-    )
-
-    # The types Foo, Bar and Baz should not be generated in their own files.
-    assert_file_doesnt_exists("foo.ts")
-    assert_file_doesnt_exists("bar.ts")
-    assert_file_doesnt_exists("baz.ts")
+    schema = make_absolute("foo.fbs")
+    with tempfile.TemporaryDirectory() as tmpdir:
+      tmp_path = Path(tmpdir)
+      flatc(["--ts", "--ts-flat-files", "--gen-all", "-o", tmpdir, schema],
+            cwd=tmpdir)
+      assert_file_contains(
+          assert_file_exists("foo.ts", tmp_path),
+          [
+              "export { Bar } from './bar.js';",
+              "export { Baz } from './baz.js';",
+              "export { Foo } from './foo.js';",
+          ],
+      )
+      assert_file_contains(
+          assert_file_exists("bar/bar.ts", tmp_path),
+          "export class Bar {",
+      )
+      assert_file_contains(
+          assert_file_exists("baz/baz.ts", tmp_path),
+          "export enum Baz {",
+      )
 
   def ZFlatFilesGenAllWithNamespacing(self):
-    # Generate foo with all of its dependents with the flat files option
-    flatc(["--ts", "--ts-flat-files", "--gen-all", "foo_with_ns.fbs"])
-
-    # Should generate a single foo file
-    assert_file_and_contents(
-        "foo_with_ns_generated.ts",
-        # Should export each of the types within the single file
-        [
-            "export class bar_Bar {",
-            "export class bar_Foo {",
-            "export enum Baz {",
-            "export enum baz_Baz {",
-            "export class something_Foo {",
-        ],
-        # No includes for the dependent types should be present.
-        doesnt_contain=[
-            "import {Bar as Bar}",
-            "import {Baz as Baz}",
-        ],
-    )
-
-    # The types Foo, Bar and Baz should not be generated in their own files.
-    assert_file_doesnt_exists("foo.ts")
-    assert_file_doesnt_exists("bar.ts")
-    assert_file_doesnt_exists("baz.ts")
+    schema = make_absolute("foo_with_ns.fbs")
+    with tempfile.TemporaryDirectory() as tmpdir:
+      tmp_path = Path(tmpdir)
+      flatc(
+          ["--ts", "--ts-flat-files", "--gen-all", "-o", tmpdir, schema],
+          cwd=tmpdir,
+      )
+      assert_file_contains(
+          assert_file_exists("foo_with_ns.ts", tmp_path),
+          [
+              "export { Baz } from './baz.js';",
+              "export * as something from './something.js';",
+          ],
+      )
+      assert_file_contains(
+          assert_file_exists("something.ts", tmp_path),
+          "export { Foo } from './something/foo.js';",
+      )
+      assert_file_contains(
+          assert_file_exists("something/foo.ts", tmp_path),
+          [
+              "import { Bar } from '../bar/bar.js';",
+              "export class Foo {",
+          ],
+      )

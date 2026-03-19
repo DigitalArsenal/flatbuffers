@@ -199,8 +199,8 @@ async function runTypeScriptTests() {
 
   await test('generates getters/setters', async () => {
     const result = await generateAlignedCode(SIMPLE_STRUCT_SCHEMA);
-    assert(result.ts.includes('get x'), 'should have getter');
-    assert(result.ts.includes('set x'), 'should have setter');
+    assert(result.ts.includes('x(): number'), 'should have getter method');
+    assert(result.ts.includes('setX(value: number)'), 'should have setter method');
   });
 
   await test('generates class for each struct', async () => {
@@ -215,7 +215,8 @@ async function runTypeScriptTests() {
 
   await test('generates fixed array accessor', async () => {
     const result = await generateAlignedCode(FIXED_ARRAY_SCHEMA);
-    assert(result.ts.includes('get data') || result.ts.includes('data(') || result.ts.includes('getdata'), 'should have data getter');
+    assert(result.ts.includes('dataLength(): number'), 'should have array length');
+    assert(result.ts.includes('dataAt(i: number)'), 'should have indexed array accessor');
   });
 
   await test('generates bigint accessors for 64-bit', async () => {
@@ -348,7 +349,7 @@ async function runIntegrationTests() {
     const result = await generateAlignedCode(SIMPLE_STRUCT_SCHEMA);
 
     assert(result.ts.includes('Vec3'), 'should have Vec3');
-    assert(result.ts.includes('get x'), 'should have x getter');
+    assert(result.ts.includes('x(): number'), 'should have x accessor method');
     assert(result.ts.includes('fromPointer'), 'should have WASM factory');
   });
 

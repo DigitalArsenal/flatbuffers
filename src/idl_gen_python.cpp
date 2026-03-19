@@ -1627,7 +1627,7 @@ class PythonGenerator : public BaseGenerator {
       } else {
         code += "def Create" + field_method + "Vector(builder, data):\n";
       }
-      code += Indent + helper_name + "(builder, data)\n\n";
+      code += Indent + "return " + helper_name + "(builder, data)\n\n";
     }
   }
 

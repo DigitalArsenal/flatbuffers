@@ -154,6 +154,23 @@ function evalGeneratedCode(jsCode) {
     return `const ${upperName}_SIZE = ${name}.SIZE;`;
   }).join('\n');
 
+  const propertyAliases = exports.map(name => `
+for (const key of Object.getOwnPropertyNames(${name}.prototype)) {
+  if (key === 'constructor' || key.startsWith('set')) continue;
+  const getter = ${name}.prototype[key];
+  if (typeof getter !== 'function' || getter.length !== 0) continue;
+  const setterName = 'set' + key.charAt(0).toUpperCase() + key.slice(1);
+  const setter = ${name}.prototype[setterName];
+  const descriptor = {
+    get() { return getter.call(this); },
+    configurable: true
+  };
+  if (typeof setter === 'function') {
+    descriptor.set = function(value) { setter.call(this, value); };
+  }
+  Object.defineProperty(${name}.prototype, key, descriptor);
+}`).join('\n');
+
   // Create View suffix aliases (tests use Cartesian3View but we generate Cartesian3)
   const viewAliases = exports.map(name => `const ${name}View = ${name};`).join('\n');
 
@@ -184,6 +201,7 @@ class ${name}ArrayView {
   const wrappedCode = `
     ${cleanCode}
     ${sizeConstants}
+    ${propertyAliases}
     ${viewAliases}
     ${arrayViewClasses}
 

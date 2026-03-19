@@ -1,0 +1,11 @@
+namespace CircularTable;
+
+table A {
+  b:B;
+}
+
+table B {
+  a:A;
+}
+
+root_type A;

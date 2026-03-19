@@ -79,16 +79,16 @@ void AlignedCodegenTest() {
   };
 
   const LanguageCase language_cases[] = {
-      { IDLOptions::kGo, "type Root struct", "RootNameOffset" },
-      { IDLOptions::kPython, "class Root:", "NAME_OFFSET = 8" },
-      { IDLOptions::kRust, "pub struct Root<'a>", "pub const NAME_OFFSET: usize = 8;" },
-      { IDLOptions::kJava, "final class Root {", "static final int NAME_OFFSET = 8;" },
-      { IDLOptions::kCSharp, "public sealed class Root {", "public const int NAME_OFFSET = 8;" },
-      { IDLOptions::kKotlin, "class Root(", "const val NAME_OFFSET: Int = 8" },
-      { IDLOptions::kKotlinKmp, "class Root(", "const val NAME_OFFSET: Int = 8" },
-      { IDLOptions::kDart, "class Root {", "static const int NAME_OFFSET = 8;" },
-      { IDLOptions::kSwift, "struct Root {", "static let NAME_OFFSET = 8" },
-      { IDLOptions::kPhp, "final class Root {", "public const NAME_OFFSET = 8;" },
+      { IDLOptions::kGo, "type Root struct", "func (r Root) MutateName(value string)" },
+      { IDLOptions::kPython, "class Root:", "def MutateName(self, value):" },
+      { IDLOptions::kRust, "pub struct Root<'a>", "pub fn mutate_name(&mut self, value: &str)" },
+      { IDLOptions::kJava, "final class Root {", "void mutateName(String value)" },
+      { IDLOptions::kCSharp, "public sealed class Root {", "public void MutateName(string value)" },
+      { IDLOptions::kKotlin, "class Root internal constructor", "fun mutateName(value: String)" },
+      { IDLOptions::kKotlinKmp, "class Root internal constructor", "fun mutateName(value: String)" },
+      { IDLOptions::kDart, "class Root {", "void mutateName(String value)" },
+      { IDLOptions::kSwift, "final class Root {", "func mutateName(_ value: String)" },
+      { IDLOptions::kPhp, "final class Root {", "public function mutateName(string $value): void" },
   };
 
   for (size_t i = 0; i < sizeof(language_cases) / sizeof(language_cases[0]);

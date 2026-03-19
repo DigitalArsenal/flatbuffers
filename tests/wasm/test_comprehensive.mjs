@@ -8,6 +8,7 @@
 import { readFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { spawnSync } from 'node:child_process';
 import FlatcWasm from '../../wasm/dist/flatc-wasm.js';
 import { FlatcRunner } from '../../wasm/src/runner.mjs';
 
@@ -30,6 +31,18 @@ function assert(condition, message) {
   testsPassed++;
   console.log(`  ✓ ${message}`);
   return true;
+}
+
+function runNodeScript(scriptPath, cwd) {
+  const result = spawnSync(process.execPath, [scriptPath], {
+    cwd,
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `${path.basename(scriptPath)} failed\n${result.stdout}\n${result.stderr}`
+    );
+  }
 }
 
 // =============================================================================
@@ -537,15 +550,15 @@ async function main() {
   const alignedLanguages = [
     { lang: 'cpp', file: 'aligned_mode_aligned.h', markers: ['struct Root {', 'AlignedString<12>'] },
     { lang: 'ts', file: 'aligned_mode_aligned.ts', markers: ['export class Root {', '__decodeString'] },
-    { lang: 'go', file: 'aligned_mode_aligned.go', markers: ['type Root struct', 'RootNameOffset = 8'] },
-    { lang: 'python', file: 'aligned_mode_aligned.py', markers: ['class Root:', 'NAME_OFFSET = 8'] },
-    { lang: 'rust', file: 'aligned_mode_aligned.rs', markers: ["pub struct Root<'a>", 'pub const NAME_OFFSET: usize = 8;'] },
-    { lang: 'java', file: 'aligned_mode_aligned.java', markers: ['final class Root {', 'static final int NAME_OFFSET = 8;'] },
-    { lang: 'csharp', file: 'aligned_mode_aligned.cs', markers: ['public sealed class Root {', 'public const int NAME_OFFSET = 8;'] },
-    { lang: 'kotlin', file: 'aligned_mode_aligned.kt', markers: ['class Root(', 'const val NAME_OFFSET: Int = 8'] },
-    { lang: 'dart', file: 'aligned_mode_aligned.dart', markers: ['class Root {', 'static const int NAME_OFFSET = 8;'] },
-    { lang: 'swift', file: 'aligned_mode_aligned.swift', markers: ['struct Root {', 'static let NAME_OFFSET = 8'] },
-    { lang: 'php', file: 'aligned_mode_aligned.php', markers: ['final class Root {', 'public const NAME_OFFSET = 8;'] },
+    { lang: 'go', file: 'aligned_mode_aligned.go', markers: ['type Root struct', 'func (r Root) MutateName(value string)'] },
+    { lang: 'python', file: 'aligned_mode_aligned.py', markers: ['class Root:', 'def MutateName(self, value):'] },
+    { lang: 'rust', file: 'aligned_mode_aligned.rs', markers: ["pub struct Root<'a>", 'pub fn mutate_name(&mut self, value: &str)'] },
+    { lang: 'java', file: 'aligned_mode_aligned.java', markers: ['final class Root {', 'void mutateName(String value)'] },
+    { lang: 'csharp', file: 'aligned_mode_aligned.cs', markers: ['public sealed class Root {', 'public void MutateName(string value)'] },
+    { lang: 'kotlin', file: 'aligned_mode_aligned.kt', markers: ['class Root internal constructor', 'fun mutateName(value: String)'] },
+    { lang: 'dart', file: 'aligned_mode_aligned.dart', markers: ['class Root {', 'void mutateName(String value)'] },
+    { lang: 'swift', file: 'aligned_mode_aligned.swift', markers: ['final class Root {', 'func mutateName(_ value: String)'] },
+    { lang: 'php', file: 'aligned_mode_aligned.php', markers: ['final class Root {', 'public function mutateName(string $value): void'] },
   ];
 
   for (const test of alignedLanguages) {
@@ -554,6 +567,14 @@ async function main() {
     const allMarkersFound = test.markers.every((marker) => generated.includes(marker));
     assert(allMarkersFound, `${test.lang}: aligned codegen contains expected markers`);
   }
+  console.log('');
+
+  console.log('=== Test 8d: Aligned Runtime Backend Verification ===');
+  runNodeScript(
+    path.join(__dirname, 'test_aligned_runtime_backends.mjs'),
+    path.join(__dirname, '..', '..')
+  );
+  assert(true, 'Aligned runtime backend verification passed');
   console.log('');
 
   // ==========================================================================

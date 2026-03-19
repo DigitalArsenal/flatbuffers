@@ -138,4 +138,4 @@
 - [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for Swift
 - [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for PHP
 - [x] Bring C++/TypeScript aligned outputs up to the same production API level for vectors and unions
-- [ ] Add compile/runtime verification for aligned generated code in every locally available backend
+- [x] Add compile/runtime verification for aligned generated code in every locally available backend

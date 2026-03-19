@@ -113,17 +113,20 @@ function encodeRoot(view, layout, childLayout, value) {
 }
 
 function toPlainChild(child) {
-  return child ? { value: child.value, label: child.label } : null;
+  return child ? { value: child.value(), label: child.label() } : null;
 }
 
 function toPlainRoot(root) {
   return {
-    id: root.id,
-    name: root.name,
-    scores: root.scores,
-    tags: root.tags,
-    child: toPlainChild(root.child),
-    children: root.children.map((child) => toPlainChild(child)),
+    id: root.id(),
+    name: root.name(),
+    scores: Array.from({ length: root.scoresLength() }, (_, i) => root.scoresAt(i)),
+    tags: Array.from({ length: root.tagsLength() }, (_, i) => root.tagsAt(i)),
+    child: toPlainChild(root.child()),
+    children: Array.from(
+      { length: root.childrenLength() },
+      (_, i) => toPlainChild(root.childrenAt(i))
+    ),
   };
 }
 
@@ -166,10 +169,9 @@ async function main() {
     children: regularJson.children,
   });
 
-  const childVector = root.children;
   const childrenField = rootLayout.fields.find((field) => field.name === 'children');
   assert.equal(
-    childVector[1].offset - childVector[0].offset,
+    root.childrenAt(1).offset - root.childrenAt(0).offset,
     childrenField.stride,
     'aligned child vector uses constant stride'
   );

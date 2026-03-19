@@ -7,43 +7,14 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build WASM
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: "3.1.74"
-          actions-cache-folder: "emsdk-cache"
-
-      - name: Configure and Build
-        run: |
-          emcmake cmake -B build/wasm -S . -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_BUILD_WASM=ON
-          cmake --build build/wasm --parallel $(nproc) --target flatc_wasm_npm
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-package
-          path: wasm/
-
   publish:
     name: Publish to NPM
-    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v6
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: npm-package
-          path: wasm/
 
       - uses: actions/setup-node@v4
         with:

@@ -17,6 +17,21 @@ filegroup(
 )
 
 cc_library(
+    name = "aligned_generator",
+    srcs = [
+        "aligned_compiler.cpp",
+        "idl_gen_aligned.cpp",
+    ],
+    hdrs = [
+        "aligned_compiler.h",
+        "idl_gen_aligned.h",
+    ],
+    strip_include_prefix = "/src",
+    visibility = ["//:__subpackages__"],
+    deps = [":flatbuffers"],
+)
+
+cc_library(
     name = "code_generators",
     srcs = ["code_generators.cpp"],
     hdrs = [
@@ -89,6 +104,7 @@ cc_library(
     strip_include_prefix = "/include",
     visibility = ["//:__pkg__"],
     deps = [
+        ":aligned_generator",
         ":flatbuffers",
         "//include/codegen:namer",
     ],
@@ -115,8 +131,6 @@ cc_library(
         "idl_gen_csharp.h",
         "idl_gen_dart.cpp",
         "idl_gen_dart.h",
-        "idl_gen_aligned.cpp",
-        "idl_gen_aligned.h",
         "idl_gen_go.cpp",
         "idl_gen_go.h",
         "idl_gen_grpc.cpp",
@@ -124,8 +138,6 @@ cc_library(
         "idl_gen_java.h",
         "idl_gen_json_schema.cpp",
         "idl_gen_json_schema.h",
-        "aligned_compiler.cpp",
-        "aligned_compiler.h",
         "idl_gen_kotlin.cpp",
         "idl_gen_kotlin.h",
         "idl_gen_kotlin_kmp.cpp",

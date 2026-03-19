@@ -83,10 +83,6 @@ cc_test(
         "vector_table_naked_ptr/vector_table_naked_ptr_generated.h",
         "vector_table_naked_ptr_test.h",
         "vector_table_naked_ptr_test.cpp",
-        "//src:aligned_compiler.cpp",
-        "//src:aligned_compiler.h",
-        "//src:idl_gen_aligned.cpp",
-        "//src:idl_gen_aligned.h",
     ],
     copts = [
         "-DFLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE",
@@ -151,6 +147,7 @@ cc_test(
         ":monster_test_cc_fbs",
         ":native_type_test_cc_fbs",
         "//:flatbuffers",
+        "//src:aligned_generator",
         "//src:generate_fbs",
     ],
 )

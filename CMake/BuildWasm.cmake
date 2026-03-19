@@ -316,6 +316,7 @@ if(EMSCRIPTEN)
   # Common link options
   set(WASM_COMMON_LINK_OPTIONS
     -sWASM=1
+    -sWASM_BIGINT=1
     -sMODULARIZE=1
     -sEXPORT_NAME=FlatcWasm
     -sALLOW_MEMORY_GROWTH=1
@@ -449,6 +450,7 @@ module.exports.default = createModule;
     # HE-specific link options with larger memory for SEAL
     set(WASM_HE_LINK_OPTIONS
       -sWASM=1
+      -sWASM_BIGINT=1
       -sMODULARIZE=1
       -sEXPORT_NAME=FlatcWasmHE
       -sALLOW_MEMORY_GROWTH=1

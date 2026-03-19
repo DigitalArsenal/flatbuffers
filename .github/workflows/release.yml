@@ -3,29 +3,62 @@ permissions: read-all
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches:
+      - master
   release:
     types: [published]
 
 jobs:
-  publish-npm:
-    name: Publish NPM (flatbuffers)
-    if: github.event_name == 'workflow_dispatch' || (startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-wasm'))
+  plan-npm-publish:
+    name: Plan NPM Publish
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
+    outputs:
+      publish_wasm: ${{ steps.check.outputs.publish_wasm }}
+      flatc_wasm_version: ${{ steps.check.outputs.flatc_wasm_version }}
+      ref_to_publish: ${{ steps.ref.outputs.ref_to_publish }}
     steps:
+      - id: ref
+        run: echo "ref_to_publish=${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
         with:
-          node-version: '24.x'
-          registry-url: 'https://registry.npmjs.org'
-      - run: npm install
-      - run: npm publish --tag latest --provenance --access public
+          ref: ${{ steps.ref.outputs.ref_to_publish }}
+
+      - id: check
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          def load_version(path):
+              with open(path, encoding="utf-8") as f:
+                  return json.load(f)["version"]
+
+          def missing_from_registry(name, version):
+              with urllib.request.urlopen(f"https://registry.npmjs.org/{name}") as response:
+                  data = json.load(response)
+              return version not in data.get("versions", {})
+
+          flatc_wasm_version = load_version("wasm/package.json")
+          publish_wasm = missing_from_registry("flatc-wasm", flatc_wasm_version)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"flatc_wasm_version={flatc_wasm_version}\n")
+              out.write(f"publish_wasm={'true' if publish_wasm else 'false'}\n")
+          PY
 
   publish-npm-wasm:
     name: Publish NPM (flatc-wasm)
-    if: github.event_name == 'workflow_dispatch' || (startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-wasm'))
+    needs: [plan-npm-publish]
+    if: needs.plan-npm-publish.outputs.publish_wasm == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,16 +68,148 @@ jobs:
         working-directory: ./wasm
     steps:
       - uses: actions/checkout@v6
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
         with:
-          version: "3.1.74"
-          actions-cache-folder: "emsdk-cache"
-      - uses: actions/setup-node@v4
+          ref: ${{ needs.plan-npm-publish.outputs.ref_to_publish }}
+      - uses: actions/setup-node@v6
         with:
           node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
-      - run: |
-          emcmake cmake -B ../build/wasm -S .. -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_BUILD_WASM=ON
-          cmake --build ../build/wasm --parallel $(nproc) --target flatc_wasm_npm
-      - run: npm publish --tag latest --provenance --access public
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Publish
+        run: npm publish --tag latest --provenance --access public
+
+  publish-pypi:
+    name: Publish PyPi
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./python
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install build twine
+
+      - name: Build
+        run: |
+          python3 -m build .
+
+      - name: Upload to PyPi
+        run: |
+          python3 -m twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
+
+  publish-nuget:
+    name: Publish NuGet
+    if: github.event_name != 'workflow_run'
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ./net/flatbuffers
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build
+        run: |
+          dotnet build Google.FlatBuffers.csproj -c Release
+
+      - name: Pack
+        run: |
+          dotnet pack Google.FlatBuffers.csproj -c Release
+
+      - name: Upload to NuGet
+        run: |
+          dotnet nuget push .\bin\Release\Google.FlatBuffers.*.nupkg -k ${{ secrets.NUGET_API_KEY }} -s https://api.nuget.org/v3/index.json
+
+  publish-maven:
+    name: Publish Maven
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./java
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Maven Central Repository
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'adopt'
+          cache: 'maven'
+          server-id: ossrh
+          server-username: OSSRH_USERNAME
+          server-password: OSSRH_PASSWORD
+          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Publish Maven
+        run: mvn --batch-mode clean deploy
+        env:
+          OSSRH_USERNAME: ${{ secrets.OSSRH_USER_V2 }}
+          OSSRH_PASSWORD: ${{ secrets.OSSRH_TOKEN_V2 }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+
+  publish-maven-kotlin:
+    name: Publish Maven - Kotlin
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./kotlin
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Maven Central Repository
+        uses: actions/setup-java@v5
+        with:
+          java-version: '11'
+          distribution: 'adopt'
+          cache: 'maven'
+          server-id: ossrh
+          server-username: OSSRH_USERNAME
+          server-password: OSSRH_PASSWORD
+          gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Publish Kotlin Library on Maven
+        run: ./gradlew publishAllPublicationsToSonatypeRepository
+        env:
+          OSSRH_USERNAME: ${{ secrets.OSSRH_USER_V2 }}
+          OSSRH_PASSWORD: ${{ secrets.OSSRH_TOKEN_V2 }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+
+  publish-crates:
+    name: Publish crates.io
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Publish Flatbuffers
+        uses: katyo/publish-crates@v2
+        with:
+          path: ./rust/flatbuffers
+          registry-token: ${{ secrets.CARGO_TOKEN }}
+
+      - name: Publish Flexbuffers
+        uses: katyo/publish-crates@v2
+        with:
+          path: ./rust/flexbuffers
+          registry-token: ${{ secrets.CARGO_TOKEN }}

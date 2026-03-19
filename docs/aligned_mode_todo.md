@@ -131,9 +131,9 @@
 - [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for Go
 - [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for Python
 - [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for Rust
-- [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for Java
-- [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for C#
-- [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for Kotlin
+- [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for Java
+- [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for C#
+- [x] Replace scaffold/metadata-only aligned outputs with real readers/writers for Kotlin
 - [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for Dart
 - [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for Swift
 - [ ] Replace scaffold/metadata-only aligned outputs with real readers/writers for PHP

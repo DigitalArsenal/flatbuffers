@@ -6,9 +6,8 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - "*" # new tag version, like `0.8.4` or else
-    tags-ignore:
-      - "npm-v*"
+      - "v*" # release tags like `v0.8.4`
+      - "wasm-v*" # standalone WASM package tags
     branches:
       - master
   pull_request:

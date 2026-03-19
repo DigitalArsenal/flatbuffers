@@ -72,6 +72,38 @@ void AlignedCodegenTest() {
     TEST_ASSERT(output.find("__decodeString") != std::string::npos);
   }
 
+  struct LanguageCase {
+    IDLOptions::Language language;
+    const char* marker_a;
+    const char* marker_b;
+  };
+
+  const LanguageCase language_cases[] = {
+      { IDLOptions::kGo, "type Root struct", "RootNameOffset" },
+      { IDLOptions::kPython, "class Root:", "NAME_OFFSET = 8" },
+      { IDLOptions::kRust, "pub struct Root<'a>", "pub const NAME_OFFSET: usize = 8;" },
+      { IDLOptions::kJava, "final class Root {", "static final int NAME_OFFSET = 8;" },
+      { IDLOptions::kCSharp, "public sealed class Root {", "public const int NAME_OFFSET = 8;" },
+      { IDLOptions::kKotlin, "class Root(", "const val NAME_OFFSET: Int = 8" },
+      { IDLOptions::kKotlinKmp, "class Root(", "const val NAME_OFFSET: Int = 8" },
+      { IDLOptions::kDart, "class Root {", "static const int NAME_OFFSET = 8;" },
+      { IDLOptions::kSwift, "struct Root {", "static let NAME_OFFSET = 8" },
+      { IDLOptions::kPhp, "final class Root {", "public const NAME_OFFSET = 8;" },
+  };
+
+  for (size_t i = 0; i < sizeof(language_cases) / sizeof(language_cases[0]);
+       ++i) {
+    Parser parser = BuildParser();
+    std::unique_ptr<CodeGenerator> generator =
+        NewAlignedLanguageCodeGenerator(language_cases[i].language);
+    TEST_NOTNULL(generator);
+    std::string output;
+    TEST_EQ(CodeGenerator::Status::OK,
+            generator->GenerateCodeString(parser, "aligned_test", output));
+    TEST_ASSERT(output.find(language_cases[i].marker_a) != std::string::npos);
+    TEST_ASSERT(output.find(language_cases[i].marker_b) != std::string::npos);
+  }
+
   {
     Parser parser = BuildParser();
     std::unique_ptr<CodeGenerator> generator = NewAlignedCodeGenerator();

@@ -1600,7 +1600,18 @@ Prefer the standard language flags with `--aligned`:
 ```bash
 flatc --cpp --aligned schema.fbs
 flatc --ts --aligned schema.fbs
+flatc --go --aligned schema.fbs
+flatc --python --aligned schema.fbs
+flatc --rust --aligned schema.fbs
+flatc --java --aligned schema.fbs
+flatc --csharp --aligned schema.fbs
+flatc --kotlin --aligned schema.fbs
+flatc --dart --aligned schema.fbs
+flatc --swift --aligned schema.fbs
+flatc --php --aligned schema.fbs
 ```
+
+The shared aligned pipeline now backs the standard `--<lang> --aligned` path for C++, TypeScript, Go, Python, Rust, Java, C#, Kotlin/KMP, Dart, Swift, and PHP.
 
 The legacy compatibility wrapper is still available and produces the combined aligned bundle:
 
@@ -1633,6 +1644,8 @@ const schemaInput = {
 
 const cpp = runner.generateCode(schemaInput, 'cpp', { aligned: true });
 const ts = runner.generateCode(schemaInput, 'ts', { aligned: true });
+const go = runner.generateCode(schemaInput, 'go', { aligned: true });
+const rust = runner.generateCode(schemaInput, 'rust', { aligned: true });
 ```
 
 The compatibility helper is still available if you want the historical bundle in one call:

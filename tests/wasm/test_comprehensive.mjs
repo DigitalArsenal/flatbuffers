@@ -9,6 +9,7 @@ import { readFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import FlatcWasm from '../../wasm/dist/flatc-wasm.js';
+import { FlatcRunner } from '../../wasm/src/runner.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = path.join(__dirname, '..');
@@ -525,6 +526,34 @@ async function main() {
   assert(alignedBundle.includes('AlignedString<12>'), 'Aligned compatibility output includes bounded strings');
   assert(alignedBundle.includes('export class Root'), 'Aligned compatibility output includes TypeScript view');
   assert(alignedBundle.includes('"qualified_name"'), 'Aligned compatibility output includes layout metadata');
+  console.log('');
+
+  console.log('=== Test 8c: Aligned Standard Backend Generation ===');
+  const runner = await FlatcRunner.init();
+  const alignedSchemaInput = {
+    entry: '/aligned_mode.fbs',
+    files: { '/aligned_mode.fbs': ALIGNED_TEST_SCHEMA },
+  };
+  const alignedLanguages = [
+    { lang: 'cpp', file: 'aligned_mode_aligned.h', markers: ['struct Root {', 'AlignedString<12>'] },
+    { lang: 'ts', file: 'aligned_mode_aligned.ts', markers: ['export class Root {', '__decodeString'] },
+    { lang: 'go', file: 'aligned_mode_aligned.go', markers: ['type Root struct', 'RootNameOffset = 8'] },
+    { lang: 'python', file: 'aligned_mode_aligned.py', markers: ['class Root:', 'NAME_OFFSET = 8'] },
+    { lang: 'rust', file: 'aligned_mode_aligned.rs', markers: ["pub struct Root<'a>", 'pub const NAME_OFFSET: usize = 8;'] },
+    { lang: 'java', file: 'aligned_mode_aligned.java', markers: ['final class Root {', 'static final int NAME_OFFSET = 8;'] },
+    { lang: 'csharp', file: 'aligned_mode_aligned.cs', markers: ['public sealed class Root {', 'public const int NAME_OFFSET = 8;'] },
+    { lang: 'kotlin', file: 'aligned_mode_aligned.kt', markers: ['class Root(', 'const val NAME_OFFSET: Int = 8'] },
+    { lang: 'dart', file: 'aligned_mode_aligned.dart', markers: ['class Root {', 'static const int NAME_OFFSET = 8;'] },
+    { lang: 'swift', file: 'aligned_mode_aligned.swift', markers: ['struct Root {', 'static let NAME_OFFSET = 8'] },
+    { lang: 'php', file: 'aligned_mode_aligned.php', markers: ['final class Root {', 'public const NAME_OFFSET = 8;'] },
+  ];
+
+  for (const test of alignedLanguages) {
+    const output = runner.generateCode(alignedSchemaInput, test.lang, { aligned: true });
+    const generated = output[test.file] || '';
+    const allMarkersFound = test.markers.every((marker) => generated.includes(marker));
+    assert(allMarkersFound, `${test.lang}: aligned codegen contains expected markers`);
+  }
   console.log('');
 
   // ==========================================================================

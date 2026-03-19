@@ -108,8 +108,8 @@
 - [x] Thread `--aligned` through standard language generators and `flatc_wasm`
 - [x] Keep the legacy `aligned` generator only as a compatibility wrapper during transition
 - [x] Add IR/unit tests for layout math, offsets, padding, stride, and bounds validation
-- [ ] Add end-to-end parity tests proving regular and aligned decoding yield the same logical values
-- [ ] Add CLI/WASM/native regression tests for positive and negative aligned cases
+- [x] Add end-to-end parity tests proving regular and aligned decoding yield the same logical values
+- [x] Add CLI/WASM/native regression tests for positive and negative aligned cases
 - [x] Rewrite aligned docs to match the new bounded fixed-layout table model
 
 ## Assumptions

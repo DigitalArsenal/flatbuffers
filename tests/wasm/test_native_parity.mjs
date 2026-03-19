@@ -345,7 +345,19 @@ for (const [schemaName, schemaContent] of Object.entries(schemas)) {
 // Test 2: Binary Conversion Parity
 console.log("\n1b. Aligned Code Generation Parity:");
 
-for (const lang of ["cpp", "ts"]) {
+for (const lang of [
+  "cpp",
+  "ts",
+  "go",
+  "python",
+  "rust",
+  "java",
+  "csharp",
+  "kotlin",
+  "dart",
+  "swift",
+  "php",
+]) {
   test(`aligned → ${lang}`, () => {
     const schemaFile = "aligned_mode.fbs";
     const nativeOutDir = join(TEMP_DIR, `native_aligned_${lang}`);

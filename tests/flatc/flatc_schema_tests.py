@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import json
+from pathlib import Path
+import tempfile
 from flatc_test import *
 
 
@@ -37,6 +39,28 @@ class SchemaTests:
 
     assert result.returncode != 0, "Expected flatc to fail on missing vector bounds"
     assert "aligned_max_count" in result.stderr
+
+  def AlignedBackendSmoke(self):
+    schema = make_absolute("aligned_mode.fbs")
+    cases = [
+        ("cpp", "aligned_mode_aligned.h", ["struct Root {", "AlignedString<12>"]),
+        ("ts", "aligned_mode_aligned.ts", ["export class Root {", "__decodeString"]),
+        ("go", "aligned_mode_aligned.go", ["type Root struct", "RootNameOffset = 8"]),
+        ("python", "aligned_mode_aligned.py", ["class Root:", "NAME_OFFSET = 8"]),
+        ("rust", "aligned_mode_aligned.rs", ["pub struct Root<'a>", "pub const NAME_OFFSET: usize = 8;"]),
+        ("java", "aligned_mode_aligned.java", ["final class Root {", "static final int NAME_OFFSET = 8;"]),
+        ("csharp", "aligned_mode_aligned.cs", ["public sealed class Root {", "public const int NAME_OFFSET = 8;"]),
+        ("kotlin", "aligned_mode_aligned.kt", ["class Root(", "const val NAME_OFFSET: Int = 8"]),
+        ("dart", "aligned_mode_aligned.dart", ["class Root {", "static const int NAME_OFFSET = 8;"]),
+        ("swift", "aligned_mode_aligned.swift", ["struct Root {", "static let NAME_OFFSET = 8"]),
+        ("php", "aligned_mode_aligned.php", ["final class Root {", "public const NAME_OFFSET = 8;"]),
+    ]
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+      tmp_path = Path(tmpdir)
+      for language, filename, markers in cases:
+        flatc([f"--{language}", "--aligned", "-o", tmpdir, schema], cwd=tmpdir)
+        assert_file_and_contents(filename, markers, path=tmp_path)
 
   def EnumValAttributes(self):
     # Generate .bfbs schema first

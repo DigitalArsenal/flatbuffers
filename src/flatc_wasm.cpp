@@ -1013,14 +1013,42 @@ int32_t wasm_he_context_create_client(uint32_t poly_degree) {
     auto ctx = std::make_unique<HEContext>(
         HEContext::CreateClient(poly_degree > 0 ? poly_degree : kDefaultPolyModulusDegree));
     if (!ctx->IsValid()) {
-      SetError("Failed to create HE client context");
+      flatbuffers::wasm::SetError("Failed to create HE client context");
       return -1;
     }
     int32_t id = g_next_he_context_id++;
     g_he_contexts[id] = std::move(ctx);
     return id;
   } catch (const std::exception& e) {
-    SetError(std::string("HE context creation failed: ") + e.what());
+    flatbuffers::wasm::SetError(std::string("HE context creation failed: ") + e.what());
+    return -1;
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE
+int32_t wasm_he_context_create_client_seeded(uint32_t poly_degree,
+                                             const uint8_t* seed,
+                                             uint32_t seed_len) {
+  using namespace flatbuffers::he;
+  if (!seed || seed_len < 32) {
+    flatbuffers::wasm::SetError("Seed must be at least 32 bytes");
+    return -1;
+  }
+  try {
+    auto ctx = std::make_unique<HEContext>(
+        HEContext::CreateClientSeeded(
+            seed, seed_len,
+            poly_degree > 0 ? poly_degree : kDefaultPolyModulusDegree));
+    if (!ctx->IsValid()) {
+      flatbuffers::wasm::SetError("Failed to create seeded HE client context");
+      return -1;
+    }
+    int32_t id = g_next_he_context_id++;
+    g_he_contexts[id] = std::move(ctx);
+    return id;
+  } catch (const std::exception& e) {
+    flatbuffers::wasm::SetError(
+        std::string("Seeded HE context creation failed: ") + e.what());
     return -1;
   }
 }
@@ -1032,14 +1060,14 @@ int32_t wasm_he_context_create_server(const uint8_t* public_key, uint32_t pk_len
     auto ctx = std::make_unique<HEContext>(
         HEContext::CreateServer(public_key, pk_len));
     if (!ctx->IsValid()) {
-      SetError("Failed to create HE server context");
+      flatbuffers::wasm::SetError("Failed to create HE server context");
       return -1;
     }
     int32_t id = g_next_he_context_id++;
     g_he_contexts[id] = std::move(ctx);
     return id;
   } catch (const std::exception& e) {
-    SetError(std::string("HE server context creation failed: ") + e.what());
+    flatbuffers::wasm::SetError(std::string("HE server context creation failed: ") + e.what());
     return -1;
   }
 }
@@ -1053,7 +1081,7 @@ EMSCRIPTEN_KEEPALIVE
 const uint8_t* wasm_he_get_public_key(int32_t ctx_id, uint32_t* out_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     *out_len = 0;
     return nullptr;
   }
@@ -1066,7 +1094,7 @@ EMSCRIPTEN_KEEPALIVE
 const uint8_t* wasm_he_get_relin_keys(int32_t ctx_id, uint32_t* out_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     *out_len = 0;
     return nullptr;
   }
@@ -1079,7 +1107,7 @@ EMSCRIPTEN_KEEPALIVE
 const uint8_t* wasm_he_get_secret_key(int32_t ctx_id, uint32_t* out_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     *out_len = 0;
     return nullptr;
   }
@@ -1088,7 +1116,7 @@ const uint8_t* wasm_he_get_secret_key(int32_t ctx_id, uint32_t* out_len) {
     *out_len = static_cast<uint32_t>(g_he_output.size());
     return g_he_output.data();
   } catch (const std::exception& e) {
-    SetError(std::string("Cannot get secret key: ") + e.what());
+    flatbuffers::wasm::SetError(std::string("Cannot get secret key: ") + e.what());
     *out_len = 0;
     return nullptr;
   }
@@ -1098,12 +1126,12 @@ EMSCRIPTEN_KEEPALIVE
 int32_t wasm_he_set_relin_keys(int32_t ctx_id, const uint8_t* rk, uint32_t rk_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     return -1;
   }
   auto result = it->second->SetRelinKeys(rk, rk_len);
   if (!result.ok()) {
-    SetError(result.message);
+    flatbuffers::wasm::SetError(result.message);
     return -1;
   }
   return 0;
@@ -1113,13 +1141,13 @@ EMSCRIPTEN_KEEPALIVE
 const uint8_t* wasm_he_encrypt_int64(int32_t ctx_id, int64_t value, uint32_t* out_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     *out_len = 0;
     return nullptr;
   }
   g_he_output = it->second->EncryptInt64(value);
   if (g_he_output.empty()) {
-    SetError("Encryption failed");
+    flatbuffers::wasm::SetError("Encryption failed");
     *out_len = 0;
     return nullptr;
   }
@@ -1131,13 +1159,13 @@ EMSCRIPTEN_KEEPALIVE
 int64_t wasm_he_decrypt_int64(int32_t ctx_id, const uint8_t* ct, uint32_t ct_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     return 0;
   }
   try {
     return it->second->DecryptInt64(ct, ct_len);
   } catch (const std::exception& e) {
-    SetError(std::string("Decryption failed: ") + e.what());
+    flatbuffers::wasm::SetError(std::string("Decryption failed: ") + e.what());
     return 0;
   }
 }
@@ -1146,13 +1174,13 @@ EMSCRIPTEN_KEEPALIVE
 const uint8_t* wasm_he_encrypt_double(int32_t ctx_id, double value, uint32_t* out_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     *out_len = 0;
     return nullptr;
   }
   g_he_output = it->second->EncryptDouble(value);
   if (g_he_output.empty()) {
-    SetError("Encryption failed");
+    flatbuffers::wasm::SetError("Encryption failed");
     *out_len = 0;
     return nullptr;
   }
@@ -1164,13 +1192,13 @@ EMSCRIPTEN_KEEPALIVE
 double wasm_he_decrypt_double(int32_t ctx_id, const uint8_t* ct, uint32_t ct_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     return 0.0;
   }
   try {
     return it->second->DecryptDouble(ct, ct_len);
   } catch (const std::exception& e) {
-    SetError(std::string("Decryption failed: ") + e.what());
+    flatbuffers::wasm::SetError(std::string("Decryption failed: ") + e.what());
     return 0.0;
   }
 }
@@ -1182,13 +1210,13 @@ const uint8_t* wasm_he_add(int32_t ctx_id,
                             uint32_t* out_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     *out_len = 0;
     return nullptr;
   }
   g_he_output = it->second->Add(ct1, ct1_len, ct2, ct2_len);
   if (g_he_output.empty()) {
-    SetError("HE addition failed");
+    flatbuffers::wasm::SetError("HE addition failed");
     *out_len = 0;
     return nullptr;
   }
@@ -1203,13 +1231,13 @@ const uint8_t* wasm_he_sub(int32_t ctx_id,
                             uint32_t* out_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     *out_len = 0;
     return nullptr;
   }
   g_he_output = it->second->Sub(ct1, ct1_len, ct2, ct2_len);
   if (g_he_output.empty()) {
-    SetError("HE subtraction failed");
+    flatbuffers::wasm::SetError("HE subtraction failed");
     *out_len = 0;
     return nullptr;
   }
@@ -1224,13 +1252,13 @@ const uint8_t* wasm_he_multiply(int32_t ctx_id,
                                  uint32_t* out_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     *out_len = 0;
     return nullptr;
   }
   g_he_output = it->second->Multiply(ct1, ct1_len, ct2, ct2_len);
   if (g_he_output.empty()) {
-    SetError("HE multiplication failed");
+    flatbuffers::wasm::SetError("HE multiplication failed");
     *out_len = 0;
     return nullptr;
   }
@@ -1244,13 +1272,13 @@ const uint8_t* wasm_he_negate(int32_t ctx_id,
                                uint32_t* out_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     *out_len = 0;
     return nullptr;
   }
   g_he_output = it->second->Negate(ct, ct_len);
   if (g_he_output.empty()) {
-    SetError("HE negation failed");
+    flatbuffers::wasm::SetError("HE negation failed");
     *out_len = 0;
     return nullptr;
   }
@@ -1265,13 +1293,13 @@ const uint8_t* wasm_he_add_plain(int32_t ctx_id,
                                   uint32_t* out_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     *out_len = 0;
     return nullptr;
   }
   g_he_output = it->second->AddPlain(ct, ct_len, plain);
   if (g_he_output.empty()) {
-    SetError("HE add_plain failed");
+    flatbuffers::wasm::SetError("HE add_plain failed");
     *out_len = 0;
     return nullptr;
   }
@@ -1286,13 +1314,13 @@ const uint8_t* wasm_he_multiply_plain(int32_t ctx_id,
                                        uint32_t* out_len) {
   auto it = g_he_contexts.find(ctx_id);
   if (it == g_he_contexts.end()) {
-    SetError("HE context not found");
+    flatbuffers::wasm::SetError("HE context not found");
     *out_len = 0;
     return nullptr;
   }
   g_he_output = it->second->MultiplyPlain(ct, ct_len, plain);
   if (g_he_output.empty()) {
-    SetError("HE multiply_plain failed");
+    flatbuffers::wasm::SetError("HE multiply_plain failed");
     *out_len = 0;
     return nullptr;
   }

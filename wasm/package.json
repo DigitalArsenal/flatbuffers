@@ -1,6 +1,6 @@
 {
   "name": "flatc-wasm",
-  "version": "26.1.26",
+  "version": "26.1.27",
   "description": "FlatBuffers compiler (flatc) as a WebAssembly module - schema management, JSON/binary conversion, and code generation",
   "type": "module",
   "main": "src/index.mjs",
@@ -74,7 +74,8 @@
   ],
   "scripts": {
     "build": "cmake --build ../build/wasm --target flatc_wasm_npm -j",
-    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
+    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_he.mjs && node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
+    "test:he": "node test/test_he.mjs",
     "test:aligned": "node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
     "prepublishOnly": "npm test",
     "prepare": "cd .. && husky || true"

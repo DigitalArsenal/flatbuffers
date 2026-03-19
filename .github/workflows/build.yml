@@ -566,6 +566,29 @@ jobs:
       working-directory: tests/ts
       run: |
         python3 TypeScriptTest.py
+    - name: publish dry run
+      run: npm publish --dry-run --tag latest
+
+  build-wasm-npm:
+    name: Build WASM NPM Package
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '24'
+    - name: Setup Emscripten
+      uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: "3.1.74"
+        actions-cache-folder: "emsdk-cache"
+    - name: Configure and Build
+      run: |
+        emcmake cmake -B build/wasm -S . -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_BUILD_WASM=ON
+        cmake --build build/wasm --parallel $(nproc) --target flatc_wasm_npm
+    - name: publish dry run
+      working-directory: wasm
+      run: npm publish --dry-run --tag latest
 
   build-dart:
     name: Build Dart

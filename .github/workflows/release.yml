@@ -7,8 +7,25 @@ on:
     types: [published]
 
 jobs:
+  publish-npm:
+    name: Publish NPM (flatbuffers)
+    if: github.event_name == 'workflow_dispatch' || (startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-wasm'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm install
+      - run: npm publish --tag latest --provenance --access public
+
   publish-npm-wasm:
     name: Publish NPM (flatc-wasm)
+    if: github.event_name == 'workflow_dispatch' || (startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-wasm'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -18,9 +35,16 @@ jobs:
         working-directory: ./wasm
     steps:
       - uses: actions/checkout@v6
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: "3.1.74"
+          actions-cache-folder: "emsdk-cache"
       - uses: actions/setup-node@v4
         with:
           node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
-
+      - run: |
+          emcmake cmake -B ../build/wasm -S .. -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_BUILD_WASM=ON
+          cmake --build ../build/wasm --parallel $(nproc) --target flatc_wasm_npm
       - run: npm publish --tag latest --provenance --access public

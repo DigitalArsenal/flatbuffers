@@ -10,32 +10,20 @@ DEMO_SRC="$REPO_ROOT/wasm/docs"
 DOCS_DIR="$REPO_ROOT/docs"
 
 # --- flatc-wasm version bump ---
-# Reads the base version from CMake/Version.cmake and compares with wasm/package.json.
-# If the base version changed, reset to X.Y.Z-wasm.0.
-# If base is the same but wasm/ files changed, increment wasm.N.
+# Reads the current version from wasm/package.json and increments the patch number.
+# Uses standard semver (MAJOR.MINOR.PATCH) matching the wasm-vX.Y.Z tag scheme.
 WASM_PKG="$REPO_ROOT/wasm/package.json"
-VERSION_CMAKE="$REPO_ROOT/CMake/Version.cmake"
 WASM_CHANGED=$(git diff --cached --name-only | grep -E "^wasm/" || true)
 
 if [ -n "$WASM_CHANGED" ]; then
-    # Read base version from CMake/Version.cmake
-    CMAKE_MAJOR=$(grep 'set(VERSION_MAJOR' "$VERSION_CMAKE" | sed 's/[^0-9]//g')
-    CMAKE_MINOR=$(grep 'set(VERSION_MINOR' "$VERSION_CMAKE" | sed 's/[^0-9]//g')
-    CMAKE_PATCH=$(grep 'set(VERSION_PATCH' "$VERSION_CMAKE" | sed 's/[^0-9]//g')
-    CMAKE_BASE="${CMAKE_MAJOR}.${CMAKE_MINOR}.${CMAKE_PATCH}"
-
-    # Read current version from wasm/package.json
+    # Read current version from wasm/package.json (strip any prerelease suffix)
     CURRENT_VER=$(node -p "require('$WASM_PKG').version")
-    CURRENT_BASE=$(echo "$CURRENT_VER" | sed 's/-wasm\..*//')
-    CURRENT_WASM_NUM=$(echo "$CURRENT_VER" | sed -n 's/.*-wasm\.\([0-9]*\)/\1/p')
-    CURRENT_WASM_NUM=${CURRENT_WASM_NUM:-0}
-
-    if [ "$CMAKE_BASE" != "$CURRENT_BASE" ]; then
-        NEW_VER="${CMAKE_BASE}-wasm.0"
-    else
-        NEW_WASM_NUM=$((CURRENT_WASM_NUM + 1))
-        NEW_VER="${CMAKE_BASE}-wasm.${NEW_WASM_NUM}"
-    fi
+    CLEAN_VER=$(echo "$CURRENT_VER" | sed 's/-.*//')
+    MAJOR=$(echo "$CLEAN_VER" | cut -d. -f1)
+    MINOR=$(echo "$CLEAN_VER" | cut -d. -f2)
+    PATCH=$(echo "$CLEAN_VER" | cut -d. -f3)
+    NEW_PATCH=$((PATCH + 1))
+    NEW_VER="${MAJOR}.${MINOR}.${NEW_PATCH}"
 
     if [ "$CURRENT_VER" != "$NEW_VER" ]; then
         echo "Bumping flatc-wasm version: $CURRENT_VER -> $NEW_VER"

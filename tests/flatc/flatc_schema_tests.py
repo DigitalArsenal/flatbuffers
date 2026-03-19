@@ -18,6 +18,26 @@ from flatc_test import *
 
 class SchemaTests:
 
+  def AlignedCompatibilityWrapper(self):
+    flatc(["--aligned", "aligned_mode.fbs"])
+
+    assert_file_and_contents("aligned_mode_aligned.h", "struct Root {")
+    assert_file_and_contents("aligned_mode_aligned.ts", "export class Root {")
+    assert_file_and_contents("aligned_mode_aligned.js", "export class Root {")
+    assert_file_and_contents("aligned_mode_layouts.json", '"qualified_name"')
+
+  def AlignedMissingBounds(self):
+    result = subprocess.run(
+        [str(flatc_path), "--cpp", "--aligned", "aligned_missing_bounds.fbs"],
+        cwd=str(script_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0, "Expected flatc to fail on missing vector bounds"
+    assert "aligned_max_count" in result.stderr
+
   def EnumValAttributes(self):
     # Generate .bfbs schema first
     flatc(

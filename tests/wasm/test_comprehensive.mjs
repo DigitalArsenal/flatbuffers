@@ -8,7 +8,7 @@
 import { readFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import path from 'path';
-import FlatcWasm from './flatc.js';
+import FlatcWasm from '../../wasm/dist/flatc-wasm.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = path.join(__dirname, '..');
@@ -339,6 +339,28 @@ file_identifier "MONS";
 file_extension "mon";
 `;
 
+const ALIGNED_TEST_SCHEMA = `
+namespace Example;
+
+table Child {
+  value:uint;
+}
+
+union Payload { Child }
+
+table Root {
+  id:uint;
+  name:string (aligned_max_length: 12);
+  values:[ushort] (aligned_max_count: 4);
+  children:[Child] (aligned_max_count: 2);
+  names:[string] (aligned_max_count: 3);
+  payload:Payload;
+  payloads:[Payload] (aligned_max_count: 2);
+}
+
+root_type Root;
+`;
+
 // =============================================================================
 // Main test runner
 // =============================================================================
@@ -441,6 +463,9 @@ async function main() {
   const optionalSchemaId = flatc.addSchema('optional_scalars.fbs', optionalScalarsSchema);
   assert(optionalSchemaId >= 0, `Optional scalars schema loaded with ID ${optionalSchemaId}`);
 
+  const alignedSchemaId = flatc.addSchema('aligned_mode.fbs', ALIGNED_TEST_SCHEMA);
+  assert(alignedSchemaId >= 0, `Aligned schema loaded with ID ${alignedSchemaId}`);
+
   const optionalBinary = flatc.jsonToBinary('optional_scalars.fbs', optionalScalarsJson);
   assert(optionalBinary.length > 0, `Optional scalars converted to ${optionalBinary.length} bytes`);
 
@@ -492,6 +517,14 @@ async function main() {
       console.log(`  ⚠ ${lang.name}: ${err.message}`);
     }
   }
+  console.log('');
+
+  console.log('=== Test 8b: Aligned Compatibility Code Generation ===');
+  const alignedBundle = flatc.generateCode('aligned_mode.fbs', 13);
+  assert(alignedBundle.includes('"cpp"'), 'Aligned compatibility output includes C++ bundle');
+  assert(alignedBundle.includes('AlignedString<12>'), 'Aligned compatibility output includes bounded strings');
+  assert(alignedBundle.includes('export class Root'), 'Aligned compatibility output includes TypeScript view');
+  assert(alignedBundle.includes('"qualified_name"'), 'Aligned compatibility output includes layout metadata');
   console.log('');
 
   // ==========================================================================

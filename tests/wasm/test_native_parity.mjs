@@ -178,6 +178,28 @@ const schemas = {
   `,
 };
 
+const alignedSchema = `
+  namespace Test;
+
+  table Child {
+    value:uint;
+  }
+
+  union Payload { Child }
+
+  table Root {
+    id:uint;
+    name:string (aligned_max_length: 12);
+    values:[ushort] (aligned_max_count: 4);
+    children:[Child] (aligned_max_count: 2);
+    names:[string] (aligned_max_count: 3);
+    payload:Payload;
+    payloads:[Payload] (aligned_max_count: 2);
+  }
+
+  root_type Root;
+`;
+
 // Languages to test
 const languages = [
   { flag: "cpp", ext: ".h" },
@@ -318,6 +340,50 @@ for (const [schemaName, schemaContent] of Object.entries(schemas)) {
       }
     });
   }
+}
+
+// Test 2: Binary Conversion Parity
+console.log("\n1b. Aligned Code Generation Parity:");
+
+for (const lang of ["cpp", "ts"]) {
+  test(`aligned → ${lang}`, () => {
+    const schemaFile = "aligned_mode.fbs";
+    const nativeOutDir = join(TEMP_DIR, `native_aligned_${lang}`);
+    const schemaPath = join(TEMP_DIR, schemaFile);
+
+    writeFileSync(schemaPath, alignedSchema);
+    ensureDir(nativeOutDir);
+
+    const nativeResult = runNativeFlatc([
+      `--${lang}`,
+      "--aligned",
+      "-o", nativeOutDir,
+      schemaPath,
+    ]);
+
+    if (!nativeResult.success) {
+      throw new Error(`Native flatc failed: ${nativeResult.error}`);
+    }
+
+    const nativeFiles = getAllFiles(nativeOutDir);
+    const schemaInput = {
+      entry: `/${schemaFile}`,
+      files: { [`/${schemaFile}`]: alignedSchema },
+    };
+    const wasmFiles = runner.generateCode(schemaInput, lang, { aligned: true });
+
+    const nativeFileNames = Object.keys(nativeFiles).sort();
+    const wasmFileNames = Object.keys(wasmFiles).sort();
+    assertDeepEqual(wasmFileNames, nativeFileNames, "Aligned file names");
+
+    for (const nativeFile of nativeFileNames) {
+      assertEqual(
+        normalizeCode(wasmFiles[nativeFile]),
+        normalizeCode(nativeFiles[nativeFile]),
+        `Aligned output parity for ${nativeFile}`
+      );
+    }
+  });
 }
 
 // Test 2: Binary Conversion Parity

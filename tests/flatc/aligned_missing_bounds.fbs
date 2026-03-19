@@ -1,0 +1,5 @@
+table Root {
+  values:[int];
+}
+
+root_type Root;

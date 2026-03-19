@@ -58,6 +58,7 @@ struct FlatCOptions {
   bool requires_bfbs = false;
   bool file_names_only = false;
   bool preserve_case = false;
+  bool aligned_compatibility = false;
 
   std::vector<std::shared_ptr<CodeGenerator>> generators;
 };

@@ -17,6 +17,19 @@ from flatc_test import *
 
 class TsTests:
 
+  def Aligned(self):
+    flatc(["--ts", "--aligned", "aligned_mode.fbs"])
+
+    assert_file_and_contents(
+        "aligned_mode_aligned.ts",
+        [
+            "export class Root {",
+            "static readonly SIZE =",
+            "__decodeString",
+            "get name()",
+        ],
+    )
+
   def Base(self):
     # Generate just foo with no extra arguments
     flatc(["--ts", "foo.fbs"])

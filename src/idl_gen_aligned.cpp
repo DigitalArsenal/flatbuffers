@@ -231,25 +231,29 @@ class Generator : public BaseGenerator {
     return true;
   }
 
-  bool save() const {
-    const std::string cpp_path = path_ + file_name_ + "_aligned.h";
-    if (!parser_.opts.file_saver->SaveFile(cpp_path.c_str(), outputs_.cpp, false)) {
-      return false;
-    }
-    const std::string ts_path = path_ + file_name_ + "_aligned.ts";
-    if (!parser_.opts.file_saver->SaveFile(ts_path.c_str(), outputs_.ts, false)) {
-      return false;
-    }
-    const std::string js_path = path_ + file_name_ + "_aligned.js";
-    if (!parser_.opts.file_saver->SaveFile(js_path.c_str(), outputs_.js, false)) {
-      return false;
-    }
-    const std::string json_path = path_ + file_name_ + "_layouts.json";
-    return parser_.opts.file_saver->SaveFile(json_path.c_str(),
-                                             outputs_.layout_json, false);
+  bool SaveLegacyBundle() const {
+    return SaveOutputFile(path_ + file_name_ + "_aligned.h", outputs_.cpp) &&
+           SaveOutputFile(path_ + file_name_ + "_aligned.ts", outputs_.ts) &&
+           SaveOutputFile(path_ + file_name_ + "_aligned.js", outputs_.js) &&
+           SaveOutputFile(path_ + file_name_ + "_layouts.json",
+                          outputs_.layout_json);
+  }
+
+  bool SaveLanguageOutput(IDLOptions::Language language) const {
+    const std::string* output = OutputForLanguage(language);
+    if (!output) { return false; }
+    return SaveOutputFile(OutputPathForLanguage(language), *output);
   }
 
   const std::string& error() const { return error_; }
+
+  const std::string* OutputForLanguage(IDLOptions::Language language) const {
+    switch (language) {
+      case IDLOptions::kCpp: return &outputs_.cpp;
+      case IDLOptions::kTs: return &outputs_.ts;
+      default: return nullptr;
+    }
+  }
 
   std::string CombinedOutput() const {
     std::ostringstream ss;
@@ -279,6 +283,18 @@ class Generator : public BaseGenerator {
     }
     ss << '"';
     return ss.str();
+  }
+
+  bool SaveOutputFile(const std::string& path, const std::string& contents) const {
+    return parser_.opts.file_saver->SaveFile(path.c_str(), contents, false);
+  }
+
+  std::string OutputPathForLanguage(IDLOptions::Language language) const {
+    switch (language) {
+      case IDLOptions::kCpp: return path_ + file_name_ + "_aligned.h";
+      case IDLOptions::kTs: return path_ + file_name_ + "_aligned.ts";
+      default: return std::string();
+    }
   }
 
   std::string PresenceMask(const FieldLayout& field) const {
@@ -656,6 +672,14 @@ class Generator : public BaseGenerator {
 
 namespace {
 
+std::string AlignedLanguageName(IDLOptions::Language language) {
+  switch (language) {
+    case IDLOptions::kCpp: return "C++";
+    case IDLOptions::kTs: return "TypeScript";
+    default: return "Unsupported";
+  }
+}
+
 class AlignedCodeGenerator : public CodeGenerator {
  public:
   Status GenerateCode(const Parser& parser, const std::string& path,
@@ -665,7 +689,11 @@ class AlignedCodeGenerator : public CodeGenerator {
       status_detail = ": " + generator.error();
       return Status::ERROR;
     }
-    return generator.save() ? Status::OK : Status::ERROR;
+    if (!generator.SaveLegacyBundle()) {
+      status_detail = ": failed to save aligned compatibility outputs";
+      return Status::ERROR;
+    }
+    return Status::OK;
   }
 
   Status GenerateCode(const uint8_t*, int64_t, const CodeGenOptions&) override {
@@ -706,10 +734,92 @@ class AlignedCodeGenerator : public CodeGenerator {
   std::string LanguageName() const override { return "Aligned"; }
 };
 
+class AlignedLanguageCodeGenerator : public CodeGenerator {
+ public:
+  explicit AlignedLanguageCodeGenerator(IDLOptions::Language language)
+      : language_(language) {}
+
+  Status GenerateCode(const Parser& parser, const std::string& path,
+                      const std::string& filename) override {
+    aligned::Generator generator(parser, path, filename);
+    if (!generator.generate()) {
+      status_detail = ": " + generator.error();
+      return Status::ERROR;
+    }
+    if (!generator.SaveLanguageOutput(language_)) {
+      status_detail = ": aligned output is not implemented for " +
+                      AlignedLanguageName(language_);
+      return Status::ERROR;
+    }
+    return Status::OK;
+  }
+
+  Status GenerateCode(const uint8_t*, int64_t, const CodeGenOptions&) override {
+    return Status::NOT_IMPLEMENTED;
+  }
+
+  Status GenerateCodeString(const Parser& parser, const std::string& filename,
+                            std::string& output) override {
+    aligned::Generator generator(parser, "", filename);
+    if (!generator.generate()) {
+      status_detail = ": " + generator.error();
+      return Status::ERROR;
+    }
+    const std::string* generated = generator.OutputForLanguage(language_);
+    if (!generated) {
+      status_detail = ": aligned output is not implemented for " +
+                      AlignedLanguageName(language_);
+      return Status::ERROR;
+    }
+    output = *generated;
+    return Status::OK;
+  }
+
+  Status GenerateMakeRule(const Parser&, const std::string&,
+                          const std::string&, std::string&) override {
+    return Status::NOT_IMPLEMENTED;
+  }
+
+  Status GenerateGrpcCode(const Parser&, const std::string&,
+                          const std::string&) override {
+    return Status::NOT_IMPLEMENTED;
+  }
+
+  Status GenerateRootFile(const Parser&, const std::string&) override {
+    return Status::NOT_IMPLEMENTED;
+  }
+
+  bool IsSchemaOnly() const override { return true; }
+  bool SupportsBfbsGeneration() const override { return false; }
+  bool SupportsRootFileGeneration() const override { return false; }
+  IDLOptions::Language Language() const override { return language_; }
+  std::string LanguageName() const override {
+    return "Aligned " + AlignedLanguageName(language_);
+  }
+
+ private:
+  IDLOptions::Language language_;
+};
+
 }  // namespace
 
 std::unique_ptr<CodeGenerator> NewAlignedCodeGenerator() {
   return std::unique_ptr<CodeGenerator>(new AlignedCodeGenerator());
+}
+
+bool IsAlignedLanguageSupported(IDLOptions::Language language) {
+  switch (language) {
+    case IDLOptions::kCpp:
+    case IDLOptions::kTs: return true;
+    default: return false;
+  }
+}
+
+std::unique_ptr<CodeGenerator> NewAlignedLanguageCodeGenerator(
+    IDLOptions::Language language) {
+  if (!IsAlignedLanguageSupported(language)) { return nullptr; }
+  return std::unique_ptr<CodeGenerator>(
+      new AlignedLanguageCodeGenerator(language));
 }
 
 }  // namespace flatbuffers

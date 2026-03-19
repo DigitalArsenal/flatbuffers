@@ -17,6 +17,19 @@ from flatc_test import *
 
 class CppTests:
 
+  def Aligned(self):
+    flatc(["--cpp", "--aligned", "aligned_mode.fbs"])
+
+    assert_file_and_contents(
+        "aligned_mode_aligned.h",
+        [
+            "namespace flatbuffers {",
+            "AlignedString<12>",
+            "AlignedVector<uint16_t, 4>",
+            "struct Root {",
+        ],
+    )
+
   def Flatten(self):
     # Generate just foo with a "flatten" import of bar.
     flatc(["--cpp", "foo.fbs"])

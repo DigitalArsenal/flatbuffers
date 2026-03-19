@@ -23,9 +23,15 @@
 
 namespace flatbuffers {
 
-// Constructs a new Aligned Struct Code generator.
-// Generates C++ headers and TypeScript view classes for zero-copy WASM interop.
+// Constructs the legacy compatibility wrapper for aligned generation.
+// It emits the historical combined C++/TypeScript/JavaScript/layout bundle.
 std::unique_ptr<CodeGenerator> NewAlignedCodeGenerator();
+
+// Constructs a single-language aligned code generator for `--<lang> --aligned`.
+std::unique_ptr<CodeGenerator> NewAlignedLanguageCodeGenerator(
+    IDLOptions::Language language);
+
+bool IsAlignedLanguageSupported(IDLOptions::Language language);
 
 }  // namespace flatbuffers
 

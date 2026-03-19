@@ -6,8 +6,11 @@
  */
 
 import createFlatcModule from "../dist/flatc-wasm.js";
-import { generateAlignedCode as generateAligned } from "./aligned-codegen.mjs";
-import { EncryptionContext, serializeEncryptionHeader, deserializeEncryptionHeader } from "./index.mjs";
+import {
+  EncryptionContext,
+  encryptionHeaderToJSON as serializeEncryptionHeader,
+  encryptionHeaderFromJSON as deserializeEncryptionHeader,
+} from "./encryption.mjs";
 
 // =============================================================================
 // Security Limits (VULN-002 fix)
@@ -900,6 +903,7 @@ export class FlatcRunner {
       }
 
       // Code generation options
+      if (options.aligned) args.push("--aligned");
       if (options.genObjectApi) args.push("--gen-object-api");
       if (options.genOnefile) args.push("--gen-onefile");
       if (options.genMutable) args.push("--gen-mutable");
@@ -1049,8 +1053,6 @@ export class FlatcRunner {
    *
    * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput - Schema files
    * @param {Object} [options={}] - Generation options
-   * @param {boolean} [options.pragmaOnce=true] - Use #pragma once in C++ header
-   * @param {boolean} [options.includeGuard=true] - Include traditional #ifndef guard
    * @returns {Promise<{ cpp: string, ts: string, layouts: Object }>} Generated code and layout info
    *
    * @example
@@ -1072,14 +1074,77 @@ export class FlatcRunner {
    */
   async generateAlignedCode(schemaInput, options = {}) {
     validateSchemaInput(schemaInput);
+    const outDir = `/out_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    this.Module.FS.mkdirTree(outDir);
 
-    // Get the schema content from the entry file
-    const schemaContent = schemaInput.files[schemaInput.entry];
-    if (typeof schemaContent !== 'string') {
-      throw new Error('Schema content must be a string for aligned code generation');
+    const cleanupDir = (dir) => {
+      try {
+        const entries = this.Module.FS.readdir(dir).filter(
+          (e) => e !== "." && e !== ".."
+        );
+        for (const entry of entries) {
+          const fullPath = `${dir}/${entry}`;
+          const stat = this.Module.FS.stat(fullPath);
+          if (this.Module.FS.isDir(stat.mode)) {
+            cleanupDir(fullPath);
+          } else {
+            this.unlink(fullPath);
+          }
+        }
+        this.rmdir(dir);
+      } catch {
+        // ignore cleanup errors
+      }
+    };
+
+    try {
+      this._mountSchemaIfNeeded(schemaInput);
+
+      const args = ["--aligned", "-o", outDir];
+      for (const dir of this._cachedIncludeDirs) {
+        args.push("-I", dir);
+      }
+      args.push(schemaInput.entry);
+
+      const result = this.runCommand(args);
+      if (result.code !== 0 || result.stderr.includes("error:")) {
+        throw new Error(
+          `flatc aligned generation failed (exit ${result.code}):\n${result.stderr || result.stdout}`
+        );
+      }
+
+      const output = {};
+      const files = this.Module.FS.readdir(outDir).filter(
+        (f) => f !== "." && f !== ".."
+      );
+      for (const file of files) {
+        output[file] = this.Module.FS.readFile(`${outDir}/${file}`, {
+          encoding: "utf8",
+        });
+      }
+
+      const cpp =
+        Object.entries(output).find(([name]) => name.endsWith("_aligned.h"))?.[1] || "";
+      const ts =
+        Object.entries(output).find(([name]) => name.endsWith("_aligned.ts"))?.[1] || "";
+      const js =
+        Object.entries(output).find(([name]) => name.endsWith("_aligned.js"))?.[1] || "";
+      const layoutsRaw =
+        Object.entries(output).find(([name]) => name.endsWith("_layouts.json"))?.[1];
+
+      if (!cpp && !ts && !js && !layoutsRaw) {
+        throw new Error("flatc aligned generation succeeded but produced no aligned outputs");
+      }
+
+      return {
+        cpp,
+        ts,
+        js,
+        layouts: layoutsRaw ? JSON.parse(layoutsRaw) : {},
+      };
+    } finally {
+      cleanupDir(outDir);
     }
-
-    return generateAligned(schemaContent, options);
   }
 
   /**

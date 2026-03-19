@@ -105,7 +105,7 @@
 - [x] Encode vectors as `uint32 length + fixed-capacity inline storage`
 - [x] Encode unions as discriminator + fixed inline payload
 - [x] Reject recursive/cyclic schemas in aligned mode v1
-- [ ] Thread `--aligned` through standard language generators and `flatc_wasm`
+- [x] Thread `--aligned` through standard language generators and `flatc_wasm`
 - [x] Keep the legacy `aligned` generator only as a compatibility wrapper during transition
 - [x] Add IR/unit tests for layout math, offsets, padding, stride, and bounds validation
 - [ ] Add end-to-end parity tests proving regular and aligned decoding yield the same logical values

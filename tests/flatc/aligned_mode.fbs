@@ -1,0 +1,19 @@
+namespace Example;
+
+table Child {
+  value:uint;
+}
+
+union Payload { Child }
+
+table Root {
+  id:uint;
+  name:string (aligned_max_length: 12);
+  values:[ushort] (aligned_max_count: 4);
+  children:[Child] (aligned_max_count: 2);
+  names:[string] (aligned_max_count: 3);
+  payload:Payload;
+  payloads:[Payload] (aligned_max_count: 2);
+}
+
+root_type Root;

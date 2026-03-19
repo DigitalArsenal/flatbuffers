@@ -29,6 +29,7 @@
 #include "flatbuffers/code_generator.h"
 #include "flatbuffers/idl.h"
 #include "flatbuffers/util.h"
+#include "idl_gen_aligned.h"
 
 namespace flatbuffers {
 
@@ -91,6 +92,9 @@ const static FlatCOption flatc_options[] = {
     {"o", "", "PATH", "Prefix PATH to all generated files."},
     {"I", "", "PATH", "Search for includes in the specified path."},
     {"M", "", "", "Print make rules for generated files."},
+    {"", "aligned", "",
+     "Generate aligned fixed-layout code for the selected language, or the "
+     "legacy aligned bundle when used without a language generator."},
     {"", "version", "", "Print the version number of flatc and exit."},
     {"h", "help", "", "Prints this help text and exit."},
     {"", "strict-json", "",
@@ -792,6 +796,8 @@ FlatCOptions FlatCompiler::ParseFromCommandLineArguments(int argc,
         options.annotate_schema = flatbuffers::PosixPath(argv[argi]);
       } else if (arg == "--file-names-only") {
         options.file_names_only = true;
+      } else if (arg == "--aligned") {
+        opts.generate_aligned = true;
       } else if (arg == "--grpc-filename-suffix") {
         if (++argi >= argc) Error("missing gRPC filename suffix: " + arg, true);
         opts.grpc_filename_suffix = argv[argi];
@@ -835,40 +841,34 @@ FlatCOptions FlatCompiler::ParseFromCommandLineArguments(int argc,
 
         auto code_generator_it = code_generators_.find(arg);
 
-        if (code_generator_it != code_generators_.end()) {
-          options.generators.push_back(code_generator_it->second);
-          if (options.preserve_case) {
-            static const std::set<std::string> preserve_case_supported = {
-                "dart", "cpp",        "go",   "php", "python",
-                "ts",   "jsonschema", "rust", "java"};
-            std::string matched_lang = arg;
-            if (matched_lang.rfind("--", 0) == 0)
-              matched_lang = matched_lang.substr(2);
-            else if (matched_lang.rfind("-", 0) == 0)
-              matched_lang = matched_lang.substr(1);
-            static const std::map<std::string, std::string> short_to_lang = {
-                {"b", "binary"}, {"c", "cpp"},  {"n", "csharp"}, {"d", "dart"},
-                {"g", "go"},     {"j", "java"}, {"t", "json"},   {"l", "lua"},
-                {"p", "python"}, {"r", "rust"}, {"T", "ts"}};
-            auto it_lang = short_to_lang.find(matched_lang);
-            if (it_lang != short_to_lang.end()) matched_lang = it_lang->second;
-            if (!preserve_case_supported.count(matched_lang)) {
-              fprintf(stderr,
-                      "[FlatBuffers] --preserve-case is not currently "
-                      "supported for '%s' (%s).\n"
-                      "Pull requests are welcome at: "
-                      "https://github.com/google/flatbuffers\n",
-                      matched_lang.c_str(), arg.c_str());
-            }
-          }
-        } else {
+        if (code_generator_it == code_generators_.end()) {
           Error("unknown commandline argument: " + arg, true, true);
           return options;
         }
 
-        if (code_generator_it == code_generators_.end()) {
-          Error("unknown commandline argument: " + arg, true);
-          return options;
+        if (options.preserve_case) {
+          static const std::set<std::string> preserve_case_supported = {
+              "dart", "cpp",        "go",   "php", "python",
+              "ts",   "jsonschema", "rust", "java"};
+          std::string matched_lang = arg;
+          if (matched_lang.rfind("--", 0) == 0)
+            matched_lang = matched_lang.substr(2);
+          else if (matched_lang.rfind("-", 0) == 0)
+            matched_lang = matched_lang.substr(1);
+          static const std::map<std::string, std::string> short_to_lang = {
+              {"b", "binary"}, {"c", "cpp"},  {"n", "csharp"}, {"d", "dart"},
+              {"g", "go"},     {"j", "java"}, {"t", "json"},   {"l", "lua"},
+              {"p", "python"}, {"r", "rust"}, {"T", "ts"}};
+          auto it_lang = short_to_lang.find(matched_lang);
+          if (it_lang != short_to_lang.end()) matched_lang = it_lang->second;
+          if (!preserve_case_supported.count(matched_lang)) {
+            fprintf(stderr,
+                    "[FlatBuffers] --preserve-case is not currently "
+                    "supported for '%s' (%s).\n"
+                    "Pull requests are welcome at: "
+                    "https://github.com/google/flatbuffers\n",
+                    matched_lang.c_str(), arg.c_str());
+          }
         }
 
         std::shared_ptr<CodeGenerator> code_generator =
@@ -880,12 +880,33 @@ FlatCOptions FlatCompiler::ParseFromCommandLineArguments(int argc,
         opts.lang_to_generate |= code_generator->Language();
 
         auto is_binary_schema = code_generator->SupportsBfbsGeneration();
-        opts.binary_schema_comments = is_binary_schema;
-        options.requires_bfbs = is_binary_schema;
-        options.generators.push_back(std::move(code_generator));
+        opts.binary_schema_comments |= is_binary_schema;
+        options.requires_bfbs = options.requires_bfbs || is_binary_schema;
+        options.generators.push_back(code_generator);
       }
     } else {
       options.filenames.push_back(flatbuffers::PosixPath(argv[argi]));
+    }
+  }
+
+  if (opts.generate_aligned) {
+    if (options.generators.empty()) {
+      options.aligned_compatibility = true;
+      options.any_generator = true;
+      options.generators.emplace_back(NewAlignedCodeGenerator().release());
+    } else {
+      std::vector<std::shared_ptr<CodeGenerator>> aligned_generators;
+      aligned_generators.reserve(options.generators.size());
+      for (const auto& generator : options.generators) {
+        const auto language = generator->Language();
+        if (!IsAlignedLanguageSupported(language)) {
+          aligned_generators.clear();
+          break;
+        }
+        aligned_generators.emplace_back(
+            NewAlignedLanguageCodeGenerator(language).release());
+      }
+      if (!aligned_generators.empty()) { options.generators = aligned_generators; }
     }
   }
 
@@ -906,6 +927,20 @@ void FlatCompiler::ValidateOptions(const FlatCOptions& options) {
     Error("no options: specify at least one generator.", true);
   }
 
+  if (opts.generate_aligned) {
+    if (options.grpc_enabled) {
+      Error("--grpc is not supported with --aligned.");
+    }
+    if (!options.aligned_compatibility) {
+      for (const auto& generator : options.generators) {
+        if (!IsAlignedLanguageSupported(generator->Language())) {
+          Error("aligned generation is not supported for " +
+                generator->LanguageName() + ".");
+        }
+      }
+    }
+  }
+
   if (opts.cs_gen_json_serializer && !opts.generate_object_based_api) {
     Error(
         "--cs-gen-json-serializer requires --gen-object-api to be set as "
@@ -920,6 +955,7 @@ flatbuffers::Parser FlatCompiler::GetConformParser(
   // conform parser should check advanced options,
   // so, it have to have knowledge about languages:
   conform_parser.opts.lang_to_generate = options.opts.lang_to_generate;
+  conform_parser.opts.generate_aligned = options.opts.generate_aligned;
 
   if (!options.conform_to_schema.empty()) {
     std::string contents;

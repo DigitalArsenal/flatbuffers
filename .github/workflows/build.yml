@@ -7,6 +7,8 @@ on:
   push:
     tags:
       - "*" # new tag version, like `0.8.4` or else
+    tags-ignore:
+      - "npm-v*"
     branches:
       - master
   pull_request:
@@ -619,7 +621,7 @@ jobs:
 
   release-digests:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [build-linux, build-windows, build-mac-universal]
+    needs: [build-linux, build-windows, build-mac-intel, build-mac-universal]
     outputs:
       digests: ${{ steps.hash.outputs.digests }}
     runs-on: ubuntu-24.04
@@ -629,6 +631,7 @@ jobs:
         env:
           LINUXGCC_DIGESTS: "${{ needs.build-linux.outputs.digests-gcc }}"
           LINUXCLANG_DIGESTS: "${{ needs.build-linux.outputs.digests-clang }}"
+          MACINTEL_DIGESTS: "${{ needs.build-mac-intel.outputs.digests }}"
           MAC_DIGESTS: "${{ needs.build-mac-universal.outputs.digests }}"
           WINDOWS_DIGESTS: "${{ needs.build-windows.outputs.digests }}"
         run: |

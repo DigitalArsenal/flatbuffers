@@ -2,7 +2,14 @@ name: Publish NPM Packages
 permissions: read-all
 
 on:
+  push:
+    tags:
+      - "npm-v*"
   workflow_dispatch:
+
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   publish-npm:
@@ -23,6 +30,8 @@ jobs:
 
       - name: Publish
         run: npm publish --tag latest --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-npm-wasm:
     name: Publish NPM (flatc-wasm)
@@ -45,3 +54,5 @@ jobs:
 
       - name: Publish
         run: npm publish --tag latest --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

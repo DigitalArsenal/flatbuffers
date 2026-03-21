@@ -9394,7 +9394,6 @@ async function generateAligned() {
   const schemaInput = $('aligned-schema-input');
   const outputEl = $('aligned-output');
   const statusEl = $('aligned-status');
-  const stringLengthInput = $('aligned-string-length');
 
   if (!schemaInput || !outputEl) return;
 
@@ -9404,11 +9403,9 @@ async function generateAligned() {
     return;
   }
 
-  const defaultStringLength = parseInt(stringLengthInput?.value || '0', 10);
-
   try {
     // Generate code for all languages (async - WASM init may be required)
-    const result = await generateAlignedCode(schema, { defaultStringLength });
+    const result = await generateAlignedCode(schema);
 
     alignedState.generatedCode.cpp = result.cpp;
     alignedState.generatedCode.ts = result.ts;
@@ -9419,7 +9416,7 @@ async function generateAligned() {
 
     // Update status
     if (statusEl) {
-      const parsed = parseSchema(schema, { defaultStringLength });
+      const parsed = parseSchema(schema);
       const structCount = parsed.structs.length;
       const tableCount = parsed.tables.length;
       const enumCount = parsed.enums.length;
@@ -9507,50 +9504,57 @@ function showAlignedExample(lang) {
     cpp: `// C++ - Direct struct access in WASM
 #include "aligned_types.h"
 
-void processEntities(Entity* entities, size_t count) {
-    for (size_t i = 0; i < count; i++) {
-        Entity& e = entities[i];
-        e.health -= 10;
-        e.position.x += e.velocity.x * dt;
-        // Zero overhead - direct memory access
+void process_particles(MyGame::Particle* particles, size_t count, float dt) {
+    for (size_t i = 0; i < count; ++i) {
+        auto& p = particles[i];
+        p.health = static_cast<uint16_t>(p.health > 10 ? p.health - 10 : 0);
+        p.position.x += p.velocity.x * dt;
+        p.position.y += p.velocity.y * dt;
+        p.position.z += p.velocity.z * dt;
     }
 }
 
-// Export for JS binding
-extern "C" void update_entities(Entity* ptr, int count) {
-    processEntities(ptr, count);
+extern "C" void update_particles(MyGame::Particle* ptr, uint32_t count, float dt) {
+    process_particles(ptr, count, dt);
 }`,
     ts: `// TypeScript - Zero-copy views into WASM memory
-import { EntityView, ENTITY_SIZE } from './aligned_types';
+import { Particle } from './aligned_types';
 
-function processEntities(memory: ArrayBuffer, offset: number, count: number) {
-  const view = new DataView(memory, offset);
+function particleAt(memory: WebAssembly.Memory, basePtr: number, index: number): Particle {
+  return Particle.fromPointer(memory, basePtr + index * Particle.SIZE);
+}
 
+function processParticles(memory: WebAssembly.Memory, basePtr: number, count: number, dt: number) {
   for (let i = 0; i < count; i++) {
-    const entity = new EntityView(view, i * ENTITY_SIZE);
+    const particle = particleAt(memory, basePtr, i);
 
-    // Direct access - no deserialization
-    entity.health = entity.health - 10;
+    particle.health = Math.max(0, particle.health - 10);
 
-    // Nested struct access
-    const pos = entity.position;
-    pos.x = pos.x + entity.velocity.x * dt;
+    const pos = particle.position;
+    const vel = particle.velocity;
+    pos.x = pos.x + vel.x * dt;
+    pos.y = pos.y + vel.y * dt;
+    pos.z = pos.z + vel.z * dt;
   }
 }`,
     js: `// JavaScript - Works without TypeScript
-import { EntityView, ENTITY_SIZE } from './aligned_types.mjs';
+import { Particle } from './aligned_types.mjs';
 
-function processEntities(wasmMemory, offset, count) {
-  const view = new DataView(wasmMemory.buffer, offset);
+function particleAt(memory, basePtr, index) {
+  return Particle.fromPointer(memory, basePtr + index * Particle.SIZE);
+}
 
+function processParticles(memory, basePtr, count, dt) {
   for (let i = 0; i < count; i++) {
-    const entity = new EntityView(view, i * ENTITY_SIZE);
+    const particle = particleAt(memory, basePtr, i);
 
-    // Same API as TypeScript version
-    entity.health = entity.health - 10;
+    particle.health = Math.max(0, particle.health - 10);
 
-    const pos = entity.position;
-    pos.x = pos.x + entity.velocity.x * dt;
+    const pos = particle.position;
+    const vel = particle.velocity;
+    pos.x = pos.x + vel.x * dt;
+    pos.y = pos.y + vel.y * dt;
+    pos.z = pos.z + vel.z * dt;
   }
 }`,
   };

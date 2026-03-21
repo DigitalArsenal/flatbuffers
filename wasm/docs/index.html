@@ -2377,7 +2377,7 @@ func decryptRecover(_ ctx: EncryptionContext,
             </div>
             <div class="overview-content">
               <h4>FlatBuffers Schema</h4>
-              <p>Use familiar FlatBuffers .fbs syntax. Structs and tables with scalars and fixed-size arrays are supported.</p>
+              <p>Use familiar FlatBuffers <code>.fbs</code> syntax. Generate aligned layouts from fixed <code>struct</code>s, and include a small <code>root_type</code> table so the schema parses cleanly.</p>
             </div>
           </div>
           <div class="overview-item">
@@ -2398,7 +2398,7 @@ func decryptRecover(_ ctx: EncryptionContext,
       <!-- Aligned Code Generator -->
       <div class="glass-card">
         <h3 class="card-subtitle">Code Generator</h3>
-        <p class="card-desc">Paste a FlatBuffers schema below to generate aligned binary format code:</p>
+        <p class="card-desc">Paste a FlatBuffers schema with fixed structs below to generate zero-copy aligned accessors:</p>
 
         <div class="aligned-layout">
           <!-- Left: Schema Input -->
@@ -2417,22 +2417,21 @@ struct Vec3 {
   z:float;
 }
 
-table Entity {
+struct Particle {
   position:Vec3;
-  health:int;
-  mana:int;
-  name:string;  // Fixed-length if string length is set
+  velocity:Vec3;
+  health:ushort;
+  team:ubyte;
+  samples:[float:4];
 }
 
-root_type Entity;</textarea>
+table ParticleRoot {
+  particle:Particle;
+}
+
+root_type ParticleRoot;</textarea>
               </div>
               <div class="pane-footer">
-                <div class="aligned-options">
-                  <div class="glass-input-group inline">
-                    <label for="aligned-string-length">String Length</label>
-                    <input type="number" id="aligned-string-length" class="glass-input small" value="0" min="0" max="65535" placeholder="0" title="Max string length (0 = disabled)">
-                  </div>
-                </div>
                 <button id="aligned-generate" class="glass-btn primary">Generate Code</button>
               </div>
             </div>
@@ -2471,21 +2470,22 @@ root_type Entity;</textarea>
           <div class="feature-col supported">
             <h4><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Supported</h4>
             <ul>
-              <li>Scalars: bool, byte, ubyte, short, ushort, int, uint, long, ulong, float, double</li>
+              <li>Fixed structs with scalar fields</li>
               <li>Fixed-size arrays: <code>[float:3]</code>, <code>[int:16]</code></li>
               <li>Hex array sizes: <code>[ubyte:0x100]</code> (256 bytes)</li>
               <li>Nested structs (inlined by value)</li>
               <li>Enums with explicit base type</li>
-              <li>Fixed-length strings (set String Length &gt; 0)</li>
+              <li>C++, TypeScript, and JavaScript accessors with <code>SIZE</code>, <code>ALIGN</code>, and <code>fromPointer()</code></li>
             </ul>
           </div>
           <div class="feature-col unsupported">
             <h4><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Not Supported</h4>
             <ul>
-              <li>Variable-length strings (without String Length)</li>
-              <li>Variable-length vectors</li>
+              <li>Strings</li>
+              <li>Variable-length vectors and nested offsets</li>
               <li>Unions</li>
-              <li>Tables with optional fields (use structs)</li>
+              <li>Tables as generated aligned layouts</li>
+              <li>Optional or nullable fields</li>
             </ul>
           </div>
         </div>
@@ -2494,7 +2494,7 @@ root_type Entity;</textarea>
             <circle cx="12" cy="12" r="10"/>
             <path d="M12 16v-4M12 8h.01"/>
           </svg>
-          <span><strong>String Length:</strong> When set &gt; 0, string fields become fixed-size char arrays (e.g., 255 = 256 bytes including null terminator). This enables strings in the aligned format while maintaining fixed-size layout.</span>
+          <span><strong>Root Type + Length Metadata:</strong> The schema still needs a <code>root_type</code>, but aligned output is generated only for fixed <code>struct</code> definitions. For dynamic buffers, annotate length explicitly with companion fields such as <code>count</code>, <code>start_index</code>, or <code>point_count</code>.</span>
         </div>
       </div>
 
@@ -2510,18 +2510,18 @@ root_type Entity;</textarea>
           <pre id="aligned-example-code" class="code-display">// C++ - Direct struct access in WASM
 #include "aligned_types.h"
 
-void processEntities(Entity* entities, size_t count) {
-    for (size_t i = 0; i &lt; count; i++) {
-        Entity&amp; e = entities[i];
-        e.health -= 10;
-        e.position.x += e.velocity.x * dt;
-        // Zero overhead - direct memory access
+void process_particles(MyGame::Particle* particles, size_t count, float dt) {
+    for (size_t i = 0; i &lt; count; ++i) {
+        auto&amp; p = particles[i];
+        p.health = static_cast&lt;uint16_t&gt;(p.health &gt; 10 ? p.health - 10 : 0);
+        p.position.x += p.velocity.x * dt;
+        p.position.y += p.velocity.y * dt;
+        p.position.z += p.velocity.z * dt;
     }
 }
 
-// Export for JS binding
-extern "C" void update_entities(Entity* ptr, int count) {
-    processEntities(ptr, count);
+extern "C" void update_particles(MyGame::Particle* ptr, uint32_t count, float dt) {
+    process_particles(ptr, count, dt);
 }</pre>
         </div>
       </div>
@@ -2529,7 +2529,7 @@ extern "C" void update_entities(Entity* ptr, int count) {
       <!-- WASM Interop Patterns -->
       <div class="glass-card">
         <h3 class="card-subtitle">WASM Interop Patterns</h3>
-        <p class="card-desc">Since aligned structs have no embedded length metadata, array bounds must be communicated out-of-band. Here are common patterns for sharing data between WASM modules:</p>
+        <p class="card-desc">Aligned structs do not embed vector lengths, so dynamic buffers need explicit count annotations. Here are the common patterns for sharing them between WASM modules:</p>
 
         <div class="interop-patterns">
           <!-- Pattern Tabs -->
@@ -2542,7 +2542,7 @@ extern "C" void update_entities(Entity* ptr, int count) {
           <!-- Pattern 1: Pointer + Count -->
           <div id="pattern-pointer-count" class="pattern-content active">
             <div class="pattern-desc">
-              <strong>Best for:</strong> Simple arrays where producer owns the data
+              <strong>Best for:</strong> Simple arrays where the producer owns the buffer and exports the length separately
             </div>
             <pre class="code-display">// C++ WASM - Export pointer and count separately
 static Cartesian3 positions[10000];
@@ -2550,15 +2550,21 @@ static uint32_t count = 0;
 
 extern "C" {
   Cartesian3* get_positions() { return positions; }
-  uint32_t get_count() { return count; }
+  uint32_t get_positions_count() { return count; }
 }
 
-// TypeScript - Read using exported functions
-const ptr = wasm.exports.get_positions();
-const count = wasm.exports.get_count();
-const positions = Cartesian3ArrayView.fromMemory(wasm.memory, ptr, count);
+// TypeScript - The generated API gives you SIZE + fromPointer()
+import { Cartesian3 } from './aligned_types';
 
-for (const pos of positions) {
+function positionAt(memory, basePtr, index) {
+  return Cartesian3.fromPointer(memory, basePtr + index * Cartesian3.SIZE);
+}
+
+const basePtr = wasm.exports.get_positions();
+const count = wasm.exports.get_positions_count();
+
+for (let i = 0; i &lt; count; i++) {
+  const pos = positionAt(wasm.memory, basePtr, i);
   console.log(`(${pos.x}, ${pos.y}, ${pos.z})`);
 }</pre>
           </div>
@@ -2566,19 +2572,23 @@ for (const pos of positions) {
           <!-- Pattern 2: Index Lookup -->
           <div id="pattern-index-lookup" class="pattern-content">
             <div class="pattern-desc">
-              <strong>Best for:</strong> Cross-references between structs, sparse access patterns
+              <strong>Best for:</strong> Cross-references between fixed structs and sparse lookup patterns
             </div>
             <pre class="code-display">// Schema - Store indices instead of pointers
 struct Cartesian3 { x: double; y: double; z: double; }
 
-table Satellite {
+struct Satellite {
   norad_id: uint32;
   position_index: uint32;  // Index into positions array
   velocity_index: uint32;  // Index into velocities array
+  epoch: double;
 }
 
-// TypeScript - Compute offset from index
-const CARTESIAN3_SIZE = 24;  // 3 doubles × 8 bytes
+// table Dummy { sat: Satellite; }
+// root_type Dummy;
+
+// TypeScript - Compute offsets from the stored indices
+import { Cartesian3, Satellite } from './aligned_types';
 
 class SpaceData {
   constructor(memory, positionsBase, satellitesBase) {
@@ -2589,8 +2599,13 @@ class SpaceData {
 
   // O(1) lookup by index
   getPositionByIndex(index) {
-    const offset = this.positionsBase + index * CARTESIAN3_SIZE;
-    return Cartesian3View.fromMemory(this.memory, offset);
+    const offset = this.positionsBase + index * Cartesian3.SIZE;
+    return Cartesian3.fromPointer(this.memory, offset);
+  }
+
+  getSatelliteByIndex(index) {
+    const offset = this.satellitesBase + index * Satellite.SIZE;
+    return Satellite.fromPointer(this.memory, offset);
   }
 
   // Follow cross-reference from satellite to position
@@ -2604,14 +2619,18 @@ class SpaceData {
           <!-- Pattern 3: Manifest + Data -->
           <div id="pattern-manifest" class="pattern-content">
             <div class="pattern-desc">
-              <strong>Best for:</strong> Multiple arrays with shared indexing, ephemeris data
+              <strong>Best for:</strong> Shared data arrays where each record needs an explicit vector-length annotation
             </div>
-            <pre class="code-display">// Schema - Manifest with indices into data array
-table EphemerisManifest {
-  satellite_ids: [uint32:100];
-  start_indices: [uint32:100];   // Where each satellite's data starts
-  point_counts: [uint32:100];    // How many points per satellite
+            <pre class="code-display">// Schema - Manifest header + entries with explicit lengths
+struct ManifestHeader {
   total_satellites: uint32;
+  total_points: uint32;
+}
+
+struct SatelliteEntry {
+  satellite_id: uint32;
+  start_index: uint32;  // First point in the shared array
+  point_count: uint32;  // Explicit vector-length annotation
 }
 
 struct EphemerisPoint {
@@ -2620,29 +2639,37 @@ struct EphemerisPoint {
   vx: double; vy: double; vz: double;
 }
 
-// TypeScript - Navigate using manifest
-const POINT_SIZE = 56;  // 7 doubles × 8 bytes
+// table Dummy { point: EphemerisPoint; }
+// root_type Dummy;
+
+// TypeScript - Navigate with start_index + point_count
+import { ManifestHeader, SatelliteEntry, EphemerisPoint } from './aligned_types';
 
 class EphemerisReader {
-  constructor(memory, manifestPtr, pointsPtr) {
-    this.manifest = EphemerisManifestView.fromMemory(memory, manifestPtr);
-    this.pointsBase = pointsPtr;
+  constructor(memory, headerPtr, entriesPtr, pointsPtr) {
     this.memory = memory;
+    this.header = ManifestHeader.fromPointer(memory, headerPtr);
+    this.entriesPtr = entriesPtr;
+    this.pointsPtr = pointsPtr;
   }
 
-  // Get all points for a satellite
-  getSatellitePoints(satIndex) {
-    const startIdx = this.manifest.start_indices[satIndex];
-    const count = this.manifest.point_counts[satIndex];
-    const offset = this.pointsBase + startIdx * POINT_SIZE;
-    return new EphemerisPointArrayView(this.memory.buffer, offset, count);
+  entryAt(index) {
+    return SatelliteEntry.fromPointer(
+      this.memory,
+      this.entriesPtr + index * SatelliteEntry.SIZE
+    );
   }
 
-  // Get specific point: base + (startIndex + timeIndex) * size
+  pointAt(globalIndex) {
+    return EphemerisPoint.fromPointer(
+      this.memory,
+      this.pointsPtr + globalIndex * EphemerisPoint.SIZE
+    );
+  }
+
   getPoint(satIndex, timeIndex) {
-    const startIdx = this.manifest.start_indices[satIndex];
-    const offset = this.pointsBase + (startIdx + timeIndex) * POINT_SIZE;
-    return EphemerisPointView.fromMemory(this.memory, offset);
+    const entry = this.entryAt(satIndex);
+    return this.pointAt(entry.start_index + timeIndex);
   }
 }</pre>
           </div>
@@ -2653,7 +2680,7 @@ class EphemerisReader {
             <circle cx="12" cy="12" r="10"/>
             <path d="M12 16v-4M12 8h.01"/>
           </svg>
-          <span><strong>Key Formula:</strong> <code>byte_offset = base_ptr + index × STRUCT_SIZE</code> — Since struct sizes are fixed and known at compile time, any index can be converted to a byte offset with a single multiplication.</span>
+          <span><strong>Key Formula:</strong> <code>byte_offset = base_ptr + index × STRUCT_SIZE</code> — Pair that offset formula with explicit <code>count</code>, <code>start_index</code>, or <code>point_count</code> fields whenever you need dynamic buffers.</span>
         </div>
       </div>
     </section>

@@ -3222,6 +3222,7 @@ async function loadStreamingWasm() {
 }
 
 async function setupStreamingDemo() {
+  if (state.streamingDemo) return;
   try {
     const wasmModule = await loadStreamingWasm();
     state.streamingDemo = new StreamingDemo(wasmModule);
@@ -3231,6 +3232,14 @@ async function setupStreamingDemo() {
 }
 
 async function startStreaming() {
+  if (!state.streamingDemo) {
+    await setupStreamingDemo();
+  }
+  if (!state.streamingDemo) {
+    alert('Streaming dispatcher module is unavailable in this build.');
+    return;
+  }
+
   const counts = {
     MONS: parseInt($('stream-monster-count').value) || 0,
     WEAP: parseInt($('stream-weapon-count').value) || 0,
@@ -4715,8 +4724,6 @@ async function init() {
       console.warn('Could not get flatc version:', e);
     }
 
-    // Setup streaming demo
-    await setupStreamingDemo();
     setupStreamingApiDocs();
     setupHexExplorerListeners();
 
@@ -9057,8 +9064,16 @@ async function fetchSolBalance(address) {
  * @returns {Promise<{balance: string, error?: string}>}
  */
 async function fetchAdaBalance(address) {
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    return {
+      balance: '--',
+      error: 'Cardano balance lookup disabled on static docs hosts due public API CORS',
+    };
+  }
+
   try {
-    // Using Koios free API v1 with POST request (CORS enabled)
+    // Using Koios free API v1 for local docs/dev only.
     const response = await fetch('https://api.koios.rest/api/v1/address_info', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

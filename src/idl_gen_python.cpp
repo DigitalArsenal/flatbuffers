@@ -1591,7 +1591,7 @@ class PythonGenerator : public BaseGenerator {
       } else {
         code += "def Create" + field_method + "Vector(builder, data):\n";
       }
-      code += Indent + helper_name + "(builder, data)\n\n";
+      code += Indent + "return " + helper_name + "(builder, data)\n\n";
     }
   }
 
@@ -2185,13 +2185,12 @@ class PythonGenerator : public BaseGenerator {
     const auto field_type_field = namer_.Field(*type_field);
 
     const EnumDef& enum_def = *field.value.type.enum_def;
-    auto union_type = namer_.Type(enum_def);
+    auto union_fn = namer_.Function(enum_def);
 
     if (parser_.opts.include_dependence_headers) {
-      union_type = namer_.NamespacedType(enum_def) + "." + union_type;
+      union_fn = namer_.NamespacedType(enum_def) + "." + union_fn;
     }
-
-    code += GenIndents(2) + "self." + field_field + " = " + union_type +
+    code += GenIndents(2) + "self." + field_field + " = " + union_fn +
             "Creator(" + "self." + field_type_field + ", " + struct_var + "." +
             field_method + "())";
   }

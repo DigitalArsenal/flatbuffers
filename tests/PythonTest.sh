@@ -22,7 +22,7 @@ gen_code_path=${test_dir}
 runtime_library_dir=${test_dir}/../python
 
 # Clean up any previous generated files
-rm -rf ${gen_code_path}/MyGame
+rm -rf ${gen_code_path}/MyGame ${gen_code_path}/union_name_test
 mkdir -p ${gen_code_path}
 
 # Function to generate code (with or without preserve-case)
@@ -43,6 +43,7 @@ function generate_code() {
   ${test_dir}/../flatc -p -o ${gen_code_path} -I include_test arrays_test.fbs --gen-object-api --python-typing ${preserve_case_opt}
   ${test_dir}/../flatc -p -o ${gen_code_path} -I include_test nested_union_test.fbs --gen-object-api --python-typing --python-decode-obj-api-strings ${preserve_case_opt}
   ${test_dir}/../flatc -p -o ${gen_code_path} -I include_test service_test.fbs --grpc --grpc-python-typed-handlers --python-typing --no-python-gen-numpy --gen-onefile ${preserve_case_opt}
+  ${test_dir}/../flatc -p -o ${gen_code_path} union_name_test.fbs --gen-object-api ${preserve_case_opt}
 }
 
 # Syntax: run_tests <interpreter> <benchmark vtable dedupes>

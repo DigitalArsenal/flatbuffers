@@ -487,9 +487,16 @@ class SwiftGenerator : public BaseGenerator {
             NumToString(field.value.type.VectorType().fixed_length);
         code_.SetValue("FIXEDLENGTH", fixed_length);
 
-        const auto vector_base_type = IsStruct(field.value.type.VectorType())
-                                          ? (type + "()")
-                                          : SwiftConstant(field);
+        std::string vector_base_type;
+        if (IsStruct(field.value.type.VectorType())) {
+          vector_base_type = type + "()";
+        } else if (IsBool(field.value.type.VectorType().base_type)) {
+          vector_base_type = "false";
+        } else if (IsFloat(field.value.type.VectorType().base_type)) {
+          vector_base_type = "0.0";
+        } else {
+          vector_base_type = SwiftConstant(field);
+        }
         code_ += "private var _{{FIELDVAR}}: InlineArray<{{FIXEDLENGTH}}, " +
                  valueType + ">";
 
@@ -1082,7 +1089,10 @@ class SwiftGenerator : public BaseGenerator {
         break;
 
       case BASE_TYPE_STRING: {
-        const auto default_string = "\"" + SwiftConstant(field) + "\"";
+        const auto sc = SwiftConstant(field);
+        std::string default_string;
+        flatbuffers::EscapeString(sc.c_str(), sc.length(), &default_string,
+                                  true, false);
         code_.SetValue("VALUETYPE", GenType(field.value.type));
         code_.SetValue("CONSTANT", field.IsDefault() ? default_string : "nil");
         if (field.attributes.Lookup("encrypted") != nullptr) {
@@ -1880,15 +1890,23 @@ class SwiftGenerator : public BaseGenerator {
         buffer_constructor.push_back(field_var + " = _t." + field_field);
 
         if (field.IsRequired()) {
-          std::string default_value =
-              field.IsDefault() ? SwiftConstant(field) : "";
-          base_constructor.push_back(field_var + " = \"" + default_value +
-                                     "\"");
+          std::string default_value;
+          if (field.IsDefault()) {
+            const auto sc = SwiftConstant(field);
+            flatbuffers::EscapeString(sc.c_str(), sc.length(), &default_value,
+                                      true, false);
+          } else {
+            default_value = "\"\"";
+          }
+          base_constructor.push_back(field_var + " = " + default_value);
           break;
         }
         if (field.IsDefault() && !field.IsRequired()) {
-          std::string value = field.IsDefault() ? SwiftConstant(field) : "nil";
-          base_constructor.push_back(field_var + " = \"" + value + "\"");
+          const auto sc = SwiftConstant(field);
+          std::string value;
+          flatbuffers::EscapeString(sc.c_str(), sc.length(), &value,
+                                    true, false);
+          base_constructor.push_back(field_var + " = " + value);
         }
         break;
       }

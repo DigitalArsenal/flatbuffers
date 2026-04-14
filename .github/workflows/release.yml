@@ -64,7 +64,9 @@ jobs:
   publish-npm:
     name: Publish NPM (flatbuffers)
     needs: [plan-npm-publish]
-    if: needs.plan-npm-publish.outputs.publish_npm == 'true'
+    if: |
+      needs.plan-npm-publish.outputs.publish_npm == 'true' &&
+      github.repository != 'DigitalArsenal/flatbuffers'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -99,7 +101,9 @@ jobs:
   publish-npm-wasm:
     name: Publish NPM (flatc-wasm)
     needs: [plan-npm-publish]
-    if: needs.plan-npm-publish.outputs.publish_wasm == 'true'
+    if: |
+      needs.plan-npm-publish.outputs.publish_wasm == 'true' &&
+      github.repository != 'DigitalArsenal/flatbuffers'
     runs-on: ubuntu-latest
     permissions:
       contents: read

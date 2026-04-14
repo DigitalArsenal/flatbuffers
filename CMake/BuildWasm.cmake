@@ -89,8 +89,11 @@ if(EMSCRIPTEN)
   file(MAKE_DIRECTORY "${WASM_NPM_DIR}")
 
   # Source files
+  set(FlatBuffers_WASM_LIBRARY_SRCS ${FlatBuffers_Library_SRCS})
+  list(REMOVE_ITEM FlatBuffers_WASM_LIBRARY_SRCS src/he_encryption.cpp)
+
   set(FlatBuffers_WASM_SRCS
-    ${FlatBuffers_Library_SRCS}
+    ${FlatBuffers_WASM_LIBRARY_SRCS}
     src/idl_gen_binary.cpp
     src/idl_gen_text.cpp
     src/idl_gen_cpp.cpp

@@ -7,51 +7,41 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build WASM
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: "3.1.51"
-          actions-cache-folder: "emsdk-cache"
-
-      - name: Configure and Build
-        run: |
-          emcmake cmake -B build/wasm -S . -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_BUILD_WASM=ON
-          cmake --build build/wasm --parallel $(nproc) --target flatc_wasm_npm
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-package
-          path: wasm/
-
   publish:
     name: Publish to NPM
-    needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/setup-node@v6
         with:
-          name: npm-package
-          path: wasm/
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
+          node-version: "latest"
           registry-url: "https://registry.npmjs.org/"
+
+      - name: Setup Emscripten
+        run: |
+          EMSDK_DIR="${RUNNER_TEMP}/emsdk"
+          EMSDK_VERSION="3.1.74"
+          git clone --branch "${EMSDK_VERSION}" --depth 1 https://github.com/emscripten-core/emsdk.git "${EMSDK_DIR}"
+          cd "${EMSDK_DIR}"
+          ./emsdk install "${EMSDK_VERSION}"
+          ./emsdk activate "${EMSDK_VERSION}"
+
+      - name: Configure and Build
+        run: |
+          source "${RUNNER_TEMP}/emsdk/emsdk_env.sh"
+          emcmake cmake -B build/wasm -S . -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_BUILD_WASM=ON -DFLATBUFFERS_WASM_ENABLE_HE=ON
+          cmake --build build/wasm --parallel $(nproc) --target flatc_wasm_npm
 
       - name: Install dependencies
         run: npm install --ignore-scripts
+        working-directory: wasm
+
+      - name: Test package
+        run: npm test
         working-directory: wasm
 
       - name: Select npm dist-tag
@@ -68,5 +58,5 @@ jobs:
         working-directory: wasm
 
       - name: Publish
-        run: npm publish --access public --provenance --tag "${{ steps.dist_tag.outputs.tag }}"
+        run: npm publish --access public --provenance --tag "${{ steps.dist_tag.outputs.tag }}" --ignore-scripts
         working-directory: wasm

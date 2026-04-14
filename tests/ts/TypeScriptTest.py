@@ -56,6 +56,16 @@ def check_call(args, cwd=tests_path):
   subprocess.check_call(args, cwd=str(cwd), shell=is_windows)
 
 
+def ensure_workspace_dependency():
+  workspace_dep = tests_path / "node_modules" / "flatbuffers"
+  if workspace_dep.exists():
+    return
+
+  pnpm = shutil.which("pnpm")
+  assert pnpm is not None, "Cannot find pnpm to install tests/ts workspace dependency"
+  check_call([pnpm, "install", "--dir", str(tests_path)], cwd=root_path)
+
+
 # Execute the flatc compiler with the specified parameters
 def flatc(
     options, schema, prefix=None, include=None, data=None, cwd=tests_path
@@ -74,10 +84,12 @@ def flatc(
 
 # Execute esbuild with the specified parameters
 def esbuild(input, output):
-  cmd = ["esbuild", input, "--outfile=" + output]
+  cmd = ["../../node_modules/.bin/esbuild", input, "--outfile=" + output]
   cmd += ["--format=cjs", "--bundle", "--external:flatbuffers"]
   check_call(cmd)
 
+
+ensure_workspace_dependency()
 
 def _preserve_prefix(*parts: str) -> str:
   return str(Path("preserve_case", *parts))
@@ -222,12 +234,14 @@ def run_preserve_case_tests():
       ts_path.write_text("// @ts-nocheck\n" + original)
 
   print("Running TypeScript Compiler (preserve-case)...")
-  check_call(["tsc", "-p", "tsconfig.preserve_case.json"])
+  check_call(["../../node_modules/.bin/tsc", "-p", "tsconfig.preserve_case.json"])
   print(
       "Running TypeScript Compiler in old node resolution mode for"
       " preserve_case/no_import_ext..."
   )
-  check_call(["tsc", "-p", "tsconfig.node.preserve_case.json"])
+  check_call(
+      ["../../node_modules/.bin/tsc", "-p", "tsconfig.node.preserve_case.json"]
+  )
 
   print("Running TypeScript Preserve-Case Tests...")
   check_call(NODE_CMD + ["JavaScriptPreserveCaseTest"])
@@ -244,13 +258,6 @@ def run_preserve_case_tests():
           "./preserve_case/monster_test_generated.cjs",
       ]
   )
-
-
-print("Removing node_modules/ directory...")
-shutil.rmtree(Path(tests_path, "node_modules"), ignore_errors=True)
-
-check_call(["npm", "install", "--silent"])
-
 flatc(
     options=[
         "--ts",
@@ -407,12 +414,12 @@ flatc(
 )
 
 print("Running TypeScript Compiler...")
-check_call(["tsc"])
+check_call(["../../node_modules/.bin/tsc"])
 print(
     "Running TypeScript Compiler in old node resolution mode for"
     " no_import_ext..."
 )
-check_call(["tsc", "-p", "./tsconfig.node.json"])
+check_call(["../../node_modules/.bin/tsc", "-p", "./tsconfig.node.json"])
 
 NODE_CMD = ["node"]
 

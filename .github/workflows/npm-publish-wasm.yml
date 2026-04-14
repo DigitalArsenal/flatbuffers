@@ -54,6 +54,19 @@ jobs:
         run: npm install --ignore-scripts
         working-directory: wasm
 
+      - name: Select npm dist-tag
+        id: dist_tag
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [[ "$VERSION" == *"-wasm."* ]]; then
+            TAG=wasm
+          else
+            TAG=latest
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Using npm dist-tag '$TAG' for flatc-wasm@$VERSION"
+        working-directory: wasm
+
       - name: Publish
-        run: npm publish --access public --provenance --tag latest
+        run: npm publish --access public --provenance --tag "${{ steps.dist_tag.outputs.tag }}"
         working-directory: wasm

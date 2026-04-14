@@ -315,6 +315,10 @@ if(EMSCRIPTEN)
     -DFLATBUFFERS_LOCALE_INDEPENDENT=0
     -DFLATBUFFERS_NO_ABSOLUTE_PATH_RESOLUTION
   )
+  set(WASM_NON_HE_COMPILE_OPTIONS
+    ${WASM_COMPILE_OPTIONS}
+    -UFLATBUFFERS_HE_USE_SEAL
+  )
 
   # Common link options
   set(WASM_COMMON_LINK_OPTIONS
@@ -357,7 +361,7 @@ if(EMSCRIPTEN)
     ${CMAKE_SOURCE_DIR}/src
     ${brotli_SOURCE_DIR}/c/include
   )
-  target_compile_options(flatc_wasm PRIVATE ${WASM_COMPILE_OPTIONS} -fexceptions)
+  target_compile_options(flatc_wasm PRIVATE ${WASM_NON_HE_COMPILE_OPTIONS} -fexceptions)
   if(FLATBUFFERS_WASM_USE_OPENSSL)
     target_compile_definitions(flatc_wasm PRIVATE FLATBUFFERS_USE_OPENSSL=1)
     target_link_libraries(flatc_wasm PRIVATE OpenSSL::SSL OpenSSL::Crypto)
@@ -394,7 +398,7 @@ if(EMSCRIPTEN)
     ${CMAKE_SOURCE_DIR}/src
     ${brotli_SOURCE_DIR}/c/include
   )
-  target_compile_options(flatc_wasm_inline PRIVATE ${WASM_COMPILE_OPTIONS} -fexceptions)
+  target_compile_options(flatc_wasm_inline PRIVATE ${WASM_NON_HE_COMPILE_OPTIONS} -fexceptions)
   if(FLATBUFFERS_WASM_USE_OPENSSL)
     target_compile_definitions(flatc_wasm_inline PRIVATE FLATBUFFERS_USE_OPENSSL=1)
     target_link_libraries(flatc_wasm_inline PRIVATE OpenSSL::SSL OpenSSL::Crypto)

@@ -1,6 +1,6 @@
 {
   "name": "flatc-wasm",
-  "version": "26.1.31",
+  "version": "26.1.32",
   "description": "FlatBuffers compiler (flatc) as a WebAssembly module - schema management, JSON/binary conversion, and code generation",
   "type": "module",
   "main": "src/index.mjs",
@@ -54,6 +54,7 @@
     "src/runner.d.ts",
     "src/aligned-codegen.mjs",
     "src/aligned-codegen.d.ts",
+    "src/encryption.mjs",
     "src/hd-keys.mjs",
     "src/hd-keys.d.ts",
     "src/streaming-dispatcher.mjs",

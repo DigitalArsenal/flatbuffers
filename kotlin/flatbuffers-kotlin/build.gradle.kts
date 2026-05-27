@@ -55,10 +55,10 @@ kotlin {
   }
 }
 
-// Fixes JS issue: https://youtrack.jetbrains.com/issue/KT-49109
+// Pin Node for Kotlin/JS dependency resolution; transitive JS deps require Node 18+.
 rootProject.plugins.withType<org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsRootPlugin> {
   rootProject.the<org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsRootExtension>().nodeVersion =
-    "16.0.0"
+    "18.20.4"
 }
 
 // Use the default greeting

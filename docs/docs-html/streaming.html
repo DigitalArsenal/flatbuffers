@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Streaming - DA FlatBuffers</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #000000;
+      --bg-secondary: rgba(42, 42, 45, 0.72);
+      --bg-tertiary: rgba(66, 66, 69, 0.72);
+      --accent-primary: #3b82f6;
+      --accent-secondary: #60a5fa;
+      --text-primary: #F5F5F7;
+      --text-secondary: rgba(255, 255, 255, 0.6);
+      --border-color: rgba(59, 130, 246, 0.3);
+      --glow-color: rgba(59, 130, 246, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(59, 130, 246, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(59, 130, 246, 0.04) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(59, 130, 246, 0.03) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Grid pattern overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        linear-gradient(rgba(59, 130, 246, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59, 130, 246, 0.02) 1px, transparent 1px);
+      background-size: 50px 50px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .page-container {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      margin-bottom: 30px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--accent-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .back-link:hover {
+      background: var(--bg-tertiary);
+      border-color: var(--accent-primary);
+      transform: translateY(-1px);
+    }
+
+    .markdown-body {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 48px;
+    }
+
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3,
+    .markdown-body h4 {
+      color: var(--text-primary);
+      border-bottom-color: var(--border-color);
+      font-weight: 600;
+    }
+
+    .markdown-body h1 {
+      background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-size: 2.2em;
+      margin-bottom: 24px;
+    }
+
+    .markdown-body a {
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body a:hover {
+      color: var(--accent-primary);
+    }
+
+    .markdown-body code {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9em;
+    }
+
+    .markdown-body pre {
+      background: var(--bg-primary) !important;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+    }
+
+    .markdown-body pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-size: 0.85em;
+      line-height: 1.6;
+    }
+
+    .markdown-body table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 20px 0;
+    }
+
+    .markdown-body table th,
+    .markdown-body table td {
+      border: 1px solid var(--border-color);
+      padding: 12px 16px;
+      text-align: left;
+    }
+
+    .markdown-body table th {
+      background: var(--bg-tertiary);
+      font-weight: 600;
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body table tr:nth-child(even) {
+      background: rgba(59, 130, 246, 0.03);
+    }
+
+    .markdown-body blockquote {
+      border-left: 4px solid var(--accent-primary);
+      background: var(--bg-tertiary);
+      padding: 16px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .markdown-body hr {
+      border: none;
+      height: 1px;
+      background: var(--border-color);
+      margin: 32px 0;
+    }
+
+    .markdown-body ul, .markdown-body ol {
+      padding-left: 24px;
+    }
+
+    .markdown-body li {
+      margin: 8px 0;
+    }
+
+    @media (max-width: 768px) {
+      .page-container {
+        padding: 20px 16px;
+      }
+      .markdown-body {
+        padding: 24px;
+        border-radius: 12px;
+      }
+      .markdown-body h1 {
+        font-size: 1.8em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <a href="https://digitalarsenal.github.io/flatbuffers/" class="back-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Back to DA FlatBuffers
+    </a>
+    <article class="markdown-body"><h1 id="streaming-api">Streaming API</h1>
+<p>The FlatBuffers Streaming Dispatcher routes mixed FlatBuffer messages to type-specific ring buffers for zero-allocation, constant-memory streaming.</p>
+<hr>
+<h2 id="wire-format">Wire Format</h2>
+<p>Each message in a stream is size-prefixed:</p>
+<pre><code>[SIZE: 4 bytes LE][FILE_ID: 4 bytes][FLATBUFFER PAYLOAD: SIZE-4 bytes]
+</code></pre>
+<ul>
+<li><strong>SIZE</strong> — Total message size (excluding the prefix itself), little-endian uint32</li>
+<li><strong>FILE_ID</strong> — 4-byte ASCII identifier (e.g., <code>MONS</code>, <code>WEAP</code>) for routing</li>
+<li><strong>PAYLOAD</strong> — Standard FlatBuffer binary data</li>
+</ul>
+<p>Use <code>FinishSizePrefixed()</code> when building to create streamable buffers.</p>
+<hr>
+<h2 id="streamingdispatcher-api">StreamingDispatcher API</h2>
+<h3 id="initialization">Initialization</h3>
+<pre><code class="language-javascript">import { StreamingDispatcher } from &#39;flatc-wasm&#39;;
+
+const dispatcher = new StreamingDispatcher(wasmModule);
+
+// Register message types with fixed-size ring buffers
+dispatcher.registerType(&#39;MONS&#39;, 64, 1000);  // 64 bytes/msg, capacity 1000
+dispatcher.registerType(&#39;WEAP&#39;, 32, 500);
+dispatcher.registerType(&#39;GALX&#39;, 16, 200);
+</code></pre>
+<h3 id="pushing-messages">Pushing Messages</h3>
+<pre><code class="language-javascript">// Push a buffer containing one or more size-prefixed messages
+dispatcher.pushBytes(mixedStreamData);
+
+// Messages are automatically routed by FILE_ID to the correct ring buffer
+</code></pre>
+<h3 id="retrieving-messages">Retrieving Messages</h3>
+<pre><code class="language-javascript">// Get a specific message by index (zero-copy view into WASM memory)
+const msg = dispatcher.getMessage(&#39;MONS&#39;, 0);
+
+// Get the latest message
+const latest = dispatcher.getLatestMessage(&#39;MONS&#39;);
+
+// Iterate all messages
+for (const msg of dispatcher.iterMessages(&#39;MONS&#39;)) {
+  // process msg (Uint8Array view)
+}
+
+// Batch operations
+const last10 = dispatcher.getLastN(&#39;MONS&#39;, 10);
+const range = dispatcher.getMessageRange(&#39;MONS&#39;, 5, 15);
+const all = dispatcher.getAllMessages(&#39;MONS&#39;);
+</code></pre>
+<h3 id="statistics">Statistics</h3>
+<pre><code class="language-javascript">const stats = dispatcher.getStats(&#39;MONS&#39;);
+// { totalReceived, capacity, head, dropped }
+
+const allStats = dispatcher.getAllStats();
+const dropped = dispatcher.getDroppedCount(&#39;MONS&#39;);
+const utilization = dispatcher.getBufferUtilization(&#39;MONS&#39;); // 0.0 - 1.0
+</code></pre>
+<hr>
+<h2 id="encrypted-streaming">Encrypted Streaming</h2>
+<p>The streaming dispatcher supports per-type encryption contexts for end-to-end encrypted message streams.</p>
+<h3 id="producer-sender">Producer (Sender)</h3>
+<pre><code class="language-javascript">import { EncryptionContext } from &#39;flatc-wasm&#39;;
+
+// 1. Create encryption context with receiver&#39;s public key
+const ctx = EncryptionContext.forEncryption(receiverPublicKey, {
+  algorithm: &#39;x25519&#39;,
+  context: &#39;my-stream-v1&#39;
+});
+
+// 2. Send the encryption header FIRST
+//    This contains the ephemeral key, nonce_start, and algorithm
+const header = ctx.getHeaderJSON();
+sendToReceiver(JSON.stringify(header));
+
+// 3. Produce encrypted messages
+for (let i = 0; i &lt; recordCount; i++) {
+  ctx.setRecordIndex(i);
+  const builder = new Builder(256);
+  // ... build FlatBuffer ...
+  const buf = builder.finishSizePrefixed(root);
+  const encrypted = ctx.encryptBuffer(builder.asUint8Array());
+  sendToReceiver(encrypted);
+}
+</code></pre>
+<h3 id="consumer-receiver">Consumer (Receiver)</h3>
+<pre><code class="language-javascript">import { EncryptionContext } from &#39;flatc-wasm&#39;;
+
+// 1. Receive the encryption header
+const header = JSON.parse(receiveFromSender());
+const ctx = EncryptionContext.forDecryption(myPrivateKey, header);
+
+// 2. Decrypt messages with known record index
+function decryptMessage(encrypted, recordIndex) {
+  ctx.setRecordIndex(recordIndex);
+  return ctx.decryptBuffer(encrypted);
+}
+
+// 3. Brute force fallback for unknown record index
+function decryptWithRecovery(encrypted, maxAttempts = 1000) {
+  for (let i = 0; i &lt; maxAttempts; i++) {
+    ctx.setRecordIndex(i);
+    try {
+      const result = ctx.decryptBuffer(encrypted);
+      // Validate FlatBuffer structure
+      const view = new DataView(result.buffer);
+      const rootOffset = view.getUint32(0, true);
+      if (rootOffset &lt; result.length) {
+        return { data: result, recordIndex: i };
+      }
+    } catch (e) { continue; }
+  }
+  throw new Error(&#39;Decryption failed: record index not found&#39;);
+}
+</code></pre>
+<h3 id="per-type-encryption">Per-Type Encryption</h3>
+<pre><code class="language-javascript">// Set encryption context per message type
+dispatcher.setEncryptionContext(&#39;MONS&#39;, encryptionCtx);
+dispatcher.setEncryptionContext(&#39;WEAP&#39;, differentCtx);
+
+// Or set global encryption for all types
+dispatcher.setEncryption(publicKey, { algorithm: &#39;x25519&#39; });
+
+// Check and clear
+dispatcher.isEncryptionActive();  // true
+dispatcher.clearEncryption();     // secure cleanup
+</code></pre>
+<hr>
+<h2 id="encryption-header">Encryption Header</h2>
+<p>The encryption header is sent once at the beginning of a stream. Without it, the receiver cannot decrypt any messages.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ephemeral_public_key</code></td>
+<td>bytes</td>
+<td>Sender&#39;s ephemeral public key for ECDH key exchange</td>
+</tr>
+<tr>
+<td><code>nonce_start</code></td>
+<td>12 bytes</td>
+<td>Random starting nonce — basis for all field nonces</td>
+</tr>
+<tr>
+<td><code>algorithm</code></td>
+<td>enum</td>
+<td>0 = X25519, 1 = secp256k1, 2 = P-256, 3 = P-384</td>
+</tr>
+<tr>
+<td><code>context</code></td>
+<td>string</td>
+<td>Application context mixed into HKDF derivation</td>
+</tr>
+<tr>
+<td><code>timestamp</code></td>
+<td>uint64</td>
+<td>Session creation time (Unix ms)</td>
+</tr>
+</tbody></table>
+<h3 id="nonce-derivation">Nonce Derivation</h3>
+<p>Each field&#39;s nonce is derived deterministically:</p>
+<pre><code>fieldNonce = nonce_start + (recordIndex * 65536 + fieldId)
+</code></pre>
+<p>This guarantees a unique nonce for every field in every record. The <code>nonce_start</code> is transmitted once in the header, not per-message.</p>
+<h3 id="why-brute-force-recovery">Why Brute Force Recovery?</h3>
+<p>When messages arrive out of order or after reconnection, the consumer may not know the <code>recordIndex</code>. The brute force approach tries sequential indices and validates the decrypted data against the FlatBuffer structure (vtable, root offset). This is safe because:</p>
+<ul>
+<li>AES-256-CTR with a wrong nonce produces random-looking output</li>
+<li>Valid FlatBuffer structures have detectable patterns (valid vtable pointer, reasonable offsets)</li>
+<li>Typical recovery finds the correct index within a few attempts</li>
+</ul>
+<hr>
+<h2 id="ring-buffer-memory-layout">Ring Buffer Memory Layout</h2>
+<p>Messages are stored in contiguous ring buffers in WASM linear memory:</p>
+<pre><code>Buffer Base (bufferPtr)
+├── Message 0:  [offset + 0 * messageSize]
+├── Message 1:  [offset + 1 * messageSize]
+├── Message 2:  [offset + 2 * messageSize]
+│   ...
+└── Message N:  [offset + N * messageSize]  (wraps at capacity)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>O(1) insertion</td>
+<td>Head pointer advances, overwrites oldest</td>
+</tr>
+<tr>
+<td>Zero allocation</td>
+<td>Buffer pre-allocated at registration</td>
+</tr>
+<tr>
+<td>Zero-copy reads</td>
+<td><code>getMessage()</code> returns a <code>Uint8Array</code> view into WASM memory</td>
+</tr>
+<tr>
+<td>Lock-free</td>
+<td>Single-producer design, no synchronization needed</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="sequence-numbers">Sequence Numbers</h2>
+<p>The dispatcher provides a monotonic sequence counter for replay protection:</p>
+<pre><code class="language-javascript">const seq = dispatcher.nextSequenceNumber();
+// Include in your message for ordering and deduplication
+</code></pre>
+<hr>
+<h2 id="use-cases">Use Cases</h2>
+<ul>
+<li><strong>Telemetry</strong> — Route sensor data by device type</li>
+<li><strong>Gaming</strong> — Separate entity updates from events</li>
+<li><strong>Finance</strong> — Dispatch orders, trades, and quotes</li>
+<li><strong>IoT</strong> — Process heterogeneous device streams</li>
+</ul>
+</article>
+  </div>
+</body>
+</html>

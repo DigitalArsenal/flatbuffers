@@ -75,7 +75,7 @@ jobs:
         run: |
           # Clear existing docs content except source files
           find docs -maxdepth 1 -type f ! -name 'mkdocs.yml' -delete 2>/dev/null || true
-          rm -rf docs/site docs/wasm-runtimes 2>/dev/null || true
+          rm -rf docs/site docs/docs-html docs/wasm-runtimes 2>/dev/null || true
 
           # Copy wasm-daflatbuffers demo as the root landing page
           cp -r wasm/docs/dist/* docs/
@@ -86,8 +86,9 @@ jobs:
 
           # Convert WASM runtime markdown docs to styled HTML
           if [ -d "wasm/docs/docs" ]; then
-            mkdir -p docs/wasm-runtimes
+            mkdir -p docs/docs-html docs/wasm-runtimes
             cd wasm/docs && node scripts/build-markdown.mjs && cd ../..
+            cp -r wasm/docs/docs-html/* docs/docs-html/
             cp -r wasm/docs/docs-html/* docs/wasm-runtimes/
           fi
 

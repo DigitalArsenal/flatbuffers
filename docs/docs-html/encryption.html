@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Encryption - DA FlatBuffers</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #000000;
+      --bg-secondary: rgba(42, 42, 45, 0.72);
+      --bg-tertiary: rgba(66, 66, 69, 0.72);
+      --accent-primary: #3b82f6;
+      --accent-secondary: #60a5fa;
+      --text-primary: #F5F5F7;
+      --text-secondary: rgba(255, 255, 255, 0.6);
+      --border-color: rgba(59, 130, 246, 0.3);
+      --glow-color: rgba(59, 130, 246, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(59, 130, 246, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(59, 130, 246, 0.04) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(59, 130, 246, 0.03) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Grid pattern overlay */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image:
+        linear-gradient(rgba(59, 130, 246, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59, 130, 246, 0.02) 1px, transparent 1px);
+      background-size: 50px 50px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .page-container {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      margin-bottom: 30px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--accent-secondary);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .back-link:hover {
+      background: var(--bg-tertiary);
+      border-color: var(--accent-primary);
+      transform: translateY(-1px);
+    }
+
+    .markdown-body {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 48px;
+    }
+
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3,
+    .markdown-body h4 {
+      color: var(--text-primary);
+      border-bottom-color: var(--border-color);
+      font-weight: 600;
+    }
+
+    .markdown-body h1 {
+      background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      font-size: 2.2em;
+      margin-bottom: 24px;
+    }
+
+    .markdown-body a {
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body a:hover {
+      color: var(--accent-primary);
+    }
+
+    .markdown-body code {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9em;
+    }
+
+    .markdown-body pre {
+      background: var(--bg-primary) !important;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+    }
+
+    .markdown-body pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-size: 0.85em;
+      line-height: 1.6;
+    }
+
+    .markdown-body table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 20px 0;
+    }
+
+    .markdown-body table th,
+    .markdown-body table td {
+      border: 1px solid var(--border-color);
+      padding: 12px 16px;
+      text-align: left;
+    }
+
+    .markdown-body table th {
+      background: var(--bg-tertiary);
+      font-weight: 600;
+      color: var(--accent-secondary);
+    }
+
+    .markdown-body table tr:nth-child(even) {
+      background: rgba(59, 130, 246, 0.03);
+    }
+
+    .markdown-body blockquote {
+      border-left: 4px solid var(--accent-primary);
+      background: var(--bg-tertiary);
+      padding: 16px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .markdown-body hr {
+      border: none;
+      height: 1px;
+      background: var(--border-color);
+      margin: 32px 0;
+    }
+
+    .markdown-body ul, .markdown-body ol {
+      padding-left: 24px;
+    }
+
+    .markdown-body li {
+      margin: 8px 0;
+    }
+
+    @media (max-width: 768px) {
+      .page-container {
+        padding: 20px 16px;
+      }
+      .markdown-body {
+        padding: 24px;
+        border-radius: 12px;
+      }
+      .markdown-body h1 {
+        font-size: 1.8em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <a href="https://digitalarsenal.github.io/flatbuffers/" class="back-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Back to DA FlatBuffers
+    </a>
+    <article class="markdown-body"><h1 id="encryption-module">Encryption Module</h1>
+<p>The <code>encryption.mjs</code> module provides a comprehensive cryptographic API built on WebAssembly (Crypto++) and Web Crypto. It supports AES-256-CTR encryption, authenticated encryption, multiple elliptic curve key exchange protocols, digital signatures, and per-field FlatBuffer encryption with deterministic nonce management.</p>
+<h2 id="initialization">Initialization</h2>
+<p>Before using any WASM-based crypto functions, initialize the module:</p>
+<pre><code class="language-javascript">import { loadEncryptionWasm, isInitialized, hasCryptopp, getVersion } from &#39;flatc-wasm&#39;;
+
+await loadEncryptionWasm();
+
+console.log(isInitialized());  // true
+console.log(hasCryptopp());    // true (Crypto++ backend available)
+console.log(getVersion());     // e.g. &quot;1.0.0&quot;
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> P-256 and P-384 functions use the Web Crypto API (<code>crypto.subtle</code>) and do not require WASM initialization. All other crypto functions require <code>loadEncryptionWasm()</code>.</p>
+</blockquote>
+<h2 id="constants">Constants</h2>
+<table>
+<thead>
+<tr>
+<th>Constant</th>
+<th>Value</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>KEY_SIZE</code></td>
+<td>32</td>
+<td>AES-256 key size in bytes</td>
+</tr>
+<tr>
+<td><code>IV_SIZE</code></td>
+<td>16</td>
+<td>AES-CTR initialization vector size</td>
+</tr>
+<tr>
+<td><code>NONCE_SIZE</code></td>
+<td>12</td>
+<td>Nonce size for nonce derivation</td>
+</tr>
+<tr>
+<td><code>SHA256_SIZE</code></td>
+<td>32</td>
+<td>SHA-256 digest size</td>
+</tr>
+<tr>
+<td><code>HMAC_SIZE</code></td>
+<td>32</td>
+<td>HMAC-SHA256 output size</td>
+</tr>
+<tr>
+<td><code>X25519_PRIVATE_KEY_SIZE</code></td>
+<td>32</td>
+<td>X25519 private key size</td>
+</tr>
+<tr>
+<td><code>X25519_PUBLIC_KEY_SIZE</code></td>
+<td>32</td>
+<td>X25519 public key size</td>
+</tr>
+<tr>
+<td><code>SECP256K1_PRIVATE_KEY_SIZE</code></td>
+<td>32</td>
+<td>secp256k1 private key size</td>
+</tr>
+<tr>
+<td><code>SECP256K1_PUBLIC_KEY_SIZE</code></td>
+<td>33</td>
+<td>secp256k1 compressed public key size</td>
+</tr>
+<tr>
+<td><code>P384_PRIVATE_KEY_SIZE</code></td>
+<td>48</td>
+<td>P-384 private key size</td>
+</tr>
+<tr>
+<td><code>P384_PUBLIC_KEY_SIZE</code></td>
+<td>49</td>
+<td>P-384 compressed public key size</td>
+</tr>
+<tr>
+<td><code>ED25519_PRIVATE_KEY_SIZE</code></td>
+<td>64</td>
+<td>Ed25519 private key size (seed + public)</td>
+</tr>
+<tr>
+<td><code>ED25519_PUBLIC_KEY_SIZE</code></td>
+<td>32</td>
+<td>Ed25519 public key size</td>
+</tr>
+<tr>
+<td><code>ED25519_SIGNATURE_SIZE</code></td>
+<td>64</td>
+<td>Ed25519 signature size</td>
+</tr>
+</tbody></table>
+<h2 id="error-handling">Error Handling</h2>
+<p>All crypto operations throw <code>CryptoError</code> on failure:</p>
+<pre><code class="language-javascript">import { CryptoError, CryptoErrorCode } from &#39;flatc-wasm&#39;;
+
+try {
+  encryptBytes(data, key, iv);
+} catch (e) {
+  if (e instanceof CryptoError) {
+    console.error(e.code);    // e.g. &#39;INVALID_KEY&#39;
+    console.error(e.message); // Human-readable description
+  }
+}
+</code></pre>
+<p><strong>Error codes:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>UNINITIALIZED</code></td>
+<td>WASM module not loaded</td>
+</tr>
+<tr>
+<td><code>INVALID_KEY</code></td>
+<td>Wrong key size or format</td>
+</tr>
+<tr>
+<td><code>INVALID_IV</code></td>
+<td>Wrong IV size or format</td>
+</tr>
+<tr>
+<td><code>INVALID_INPUT</code></td>
+<td>Invalid input data</td>
+</tr>
+<tr>
+<td><code>WASM_ERROR</code></td>
+<td>Internal WASM operation failure</td>
+</tr>
+<tr>
+<td><code>KEY_GENERATION_FAILED</code></td>
+<td>Key pair generation failed</td>
+</tr>
+<tr>
+<td><code>ECDH_FAILED</code></td>
+<td>ECDH key agreement failed</td>
+</tr>
+<tr>
+<td><code>SIGN_FAILED</code></td>
+<td>Signature creation failed</td>
+</tr>
+<tr>
+<td><code>VERIFY_FAILED</code></td>
+<td>Signature verification failed</td>
+</tr>
+<tr>
+<td><code>AUTHENTICATION_FAILED</code></td>
+<td>MAC verification failed</td>
+</tr>
+<tr>
+<td><code>ALLOCATION_FAILED</code></td>
+<td>WASM memory allocation failed</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="hash-functions">Hash Functions</h2>
+<h3 id="sha-256">SHA-256</h3>
+<pre><code class="language-javascript">import { sha256 } from &#39;flatc-wasm&#39;;
+
+const digest = sha256(new Uint8Array([1, 2, 3]));
+// Returns Uint8Array (32 bytes)
+</code></pre>
+<h3 id="hmac-sha256">HMAC-SHA256</h3>
+<pre><code class="language-javascript">import { hmacSha256, hmacSha256Verify } from &#39;flatc-wasm&#39;;
+
+const mac = hmacSha256(key, data);
+// Returns Uint8Array (32 bytes)
+
+const valid = hmacSha256Verify(key, data, mac);
+// Returns boolean (constant-time comparison)
+</code></pre>
+<h3 id="hkdf-hmac-based-key-derivation">HKDF (HMAC-based Key Derivation)</h3>
+<pre><code class="language-javascript">import { hkdf } from &#39;flatc-wasm&#39;;
+
+const derivedKey = hkdf(
+  inputKeyMaterial,          // Uint8Array
+  salt,                      // Uint8Array or null
+  info,                      // Uint8Array or null (context/label)
+  32                         // Output length in bytes
+);
+</code></pre>
+<hr>
+<h2 id="aes-256-ctr-encryption">AES-256-CTR Encryption</h2>
+<h3 id="in-place-encryption">In-Place Encryption</h3>
+<p>Encrypts/decrypts the buffer in place (modifies the input array):</p>
+<pre><code class="language-javascript">import { encryptBytes, decryptBytes } from &#39;flatc-wasm&#39;;
+
+const data = new Uint8Array([1, 2, 3, 4]);
+const key = crypto.getRandomValues(new Uint8Array(32));
+const iv = crypto.getRandomValues(new Uint8Array(16));
+
+encryptBytes(data, key, iv);  // data is now ciphertext
+decryptBytes(data, key, iv);  // data is restored to plaintext
+</code></pre>
+<h3 id="non-destructive-encryption">Non-Destructive Encryption</h3>
+<p>Returns new arrays instead of modifying the input:</p>
+<pre><code class="language-javascript">import { encryptBytesCopy, decryptBytesCopy } from &#39;flatc-wasm&#39;;
+
+const { ciphertext, iv } = encryptBytesCopy(plaintext, key);
+// iv is auto-generated if not provided
+
+const plaintext = decryptBytesCopy(ciphertext, key, iv);
+</code></pre>
+<h3 id="iv-tracking">IV Tracking</h3>
+<p>The module tracks IVs per key to warn about dangerous IV reuse:</p>
+<pre><code class="language-javascript">import { clearIVTracking, clearAllIVTracking } from &#39;flatc-wasm&#39;;
+
+clearIVTracking(key);    // Clear tracking for a specific key
+clearAllIVTracking();    // Clear all IV tracking state
+</code></pre>
+<hr>
+<h2 id="authenticated-encryption">Authenticated Encryption</h2>
+<p>AES-256-CTR + HMAC-SHA256 with optional associated data (AAD).</p>
+<p>Wire format: <code>IV (16 bytes) || ciphertext || HMAC (32 bytes)</code></p>
+<pre><code class="language-javascript">import { encryptAuthenticated, decryptAuthenticated } from &#39;flatc-wasm&#39;;
+
+const aad = new TextEncoder().encode(&#39;context-string&#39;);
+
+// Encrypt with authentication
+const message = encryptAuthenticated(plaintext, key, aad);
+
+// Decrypt and verify integrity
+const plaintext = decryptAuthenticated(message, key, aad);
+// Throws CryptoError (AUTHENTICATION_FAILED) if tampered
+</code></pre>
+<hr>
+<h2 id="key-exchange">Key Exchange</h2>
+<h3 id="x25519-curve25519-ecdh">X25519 (Curve25519 ECDH)</h3>
+<p>Fast elliptic curve Diffie-Hellman. Keys are 32 bytes. Powered by WASM (Crypto++).</p>
+<pre><code class="language-javascript">import { x25519GenerateKeyPair, x25519SharedSecret, x25519DeriveKey } from &#39;flatc-wasm&#39;;
+
+const alice = x25519GenerateKeyPair();
+const bob = x25519GenerateKeyPair();
+
+// Compute shared secret (both sides derive the same value)
+const secretA = x25519SharedSecret(alice.privateKey, bob.publicKey);
+const secretB = x25519SharedSecret(bob.privateKey, alice.publicKey);
+
+// Derive an AES-256 key from shared secret via HKDF
+const aesKey = x25519DeriveKey(secretA, &#39;my-app-context&#39;);
+</code></pre>
+<h3 id="secp256k1-ecdh-ecdsa">secp256k1 (ECDH + ECDSA)</h3>
+<p>Bitcoin/Ethereum elliptic curve. 32-byte private keys, 33-byte compressed public keys. Powered by WASM (Crypto++).</p>
+<pre><code class="language-javascript">import {
+  secp256k1GenerateKeyPair, secp256k1SharedSecret, secp256k1DeriveKey,
+  secp256k1Sign, secp256k1Verify
+} from &#39;flatc-wasm&#39;;
+
+// Key exchange
+const kp = secp256k1GenerateKeyPair();
+const shared = secp256k1SharedSecret(kp.privateKey, otherPublicKey);
+const aesKey = secp256k1DeriveKey(shared, &#39;context&#39;);
+
+// Sign and verify
+const signature = secp256k1Sign(kp.privateKey, data);
+const valid = secp256k1Verify(kp.publicKey, data, signature);
+</code></pre>
+<h3 id="p-256-nist-web-crypto">P-256 (NIST, Web Crypto)</h3>
+<p>FIPS-approved NIST curve. Uses the Web Crypto API — all functions are <strong>async</strong>. Private keys are PKCS#8 format, public keys are uncompressed (65 bytes).</p>
+<pre><code class="language-javascript">import {
+  p256GenerateKeyPairAsync, p256SharedSecretAsync, p256DeriveKey,
+  p256SignAsync, p256VerifyAsync
+} from &#39;flatc-wasm&#39;;
+
+const kp = await p256GenerateKeyPairAsync();
+const shared = await p256SharedSecretAsync(kp.privateKey, otherPublicKey);
+const aesKey = p256DeriveKey(shared, &#39;context&#39;);
+
+const signature = await p256SignAsync(kp.privateKey, data);
+const valid = await p256VerifyAsync(kp.publicKey, data, signature);
+</code></pre>
+<h3 id="p-384-nist-web-crypto">P-384 (NIST, Web Crypto)</h3>
+<p>Higher-security NIST curve. Same API pattern as P-256, uses Web Crypto. Public keys are 97 bytes (uncompressed).</p>
+<pre><code class="language-javascript">import {
+  p384GenerateKeyPairAsync, p384SharedSecretAsync, p384DeriveKey,
+  p384SignAsync, p384VerifyAsync
+} from &#39;flatc-wasm&#39;;
+
+const kp = await p384GenerateKeyPairAsync();
+const shared = await p384SharedSecretAsync(kp.privateKey, otherPublicKey);
+const aesKey = p384DeriveKey(shared, &#39;context&#39;);
+
+const signature = await p384SignAsync(kp.privateKey, data);
+const valid = await p384VerifyAsync(kp.publicKey, data, signature);
+</code></pre>
+<hr>
+<h2 id="digital-signatures">Digital Signatures</h2>
+<h3 id="ed25519">Ed25519</h3>
+<p>High-performance EdDSA signatures. 64-byte private keys, 32-byte public keys, 64-byte signatures. Powered by WASM (Crypto++).</p>
+<pre><code class="language-javascript">import { ed25519GenerateKeyPair, ed25519Sign, ed25519Verify } from &#39;flatc-wasm&#39;;
+
+const kp = ed25519GenerateKeyPair();
+
+const signature = ed25519Sign(kp.privateKey, data);
+const valid = ed25519Verify(kp.publicKey, data, signature);
+</code></pre>
+<hr>
+<h2 id="crypto-backend-summary">Crypto Backend Summary</h2>
+<table>
+<thead>
+<tr>
+<th>Algorithm</th>
+<th>Backend</th>
+<th>Sync/Async</th>
+<th>Key Sizes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>AES-256-CTR</td>
+<td>WASM (Crypto++)</td>
+<td>Sync</td>
+<td>32-byte key, 16-byte IV</td>
+</tr>
+<tr>
+<td>SHA-256</td>
+<td>WASM (Crypto++)</td>
+<td>Sync</td>
+<td>-</td>
+</tr>
+<tr>
+<td>HMAC-SHA256</td>
+<td>JS + WASM SHA-256</td>
+<td>Sync</td>
+<td>Any key size</td>
+</tr>
+<tr>
+<td>HKDF-SHA256</td>
+<td>WASM (Crypto++)</td>
+<td>Sync</td>
+<td>Variable</td>
+</tr>
+<tr>
+<td>X25519</td>
+<td>WASM (Crypto++)</td>
+<td>Sync</td>
+<td>32-byte priv/pub</td>
+</tr>
+<tr>
+<td>secp256k1</td>
+<td>WASM (Crypto++)</td>
+<td>Sync</td>
+<td>32-byte priv, 33-byte pub</td>
+</tr>
+<tr>
+<td>Ed25519</td>
+<td>WASM (Crypto++)</td>
+<td>Sync</td>
+<td>64-byte priv, 32-byte pub</td>
+</tr>
+<tr>
+<td>P-256</td>
+<td>Web Crypto</td>
+<td>Async</td>
+<td>PKCS#8 priv, 65-byte pub</td>
+</tr>
+<tr>
+<td>P-384</td>
+<td>Web Crypto</td>
+<td>Async</td>
+<td>PKCS#8 priv, 97-byte pub</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="nonce-generation-and-derivation">Nonce Generation and Derivation</h2>
+<h3 id="generating-a-nonce-start">Generating a Nonce Start</h3>
+<pre><code class="language-javascript">import { generateNonceStart } from &#39;flatc-wasm&#39;;
+
+const nonceStart = generateNonceStart();  // 12 bytes from CSPRNG
+</code></pre>
+<h3 id="deriving-nonces">Deriving Nonces</h3>
+<p>Each field gets a unique 96-bit (12-byte) nonce derived via big-endian addition:</p>
+<pre><code class="language-text">derived_nonce = nonceStart + combined_index
+combined_index = recordIndex * 65536 + fieldId
+</code></pre>
+<p>This provides:</p>
+<ul>
+<li><strong>2^16 (65,536) unique field IDs per record</strong></li>
+<li><strong>2^80 unique record indices</strong> before the combined index could theoretically wrap</li>
+<li><strong>Deterministic derivation</strong> - same inputs always produce the same nonce</li>
+</ul>
+<pre><code class="language-javascript">import { deriveNonce } from &#39;flatc-wasm&#39;;
+
+const nonce_r0_f0 = deriveNonce(nonceStart, 0);           // record 0, field 0
+const nonce_r0_f1 = deriveNonce(nonceStart, 1);           // record 0, field 1
+const nonce_r1_f0 = deriveNonce(nonceStart, 65536);       // record 1, field 0
+const nonce_r5_f3 = deriveNonce(nonceStart, 5 * 65536 + 3); // record 5, field 3
+</code></pre>
+<hr>
+<h2 id="header-utilities">Header Utilities</h2>
+<p>Encryption headers carry the parameters needed for decryption (sender&#39;s ephemeral public key, nonce start, algorithm, context).</p>
+<pre><code class="language-javascript">import {
+  computeKeyId,
+  createEncryptionHeader,
+  encryptionHeaderToJSON,
+  encryptionHeaderFromJSON
+} from &#39;flatc-wasm&#39;;
+
+// Compute a key ID (first 8 bytes of SHA-256)
+const keyId = computeKeyId(publicKey);
+
+// Create a header manually
+const header = createEncryptionHeader({
+  algorithm: &#39;x25519&#39;,
+  senderPublicKey: ephemeralPublicKey,
+  recipientKeyId: keyId,
+  nonceStart: generateNonceStart(),
+  context: &#39;my-app&#39;
+});
+
+// Serialize/deserialize
+const json = encryptionHeaderToJSON(header);
+const restored = encryptionHeaderFromJSON(json);
+</code></pre>
+<h3 id="header-format">Header Format</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Size</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>version</code></td>
+<td>1 byte</td>
+<td>Header format version (2 = nonce_start required)</td>
+</tr>
+<tr>
+<td><code>algorithm</code></td>
+<td>string</td>
+<td>Key exchange algorithm (<code>x25519</code>, <code>secp256k1</code>)</td>
+</tr>
+<tr>
+<td><code>senderPublicKey</code></td>
+<td>32-33 bytes</td>
+<td>Sender&#39;s ephemeral ECDH public key</td>
+</tr>
+<tr>
+<td><code>recipientKeyId</code></td>
+<td>8 bytes</td>
+<td>First 8 bytes of SHA-256 of recipient&#39;s public key</td>
+</tr>
+<tr>
+<td><code>nonceStart</code></td>
+<td>12 bytes</td>
+<td>Random starting nonce from CSPRNG</td>
+</tr>
+<tr>
+<td><code>context</code></td>
+<td>variable</td>
+<td>Optional HKDF domain separation string</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="encryptioncontext-per-field-ecies">EncryptionContext (Per-Field ECIES)</h2>
+<p>The <code>EncryptionContext</code> class manages encrypted sessions with per-field key and IV derivation. It supports symmetric mode (direct key) and ECIES mode (ephemeral key exchange).</p>
+<h3 id="symmetric-mode">Symmetric Mode</h3>
+<pre><code class="language-javascript">import { EncryptionContext } from &#39;flatc-wasm&#39;;
+
+const key = crypto.getRandomValues(new Uint8Array(32));
+const ctx = new EncryptionContext(key);
+
+// Also accepts hex string
+const ctx2 = EncryptionContext.fromHex(&#39;abcdef...&#39;);  // 64 hex chars
+</code></pre>
+<h3 id="ecies-mode-encryption">ECIES Mode - Encryption</h3>
+<pre><code class="language-javascript">const ctx = EncryptionContext.forEncryption(recipientPublicKey, {
+  algorithm: &#39;x25519&#39;,           // or &#39;secp256k1&#39;
+  context: &#39;my-application-v1&#39;,  // HKDF domain separation
+  // nonceStart is auto-generated if not provided
+});
+
+// Get header to send to recipient
+const header = ctx.getHeader();
+const headerJSON = ctx.getHeaderJSON();
+</code></pre>
+<h3 id="ecies-mode-decryption">ECIES Mode - Decryption</h3>
+<pre><code class="language-javascript">const ctx = EncryptionContext.forDecryption(
+  myPrivateKey,
+  header,             // Received from sender
+  &#39;my-application-v1&#39; // Must match sender&#39;s context
+);
+</code></pre>
+<h3 id="per-field-encryption">Per-Field Encryption</h3>
+<p>Each FlatBuffer field gets a unique key and IV derived from the session key, field ID, and record index:</p>
+<pre><code class="language-javascript">// Encrypt fields in a FlatBuffer
+for (let recordIndex = 0; recordIndex &lt; records.length; recordIndex++) {
+  ctx.setRecordIndex(recordIndex);
+
+  for (const field of encryptedFields) {
+    ctx.encryptScalar(buffer, field.offset, field.length, field.id, recordIndex);
+  }
+}
+
+// Decrypt - same API, any record order
+ctx.setRecordIndex(42);
+ctx.decryptScalar(buffer, field.offset, field.length, field.id, 42);
+</code></pre>
+<h3 id="nonce-management">Nonce Management</h3>
+<pre><code class="language-javascript">ctx.getNonceStart();         // Get the 12-byte nonce start
+ctx.getRecordIndex();        // Current record index
+ctx.setRecordIndex(n);       // Set record index
+ctx.nextRecordIndex();       // Increment and return
+ctx.deriveFieldNonce(fieldId, recordIndex);  // Get unique nonce for field
+</code></pre>
+<h3 id="encryptioncontext-api-reference">EncryptionContext API Reference</h3>
+<pre><code class="language-typescript">class EncryptionContext {
+  constructor(key: Uint8Array | string, nonceStart?: Uint8Array);
+  static fromHex(hexKey: string): EncryptionContext;
+  static forEncryption(recipientPublicKey: Uint8Array, options?: {
+    algorithm?: &#39;x25519&#39; | &#39;secp256k1&#39;;
+    context?: string;
+    nonceStart?: Uint8Array;
+  }): EncryptionContext;
+  static forDecryption(
+    privateKey: Uint8Array,
+    header: EncryptionHeader,
+    context?: string
+  ): EncryptionContext;
+
+  isValid(): boolean;
+  getKey(): Uint8Array;
+  getNonceStart(): Uint8Array | null;
+  getRecordIndex(): number;
+  setRecordIndex(index: number): void;
+  nextRecordIndex(): number;
+  getEphemeralPublicKey(): Uint8Array | null;
+  getAlgorithm(): string | null;
+  getContext(): string | null;
+
+  deriveFieldKey(fieldId: number, recordIndex?: number): Uint8Array;
+  deriveFieldNonce(fieldId: number, recordIndex?: number): Uint8Array;
+  encryptScalar(buffer: Uint8Array, offset: number, length: number,
+                fieldId: number, recordIndex?: number): void;
+  decryptScalar(buffer: Uint8Array, offset: number, length: number,
+                fieldId: number, recordIndex?: number): void;
+
+  getHeader(): EncryptionHeader;
+  getHeaderJSON(): string;
+}
+</code></pre>
+<hr>
+<h2 id="establishing-an-encrypted-session">Establishing an Encrypted Session</h2>
+<h3 id="step-1-sender-creates-context">Step 1: Sender Creates Context</h3>
+<pre><code class="language-javascript">import { EncryptionContext } from &#39;flatc-wasm&#39;;
+
+const ctx = EncryptionContext.forEncryption(recipientPublicKey, {
+  algorithm: &#39;x25519&#39;,
+  context: &#39;my-application-v1&#39;,
+});
+
+const header = ctx.getHeader();
+</code></pre>
+<h3 id="step-2-send-header-first">Step 2: Send Header First</h3>
+<p>The <code>EncryptionHeader</code> <strong>MUST</strong> be transmitted before any encrypted data.</p>
+<pre><code class="language-javascript">const headerJSON = ctx.getHeaderJSON();
+await transport.send({ type: &#39;encryption_header&#39;, payload: headerJSON });
+</code></pre>
+<h3 id="step-3-encrypt-and-send-records">Step 3: Encrypt and Send Records</h3>
+<pre><code class="language-javascript">for (let recordIndex = 0; recordIndex &lt; records.length; recordIndex++) {
+  ctx.setRecordIndex(recordIndex);
+
+  for (const field of encryptedFields) {
+    ctx.encryptScalar(buffer, field.offset, field.length, field.id, recordIndex);
+  }
+
+  await transport.send({
+    type: &#39;encrypted_record&#39;,
+    recordIndex,
+    payload: buffer
+  });
+}
+</code></pre>
+<h3 id="step-4-recipient-decrypts">Step 4: Recipient Decrypts</h3>
+<pre><code class="language-javascript">import { EncryptionContext, encryptionHeaderFromJSON } from &#39;flatc-wasm&#39;;
+
+const header = encryptionHeaderFromJSON(headerJSON);
+const ctx = EncryptionContext.forDecryption(myPrivateKey, header, &#39;my-application-v1&#39;);
+
+// Records can be decrypted in any order
+ctx.setRecordIndex(msg.recordIndex);
+for (const field of encryptedFields) {
+  ctx.decryptScalar(msg.payload, field.offset, field.length, field.id, msg.recordIndex);
+}
+</code></pre>
+<hr>
+<h2 id="offline-and-out-of-order-decryption">Offline and Out-of-Order Decryption</h2>
+<p>Once the header is received, decryption requires no further communication:</p>
+<pre><code class="language-javascript">// Store header for later
+localStorage.setItem(&#39;session_header&#39;, ctx.getHeaderJSON());
+
+// Later, even offline
+const header = encryptionHeaderFromJSON(localStorage.getItem(&#39;session_header&#39;));
+const ctx = EncryptionContext.forDecryption(myPrivateKey, header, &#39;my-app&#39;);
+
+// Decrypt any record by index
+ctx.setRecordIndex(42);
+ctx.decryptScalar(encryptedData, offset, length, fieldId, 42);
+</code></pre>
+<p>Records can arrive and be processed in any order since nonces are derived deterministically from the record index.</p>
+<hr>
+<h2 id="parallel-decryption">Parallel Decryption</h2>
+<p>Different records can be decrypted simultaneously in separate workers:</p>
+<pre><code class="language-javascript">// Main thread
+const header = ctx.getHeader();
+
+const workers = encryptedRecords.map((record, index) =&gt; {
+  return new Promise((resolve) =&gt; {
+    const worker = new Worker(&#39;decrypt-worker.js&#39;);
+    worker.postMessage({ privateKey: myPrivateKey, header, context: &#39;my-app&#39;, recordIndex: index, encryptedData: record });
+    worker.onmessage = (e) =&gt; resolve(e.data);
+  });
+});
+
+const decryptedRecords = await Promise.all(workers);
+</code></pre>
+<pre><code class="language-javascript">// decrypt-worker.js
+import { EncryptionContext, encryptionHeaderFromJSON } from &#39;flatc-wasm&#39;;
+
+self.onmessage = (event) =&gt; {
+  const { privateKey, header, context, recordIndex, encryptedData } = event.data;
+  const ctx = EncryptionContext.forDecryption(
+    new Uint8Array(privateKey), encryptionHeaderFromJSON(header), context
+  );
+  ctx.setRecordIndex(recordIndex);
+  const decrypted = new Uint8Array(encryptedData);
+  ctx.decryptScalar(decrypted, 0, decrypted.length, 0, recordIndex);
+  self.postMessage(decrypted);
+};
+</code></pre>
+<hr>
+<h2 id="security-considerations">Security Considerations</h2>
+<h3 id="why-nonce-reuse-is-catastrophic">Why Nonce Reuse is Catastrophic</h3>
+<p>AES-CTR encrypts by XORing plaintext with a keystream:</p>
+<pre><code class="language-text">ciphertext = plaintext XOR AES_CTR(key, nonce)
+</code></pre>
+<p>If the same (key, nonce) encrypts two different plaintexts:</p>
+<pre><code class="language-text">C1 XOR C2 = P1 XOR P2  // Keystream cancels out
+</code></pre>
+<p>This reveals the XOR of the plaintexts, enabling statistical recovery.</p>
+<h3 id="how-nonce-incrementing-prevents-this">How Nonce Incrementing Prevents This</h3>
+<ul>
+<li>Every (recordIndex, fieldId) pair produces a unique nonce</li>
+<li>Even with billions of records, no nonce is reused</li>
+<li>The starting nonce is random (CSPRNG), so it&#39;s unpredictable</li>
+</ul>
+<h3 id="recommendations">Recommendations</h3>
+<ol>
+<li><strong>Always send header first</strong> - Don&#39;t encrypt until recipient confirms header receipt</li>
+<li><strong>Validate record indices</strong> - Ensure indices are within expected range</li>
+<li><strong>Use authenticated encryption</strong> - Use <code>encryptAuthenticated()</code> for integrity verification when not using per-field mode</li>
+<li><strong>Rotate sessions</strong> - Start new sessions periodically with fresh <code>nonceStart</code> values</li>
+<li><strong>Secure key storage</strong> - The recipient&#39;s private key must be protected</li>
+</ol>
+<hr>
+<h2 id="see-also">See Also</h2>
+<ul>
+<li><a href="nodejs.html">Node.js Integration</a> - Using encryption in Node.js</li>
+<li><a href="browser.html">Browser Integration</a> - Using encryption in browsers</li>
+<li><a href="streaming.html">Streaming</a> - Size-prefixed message framing</li>
+</ul>
+</article>
+  </div>
+</body>
+</html>

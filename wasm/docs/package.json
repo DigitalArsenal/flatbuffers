@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && cp streaming-dispatcher.js streaming-dispatcher.wasm dist/",
-    "check:links": "node scripts/check-doc-links.mjs index.html . && node scripts/check-doc-links.mjs ../../docs/index.html ../../docs && node scripts/check-landing-docs.mjs . && node scripts/check-landing-docs.mjs ../../docs",
+    "check:links": "node scripts/check-doc-links.mjs index.html . && node scripts/check-doc-links.mjs ../../docs/index.html ../../docs && node scripts/check-landing-docs.mjs . && node scripts/check-landing-docs.mjs ../../docs && node scripts/check-sdn-stack-nav.mjs flatbuffers index.html ../../docs/index.html",
     "preview": "vite preview"
   },
   "dependencies": {

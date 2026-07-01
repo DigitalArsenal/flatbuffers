@@ -56,6 +56,7 @@ a, button, nav, nav * {
   --card-padding: 32px;
   --radius: 28px;
   --radius-sm: 14px;
+  --sdn-stack-nav-height: 32px;
 }
 
 html {
@@ -130,7 +131,7 @@ body {
 
 .nav-bar {
   position: fixed;
-  top: 0;
+  top: var(--sdn-stack-nav-height, 32px);
   left: 0;
   right: 0;
   height: 64px;
@@ -223,7 +224,7 @@ body:has(.modal.active) .nav-bar {
 .nav-mobile-menu {
   display: none;
   position: fixed;
-  top: 56px;
+  top: calc(var(--sdn-stack-nav-height, 32px) + 56px);
   left: 0;
   right: 0;
   bottom: 0;

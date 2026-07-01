@@ -4210,7 +4210,8 @@ function setupMainAppHandlers() {
       'runtimes': 'runtimes',
       'overview': 'overview',
       'schema': 'schema',
-      'studio': 'studio'
+      'studio': 'studio',
+      'stack': 'stack'
     };
 
     let lastHash = '';

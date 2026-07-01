@@ -41,7 +41,7 @@
         <a href="#aligned" class="nav-link" data-tab="aligned">Aligned</a>
         <a href="#runtimes" class="nav-link" data-tab="runtimes">Runtimes</a>
         <span class="nav-divider"></span>
-        <a href="https://flatbuffers.dev" target="_blank" class="nav-link nav-link-external">Docs</a>
+        <a href="#docs" class="nav-link" data-tab="runtimes" data-scroll-target="docs">Docs</a>
         <span id="nav-status" class="nav-status"></span>
       </div>
       <div class="nav-actions">
@@ -80,7 +80,7 @@
     <a href="#aligned" class="nav-link" data-tab="aligned">Aligned</a>
     <a href="#runtimes" class="nav-link" data-tab="runtimes">Runtimes</a>
     <span class="nav-divider"></span>
-    <a href="https://flatbuffers.dev" target="_blank" class="nav-link nav-link-external">Docs</a>
+    <a href="#docs" class="nav-link" data-tab="runtimes" data-scroll-target="docs">Docs</a>
     <span class="nav-divider"></span>
     <button id="mobile-login" class="glass-btn primary mobile-auth-btn">Login</button>
     <button id="mobile-logout" class="glass-btn mobile-auth-btn" style="display: none;">Logout</button>
@@ -3039,9 +3039,17 @@ class EphemerisReader {
       </div>
 
       <!-- Documentation Links Card -->
-      <div class="glass-card">
+      <div id="docs" class="glass-card">
         <h3 class="card-subtitle">Documentation</h3>
         <div class="docs-grid">
+          <a href="https://flatbuffers.dev" target="_blank" rel="noopener" class="doc-link-card">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+              <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/>
+            </svg>
+            <h4>FlatBuffers Core Docs</h4>
+            <p>Schema, compiler, language, and runtime guides</p>
+          </a>
           <a href="docs-html/README.html" class="doc-link-card">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>

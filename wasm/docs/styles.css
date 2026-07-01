@@ -6652,7 +6652,8 @@ details[open] .collapse-icon {
 /* Documentation Links */
 .docs-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 240px));
+  justify-content: center;
   gap: 16px;
   margin-top: 16px;
 }
@@ -6669,6 +6670,7 @@ details[open] .collapse-icon {
   border-radius: var(--radius-sm);
   text-decoration: none;
   transition: all 0.2s;
+  width: 100%;
 }
 
 .doc-link-card:hover {
@@ -6703,13 +6705,13 @@ details[open] .collapse-icon {
   }
 
   .docs-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 240px));
   }
 }
 
 @media (max-width: 480px) {
   .docs-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 260px);
   }
 
   .runtime-actions {

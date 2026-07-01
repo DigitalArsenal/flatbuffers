@@ -4177,7 +4177,8 @@ function setupMainAppHandlers() {
       e.preventDefault();
       document.querySelectorAll('.nav-link[data-tab]').forEach(l => l.classList.remove('active'));
       link.classList.add('active');
-      const tabEl = $(`${link.dataset.tab}-tab`);
+      const scrollTarget = link.dataset.scrollTarget || `${link.dataset.tab}-tab`;
+      const tabEl = $(scrollTarget);
       if (tabEl) {
         // Scroll the section into view within the main-app container
         tabEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -4788,7 +4789,7 @@ async function init() {
     // Handle initial hash navigation
     const initialHash = window.location.hash.slice(1);
     if (initialHash) {
-      const tabEl = $(`${initialHash}-tab`);
+      const tabEl = $(initialHash) || $(`${initialHash}-tab`);
       if (tabEl) {
         setTimeout(() => {
           tabEl.scrollIntoView({ behavior: 'smooth', block: 'start' });

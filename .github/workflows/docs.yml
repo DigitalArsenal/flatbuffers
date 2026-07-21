@@ -1,6 +1,8 @@
 name: docs
 on:
-  # For manual pushes.
+  # Manual runs materialize a reviewed non-Pages branch in place. The release
+  # gate verifies the exact source SHA and the generated child commit before
+  # either commit can be promoted to master.
   workflow_dispatch:
 
   # Pushes to master that touch docs or wasm/docs
@@ -19,6 +21,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Validate materialization ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            test "${GITHUB_REF_TYPE}" = "branch"
+            test "${GITHUB_REF_NAME}" != "master"
+            test "${GITHUB_REF_NAME}" != "gh-pages"
+          else
+            test "${GITHUB_EVENT_NAME}" = "push"
+            test "${GITHUB_REF}" = "refs/heads/master"
+          fi
 
       - name: Configure Git Credentials
         run: |
@@ -28,14 +46,14 @@ jobs:
       # Setup Node.js for wasm-daflatbuffers demo build
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: wasm/docs/package-lock.json
 
       # Install parent wasm package dependencies (needed for ../src imports)
       - name: Install wasm package dependencies
         working-directory: wasm
-        run: npm install
+        run: npm ci
 
       # Build wasm-daflatbuffers demo (this will be the landing page)
       - name: Build wasm-daflatbuffers demo
@@ -48,6 +66,44 @@ jobs:
           npm ci
           echo "=== Building demo ==="
           npm run build
+
+      - name: Record reviewed source and landing digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_commit="$(git rev-parse HEAD)"
+          dist_tree_sha256="$(
+            node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { readdirSync, readFileSync } from "node:fs";
+          import { posix, resolve } from "node:path";
+
+          const root = resolve("wasm/docs/dist");
+          const files = [];
+          function walk(directory, prefix = "") {
+            for (const entry of readdirSync(directory, { withFileTypes: true })) {
+              const relative = prefix ? posix.join(prefix, entry.name) : entry.name;
+              const path = resolve(directory, entry.name);
+              if (entry.isDirectory()) walk(path, relative);
+              else if (entry.isFile()) files.push([relative, path]);
+              else throw new Error(`unsupported dist entry: ${relative}`);
+            }
+          }
+          walk(root);
+          files.sort(([left], [right]) => left.localeCompare(right, "en"));
+          const tree = createHash("sha256");
+          for (const [relative, path] of files) {
+            const fileDigest = createHash("sha256").update(readFileSync(path)).digest("hex");
+            tree.update(`${fileDigest}  ${relative}\n`, "utf8");
+          }
+          process.stdout.write(tree.digest("hex"));
+          NODE
+          )"
+          {
+            echo "### FlatBuffers docs materialization"
+            echo "- Source commit: \`${source_commit}\`"
+            echo "- dist tree SHA-256: \`${dist_tree_sha256}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       # Setup Python for mkdocs
       - uses: actions/setup-python@v6
@@ -72,13 +128,19 @@ jobs:
 
       # Assemble final site into /docs folder (served from master branch)
       - name: Assemble site
+        shell: bash
         run: |
-          # Clear existing docs content except source files
-          find docs -maxdepth 1 -type f ! -name 'mkdocs.yml' -delete 2>/dev/null || true
-          rm -rf docs/site docs/docs-html docs/wasm-runtimes 2>/dev/null || true
+          set -euo pipefail
+          # Preserve only canonical MkDocs inputs; every generated output is
+          # recreated from this reviewed source commit.
+          find docs -mindepth 1 -maxdepth 1 \
+            ! -name 'mkdocs.yml' \
+            ! -name 'source' \
+            ! -name 'overrides' \
+            -exec rm -rf -- {} +
 
           # Copy wasm-daflatbuffers demo as the root landing page
-          cp -r wasm/docs/dist/* docs/
+          cp -a wasm/docs/dist/. docs/
 
           # Copy mkdocs documentation to /docs/site subdirectory
           mkdir -p docs/site
@@ -92,9 +154,18 @@ jobs:
             cp -r wasm/docs/docs-html/* docs/wasm-runtimes/
           fi
 
-      - name: Commit and push to master
+      - name: Commit generated docs to the source branch
+        shell: bash
         run: |
+          set -euo pipefail
           git add docs/
           git diff --staged --quiet && echo "No changes to commit" && exit 0
-          git commit -m "Update docs site [skip ci]"
-          git push
+          git commit -m "Update docs site from ${GITHUB_SHA} [skip ci]"
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            test "${GITHUB_REF_NAME}" != "master"
+            test "${GITHUB_REF_NAME}" != "gh-pages"
+            git push origin "HEAD:${GITHUB_REF}"
+          else
+            test "${GITHUB_REF}" = "refs/heads/master"
+            git push origin "HEAD:refs/heads/master"
+          fi

@@ -2,6 +2,36 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+const START_MARKER = "<!-- SDN_CONSUMER_ASSETS_START -->";
+const END_MARKER = "<!-- SDN_CONSUMER_ASSETS_END -->";
+
+function countOccurrences(text, value) {
+  return text.split(value).length - 1;
+}
+
+function stripReviewedAssetRegion(document, { required }) {
+  const startCount = countOccurrences(document, START_MARKER);
+  const endCount = countOccurrences(document, END_MARKER);
+  if (!required) {
+    if (startCount !== 0 || endCount !== 0) throw new Error("safe baseline must not contain consumer asset markers");
+    return document;
+  }
+  if (startCount !== 1 || endCount !== 1) throw new Error("pinned consumer requires exactly one asset marker pair");
+  const start = document.indexOf(START_MARKER);
+  const end = document.indexOf(END_MARKER);
+  if (end <= start) throw new Error("consumer asset markers are out of order");
+  return `${document.slice(0, start)}${document.slice(end + END_MARKER.length)}`;
+}
+
+// Fail-closed parser tests: only one ordered pinner-owned region may be
+// excluded, and forbidden content beside that region remains visible.
+assert.throws(() => stripReviewedAssetRegion("plain page", { required: true }), /exactly one/u);
+assert.throws(() => stripReviewedAssetRegion(`${START_MARKER}${START_MARKER}${END_MARKER}`, { required: true }), /exactly one/u);
+assert.throws(() => stripReviewedAssetRegion(`${END_MARKER}${START_MARKER}`, { required: true }), /out of order/u);
+const adversarialOutside = stripReviewedAssetRegion(`hd-wallet-ui${START_MARKER}hd-wallet-ui${END_MARKER}`, { required: true });
+assert.throws(() => assert.doesNotMatch(adversarialOutside, /hd-wallet-ui/iu));
+assert.doesNotMatch(stripReviewedAssetRegion(`${START_MARKER}hd-wallet-ui${END_MARKER}`, { required: true }), /hd-wallet-ui/iu);
+
 const argumentsSet = new Set(process.argv.slice(2));
 for (const argument of argumentsSet) {
   if (argument !== "--safe-baseline") throw new Error(`unknown argument: ${argument}`);
@@ -14,7 +44,8 @@ const app = readFileSync(resolve(root, "app.mjs"), "utf8");
 const packageJson = readFileSync(resolve(root, "package.json"), "utf8");
 const packageLock = readFileSync(resolve(root, "package-lock.json"), "utf8");
 const workflow = readFileSync(resolve(repositoryRoot, ".github/workflows/docs.yml"), "utf8");
-const scanned = `${html}\n${app}\n${packageJson}`;
+const htmlOutsideReviewedAssets = stripReviewedAssetRegion(html, { required: !safeBaseline });
+const scanned = `${htmlOutsideReviewedAssets}\n${app}\n${packageJson}`;
 
 assert.equal(existsSync(resolve(root, "../package-lock.json")), true, "parent WASM npm ci lock is missing");
 assert.match(workflow, /working-directory:\s*wasm\s*\n\s*run:\s*npm ci/u, "parent WASM install must use npm ci");
@@ -48,11 +79,21 @@ for (const retiredSurface of [
   /id="mobile-(?:login|logout)"/u,
   /id="(?:alice|bob)-private-key"/u,
   /id="pki-(?:clear-keys|login-prompt)"/u,
+  /id="bulk-(?:private-key|custom-privkey-group|privkey-status)"/u,
   /function\s+(?:login|logout|exportWallet|savePKIKeys|loadPKIKeys|derivePKIKeysFromHD)\b/u,
+  /function\s+onBulkPrivateKeyChange\b/u,
   /flatbuffers-pki-keys/u,
 ]) {
   assert.doesNotMatch(`${html}\n${app}`, retiredSurface, `public docs retain retired private surface: ${retiredSurface}`);
 }
+
+assert.doesNotMatch(app, /\bprivate key\b/iu, "executable docs must not retain a private-key prompt or status message");
+assert.match(app, /async function generatePKIKeyPairs\b/u, "session-only encryption keys must remain available");
+assert.match(app, /curveType === 'p256'[\s\S]{0,300}p256\.utils\.randomPrivateKey\(\)/u, "P-256 session keys must use the encryption engine's raw scalar format");
+assert.doesNotMatch(app, /p(?:256|384)GenerateKeyPairAsync/u, "session encryption must not pass PKCS#8 keys to the raw-scalar engine");
+assert.match(html, /id="pki-encrypt"/u, "session-only encryption demonstration is missing");
+assert.match(html, /id="pki-decrypt"/u, "session-only decryption demonstration is missing");
+assert.doesNotMatch(html, /<option\s+value="p384"/u, "the public demo must not offer an unsupported encryption curve");
 
 const vcfStart = app.indexOf("function parseAndDisplayVCF");
 const vcfEnd = app.indexOf("// Help Content", vcfStart);

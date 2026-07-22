@@ -37,26 +37,12 @@ function generateKeyPair(curveType) {
     const publicKey = x25519.getPublicKey(privateKey);
     return { privateKey, publicKey };
   }
+  if (curveType === 'p256') {
+    const privateKey = p256.utils.randomPrivateKey();
+    const publicKey = p256.getPublicKey(privateKey, true);
+    return { privateKey, publicKey };
+  }
   throw new Error(`Unsupported curve type: ${curveType}`);
-}
-
-// P-256/P-384 key generation via WebCrypto (hardware accelerated)
-async function p256GenerateKeyPairAsync() {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']
-  );
-  const rawPublic = await crypto.subtle.exportKey('raw', keyPair.publicKey);
-  const pkcs8Private = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
-  return { publicKey: new Uint8Array(rawPublic), privateKey: new Uint8Array(pkcs8Private) };
-}
-
-async function p384GenerateKeyPairAsync() {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-384' }, true, ['sign', 'verify']
-  );
-  const rawPublic = await crypto.subtle.exportKey('raw', keyPair.publicKey);
-  const pkcs8Private = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
-  return { publicKey: new Uint8Array(rawPublic), privateKey: new Uint8Array(pkcs8Private) };
 }
 
 import { FlatcRunner } from '../src/runner.mjs';
@@ -492,7 +478,7 @@ function encryptFieldBytesWithPKI(bytes, fieldId = 0) {
 
 /**
  * Helper to ensure a value is a Uint8Array
- * Handles localStorage deserialization which produces plain objects
+ * Handles array-like values supplied by the in-memory demos.
  */
 function ensureUint8Array(value) {
   if (value instanceof Uint8Array) {
@@ -505,7 +491,7 @@ function ensureUint8Array(value) {
 }
 
 /**
- * Decrypt field bytes using Bob's private key
+ * Decrypt field bytes using Bob's session secret
  */
 function decryptFieldBytesWithPKI(encrypted, headerJSON, fieldId = 0) {
   if (!state.pki.bob || !state.pki.bob.privateKey) {
@@ -741,7 +727,7 @@ function renderFieldDisplay() {
     }
     tr.appendChild(encTd);
 
-    // Decrypted hex (decrypt-col) - decrypt using Bob's private key
+    // Decrypted hex (decrypt-col) - decrypt using Bob's session secret
     const decHexTd = document.createElement('td');
     decHexTd.className = 'hex decrypt-col';
     if (field.encryptedBytes && field.encryptionHeader && state.showFieldDecrypted) {
@@ -1185,7 +1171,7 @@ async function uploadAndDecrypt(file) {
     if (isEncrypted) {
       // Create decryption context
       if (!state.pki.bob || !state.pki.bob.privateKey) {
-        throw new Error('Bob\'s private key not available for decryption');
+        throw new Error('Bob\'s session secret is not available for decryption');
       }
 
       let privateKey = state.pki.bob.privateKey;
@@ -1503,12 +1489,12 @@ function showRecordDetail(record, index) {
 }
 
 /**
- * Decrypt a bulk record using Bob's private key.
+ * Decrypt a bulk record using Bob's session secret.
  * Uses high-performance decryptBuffer() method with cached field keys.
  */
 function decryptBulkRecord(index) {
   if (!state.pki.bob || !state.pki.bob.privateKey) {
-    console.error('Bob\'s private key not available');
+    console.error('Bob\'s session secret is not available');
     return new Uint8Array(0);
   }
 
@@ -1707,7 +1693,6 @@ const PKI_ALGORITHM_NAMES = Object.freeze({
   x25519: 'X25519 (Curve25519)',
   secp256k1: 'secp256k1 (Bitcoin/Ethereum)',
   p256: 'P-256 / secp256r1 (NIST)',
-  p384: 'P-384 / secp384r1 (NIST)',
 });
 
 async function generatePKIKeyPairs() {
@@ -1715,16 +1700,8 @@ async function generatePKIKeyPairs() {
   state.pki.algorithm = algorithm;
 
   try {
-    if (algorithm === 'p256') {
-      state.pki.alice = await p256GenerateKeyPairAsync();
-      state.pki.bob = await p256GenerateKeyPairAsync();
-    } else if (algorithm === 'p384') {
-      state.pki.alice = await p384GenerateKeyPairAsync();
-      state.pki.bob = await p384GenerateKeyPairAsync();
-    } else {
-      state.pki.alice = generateKeyPair(algorithm);
-      state.pki.bob = generateKeyPair(algorithm);
-    }
+    state.pki.alice = generateKeyPair(algorithm);
+    state.pki.bob = generateKeyPair(algorithm);
   } catch (error) {
     state.pki.alice = null;
     state.pki.bob = null;
@@ -1775,7 +1752,7 @@ function pkiEncrypt() {
   state.pki.plaintext = encoder.encode(plaintext);
 
   // Create encryption context using Bob's public key (Alice encrypts FOR Bob)
-  // Ensure publicKey is a Uint8Array (may be plain object from localStorage)
+  // Normalize the in-memory public key.
   let publicKey = state.pki.bob.publicKey;
   if (!(publicKey instanceof Uint8Array)) {
     if (typeof publicKey === 'object' && publicKey !== null) {
@@ -1824,8 +1801,8 @@ function pkiDecrypt() {
     // Parse the header
     const header = encryptionHeaderFromJSON(state.pki.header);
 
-    // Create decryption context using Bob's private key
-    // Ensure privateKey is a Uint8Array (may be plain object from localStorage)
+    // Create decryption context using Bob's session secret
+    // Normalize the in-memory session secret.
     let privateKey = state.pki.bob.privateKey;
     if (!(privateKey instanceof Uint8Array)) {
       if (typeof privateKey === 'object' && privateKey !== null) {
@@ -1876,7 +1853,7 @@ function pkiTryWrongKey() {
     // Parse the header
     const header = encryptionHeaderFromJSON(state.pki.header);
 
-    // Ensure Alice's private key is a Uint8Array (may be plain object from localStorage)
+    // Ensure Alice's session secret is a Uint8Array.
     let privateKey = state.pki.alice.privateKey;
     if (!(privateKey instanceof Uint8Array)) {
       if (typeof privateKey === 'object' && privateKey !== null) {
@@ -1886,7 +1863,7 @@ function pkiTryWrongKey() {
       }
     }
 
-    // Try to decrypt with Alice's private key (WRONG - should fail)
+    // Try to decrypt with Alice's session secret (WRONG - should fail)
     const decryptCtx = EncryptionContext.forDecryption(
       privateKey,
       header,
@@ -3651,7 +3628,7 @@ const schemaFiles = {
   entryPoint: null,    // Main entry point for compilation (usually main.fbs or schema.fbs)
 };
 
-// localStorage key for persistence
+// Browser storage is limited to non-secret schema editor files.
 const SCHEMA_FILES_STORAGE_KEY = 'flatbuffers_studio_files';
 
 // Schema Builder State
@@ -4589,19 +4566,7 @@ function initStudio() {
 
   // Decrypt key selector
   $('bulk-decrypt-selector')?.addEventListener('change', (e) => {
-    const value = e.target.value;
-    const customGroup = $('bulk-custom-privkey-group');
-    if (customGroup) {
-      customGroup.style.display = value === 'custom' ? 'block' : 'none';
-    }
-    updateBulkDecryptionKey(value);
-  });
-
-  $('bulk-private-key')?.addEventListener('input', () => {
-    const selector = $('bulk-decrypt-selector');
-    if (selector?.value === 'custom') {
-      onBulkPrivateKeyChange();
-    }
+    updateBulkDecryptionKey(e.target.value);
   });
 
   // Bulk Builder Actions
@@ -5660,11 +5625,9 @@ function initBulkKeys() {
   if (keySelector) keySelector.value = 'bob';
   if (decryptSelector) decryptSelector.value = 'bob';
 
-  // Hide custom key inputs
+  // Hide the custom recipient public-key input.
   const customKeyGroup = $('bulk-custom-key-group');
-  const customPrivKeyGroup = $('bulk-custom-privkey-group');
   if (customKeyGroup) customKeyGroup.style.display = 'none';
-  if (customPrivKeyGroup) customPrivKeyGroup.style.display = 'none';
 
   // Initialize with Bob's keys if available
   if (state.pki.bob) {
@@ -5730,31 +5693,6 @@ function onBulkPublicKeyChange() {
   }
 }
 
-function onBulkPrivateKeyChange() {
-  const input = $('bulk-private-key');
-  const value = input?.value.trim() || '';
-
-  if (!value) {
-    if (state.pki.bob) {
-      studioState.bulkConfig.privateKey = ensureUint8Array(state.pki.bob.privateKey);
-      updateBulkKeyStatus('bulk-privkey-status', true, "Using Bob's key");
-    } else {
-      studioState.bulkConfig.privateKey = null;
-      updateBulkKeyStatus('bulk-privkey-status', false, 'No key provided');
-    }
-    return;
-  }
-
-  const result = parseHexKey(value);
-  if (result.valid) {
-    studioState.bulkConfig.privateKey = result.bytes;
-    updateBulkKeyStatus('bulk-privkey-status', true, `Valid key (${result.bytes.length} bytes)`);
-  } else {
-    studioState.bulkConfig.privateKey = null;
-    updateBulkKeyStatus('bulk-privkey-status', false, result.error);
-  }
-}
-
 /**
  * Update bulk encryption key based on selector value
  */
@@ -5799,18 +5737,6 @@ function updateBulkDecryptionKey(selectorValue) {
     privateKey = ensureUint8Array(state.pki.bob.privateKey);
   } else if (selectorValue === 'alice' && state.pki.alice) {
     privateKey = ensureUint8Array(state.pki.alice.privateKey);
-  } else if (selectorValue === 'custom') {
-    const input = $('bulk-private-key');
-    const value = input?.value.trim() || '';
-    if (value) {
-      const result = parseHexKey(value);
-      if (result.valid) {
-        privateKey = result.bytes;
-        updateBulkKeyStatus('bulk-privkey-status', true, `Valid (${result.bytes.length} bytes)`);
-      } else {
-        updateBulkKeyStatus('bulk-privkey-status', false, result.error);
-      }
-    }
   }
 
   studioState.bulkConfig.privateKey = privateKey;
@@ -6181,7 +6107,7 @@ function displayBulkHexView(index) {
 
 function toggleBulkDecryption() {
   if (!studioState.bulkConfig.privateKey) {
-    alert('Please provide a valid private key for decryption');
+    alert('No session decryption key is available');
     return;
   }
 

@@ -86,7 +86,10 @@ struct Satellite {
   epoch: double;
 }
 
-table Dummy { s: Satellite; }
+table Dummy {
+  s: Satellite;
+  c: Cartesian3;
+}
 root_type Dummy;
 `;
 
@@ -116,7 +119,11 @@ struct SatelliteEntry {
   point_count: uint32;
 }
 
-table Dummy { p: EphemerisPoint; }
+table Dummy {
+  p: EphemerisPoint;
+  h: ManifestHeader;
+  s: SatelliteEntry;
+}
 
 root_type Dummy;
 `;
@@ -648,7 +655,10 @@ struct Satellite {
   point_count: uint32;
 }
 
-table Dummy { s: Satellite; }
+table Dummy {
+  s: Satellite;
+  p: EphemerisPoint;
+}
 root_type Dummy;
 `;
 

@@ -128,6 +128,24 @@ class Compiler {
         options_(options) {}
 
   bool Compile() {
+    if (parser_.root_struct_def_) {
+      const RecordLayout* root_layout = nullptr;
+      if (!CompileRecord(parser_.root_struct_def_, &root_layout)) { return false; }
+
+      std::map<const StructDef*, size_t> definition_order;
+      for (size_t i = 0; i < parser_.structs_.vec.size(); ++i) {
+        definition_order[parser_.structs_.vec[i]] = i;
+      }
+      std::sort(
+          schema_layout_->records.begin(), schema_layout_->records.end(),
+          [&definition_order](const std::unique_ptr<RecordLayout>& left,
+                              const std::unique_ptr<RecordLayout>& right) {
+            return definition_order.find(left->def)->second <
+                   definition_order.find(right->def)->second;
+          });
+      return true;
+    }
+
     for (auto it = parser_.structs_.vec.begin(); it != parser_.structs_.vec.end();
          ++it) {
       const RecordLayout* layout = nullptr;

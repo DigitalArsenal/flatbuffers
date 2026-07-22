@@ -60,6 +60,9 @@ void AlignedLayoutTest() {
 
   const auto* child = layout.Lookup("Child");
   TEST_NOTNULL(child);
+  TEST_EQ(std::string("Child"), layout.records[0]->name);
+  TEST_EQ(std::string("Extra"), layout.records[1]->name);
+  TEST_EQ(std::string("Root"), layout.records[2]->name);
   TEST_EQ(4u, static_cast<unsigned>(child->size));
   TEST_EQ(4u, static_cast<unsigned>(child->align));
   TEST_EQ(0u, static_cast<unsigned>(child->fields[0].offset));
@@ -132,6 +135,48 @@ void AlignedLayoutTest() {
   )",
                            &layout, &error));
   TEST_ASSERT(error.find("aligned_max_count") != std::string::npos);
+
+  TEST_ASSERT(BuildLayout(R"(
+    namespace Layout;
+    table Root {
+      value:int;
+    }
+    table UnreachableMissingBounds {
+      values:[int];
+    }
+    root_type Root;
+  )",
+                          &layout, &error));
+  TEST_NOTNULL(layout.Lookup("Root"));
+  TEST_ASSERT(layout.Lookup("UnreachableMissingBounds") == nullptr);
+  TEST_EQ(1u, static_cast<unsigned>(layout.records.size()));
+
+  TEST_ASSERT(!BuildLayout(R"(
+    namespace Layout;
+    table ReachableMissingBounds {
+      values:[int];
+    }
+    table Root {
+      child:ReachableMissingBounds;
+    }
+    root_type Root;
+  )",
+                           &layout, &error));
+  TEST_ASSERT(error.find("aligned_max_count") != std::string::npos);
+
+  TEST_ASSERT(BuildLayout(R"(
+    namespace Layout;
+    table First {
+      value:int;
+    }
+    table Second {
+      value:int;
+    }
+  )",
+                          &layout, &error));
+  TEST_NOTNULL(layout.Lookup("First"));
+  TEST_NOTNULL(layout.Lookup("Second"));
+  TEST_EQ(2u, static_cast<unsigned>(layout.records.size()));
 
   TEST_ASSERT(!BuildLayout(R"(
     namespace Layout;

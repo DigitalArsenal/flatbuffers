@@ -137,6 +137,7 @@ grpc/google/
 **/Package.resolved
 .clangd/**
 package-lock.json
+!wasm/package-lock.json
 !wasm/docs/package-lock.json
 /*.ilk
 /*.pdb

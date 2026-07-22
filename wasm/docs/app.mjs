@@ -1,17 +1,10 @@
 /**
- * FlatBuffers Crypto Wallet Demo
+ * FlatBuffers WASM documentation and explorer
  *
- * Login-first flow:
- * 1. User creates/restores wallet (username+password or seed phrase)
- * 2. Keys are derived and stored in memory
- * 3. Generate real FlatBuffer records with field-level encryption
- * 4. Toggle between encrypted/decrypted hex with value display
- * 5. Streaming demo with message routing by type
+ * Public examples use session-only cryptographic material. The page has no
+ * credential, recovery, derivation, export, or secret-persistence surface.
  */
 
-import 'hd-wallet-ui/styles';
-import { createWalletUI } from 'hd-wallet-ui';
-import initHDWallet, { Curve } from 'hd-wallet-wasm';
 import { x25519, ed25519 } from '@noble/curves/ed25519';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { p256 } from '@noble/curves/p256';
@@ -22,55 +15,34 @@ import { sha256 as sha256Noble } from '@noble/hashes/sha256';
 import { base58check } from '@scure/base';
 import { base58 } from '@scure/base';
 import QRCode from 'qrcode';
-import { Buffer } from 'buffer';
 import { createV3 } from 'vcard-cryptoperson';
-
-// Make Buffer available globally for various crypto libraries
-window.Buffer = Buffer;
 
 import {
   loadEncryptionWasm,
-  sha256,
-  hkdf,
   EncryptionContext,
   encryptionHeaderFromJSON,
   encryptBuffer,
   decryptBuffer,
 } from './encryption-stub.mjs';
 
-// Key generation using @noble/curves
-// TODO: Replace with hd-wallet-wasm curves API once WASM exports _hd_curve_pubkey_from_privkey
+// Session-only key generation for the public encryption demonstrations.
 function generateKeyPair(curveType) {
-  if (curveType === Curve.SECP256K1) {
+  if (curveType === 'secp256k1') {
     const privateKey = secp256k1.utils.randomPrivateKey();
     const publicKey = secp256k1.getPublicKey(privateKey, true);
     return { privateKey, publicKey };
   }
-  if (curveType === Curve.X25519) {
+  if (curveType === 'x25519') {
     const privateKey = x25519.utils.randomPrivateKey();
     const publicKey = x25519.getPublicKey(privateKey);
     return { privateKey, publicKey };
   }
+  if (curveType === 'p256') {
+    const privateKey = p256.utils.randomPrivateKey();
+    const publicKey = p256.getPublicKey(privateKey, true);
+    return { privateKey, publicKey };
+  }
   throw new Error(`Unsupported curve type: ${curveType}`);
-}
-
-// P-256/P-384 key generation via WebCrypto (hardware accelerated)
-async function p256GenerateKeyPairAsync() {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']
-  );
-  const rawPublic = await crypto.subtle.exportKey('raw', keyPair.publicKey);
-  const pkcs8Private = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
-  return { publicKey: new Uint8Array(rawPublic), privateKey: new Uint8Array(pkcs8Private) };
-}
-
-async function p384GenerateKeyPairAsync() {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-384' }, true, ['sign', 'verify']
-  );
-  const rawPublic = await crypto.subtle.exportKey('raw', keyPair.publicKey);
-  const pkcs8Private = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
-  return { publicKey: new Uint8Array(rawPublic), privateKey: new Uint8Array(pkcs8Private) };
 }
 
 import { FlatcRunner } from '../src/runner.mjs';
@@ -79,7 +51,6 @@ import { FlatBufferParser, parseWithSchema, Schemas, toHex, toHexCompact } from 
 import { PaginatedTable } from './virtual-scroller.mjs';
 import { StreamingDemo, MessageTypes, formatBytes, formatThroughput } from './streaming-demo.mjs';
 import { Builder } from 'flatbuffers';
-import { buildSigningPath, buildEncryptionPath } from '../src/hd-keys.mjs';
 
 // Import schemas as raw text
 import monsterSchema from './schemas/monster.fbs?raw';
@@ -94,24 +65,6 @@ const ENCRYPTION_WASM_PATH = './flatc-encryption.wasm';
 
 const state = {
   initialized: false,
-  loggedIn: false,
-  selectedCrypto: 'btc',
-  addresses: {
-    btc: null,
-    eth: null,
-    sol: null,
-  },
-  wallet: {
-    x25519: null,
-    ed25519: null,
-    secp256k1: null,
-    p256: null,
-  },
-  // HD wallet state
-  hdWalletModule: null, // hd-wallet-wasm module
-  walletUI: null, // hd-wallet-ui instance
-  masterSeed: null,
-  hdRoot: null,
   // FlatBuffer state
   flatcRunner: null,
   buffers: [],
@@ -219,96 +172,8 @@ file_identifier "GALX";
 };
 
 // =============================================================================
-// Crypto Address Generation & Explorers
+// Public address formatting helpers used by the schema data tools
 // =============================================================================
-
-const cryptoConfig = {
-  btc: {
-    name: 'Bitcoin',
-    symbol: 'BTC',
-    coinType: 0,
-    explorer: 'https://blockstream.info/address/',
-    balanceApi: 'https://blockstream.info/api/address/',
-    formatBalance: (satoshis) => `${(satoshis / 100000000).toFixed(8)} BTC`,
-  },
-  eth: {
-    name: 'Ethereum',
-    symbol: 'ETH',
-    coinType: 60,
-    explorer: 'https://etherscan.io/address/',
-    balanceApi: null,
-    formatBalance: (wei) => `${(parseFloat(wei) / 1e18).toFixed(6)} ETH`,
-  },
-  sol: {
-    name: 'Solana',
-    symbol: 'SOL',
-    coinType: 501,
-    explorer: 'https://solscan.io/account/',
-    balanceApi: null,
-    formatBalance: (lamports) => `${(lamports / 1e9).toFixed(4)} SOL`,
-  },
-  ltc: {
-    name: 'Litecoin',
-    symbol: 'LTC',
-    coinType: 2,
-    explorer: 'https://blockchair.com/litecoin/address/',
-    balanceApi: null,
-    formatBalance: (lits) => `${(lits / 100000000).toFixed(8)} LTC`,
-  },
-  bch: {
-    name: 'Bitcoin Cash',
-    symbol: 'BCH',
-    coinType: 145,
-    explorer: 'https://blockchair.com/bitcoin-cash/address/',
-    balanceApi: null,
-    formatBalance: (sats) => `${(sats / 100000000).toFixed(8)} BCH`,
-  },
-  doge: {
-    name: 'Dogecoin',
-    symbol: 'DOGE',
-    coinType: 3,
-    explorer: 'https://dogechain.info/address/',
-    balanceApi: null,
-    formatBalance: (sats) => `${(sats / 100000000).toFixed(4)} DOGE`,
-  },
-  atom: {
-    name: 'Cosmos',
-    symbol: 'ATOM',
-    coinType: 118,
-    explorer: 'https://www.mintscan.io/cosmos/address/',
-    balanceApi: null,
-    formatBalance: (uatom) => `${(uatom / 1e6).toFixed(6)} ATOM`,
-  },
-  algo: {
-    name: 'Algorand',
-    symbol: 'ALGO',
-    coinType: 330,
-    explorer: 'https://algoexplorer.io/address/',
-    balanceApi: null,
-    formatBalance: (microalgos) => `${(microalgos / 1e6).toFixed(6)} ALGO`,
-  },
-  dot: {
-    name: 'Polkadot',
-    symbol: 'DOT',
-    coinType: 354,
-    explorer: 'https://polkascan.io/polkadot/account/',
-    balanceApi: null,
-    formatBalance: (planks) => `${(planks / 1e10).toFixed(4)} DOT`,
-  },
-  ada: {
-    name: 'Cardano',
-    symbol: 'ADA',
-    coinType: 1815,
-    explorer: 'https://cardanoscan.io/address/',
-    balanceApi: null,
-    formatBalance: (lovelace) => `${(lovelace / 1e6).toFixed(6)} ADA`,
-  },
-};
-
-// Coin type to config mapping
-const coinTypeToConfig = Object.fromEntries(
-  Object.entries(cryptoConfig).map(([key, config]) => [config.coinType, { key, ...config }])
-);
 
 // Create Base58Check encoder for Bitcoin (uses sha256 for checksum)
 const base58checkBtc = base58check(sha256Noble);
@@ -351,62 +216,14 @@ function generateSolAddress(publicKey) {
   return base58.encode(publicKey);
 }
 
-function generateAddresses(wallet) {
-  return {
-    btc: generateBtcAddress(wallet.secp256k1.publicKey),
-    eth: generateEthAddress(wallet.secp256k1.publicKey),
-    sol: generateSolAddress(wallet.ed25519.publicKey),
-  };
-}
-
 function truncateAddress(address) {
   if (address.length <= 16) return address;
   return address.slice(0, 8) + '...' + address.slice(-6);
 }
 
-async function fetchBalance(crypto, address) {
-  const config = cryptoConfig[crypto];
-  if (!config.balanceApi) return null;
-
-  try {
-    if (crypto === 'btc') {
-      const response = await fetch(config.balanceApi + address);
-      if (!response.ok) return null;
-      const data = await response.json();
-      const balance = data.chain_stats?.funded_txo_sum - data.chain_stats?.spent_txo_sum || 0;
-      return config.formatBalance(balance);
-    }
-  } catch (err) {
-    console.warn('Failed to fetch balance:', err);
-  }
-  return null;
-}
-
-function updateAddressDisplay() {
-  const crypto = state.selectedCrypto;
-  const address = state.addresses[crypto];
-  const config = cryptoConfig[crypto];
-
-  // Update hero stats
-  const walletTypeEl = $('hero-wallet-type');
-  const heroAddressEl = $('hero-address');
-
-  if (walletTypeEl) {
-    walletTypeEl.textContent = config.name;
-  }
-  if (heroAddressEl && address) {
-    heroAddressEl.textContent = truncateAddress(address);
-    heroAddressEl.title = address;
-  }
-}
-
 // =============================================================================
 // Utilities
 // =============================================================================
-
-function toBase64(arr) {
-  return btoa(String.fromCharCode(...arr));
-}
 
 function $(id) {
   return document.getElementById(id);
@@ -447,501 +264,6 @@ function formatSize(bytes) {
 
 
 
-
-// =============================================================================
-// HD Wallet Derivation
-// =============================================================================
-
-/**
- * Derive a child key from the HD root using BIP44 path
- * Path format: m/purpose'/coin_type'/account'/change/address_index
- */
-function deriveHDKey(path) {
-  if (!state.hdRoot) {
-    throw new Error('HD wallet not initialized');
-  }
-  // hd-wallet-wasm HDKey uses derivePath() method with path string
-  try {
-    return state.hdRoot.derivePath(path);
-  } catch (e) {
-    console.error('HD derivation error:', e, 'path:', path);
-    throw e;
-  }
-}
-
-/**
- * Generate address from public key based on coin type
- * Note: HD derivation produces secp256k1 keys. For coins that use ed25519
- * (Solana, etc.), this will generate a valid-looking address but not a
- * standard address for that chain.
- */
-function generateAddressForCoin(publicKey, coinType) {
-  const config = coinTypeToConfig[coinType];
-  if (!config) {
-    // Default to hex representation
-    return toHexCompact(publicKey);
-  }
-
-  switch (coinType) {
-    case 0:   // Bitcoin
-    case 2:   // Litecoin
-    case 3:   // Dogecoin
-    case 145: // Bitcoin Cash
-      return generateBtcAddress(publicKey);
-
-    case 60:  // Ethereum
-      return generateEthAddress(publicKey);
-
-    case 501: // Solana - uses ed25519, but we generate from secp256k1 for demo
-      // For proper Solana, would need ed25519 derivation (SLIP-0010)
-      return base58.encode(publicKey.slice(0, 32)); // Take first 32 bytes
-
-    case 118: // Cosmos
-    case 330: // Algorand
-    case 354: // Polkadot
-    case 1815: // Cardano
-      // These chains use different key schemes; show truncated key hash
-      const hash = sha256Noble(publicKey);
-      return toHexCompact(hash.slice(0, 20));
-
-    default:
-      // For unsupported coins, return a truncated public key hash
-      const defaultHash = sha256Noble(publicKey);
-      return toHexCompact(defaultHash.slice(0, 20));
-  }
-}
-
-// Note: buildSigningPath and buildEncryptionPath are imported from ../src/hd-keys.mjs
-
-/**
- * Update the path displays from UI inputs
- */
-function updatePathDisplay() {
-  const coin = $('hd-coin').value;
-  const account = $('hd-account').value || '0';
-  const index = $('hd-index')?.value || '0';
-
-  const signingPath = buildSigningPath(coin, account, index);
-  const encryptionPath = buildEncryptionPath(coin, account, index);
-
-  const signingPathEl = $('signing-path');
-  const encryptionPathEl = $('encryption-path');
-
-  if (signingPathEl) signingPathEl.textContent = signingPath;
-  if (encryptionPathEl) encryptionPathEl.textContent = encryptionPath;
-}
-
-/**
- * Derive and display both signing and encryption keys
- */
-async function deriveAndDisplayAddress() {
-  console.log('deriveAndDisplayAddress called, hdRoot:', !!state.hdRoot);
-
-  const hdNotInitialized = $('hd-not-initialized');
-  const derivedResult = $('derived-result');
-
-  // Show warning and hide result if wallet not initialized
-  if (!state.hdRoot) {
-    console.log('HD not initialized, showing warning. Element found:', !!hdNotInitialized);
-    if (hdNotInitialized) hdNotInitialized.style.display = 'block';
-    if (derivedResult) derivedResult.style.display = 'none';
-    return;
-  }
-
-  // Hide warning since wallet is initialized
-  if (hdNotInitialized) hdNotInitialized.style.display = 'none';
-
-  const coin = $('hd-coin').value;
-  const account = $('hd-account').value || '0';
-  const index = $('hd-index')?.value || '0';
-  const coinType = parseInt(coin);
-  const coinOption = $('hd-coin').selectedOptions[0];
-  const cryptoName = coinOption.dataset.name || 'Unknown';
-  const cryptoSymbol = coinOption.dataset.symbol || '???';
-
-  const signingPath = buildSigningPath(coin, account, index);
-  const encryptionPath = buildEncryptionPath(coin, account, index);
-
-  console.log('Deriving signing path:', signingPath);
-  console.log('Deriving encryption path:', encryptionPath);
-
-  try {
-    // Derive signing key
-    const signingKey = deriveHDKey(signingPath);
-    const signingPubKey = signingKey.publicKey();
-
-    // Derive encryption key
-    const encryptionKey = deriveHDKey(encryptionPath);
-    const encryptionPubKey = encryptionKey.publicKey();
-
-    // Generate address from signing key
-    const address = generateAddressForCoin(signingPubKey, coinType);
-    console.log('Generated address:', address);
-
-    // Get config for explorer link
-    const config = coinTypeToConfig[coinType];
-    const explorerUrl = config ? config.explorer + address : null;
-
-    // Update UI
-    $('derived-result').style.display = 'block';
-
-    // Update paths
-    $('signing-path').textContent = signingPath;
-    $('encryption-path').textContent = encryptionPath;
-
-    // Update public keys
-    $('signing-pubkey').textContent = toHexCompact(signingPubKey);
-    $('encryption-pubkey').textContent = toHexCompact(encryptionPubKey);
-
-    // Update address display
-    $('derived-crypto-name').textContent = cryptoName;
-    $('derived-icon').textContent = cryptoSymbol.substring(0, 2);
-    $('derived-address').textContent = address;
-
-    // Update explorer link
-    const explorerLink = $('derived-explorer-link');
-    if (explorerUrl) {
-      explorerLink.href = explorerUrl;
-      explorerLink.style.display = 'inline-flex';
-    } else {
-      explorerLink.style.display = 'none';
-    }
-
-    // Generate QR code
-    try {
-      await QRCode.toCanvas($('address-qr'), address, {
-        width: 64,
-        margin: 1,
-        color: { dark: '#1e293b', light: '#ffffff' },
-      });
-    } catch (qrErr) {
-      console.warn('QR generation failed:', qrErr);
-    }
-
-  } catch (err) {
-    console.error('Derivation failed:', err);
-  }
-}
-
-/**
- * Quick derive for a specific coin
- */
-function quickDerive(coinType) {
-  $('hd-coin').value = coinType;
-  $('hd-account').value = '0';
-  if ($('hd-index')) $('hd-index').value = '0';
-  updatePathDisplay();
-  deriveAndDisplayAddress();
-}
-
-// =============================================================================
-// Login / Logout
-// =============================================================================
-
-async function login(keys) {
-  state.loggedIn = true;
-  state.wallet = keys;
-  state.addresses = generateAddresses(keys);
-  state.selectedCrypto = 'btc';
-
-  // Derive PKI keys if not already loaded
-  if (!state.pki.alice || !state.pki.bob) {
-    if (!loadPKIKeys()) {
-      await generatePKIKeyPairs();
-    }
-  } else {
-    // Update the PKI UI since keys are already in state
-    $('alice-public-key').textContent = toHexCompact(state.pki.alice.publicKey);
-    $('alice-private-key').textContent = toHexCompact(state.pki.alice.privateKey);
-    $('bob-public-key').textContent = toHexCompact(state.pki.bob.publicKey);
-    $('bob-private-key').textContent = toHexCompact(state.pki.bob.privateKey);
-    const algorithmNames = {
-      x25519: 'X25519 (Curve25519)',
-      secp256k1: 'secp256k1 (Bitcoin)',
-      p256: 'P-256 (NIST)',
-      p384: 'P-384 (NIST)',
-    };
-    $('pki-algorithm-display').textContent = algorithmNames[state.pki.algorithm] || state.pki.algorithm;
-    $('pki-login-prompt').style.display = 'none';
-    $('pki-controls').style.display = 'flex';
-    $('pki-parties').style.display = 'grid';
-    $('pki-demo').style.display = 'block';
-    $('pki-security').style.display = 'block';
-    $('pki-clear-keys').style.display = 'inline-flex';
-  }
-
-  // Initialize schema viewer
-  updateSchemaViewer();
-
-  // Update adversarial security section (wallet addresses and balances)
-  updateAdversarialSecurity();
-}
-
-function logout() {
-  state.loggedIn = false;
-  state.wallet = { x25519: null, ed25519: null, secp256k1: null, p256: null };
-  state.buffers = [];
-  state.encryptedBuffers = [];
-  state.encryptionKey = null;
-  state.encryptionIV = null;
-  state.currentFieldData = null;
-  state.showFieldDecrypted = false;
-  state.masterSeed = null;
-  state.hdRoot = null;
-  localStorage.removeItem('flatbuffers-pki-keys');
-  clearBufferDisplay();
-  clearFieldDisplay();
-}
-
-/**
- * Export wallet in various formats
- * @param {string} format - Export format: mnemonic, xpub, xprv, keystore, wif, hex
- */
-async function exportWallet(format) {
-  if (!state.loggedIn) {
-    alert('Please log in first to export wallet data.');
-    return;
-  }
-
-  let data, filename, mimeType;
-
-  switch (format) {
-    case 'mnemonic':
-      if (!state.mnemonic) {
-        alert('Seed phrase not available. This wallet was derived from a password.');
-        return;
-      }
-      data = state.mnemonic;
-      filename = 'wallet-seed-phrase.txt';
-      mimeType = 'text/plain';
-      break;
-
-    case 'xpub':
-      if (!state.hdRoot?.publicExtendedKey) {
-        alert('Extended public key not available.');
-        return;
-      }
-      data = state.hdRoot.publicExtendedKey;
-      filename = 'wallet-xpub.txt';
-      mimeType = 'text/plain';
-      break;
-
-    case 'xprv':
-      if (!state.hdRoot?.privateExtendedKey) {
-        alert('Extended private key not available.');
-        return;
-      }
-      // Confirm before exporting private key
-      if (!confirm('Warning: You are about to export your master private key. Anyone with this key can access all your funds. Continue?')) {
-        return;
-      }
-      data = state.hdRoot.privateExtendedKey;
-      filename = 'wallet-xprv.txt';
-      mimeType = 'text/plain';
-      break;
-
-    case 'keystore':
-      if (!state.masterSeed) {
-        alert('Master seed not available.');
-        return;
-      }
-      // Prompt for encryption password
-      const password = prompt('Enter a strong password to encrypt your keystore file:');
-      if (!password || password.length < 8) {
-        alert('Password must be at least 8 characters.');
-        return;
-      }
-      try {
-        data = await createKeystoreJSON(state.masterSeed, password);
-        filename = 'wallet-keystore.json';
-        mimeType = 'application/json';
-      } catch (err) {
-        alert('Failed to create keystore: ' + err.message);
-        return;
-      }
-      break;
-
-    case 'wif':
-      if (!state.hdRoot) {
-        alert('HD wallet not available.');
-        return;
-      }
-      // Confirm before exporting private key
-      if (!confirm('Warning: You are about to export a private key in WIF format. Anyone with this key can access funds at this address. Continue?')) {
-        return;
-      }
-      // Derive Bitcoin key at m/44'/0'/0'/0/0
-      try {
-        const btcPath = "m/44'/0'/0'/0/0";
-        const derived = state.hdRoot.derivePath(btcPath);
-        const privateKeyBytes = derived.privateKey;
-        data = await privateKeyToWIF(privateKeyBytes, true); // mainnet, compressed
-        filename = 'wallet-private-key.wif';
-        mimeType = 'text/plain';
-      } catch (err) {
-        alert('Failed to derive WIF: ' + err.message);
-        return;
-      }
-      break;
-
-    case 'hex':
-      if (!state.masterSeed) {
-        alert('Master seed not available.');
-        return;
-      }
-      // Confirm before exporting raw seed
-      if (!confirm('Warning: You are about to export your raw master seed in hex format. This is extremely sensitive data. Continue?')) {
-        return;
-      }
-      data = toHexCompact(state.masterSeed);
-      filename = 'wallet-seed-hex.txt';
-      mimeType = 'text/plain';
-      break;
-
-    default:
-      alert('Unknown export format: ' + format);
-      return;
-  }
-
-  // Download the file
-  downloadData(data, filename, mimeType);
-}
-
-/**
- * Convert private key bytes to WIF (Wallet Import Format)
- * @param {Uint8Array} privateKey - 32-byte private key
- * @param {boolean} compressed - Whether to use compressed format
- * @returns {string} WIF-encoded private key
- */
-async function privateKeyToWIF(privateKey, compressed = true) {
-  // WIF format: version byte + private key + (optional compression flag) + checksum
-  const version = 0x80; // Mainnet
-  const payload = new Uint8Array(compressed ? 34 : 33);
-  payload[0] = version;
-  payload.set(privateKey, 1);
-  if (compressed) {
-    payload[33] = 0x01;
-  }
-
-  // Double SHA256 for checksum
-  const hash1 = await sha256(payload);
-  const hash2 = await sha256(hash1);
-  const checksum = hash2.slice(0, 4);
-
-  // Combine and encode as Base58
-  const result = new Uint8Array(payload.length + 4);
-  result.set(payload);
-  result.set(checksum, payload.length);
-
-  return base58Encode(result);
-}
-
-/**
- * Base58 encoding (Bitcoin-style)
- */
-function base58Encode(bytes) {
-  const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-  const BASE = 58n;
-
-  // Convert bytes to big integer
-  let num = 0n;
-  for (const byte of bytes) {
-    num = num * 256n + BigInt(byte);
-  }
-
-  // Convert to base58
-  let encoded = '';
-  while (num > 0n) {
-    const remainder = num % BASE;
-    num = num / BASE;
-    encoded = ALPHABET[Number(remainder)] + encoded;
-  }
-
-  // Add leading '1's for leading zero bytes
-  for (const byte of bytes) {
-    if (byte === 0) {
-      encoded = '1' + encoded;
-    } else {
-      break;
-    }
-  }
-
-  return encoded;
-}
-
-/**
- * Create encrypted keystore JSON (similar to Ethereum Keystore V3 format)
- * @param {Uint8Array} seed - The seed to encrypt
- * @param {string} password - Encryption password
- * @returns {string} JSON string
- */
-async function createKeystoreJSON(seed, password) {
-  const encoder = new TextEncoder();
-
-  // Generate random salt and IV
-  const salt = new Uint8Array(32);
-  crypto.getRandomValues(salt);
-  const iv = new Uint8Array(16);
-  crypto.getRandomValues(iv);
-
-  // Derive key from password using PBKDF2-like HKDF (simplified)
-  const iterations = 100000;
-  let key = encoder.encode(password);
-  for (let i = 0; i < Math.min(iterations / 1000, 100); i++) {
-    key = await sha256(new Uint8Array([...key, ...salt]));
-  }
-  const derivedKey = key.slice(0, 32);
-
-  // Encrypt with AES-256-GCM
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    derivedKey,
-    { name: 'AES-GCM' },
-    false,
-    ['encrypt']
-  );
-
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    cryptoKey,
-    seed
-  );
-
-  // Create keystore object
-  const keystore = {
-    version: 3,
-    id: crypto.randomUUID(),
-    crypto: {
-      cipher: 'aes-256-gcm',
-      ciphertext: toHexCompact(new Uint8Array(ciphertext)),
-      cipherparams: {
-        iv: toHexCompact(iv)
-      },
-      kdf: 'hkdf-sha256',
-      kdfparams: {
-        salt: toHexCompact(salt),
-        iterations: 100
-      }
-    }
-  };
-
-  return JSON.stringify(keystore, null, 2);
-}
-
-/**
- * Download data as a file
- */
-function downloadData(data, filename, mimeType) {
-  const blob = new Blob([data], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
 
 // =============================================================================
 // FlatBuffer Builder Functions (Direct API - bypasses CLI for performance)
@@ -1156,7 +478,7 @@ function encryptFieldBytesWithPKI(bytes, fieldId = 0) {
 
 /**
  * Helper to ensure a value is a Uint8Array
- * Handles localStorage deserialization which produces plain objects
+ * Handles array-like values supplied by the in-memory demos.
  */
 function ensureUint8Array(value) {
   if (value instanceof Uint8Array) {
@@ -1169,7 +491,7 @@ function ensureUint8Array(value) {
 }
 
 /**
- * Decrypt field bytes using Bob's private key
+ * Decrypt field bytes using Bob's session secret
  */
 function decryptFieldBytesWithPKI(encrypted, headerJSON, fieldId = 0) {
   if (!state.pki.bob || !state.pki.bob.privateKey) {
@@ -1405,7 +727,7 @@ function renderFieldDisplay() {
     }
     tr.appendChild(encTd);
 
-    // Decrypted hex (decrypt-col) - decrypt using Bob's private key
+    // Decrypted hex (decrypt-col) - decrypt using Bob's session secret
     const decHexTd = document.createElement('td');
     decHexTd.className = 'hex decrypt-col';
     if (field.encryptedBytes && field.encryptionHeader && state.showFieldDecrypted) {
@@ -1849,7 +1171,7 @@ async function uploadAndDecrypt(file) {
     if (isEncrypted) {
       // Create decryption context
       if (!state.pki.bob || !state.pki.bob.privateKey) {
-        throw new Error('Bob\'s private key not available for decryption');
+        throw new Error('Bob\'s session secret is not available for decryption');
       }
 
       let privateKey = state.pki.bob.privateKey;
@@ -2167,12 +1489,12 @@ function showRecordDetail(record, index) {
 }
 
 /**
- * Decrypt a bulk record using Bob's private key.
+ * Decrypt a bulk record using Bob's session secret.
  * Uses high-performance decryptBuffer() method with cached field keys.
  */
 function decryptBulkRecord(index) {
   if (!state.pki.bob || !state.pki.bob.privateKey) {
-    console.error('Bob\'s private key not available');
+    console.error('Bob\'s session secret is not available');
     return new Uint8Array(0);
   }
 
@@ -2367,324 +1689,38 @@ function convertFlatBufferToJson() {
 // PKI Demo (Alice/Bob Public Key Encryption)
 // =============================================================================
 
-const PKI_STORAGE_KEY = 'flatbuffers-pki-keys';
+const PKI_ALGORITHM_NAMES = Object.freeze({
+  x25519: 'X25519 (Curve25519)',
+  secp256k1: 'secp256k1 (Bitcoin/Ethereum)',
+  p256: 'P-256 / secp256r1 (NIST)',
+});
 
-/**
- * Save PKI keys to localStorage (encrypted keys stored as hex)
- */
-function savePKIKeys() {
-  if (!state.pki.alice || !state.pki.bob) {
-    console.warn('Cannot save PKI keys: alice or bob is null');
-    return;
-  }
-
-  const data = {
-    algorithm: state.pki.algorithm,
-    alice: {
-      publicKey: toHexCompact(state.pki.alice.publicKey),
-      privateKey: toHexCompact(state.pki.alice.privateKey),
-    },
-    bob: {
-      publicKey: toHexCompact(state.pki.bob.publicKey),
-      privateKey: toHexCompact(state.pki.bob.privateKey),
-    },
-    savedAt: new Date().toISOString(),
-  };
-
-  // Also save encryption key and IV if available
-  if (state.encryptionKey && state.encryptionIV) {
-    data.encryptionKey = toHexCompact(state.encryptionKey);
-    data.encryptionIV = toHexCompact(state.encryptionIV);
-  }
-
-  try {
-    localStorage.setItem(PKI_STORAGE_KEY, JSON.stringify(data));
-  } catch (e) {
-    console.warn('Failed to save PKI keys to localStorage:', e);
-  }
-}
-
-/**
- * Convert hex string to Uint8Array
- */
-function hexToBytes(hex) {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
-  }
-  return bytes;
-}
-
-/**
- * Load PKI keys from localStorage
- * @returns {boolean} true if keys were loaded successfully
- */
-function loadPKIKeys() {
-  try {
-    const stored = localStorage.getItem(PKI_STORAGE_KEY);
-    if (!stored) {
-      return false;
-    }
-
-    const data = JSON.parse(stored);
-    if (!data.alice || !data.bob || !data.algorithm) {
-      console.warn('Invalid PKI data in localStorage');
-      return false;
-    }
-
-    // Restore keys from hex
-    state.pki.algorithm = data.algorithm;
-    state.pki.alice = {
-      publicKey: hexToBytes(data.alice.publicKey),
-      privateKey: hexToBytes(data.alice.privateKey),
-    };
-    state.pki.bob = {
-      publicKey: hexToBytes(data.bob.publicKey),
-      privateKey: hexToBytes(data.bob.privateKey),
-    };
-
-    // Restore encryption key and IV if available
-    if (data.encryptionKey && data.encryptionIV) {
-      state.encryptionKey = hexToBytes(data.encryptionKey);
-      state.encryptionIV = hexToBytes(data.encryptionIV);
-    }
-
-    // Update UI elements (with null checks)
-    const pkiAlgorithm = $('pki-algorithm');
-    const alicePublicKey = $('alice-public-key');
-    const alicePrivateKey = $('alice-private-key');
-    const bobPublicKey = $('bob-public-key');
-    const bobPrivateKey = $('bob-private-key');
-    const pkiParties = $('pki-parties');
-    const pkiDemo = $('pki-demo');
-    const pkiSecurity = $('pki-security');
-    const pkiClearKeys = $('pki-clear-keys');
-
-    if (pkiAlgorithm) pkiAlgorithm.value = data.algorithm;
-    if (alicePublicKey) alicePublicKey.textContent = data.alice.publicKey;
-    if (alicePrivateKey) alicePrivateKey.textContent = data.alice.privateKey;
-    if (bobPublicKey) bobPublicKey.textContent = data.bob.publicKey;
-    if (bobPrivateKey) bobPrivateKey.textContent = data.bob.privateKey;
-
-    // Show UI sections
-    if (pkiParties) pkiParties.style.display = 'grid';
-    if (pkiDemo) pkiDemo.style.display = 'block';
-    if (pkiSecurity) pkiSecurity.style.display = 'block';
-    if (pkiClearKeys) pkiClearKeys.style.display = 'inline-flex';
-
-    return true;
-  } catch (e) {
-    console.warn('Failed to load PKI keys from localStorage:', e);
-    return false;
-  }
-}
-
-/**
- * Clear saved PKI keys from localStorage and reset UI
- */
-function clearPKIKeys() {
-  try {
-    localStorage.removeItem(PKI_STORAGE_KEY);
-  } catch (e) {
-    console.warn('Failed to clear PKI keys from localStorage:', e);
-  }
-
-  // Reset state
-  state.pki.alice = null;
-  state.pki.bob = null;
-  state.pki.algorithm = 'x25519';
-  state.pki.plaintext = null;
-  state.pki.ciphertext = null;
-  state.pki.header = null;
-  state.pki.decrypted = null;
-
-  // Reset UI
-  $('alice-public-key').textContent = '--';
-  $('alice-private-key').textContent = '--';
-  $('bob-public-key').textContent = '--';
-  $('bob-private-key').textContent = '--';
-  $('pki-login-prompt').style.display = 'block';
-  $('pki-controls').style.display = 'none';
-  $('pki-parties').style.display = 'none';
-  // Keep encryption-explainer visible - it's educational content
-  $('pki-demo').style.display = 'none';
-  $('pki-security').style.display = 'none';
-  $('pki-clear-keys').style.display = 'none';
-  $('pki-plaintext').value = '';
-  $('pki-ciphertext-step').style.display = 'none';
-  $('pki-decrypt-step').style.display = 'none';
-  $('pki-result-step').style.display = 'none';
-  $('pki-wrong-result').style.display = 'none';
-}
-
-/**
- * Derive PKI keys from HD wallet paths
- * Alice: m/44'/0'/0'/0/0 (index 0)
- * Bob: m/44'/0'/0'/0/1 (index 1)
- */
-function derivePKIKeysFromHD() {
-  if (!state.hdRoot) {
-    console.warn('HD wallet not initialized, cannot derive PKI keys');
-    return false;
-  }
-
+async function generatePKIKeyPairs() {
   const algorithm = $('pki-algorithm')?.value || 'x25519';
   state.pki.algorithm = algorithm;
 
   try {
-    // Derive deterministic seeds from HD wallet for Alice (index 0) and Bob (index 1)
-    // This ensures consistent keys across sessions while keeping them different
-    const alicePath = "m/44'/0'/0'/0/0";
-    const bobPath = "m/44'/0'/0'/0/1";
-
-    const aliceSeed = deriveKeyFromPath(alicePath);
-    const bobSeed = deriveKeyFromPath(bobPath);
-
-    // Generate key pairs based on algorithm using derived seeds
-    switch (algorithm) {
-      case 'x25519': {
-        state.pki.alice = deriveX25519FromSeed(aliceSeed);
-        state.pki.bob = deriveX25519FromSeed(bobSeed);
-        break;
-      }
-      case 'secp256k1': {
-        state.pki.alice = deriveSecp256k1FromSeed(aliceSeed);
-        state.pki.bob = deriveSecp256k1FromSeed(bobSeed);
-        break;
-      }
-      case 'p256': {
-        state.pki.alice = deriveP256FromSeed(aliceSeed);
-        state.pki.bob = deriveP256FromSeed(bobSeed);
-        break;
-      }
-      default:
-        state.pki.alice = deriveX25519FromSeed(aliceSeed);
-        state.pki.bob = deriveX25519FromSeed(bobSeed);
-    }
-
-    return true;
-  } catch (e) {
-    console.error('Failed to derive PKI keys from HD:', e);
+    state.pki.alice = generateKeyPair(algorithm);
+    state.pki.bob = generateKeyPair(algorithm);
+  } catch (error) {
+    state.pki.alice = null;
+    state.pki.bob = null;
+    console.error('Failed to generate session keys:', error);
+    alert('Failed to generate session keys: ' + error.message);
     return false;
   }
-}
 
-/**
- * Derive a 32-byte key from HD wallet path
- */
-function deriveKeyFromPath(path) {
-  if (!state.hdRoot) {
-    throw new Error('HD wallet not initialized');
-  }
-  // hd-wallet-wasm HDKey uses derivePath() method
-  const derived = state.hdRoot.derivePath(path);
-  return derived.privateKey();
-}
+  const alicePublicKey = $('alice-public-key');
+  const bobPublicKey = $('bob-public-key');
+  const algorithmDisplay = $('pki-algorithm-display');
+  if (alicePublicKey) alicePublicKey.textContent = toHexCompact(state.pki.alice.publicKey);
+  if (bobPublicKey) bobPublicKey.textContent = toHexCompact(state.pki.bob.publicKey);
+  if (algorithmDisplay) algorithmDisplay.textContent = PKI_ALGORITHM_NAMES[algorithm] || algorithm;
 
-/**
- * Derive X25519 key pair from a seed using @noble/curves (pure JS)
- * Uses the seed as the private key and computes the public key via scalar multiplication
- */
-function deriveX25519FromSeed(seed) {
-  // Use @noble/curves for deterministic key derivation from HD seed
-  // x25519.getPublicKey handles the clamping internally
-  const privateKey = new Uint8Array(seed);
-  const publicKey = x25519.getPublicKey(privateKey);
-  return {
-    privateKey,
-    publicKey: new Uint8Array(publicKey),
-  };
-}
-
-/**
- * Derive secp256k1 key pair from a seed using @noble/curves (pure JS)
- */
-function deriveSecp256k1FromSeed(seed) {
-  // Use @noble/curves for deterministic key derivation
-  const privateKey = new Uint8Array(seed);
-  const publicKey = secp256k1.getPublicKey(privateKey, true); // compressed
-  return {
-    privateKey,
-    publicKey: new Uint8Array(publicKey),
-  };
-}
-
-/**
- * Derive P-256 key pair from a seed using @noble/curves (pure JS)
- */
-function deriveP256FromSeed(seed) {
-  // Use @noble/curves for deterministic key derivation
-  const privateKey = new Uint8Array(seed);
-  const publicKey = p256.getPublicKey(privateKey, true); // compressed
-  return {
-    privateKey,
-    publicKey: new Uint8Array(publicKey),
-  };
-}
-
-async function generatePKIKeyPairs() {
-  // First try to derive from HD wallet
-  if (state.hdRoot && derivePKIKeysFromHD()) {
-    // PKI keys derived from HD wallet
-  } else {
-    // Fallback to random generation
-    const algorithm = $('pki-algorithm')?.value || 'x25519';
-    state.pki.algorithm = algorithm;
-
-    try {
-      // P-256 and P-384 require async crypto.subtle
-      if (algorithm === 'p256') {
-        state.pki.alice = await p256GenerateKeyPairAsync();
-        state.pki.bob = await p256GenerateKeyPairAsync();
-      } else if (algorithm === 'p384') {
-        state.pki.alice = await p384GenerateKeyPairAsync();
-        state.pki.bob = await p384GenerateKeyPairAsync();
-      } else {
-        const curveType = algorithm === 'secp256k1' ? Curve.SECP256K1 : Curve.X25519;
-        state.pki.alice = generateKeyPair(curveType);
-        state.pki.bob = generateKeyPair(curveType);
-      }
-    } catch (e) {
-      console.error('Failed to generate PKI keys:', e);
-      alert('Failed to generate keys: ' + e.message);
-      return;
-    }
-  }
-
-  // Save keys to localStorage
-  savePKIKeys();
-
-  // Display keys
-  $('alice-public-key').textContent = toHexCompact(state.pki.alice.publicKey);
-  $('alice-private-key').textContent = toHexCompact(state.pki.alice.privateKey);
-  $('bob-public-key').textContent = toHexCompact(state.pki.bob.publicKey);
-  $('bob-private-key').textContent = toHexCompact(state.pki.bob.privateKey);
-
-  // Display algorithm
-  const algorithmNames = {
-    x25519: 'X25519 (Curve25519)',
-    secp256k1: 'secp256k1 (Bitcoin/Ethereum)',
-    p256: 'P-256 / secp256r1 (NIST)',
-    p384: 'P-384 / secp384r1 (NIST)',
-  };
-  $('pki-algorithm-display').textContent = algorithmNames[state.pki.algorithm] || state.pki.algorithm;
-
-  // Sync the dropdown selector with current algorithm
-  const selector = $('pki-algorithm');
-  if (selector) selector.value = state.pki.algorithm;
-
-  // Show UI sections
-  $('pki-login-prompt').style.display = 'none';
-  $('pki-controls').style.display = 'flex';
-  $('pki-parties').style.display = 'grid';
-  // encryption-explainer is always visible (educational content)
-  $('pki-demo').style.display = 'block';
-  $('pki-security').style.display = 'block';
-  $('pki-clear-keys').style.display = 'inline-flex';
-
-  // Reset encryption state
   resetPKIDemo();
+  return true;
 }
+
 
 function resetPKIDemo() {
   state.pki.plaintext = null;
@@ -2716,7 +1752,7 @@ function pkiEncrypt() {
   state.pki.plaintext = encoder.encode(plaintext);
 
   // Create encryption context using Bob's public key (Alice encrypts FOR Bob)
-  // Ensure publicKey is a Uint8Array (may be plain object from localStorage)
+  // Normalize the in-memory public key.
   let publicKey = state.pki.bob.publicKey;
   if (!(publicKey instanceof Uint8Array)) {
     if (typeof publicKey === 'object' && publicKey !== null) {
@@ -2765,8 +1801,8 @@ function pkiDecrypt() {
     // Parse the header
     const header = encryptionHeaderFromJSON(state.pki.header);
 
-    // Create decryption context using Bob's private key
-    // Ensure privateKey is a Uint8Array (may be plain object from localStorage)
+    // Create decryption context using Bob's session secret
+    // Normalize the in-memory session secret.
     let privateKey = state.pki.bob.privateKey;
     if (!(privateKey instanceof Uint8Array)) {
       if (typeof privateKey === 'object' && privateKey !== null) {
@@ -2817,7 +1853,7 @@ function pkiTryWrongKey() {
     // Parse the header
     const header = encryptionHeaderFromJSON(state.pki.header);
 
-    // Ensure Alice's private key is a Uint8Array (may be plain object from localStorage)
+    // Ensure Alice's session secret is a Uint8Array.
     let privateKey = state.pki.alice.privateKey;
     if (!(privateKey instanceof Uint8Array)) {
       if (typeof privateKey === 'object' && privateKey !== null) {
@@ -2827,7 +1863,7 @@ function pkiTryWrongKey() {
       }
     }
 
-    // Try to decrypt with Alice's private key (WRONG - should fail)
+    // Try to decrypt with Alice's session secret (WRONG - should fail)
     const decryptCtx = EncryptionContext.forDecryption(
       privateKey,
       header,
@@ -3213,8 +2249,7 @@ let streamingWasmModule = null;
 async function loadStreamingWasm() {
   if (streamingWasmModule) return streamingWasmModule;
 
-  const wasmPath = './streaming-dispatcher.js';
-  const module = await import(/* @vite-ignore */ wasmPath);
+  const module = await import(/* @vite-ignore */ './streaming-dispatcher.js');
   const createModule = module.default || module.createStreamingDispatcher;
   streamingWasmModule = await createModule();
   console.log('Loaded streaming-dispatcher WASM');
@@ -3632,29 +2667,7 @@ function generateVCard(info, { skipPhoto = false } = {}) {
     person.IMAGE = state.vcardPhoto;
   }
 
-  if (info.includeKeys && state.wallet.x25519) {
-    person.KEY = [
-      {
-        KEY_TYPE: 'X25519',
-        PUBLIC_KEY: toBase64(state.wallet.x25519.publicKey),
-      },
-      {
-        KEY_TYPE: 'Ed25519',
-        PUBLIC_KEY: toBase64(state.wallet.ed25519.publicKey),
-      },
-      {
-        KEY_TYPE: 'secp256k1',
-        PUBLIC_KEY: toBase64(state.wallet.secp256k1.publicKey),
-        CRYPTO_ADDRESS: state.addresses.btc || undefined,
-      },
-    ];
-  }
-
-  const note = info.includeKeys
-    ? 'Generated by DA FlatBuffers Encryption Demo'
-    : undefined;
-
-  let vcard = createV3(person, note);
+  let vcard = createV3(person);
 
   // Convert PHOTO from data URI format to iOS-compatible inline base64 format
   // iOS Contacts doesn't support PHOTO;VALUE=URI:data:... but needs PHOTO;ENCODING=b;TYPE=JPEG:
@@ -3728,17 +2741,36 @@ function parseAndDisplayVCF(vcfText) {
   const fieldsEl = $('vcf-import-fields');
   if (!resultEl || !fieldsEl) return;
 
-  // Photo
+  // Photo. Reject active data types and construct the preview without markup
+  // interpolation because every VCF field is untrusted input.
   if (photoEl) {
-    photoEl.innerHTML = photo
-      ? `<img src="${photo}" alt="Contact photo">`
-      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;opacity:0.3">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-        </svg>`;
+    let safePhoto = null;
+    if (/^data:image\/(?:avif|gif|jpeg|png|webp);base64,[a-z0-9+/=\s]+$/iu.test(photo || '')) {
+      safePhoto = photo;
+    } else if (photo) {
+      try {
+        const candidate = new URL(photo, window.location.href);
+        if (candidate.protocol === 'https:' || candidate.protocol === 'http:') safePhoto = candidate.href;
+      } catch {
+        // Invalid photo URLs render the inert placeholder below.
+      }
+    }
+
+    if (safePhoto) {
+      const image = document.createElement('img');
+      image.src = safePhoto;
+      image.alt = 'Contact photo';
+      photoEl.replaceChildren(image);
+    } else {
+      const placeholder = document.createElement('span');
+      placeholder.className = 'vcf-import-photo-placeholder';
+      placeholder.textContent = 'No photo';
+      photoEl.replaceChildren(placeholder);
+    }
   }
 
   // Fields
-  let html = '';
+  fieldsEl.replaceChildren();
   const fieldMap = [
     ['Name', fields.name],
     ['Email', fields.email],
@@ -3748,25 +2780,37 @@ function parseAndDisplayVCF(vcfText) {
   ];
   for (const [label, val] of fieldMap) {
     if (val) {
-      html += `<div class="vcf-import-field">
-        <span class="vcf-import-field-label">${label}</span>
-        <span class="vcf-import-field-value">${val}</span>
-      </div>`;
+      const row = document.createElement('div');
+      row.className = 'vcf-import-field';
+      const labelElement = document.createElement('span');
+      labelElement.className = 'vcf-import-field-label';
+      labelElement.textContent = label;
+      const valueElement = document.createElement('span');
+      valueElement.className = 'vcf-import-field-value';
+      valueElement.textContent = val;
+      row.append(labelElement, valueElement);
+      fieldsEl.append(row);
     }
   }
 
   if (keys.length > 0) {
-    html += '<div class="vcf-import-keys">';
+    const keyList = document.createElement('div');
+    keyList.className = 'vcf-import-keys';
     for (const k of keys) {
-      html += `<div class="vcf-import-key">
-        <span class="vcf-import-key-type">${k.type}</span>
-        <span class="vcf-import-key-value">${k.value}</span>
-      </div>`;
+      const keyRow = document.createElement('div');
+      keyRow.className = 'vcf-import-key';
+      const typeElement = document.createElement('span');
+      typeElement.className = 'vcf-import-key-type';
+      typeElement.textContent = k.type;
+      const valueElement = document.createElement('span');
+      valueElement.className = 'vcf-import-key-value';
+      valueElement.textContent = k.value;
+      keyRow.append(typeElement, valueElement);
+      keyList.append(keyRow);
     }
-    html += '</div>';
+    fieldsEl.append(keyList);
   }
 
-  fieldsEl.innerHTML = html;
   resultEl.style.display = 'block';
 }
 
@@ -3802,15 +2846,6 @@ const helpContent = {
 
 
 function setupMainAppHandlers() {
-  // Nav actions - delegate login/keys modals to hd-wallet-ui
-  $('nav-login')?.addEventListener('click', () => {
-    state.walletUI?.openLogin();
-  });
-  $('nav-logout')?.addEventListener('click', logout);
-  $('nav-keys')?.addEventListener('click', () => {
-    state.walletUI?.openAccount();
-  });
-
   // Photo upload handler
   $('vcard-photo-input')?.addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -4058,64 +3093,6 @@ function setupMainAppHandlers() {
     }
   });
 
-  // Reveal sensitive key buttons
-  document.querySelectorAll('.reveal-key-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const targetId = btn.dataset.target;
-      const targetEl = $(targetId);
-      if (targetEl) {
-        const isRevealed = targetEl.dataset.revealed === 'true';
-        targetEl.dataset.revealed = isRevealed ? 'false' : 'true';
-        // Update button icon
-        btn.innerHTML = isRevealed
-          ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
-          : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
-      }
-    });
-  });
-
-  // Copy key buttons
-  document.querySelectorAll('.copy-key-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const targetId = btn.dataset.copy;
-      const targetEl = $(targetId);
-      if (targetEl) {
-        try {
-          await navigator.clipboard.writeText(targetEl.textContent);
-          btn.classList.add('copied');
-          setTimeout(() => btn.classList.remove('copied'), 1500);
-        } catch (err) {
-          console.error('Copy failed:', err);
-        }
-      }
-    });
-  });
-
-  // Export wallet dropdown
-  const exportBtn = $('export-wallet-btn');
-  const exportMenu = $('export-menu');
-  if (exportBtn && exportMenu) {
-    exportBtn.addEventListener('click', () => {
-      exportMenu.classList.toggle('active');
-    });
-
-    // Close menu when clicking outside
-    document.addEventListener('click', (e) => {
-      if (!exportBtn.contains(e.target) && !exportMenu.contains(e.target)) {
-        exportMenu.classList.remove('active');
-      }
-    });
-
-    // Export format handlers
-    document.querySelectorAll('.export-option').forEach(option => {
-      option.addEventListener('click', async () => {
-        const format = option.dataset.format;
-        await exportWallet(format);
-        exportMenu.classList.remove('active');
-      });
-    });
-  }
-
   // Mobile menu toggle
   const mobileMenu = $('nav-mobile-menu');
   let lastMobileMenuTouchAt = 0;
@@ -4134,7 +3111,7 @@ function setupMainAppHandlers() {
       lastMobileMenuTouchAt = now;
     }
 
-    // Capture the event before hd-wallet-ui's legacy menu listener can re-toggle it.
+    // Capture touch and synthetic click as one mobile-menu gesture.
     event.preventDefault();
     event.stopPropagation();
 
@@ -4153,24 +3130,6 @@ function setupMainAppHandlers() {
 
   document.addEventListener('click', handleMobileMenuToggle, { capture: true });
 
-  // Mobile login/logout handlers
-  const mobileLogin = $('mobile-login');
-  const mobileLogout = $('mobile-logout');
-
-  if (mobileLogin) {
-    mobileLogin.addEventListener('click', () => {
-      state.walletUI?.openLogin();
-      setMobileMenuOpen(false);
-    });
-  }
-
-  if (mobileLogout) {
-    mobileLogout.addEventListener('click', () => {
-      logout();
-      setMobileMenuOpen(false);
-    });
-  }
-
   // Navigation tabs (now links) - scroll to sections instead of hide/show
   document.querySelectorAll('.nav-link[data-tab]').forEach(link => {
     link.addEventListener('click', (e) => {
@@ -4186,10 +3145,6 @@ function setupMainAppHandlers() {
       // Close mobile menu if open
       if (mobileMenu) {
         setMobileMenuOpen(false);
-      }
-      // Trigger adversarial security update when navigating to that tab
-      if (link.dataset.tab === 'adversarial') {
-        updateAdversarialSecurity();
       }
     });
   });
@@ -4272,68 +3227,6 @@ function setupMainAppHandlers() {
     });
   }
 
-  // HD Wallet Derivation handlers
-  const hdCoin = $('hd-coin');
-  const hdAccount = $('hd-account');
-  const hdIndex = $('hd-index');
-
-  // Auto-derive on any change (with debounce for input fields)
-  let deriveTimeout = null;
-  const autoDerive = () => {
-    console.log('autoDerive triggered, hdRoot:', !!state.hdRoot);
-    updatePathDisplay();
-    // Always call deriveAndDisplayAddress - it shows warning if not initialized
-    clearTimeout(deriveTimeout);
-    deriveTimeout = setTimeout(() => {
-      console.log('Calling deriveAndDisplayAddress');
-      deriveAndDisplayAddress();
-    }, 300); // Debounce for typing
-  };
-
-  // Coin dropdown
-  if (hdCoin) {
-    hdCoin.addEventListener('change', autoDerive);
-  }
-
-  // Account input
-  if (hdAccount) {
-    hdAccount.addEventListener('input', autoDerive);
-    hdAccount.addEventListener('change', autoDerive);
-  }
-
-  // Index input
-  if (hdIndex) {
-    hdIndex.addEventListener('input', autoDerive);
-    hdIndex.addEventListener('change', autoDerive);
-  }
-
-  // Copy buttons for keys
-  document.querySelectorAll('.hd-key-value .copy-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const targetId = btn.dataset.copy;
-      const targetEl = $(targetId);
-      if (targetEl) {
-        try {
-          await navigator.clipboard.writeText(targetEl.textContent);
-          btn.classList.add('copied');
-          setTimeout(() => btn.classList.remove('copied'), 1500);
-        } catch (err) {
-          console.error('Copy failed:', err);
-        }
-      }
-    });
-  });
-
-  // Quick derive buttons (if any exist)
-  document.querySelectorAll('.quick-derive .glass-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const coin = btn.dataset.coin;
-      if (coin !== undefined) {
-        quickDerive(coin);
-      }
-    });
-  });
-
   // Field Encryption Tab
   $('generate-single')?.addEventListener('click', generateSingleRecord);
   $('toggle-field-decrypt')?.addEventListener('click', toggleFieldDecrypt);
@@ -4384,76 +3277,12 @@ function setupMainAppHandlers() {
     if (panel) panel.style.display = 'none';
   });
 
-  // PKI Tab - Keys are derived from HD wallet automatically on login
-  $('pki-clear-keys')?.addEventListener('click', clearPKIKeys);
+  // PKI demo keys are fresh for this page session and never persisted.
   $('pki-encrypt')?.addEventListener('click', pkiEncrypt);
   $('pki-decrypt')?.addEventListener('click', pkiDecrypt);
   $('pki-wrong-key')?.addEventListener('click', pkiTryWrongKey);
+  $('pki-algorithm')?.addEventListener('change', generatePKIKeyPairs);
 
-  // Algorithm selector - regenerate keys when curve changes
-  $('pki-algorithm')?.addEventListener('change', async (e) => {
-    const newAlgorithm = e.target.value;
-    state.pki.algorithm = newAlgorithm;
-
-    // Reset demo UI first
-    resetPKIDemo();
-
-    // Regenerate keys for the new algorithm if logged in with HD wallet
-    if (state.loggedIn && state.hdRoot) {
-      // Derive new keys using the selected algorithm
-      if (derivePKIKeysFromHD()) {
-        // Save the new keys
-        savePKIKeys();
-
-        // Update key display
-        $('alice-public-key').textContent = toHexCompact(state.pki.alice.publicKey);
-        $('alice-private-key').textContent = toHexCompact(state.pki.alice.privateKey);
-        $('bob-public-key').textContent = toHexCompact(state.pki.bob.publicKey);
-        $('bob-private-key').textContent = toHexCompact(state.pki.bob.privateKey);
-
-        // Update algorithm display
-        const algorithmNames = {
-          x25519: 'X25519 (Curve25519)',
-          secp256k1: 'secp256k1 (Bitcoin/Ethereum)',
-          p256: 'P-256 / secp256r1 (NIST)',
-          p384: 'P-384 / secp384r1 (NIST)',
-        };
-        $('pki-algorithm-display').textContent = algorithmNames[newAlgorithm] || newAlgorithm;
-      }
-    } else if (state.loggedIn) {
-      // Fallback: generate random keys if no HD wallet
-      try {
-        // P-256 and P-384 require async crypto.subtle
-        if (newAlgorithm === 'p256') {
-          state.pki.alice = await p256GenerateKeyPairAsync();
-          state.pki.bob = await p256GenerateKeyPairAsync();
-        } else if (newAlgorithm === 'p384') {
-          state.pki.alice = await p384GenerateKeyPairAsync();
-          state.pki.bob = await p384GenerateKeyPairAsync();
-        } else {
-          const curveType = newAlgorithm === 'secp256k1' ? Curve.SECP256K1 : Curve.X25519;
-          state.pki.alice = generateKeyPair(curveType);
-          state.pki.bob = generateKeyPair(curveType);
-        }
-        savePKIKeys();
-
-        $('alice-public-key').textContent = toHexCompact(state.pki.alice.publicKey);
-        $('alice-private-key').textContent = toHexCompact(state.pki.alice.privateKey);
-        $('bob-public-key').textContent = toHexCompact(state.pki.bob.publicKey);
-        $('bob-private-key').textContent = toHexCompact(state.pki.bob.privateKey);
-
-        const algorithmNames = {
-          x25519: 'X25519 (Curve25519)',
-          secp256k1: 'secp256k1 (Bitcoin/Ethereum)',
-          p256: 'P-256 / secp256r1 (NIST)',
-          p384: 'P-384 / secp384r1 (NIST)',
-        };
-        $('pki-algorithm-display').textContent = algorithmNames[newAlgorithm] || newAlgorithm;
-      } catch (err) {
-        console.error('Failed to generate keys for', newAlgorithm, err);
-      }
-    }
-  });
 
   // Streaming Tab
   $('start-streaming')?.addEventListener('click', startStreaming);
@@ -4471,7 +3300,6 @@ function setupMainAppHandlers() {
       email: $('vcard-email')?.value || '',
       org: $('vcard-org')?.value || '',
       title: $('vcard-title')?.value || '',
-      includeKeys: $('include-keys')?.checked || false,
     };
 
     if (!info.firstName && !info.lastName) {
@@ -4700,12 +3528,7 @@ async function init() {
   initGridAnimation();
 
   try {
-    // Initialize hd-wallet-ui first (injects modal HTML + loading overlay into DOM)
-    state.walletUI = await createWalletUI({ autoOpenWallet: true });
-    state.hdWalletModule = await initHDWallet();
-
     const status = $('status');
-    const loadingOverlay = $('loading-overlay');
 
     // Load encryption WASM
     if (status) status.textContent = 'Loading encryption module...';
@@ -4728,9 +3551,7 @@ async function init() {
 
     setupStreamingApiDocs();
     setupHexExplorerListeners();
-
-    // Load saved PKI keys if available
-    const hasSavedKeys = loadPKIKeys();
+    await generatePKIKeyPairs();
 
     state.initialized = true;
 
@@ -4740,48 +3561,10 @@ async function init() {
       navStatus.className = 'nav-status ready';
     }
 
-    // Hide loading overlay with fade (hd-wallet-ui may have already hidden it)
-    if (loadingOverlay) {
-      loadingOverlay.classList.add('hidden');
-      setTimeout(() => {
-        loadingOverlay.style.display = 'none';
-      }, 500);
-    }
-
-    // Auto-login with temporary session keys if PKI keys are available
-    if (hasSavedKeys) {
-      const tempEd25519Seed = new Uint8Array(32);
-      crypto.getRandomValues(tempEd25519Seed);
-      const tempKeys = {
-        x25519: generateKeyPair(Curve.X25519),
-        ed25519: {
-          privateKey: tempEd25519Seed,
-          publicKey: ed25519.getPublicKey(tempEd25519Seed),
-        },
-        secp256k1: generateKeyPair(Curve.SECP256K1),
-        p256: await p256GenerateKeyPairAsync(),
-        p384: await p384GenerateKeyPairAsync(),
-      };
-
-      // Generate encryption key and IV if not loaded from storage
-      if (!state.encryptionKey || !state.encryptionIV) {
-        const encoder = new TextEncoder();
-        const randomSeed = new Uint8Array(32);
-        crypto.getRandomValues(randomSeed);
-        state.encryptionKey = await hkdf(randomSeed, new Uint8Array(0), encoder.encode('buffer-encryption-key'), 32);
-        state.encryptionIV = await hkdf(randomSeed, new Uint8Array(0), encoder.encode('buffer-encryption-iv'), 16);
-        savePKIKeys();
-      }
-
-      await login(tempKeys);
-    }
-
   } catch (err) {
     console.error('Init failed:', err);
     const status = $('status');
-    const loadingOverlay = $('loading-overlay');
     if (status) status.textContent = `Failed to load: ${err.message}`;
-    if (loadingOverlay) loadingOverlay.classList.add('error');
   } finally {
     // Always set up UI handlers so navigation works even if WASM loading fails
     setupMainAppHandlers();
@@ -4844,7 +3627,7 @@ const schemaFiles = {
   entryPoint: null,    // Main entry point for compilation (usually main.fbs or schema.fbs)
 };
 
-// localStorage key for persistence
+// Browser storage is limited to non-secret schema editor files.
 const SCHEMA_FILES_STORAGE_KEY = 'flatbuffers_studio_files';
 
 // Schema Builder State
@@ -5782,19 +4565,7 @@ function initStudio() {
 
   // Decrypt key selector
   $('bulk-decrypt-selector')?.addEventListener('change', (e) => {
-    const value = e.target.value;
-    const customGroup = $('bulk-custom-privkey-group');
-    if (customGroup) {
-      customGroup.style.display = value === 'custom' ? 'block' : 'none';
-    }
-    updateBulkDecryptionKey(value);
-  });
-
-  $('bulk-private-key')?.addEventListener('input', () => {
-    const selector = $('bulk-decrypt-selector');
-    if (selector?.value === 'custom') {
-      onBulkPrivateKeyChange();
-    }
+    updateBulkDecryptionKey(e.target.value);
   });
 
   // Bulk Builder Actions
@@ -6853,11 +5624,9 @@ function initBulkKeys() {
   if (keySelector) keySelector.value = 'bob';
   if (decryptSelector) decryptSelector.value = 'bob';
 
-  // Hide custom key inputs
+  // Hide the custom recipient public-key input.
   const customKeyGroup = $('bulk-custom-key-group');
-  const customPrivKeyGroup = $('bulk-custom-privkey-group');
   if (customKeyGroup) customKeyGroup.style.display = 'none';
-  if (customPrivKeyGroup) customPrivKeyGroup.style.display = 'none';
 
   // Initialize with Bob's keys if available
   if (state.pki.bob) {
@@ -6923,31 +5692,6 @@ function onBulkPublicKeyChange() {
   }
 }
 
-function onBulkPrivateKeyChange() {
-  const input = $('bulk-private-key');
-  const value = input?.value.trim() || '';
-
-  if (!value) {
-    if (state.pki.bob) {
-      studioState.bulkConfig.privateKey = ensureUint8Array(state.pki.bob.privateKey);
-      updateBulkKeyStatus('bulk-privkey-status', true, "Using Bob's key");
-    } else {
-      studioState.bulkConfig.privateKey = null;
-      updateBulkKeyStatus('bulk-privkey-status', false, 'No key provided');
-    }
-    return;
-  }
-
-  const result = parseHexKey(value);
-  if (result.valid) {
-    studioState.bulkConfig.privateKey = result.bytes;
-    updateBulkKeyStatus('bulk-privkey-status', true, `Valid key (${result.bytes.length} bytes)`);
-  } else {
-    studioState.bulkConfig.privateKey = null;
-    updateBulkKeyStatus('bulk-privkey-status', false, result.error);
-  }
-}
-
 /**
  * Update bulk encryption key based on selector value
  */
@@ -6992,18 +5736,6 @@ function updateBulkDecryptionKey(selectorValue) {
     privateKey = ensureUint8Array(state.pki.bob.privateKey);
   } else if (selectorValue === 'alice' && state.pki.alice) {
     privateKey = ensureUint8Array(state.pki.alice.privateKey);
-  } else if (selectorValue === 'custom') {
-    const input = $('bulk-private-key');
-    const value = input?.value.trim() || '';
-    if (value) {
-      const result = parseHexKey(value);
-      if (result.valid) {
-        privateKey = result.bytes;
-        updateBulkKeyStatus('bulk-privkey-status', true, `Valid (${result.bytes.length} bytes)`);
-      } else {
-        updateBulkKeyStatus('bulk-privkey-status', false, result.error);
-      }
-    }
   }
 
   studioState.bulkConfig.privateKey = privateKey;
@@ -7374,7 +6106,7 @@ function displayBulkHexView(index) {
 
 function toggleBulkDecryption() {
   if (!studioState.bulkConfig.privateKey) {
-    alert('Please provide a valid private key for decryption');
+    alert('No session decryption key is available');
     return;
   }
 
@@ -9192,201 +7924,6 @@ function bech32Polymod(values) {
   }
   return chk;
 }
-
-/**
- * Populate wallet addresses in the Adversarial Security section
- * Uses addresses from state.addresses and derives additional ones from wallet keys
- */
-function populateWalletAddresses() {
-  if (!state.wallet) return;
-
-  // Get addresses from state (already generated at login)
-  const btcAddress = state.addresses?.btc || '--';
-  const ethAddress = state.addresses?.eth || '--';
-  const solAddress = state.addresses?.sol || '--';
-
-  // Derive additional addresses
-  let suiAddress = '--';
-  let monadAddress = '--';
-  let adaAddress = '--';
-
-  if (state.wallet.ed25519?.publicKey) {
-    const ed25519Pub = ensureUint8Array(state.wallet.ed25519.publicKey);
-    suiAddress = deriveSuiAddress(ed25519Pub, 'ed25519');
-    adaAddress = deriveCardanoAddress(ed25519Pub);
-  }
-
-  if (state.wallet.secp256k1?.publicKey) {
-    // Monad uses same derivation as Ethereum
-    monadAddress = ethAddress;
-  }
-
-  // Update UI elements
-  const updateAddressCard = (network, address, explorerBase) => {
-    const addrEl = $(`wallet-${network}-address`);
-    const linkEl = $(`wallet-${network}-explorer`);
-
-    if (addrEl && address !== '--') {
-      // Truncate address for display
-      addrEl.textContent = address.length > 20
-        ? address.slice(0, 10) + '...' + address.slice(-8)
-        : address;
-      addrEl.title = address; // Full address on hover
-    }
-
-    if (linkEl && address !== '--') {
-      linkEl.href = explorerBase + address;
-    }
-  };
-
-  // Bitcoin
-  updateAddressCard('btc', btcAddress, 'https://blockstream.info/address/');
-
-  // Ethereum
-  updateAddressCard('eth', ethAddress, 'https://etherscan.io/address/');
-
-  // Solana
-  updateAddressCard('sol', solAddress, 'https://solscan.io/account/');
-
-  // SUI
-  updateAddressCard('sui', suiAddress, 'https://suiscan.xyz/mainnet/account/');
-
-  // Monad (uses same address as ETH)
-  updateAddressCard('monad', monadAddress, 'https://explorer.monad.xyz/address/');
-
-  // Cardano
-  updateAddressCard('ada', adaAddress, 'https://cardanoscan.io/address/');
-}
-
-/**
- * Update the Adversarial Security UI with derived addresses and balances
- */
-async function updateAdversarialSecurity() {
-  const loginRequired = $('adversarial-login-required');
-  const balancesSection = $('adversarial-balances');
-
-  // Check if we have wallet keys (not just PKI keys)
-  const hasWallet = state.wallet && (state.wallet.secp256k1 || state.wallet.ed25519);
-
-  if (!hasWallet) {
-    // Show login required, hide balances
-    if (loginRequired) loginRequired.style.display = 'block';
-    if (balancesSection) balancesSection.style.display = 'none';
-    const trustNote = $('trust-note');
-    if (trustNote) trustNote.textContent = 'Login to derive addresses and check balances.';
-    return;
-  }
-
-  // Hide login required, show the sections
-  if (loginRequired) loginRequired.style.display = 'none';
-  if (balancesSection) balancesSection.style.display = 'block';
-
-  // Populate addresses from wallet
-  populateWalletAddresses();
-
-  // Get addresses for balance fetching
-  const btcAddress = state.addresses?.btc;
-  const ethAddress = state.addresses?.eth;
-  const solAddress = state.addresses?.sol;
-
-  let suiAddress = null;
-  let adaAddress = null;
-  if (state.wallet.ed25519?.publicKey) {
-    const ed25519Pub = ensureUint8Array(state.wallet.ed25519.publicKey);
-    suiAddress = deriveSuiAddress(ed25519Pub, 'ed25519');
-    adaAddress = deriveCardanoAddress(ed25519Pub);
-  }
-
-  // Monad uses same address as Ethereum
-  const monadAddress = ethAddress;
-
-  // Set initial loading state for all balances
-  const networks = ['btc', 'eth', 'sol', 'sui', 'monad', 'ada'];
-  networks.forEach(net => {
-    const balEl = $(`wallet-${net}-balance`);
-    if (balEl) balEl.textContent = '...';
-  });
-  const trustNote = $('trust-note');
-  if (trustNote) trustNote.textContent = 'Fetching balances from blockchain...';
-
-  // Fetch all balances in parallel (with error handling for each)
-  const fetchResults = await Promise.allSettled([
-    btcAddress ? fetchBtcBalance(btcAddress) : Promise.resolve({ balance: '0' }),
-    ethAddress ? fetchEthBalance(ethAddress) : Promise.resolve({ balance: '0' }),
-    solAddress ? fetchSolBalance(solAddress) : Promise.resolve({ balance: '0' }),
-    suiAddress ? fetchSuiBalance(suiAddress) : Promise.resolve({ balance: '0' }),
-    monadAddress ? fetchMonadBalance(monadAddress) : Promise.resolve({ balance: '0' }),
-    adaAddress ? fetchAdaBalance(adaAddress) : Promise.resolve({ balance: '0' }),
-  ]);
-
-  // Extract results
-  const [btcResult, ethResult, solResult, suiResult, monadResult, adaResult] = fetchResults.map(
-    r => r.status === 'fulfilled' ? r.value : { balance: '0' }
-  );
-
-  // Update balance displays
-  const updateBalance = (network, balance, decimals = 4) => {
-    const balEl = $(`wallet-${network}-balance`);
-    if (balEl) {
-      const val = parseFloat(balance) || 0;
-      balEl.textContent = val > 0 ? val.toFixed(val < 0.0001 ? 8 : decimals) : '0';
-    }
-
-    const card = $(`wallet-${network}-card`);
-    if (card) {
-      const hasBalance = parseFloat(balance) > 0;
-      card.classList.toggle('has-balance', hasBalance);
-      card.classList.toggle('secure', hasBalance);
-    }
-  };
-
-  // Update all balances
-  updateBalance('btc', btcResult.balance, 8);
-  updateBalance('eth', ethResult.balance, 6);
-  updateBalance('sol', solResult.balance, 6);
-  updateBalance('sui', suiResult.balance, 4);
-  updateBalance('monad', monadResult.balance, 4);
-  updateBalance('ada', adaResult.balance, 6);
-
-  // Calculate trust level based on all balances
-  const totalValue =
-    parseFloat(btcResult.balance) +
-    parseFloat(ethResult.balance) +
-    parseFloat(solResult.balance) +
-    parseFloat(suiResult.balance) +
-    parseFloat(monadResult.balance) +
-    parseFloat(adaResult.balance);
-
-  // Update trust meter if it exists
-  const trustFill = $('trust-fill');
-  if (trustFill) {
-    const trustPercent = Math.min(100, Math.log10(totalValue + 1) * 33);
-    trustFill.style.width = `${trustPercent}%`;
-  }
-
-  // Update trust note
-  if (trustNote) {
-    if (totalValue === 0) {
-      trustNote.textContent = 'No value locked. Send funds to these addresses to increase trust level.';
-    } else if (totalValue < 1) {
-      trustNote.textContent = `${totalValue.toFixed(4)} total value locked. Low trust level.`;
-    } else if (totalValue < 100) {
-      trustNote.textContent = `${totalValue.toFixed(2)} total value locked. Moderate trust level.`;
-    } else {
-      trustNote.textContent = `${totalValue.toFixed(2)} total value locked. High trust level established.`;
-    }
-  }
-}
-
-// Bind refresh button
-document.addEventListener('DOMContentLoaded', () => {
-  const refreshBtn = $('refresh-balances');
-  if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => {
-      updateAdversarialSecurity();
-    });
-  }
-});
 
 // =============================================================================
 // Aligned Binary Format Section

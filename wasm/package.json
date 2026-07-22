@@ -1,6 +1,6 @@
 {
   "name": "flatc-wasm",
-  "version": "25.12.19-wasm.67",
+  "version": "25.12.19-wasm.68",
   "description": "FlatBuffers compiler (flatc) as a WebAssembly module - schema management, JSON/binary conversion, and code generation",
   "type": "module",
   "main": "src/index.mjs",
@@ -104,7 +104,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "hd-wallet-wasm": "^1.2.6"
+    "hd-wallet-wasm": "2.0.28"
   },
   "devDependencies": {
     "husky": "^9.1.7"

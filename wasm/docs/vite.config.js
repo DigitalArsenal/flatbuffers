@@ -23,7 +23,7 @@ function markdownPlugin() {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${req.url.split('/').pop().replace('.md', '')} - DA FlatBuffers</title>
+  <title>${req.url.split('/').pop().replace('.md', '')} - Edgesource FlatBuffers</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -246,7 +246,7 @@ function markdownPlugin() {
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M19 12H5M12 19l-7-7 7-7"/>
       </svg>
-      Back to DA FlatBuffers
+      Back to Edgesource FlatBuffers
     </a>
     <article class="markdown-body">\${html}</article>
   </div>

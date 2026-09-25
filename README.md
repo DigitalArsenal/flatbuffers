@@ -1,4 +1,4 @@
-# DigitalArsenal FlatBuffers
+# Edgesource FlatBuffers
 ![Build status](https://github.com/digitalarsenal/flatbuffers/actions/workflows/build.yml/badge.svg?branch=master)
 
 

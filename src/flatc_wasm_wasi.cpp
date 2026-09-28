@@ -114,27 +114,26 @@ bool NormalizePath(const char* in, size_t len, std::string* out) {
   return true;
 }
 
-const std::string* FindFile(const char* name) {
+const std::string* FindFile(const char* name, std::string* key) {
   State& s = S();
   if (!s.read_files || !name) return nullptr;
-  std::string key;
-  if (!NormalizePath(name, strlen(name), &key)) return nullptr;
-  auto it = s.read_files->find(key);
+  if (!NormalizePath(name, strlen(name), key)) return nullptr;
+  auto it = s.read_files->find(*key);
   return it == s.read_files->end() ? nullptr : &it->second;
 }
 
-bool VfsFileExists(const char* name) { return FindFile(name) != nullptr; }
+bool VfsFileExists(const char* name) {
+  std::string key;
+  return FindFile(name, &key) != nullptr;
+}
 
 bool VfsLoadFile(const char* name, bool /*binary*/, std::string* buf) {
-  const std::string* data = FindFile(name);
+  std::string key;
+  const std::string* data = FindFile(name, &key);
   if (!data) return false;
   *buf = *data;
   State& s = S();
-  if (s.record_files) {
-    std::string key;
-    NormalizePath(name, strlen(name), &key);
-    (*s.record_files)[key] = *data;
-  }
+  if (s.record_files) (*s.record_files)[key] = *data;
   return true;
 }
 
@@ -414,7 +413,12 @@ FLATC_API int32_t flatc_vfs_put(const char* path, uint32_t path_len,
     return Fail(kErrInvalidArgument,
                 "invalid path: " + std::string(path, path_len));
   }
-  s.vfs[key].assign(reinterpret_cast<const char*>(data), data_len);
+  std::string& file = s.vfs[key];
+  if (data_len) {
+    file.assign(reinterpret_cast<const char*>(data), data_len);
+  } else {
+    file.clear();
+  }
   return kOk;
 }
 

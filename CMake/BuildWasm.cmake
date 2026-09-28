@@ -977,6 +977,12 @@ add_custom_target(flatc_wasm_wasi_he
   USES_TERMINAL
 )
 
+add_custom_target(flatc_wasi
+  COMMAND bash "${WASM_BUILD_SCRIPT}" flatc_wasi_npm
+  COMMENT "Building WASI JSON/FlatBuffer converter..."
+  USES_TERMINAL
+)
+
 # Test targets
 find_program(NODE_EXECUTABLE node)
 if(NODE_EXECUTABLE)
@@ -1017,6 +1023,7 @@ message(STATUS "  flatc_wasm_inline - Build WASM module (single file)")
 message(STATUS "  flatc_wasm_npm    - Build npm package")
 message(STATUS "  flatc_wasm_wasi   - Build WASI standalone module")
 message(STATUS "  flatc_wasm_wasi_he - Build WASI standalone module with HE")
+message(STATUS "  flatc_wasi        - Build WASI JSON/FlatBuffer converter")
 if(NODE_EXECUTABLE)
   message(STATUS "  flatc_wasm_test   - Run basic tests")
   message(STATUS "  flatc_wasm_test_all - Run all tests")

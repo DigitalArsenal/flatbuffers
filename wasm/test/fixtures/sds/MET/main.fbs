@@ -1,0 +1,21 @@
+// Hash: baf37f69ec211c87c4c638876f09a2cbf7d780681463980fee792c7fc1053d96
+// Version: 1.0.3
+// -----------------------------------END_HEADER
+enum meanElementSource : byte {
+  /// Simplified General Perturbation Model 4
+  SGP4,
+  /// Simplified General Perturbation Model 4 eXtended Perturbations (SGP4-XP),
+  /// as published in the 2022 astrodynamics conference literature.
+  SGP4XP,
+  /// Draper Semi-analytical Satellite Theory
+  DSST,
+  /// Universal Semianalytical Method
+  USM
+}
+
+/// Mean Element Theory
+table MET {
+  MEAN_ELEMENT_THEORY:meanElementSource;
+}
+root_type MET;
+file_identifier "$MET";

@@ -35,6 +35,7 @@
 | **Cross-Lang** | Same WASM runs in Node.js, Go, Python, Rust, Java, C#, Swift |
 | **Runtimes** | Embedded language runtimes for 11 languages, retrievable as JSON or ZIP |
 | **Zero Deps** | Self-contained with inlined WASM binaries |
+| **WASI** | `dist/flatc-wasi.wasm`: JSON ↔ binary converter for WasmEdge, wasmtime and `node:wasi`, no JS glue ([WASI.md](WASI.md)) |
 
 ---
 

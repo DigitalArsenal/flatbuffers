@@ -1,6 +1,6 @@
 {
   "name": "flatc-wasm",
-  "version": "25.12.19-wasm.68",
+  "version": "25.12.19-wasm.69",
   "description": "FlatBuffers compiler (flatc) as a WebAssembly module - schema management, JSON/binary conversion, and code generation",
   "type": "module",
   "main": "src/index.mjs",
@@ -45,7 +45,9 @@
     "./format-detector": {
       "types": "./src/format-detector.d.ts",
       "import": "./src/format-detector.mjs"
-    }
+    },
+    "./flatc-wasi.wasm": "./dist/flatc-wasi.wasm",
+    "./flatc-wasi.wasm.sha256": "./dist/flatc-wasi.wasm.sha256"
   },
   "files": [
     "src/index.mjs",
@@ -70,14 +72,18 @@
     "dist/flatc-wasm.js",
     "dist/flatc-wasm.cjs",
     "dist/flatc-wasm.d.ts",
-    "README.md"
+    "dist/flatc-wasi.wasm",
+    "dist/flatc-wasi.wasm.sha256",
+    "README.md",
+    "WASI.md"
   ],
   "scripts": {
     "build": "cmake --build ../build/wasm --target flatc_wasm_npm -j",
-    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
+    "test": "node test/test_all.mjs && node test/test_runner.mjs && node test/test_aligned.mjs && node test/test_aligned_interop.mjs && node test/test_flatc_wasi.mjs",
     "test:aligned": "node test/test_aligned.mjs && node test/test_aligned_interop.mjs",
     "prepublishOnly": "npm test",
-    "prepare": "cd .. && husky || true"
+    "prepare": "cd .. && husky || true",
+    "test:wasi": "node test/test_flatc_wasi.mjs"
   },
   "repository": {
     "type": "git",

@@ -36,6 +36,22 @@ jobs:
           emcmake cmake -B build/wasm -S . -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_BUILD_WASM=ON -DFLATBUFFERS_WASM_ENABLE_HE=ON
           cmake --build build/wasm --parallel $(nproc) --target flatc_wasm_npm
 
+      - name: Report flatc-wasi.wasm digest
+        run: cat dist/flatc-wasi.wasm.sha256
+        working-directory: wasm
+
+      # test_flatc_wasi.mjs runs the converter under WasmEdge as well as Node.
+      - name: Install WasmEdge
+        run: |
+          WASMEDGE_VERSION="0.16.4"
+          ARCHIVE="WasmEdge-${WASMEDGE_VERSION}-manylinux_2_28_x86_64.tar.gz"
+          curl -sSfL -o "${RUNNER_TEMP}/${ARCHIVE}" \
+            "https://github.com/WasmEdge/WasmEdge/releases/download/${WASMEDGE_VERSION}/${ARCHIVE}"
+          echo "f74ae2828585daf3c4e16754e41bde0bffa2f2c8f31d0b9a195f7ed27af1fa27  ${RUNNER_TEMP}/${ARCHIVE}" | sha256sum -c -
+          mkdir -p "${RUNNER_TEMP}/wasmedge"
+          tar xzf "${RUNNER_TEMP}/${ARCHIVE}" -C "${RUNNER_TEMP}/wasmedge"
+          echo "WASMEDGE_DIR=${RUNNER_TEMP}/wasmedge" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: npm install --ignore-scripts
         working-directory: wasm
@@ -43,6 +59,8 @@ jobs:
       - name: Test package
         run: npm test
         working-directory: wasm
+        env:
+          FLATC_WASI_REQUIRE_WASMEDGE: "1"
 
       - name: Select npm dist-tag
         id: dist_tag

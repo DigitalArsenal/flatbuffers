@@ -643,6 +643,90 @@ module.exports.default = createModule;
 
   message(STATUS "  flatc_wasm_wasi   - WASI standalone module (with Crypto++) -> ${WASM_OUTPUT_DIR}/")
 
+  # =============================================================================
+  # WASI Target: JSON <-> FlatBuffer converter (flatc-wasi.wasm)
+  # =============================================================================
+  # Imports only wasi_snapshot_preview1, so WasmEdge, wasmtime and Node's WASI
+  # load it without JS glue. Export contract: wasm/WASI.md.
+  set(FlatBuffers_WASI_CONVERTER_SRCS
+    ${CMAKE_SOURCE_DIR}/src/flatc_wasm_wasi.cpp
+    ${CMAKE_SOURCE_DIR}/src/idl_parser.cpp
+    ${CMAKE_SOURCE_DIR}/src/idl_gen_text.cpp
+    ${CMAKE_SOURCE_DIR}/src/reflection.cpp
+    ${CMAKE_SOURCE_DIR}/src/util.cpp
+    ${CMAKE_SOURCE_DIR}/src/options.cpp
+  )
+  set(WASI_CONVERTER_EXPORTED_FUNCTIONS
+    "_malloc"
+    "_free"
+    "_flatc_abi_version"
+    "_flatc_version"
+    "_flatc_last_error_ptr"
+    "_flatc_last_error_len"
+    "_flatc_vfs_put"
+    "_flatc_vfs_remove"
+    "_flatc_vfs_clear"
+    "_flatc_schema_add"
+    "_flatc_schema_remove"
+    "_flatc_json_to_binary"
+    "_flatc_binary_to_json"
+  )
+  string(JOIN "," WASI_CONVERTER_EXPORTS_STR ${WASI_CONVERTER_EXPORTED_FUNCTIONS})
+
+  add_executable(flatc_wasi ${FlatBuffers_WASI_CONVERTER_SRCS})
+  set_target_properties(flatc_wasi PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    CXX_EXTENSIONS OFF
+    OUTPUT_NAME "flatc-wasi"
+    SUFFIX ".wasm"
+    RUNTIME_OUTPUT_DIRECTORY "${WASM_OUTPUT_DIR}"
+  )
+  target_include_directories(flatc_wasi PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src
+  )
+  # NDEBUG in every configuration: a failed FlatBuffers assert aborts, and the
+  # contract is that errors return status codes instead of trapping.
+  target_compile_definitions(flatc_wasi PRIVATE
+    NDEBUG
+    FLATBUFFERS_LOCALE_INDEPENDENT=0
+    FLATBUFFERS_NO_ABSOLUTE_PATH_RESOLUTION
+  )
+  # No exceptions: Emscripten's JS exception support would add env imports.
+  target_compile_options(flatc_wasi PRIVATE -fno-exceptions)
+  target_link_options(flatc_wasi PRIVATE
+    -sSTANDALONE_WASM=1
+    -sPURE_WASI=1
+    -sWASM=1
+    -sERROR_ON_UNDEFINED_SYMBOLS=1
+    "-sEXPORTED_FUNCTIONS=[${WASI_CONVERTER_EXPORTS_STR}]"
+    -sALLOW_MEMORY_GROWTH=1
+    -sINITIAL_MEMORY=4MB
+    -sMAXIMUM_MEMORY=2GB
+    -sSTACK_SIZE=1MB
+    -fno-exceptions
+    --no-entry
+    $<$<CONFIG:Release>:-O3>
+    $<$<CONFIG:Release>:--strip-debug>
+    $<$<CONFIG:Debug>:-g>
+  )
+
+  # Copies the module into the npm package with its sha256.
+  file(WRITE "${CMAKE_BINARY_DIR}/flatc-wasi-sha256.cmake"
+"file(SHA256 \"\${INPUT}\" digest)
+file(WRITE \"\${OUTPUT}\" \"\${digest}  flatc-wasi.wasm\\n\")
+")
+  add_custom_target(flatc_wasi_npm
+    DEPENDS flatc_wasi
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${WASM_OUTPUT_DIR}/flatc-wasi.wasm" "${WASM_NPM_DIR}/flatc-wasi.wasm"
+    COMMAND ${CMAKE_COMMAND} "-DINPUT=${WASM_NPM_DIR}/flatc-wasi.wasm" "-DOUTPUT=${WASM_NPM_DIR}/flatc-wasi.wasm.sha256" -P "${CMAKE_BINARY_DIR}/flatc-wasi-sha256.cmake"
+    COMMENT "Copying flatc-wasi.wasm into ${WASM_NPM_DIR}"
+  )
+  add_dependencies(flatc_wasm_npm flatc_wasi_npm)
+
+  message(STATUS "  flatc_wasi        - WASI JSON/FlatBuffer converter -> ${WASM_OUTPUT_DIR}/flatc-wasi.wasm")
+
   # Target: flatc_wasm_wasi_he (WASI standalone module with HE support)
   if(FLATBUFFERS_WASM_ENABLE_HE)
     # WASI HE exported functions

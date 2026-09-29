@@ -169,17 +169,52 @@ flatbuffers::DecryptBuffer(buffer_pointer, buffer_size, schema, schema_size,
 
 ### Generated Code API
 
-```cpp
-// Option 1: Encryption context
-auto ctx = CreateEncryptionContext(key);
-auto record = GetUserRecord(buffer);
-std::string password = record->password_hash(ctx);  // Auto-decrypts
+For every table that has an `(encrypted)` field, or reaches one through a
+table, a vector of tables or a union, `flatc` generates buffer-level
+encrypt/decrypt functions that follow format 3 byte for byte: they produce
+exactly the ciphertext `EncryptBuffer` and flatc-wasm produce, and decrypt
+theirs. A generated `FlatbuffersEncryption` helper interprets a small "walk
+program" that `flatc` emits for each such table (the vtable slots and sizes of
+its `(encrypted)` fields and the tables it reaches), so no `.bfbs` is needed at
+run time. After decrypting, read the buffer with the ordinary accessors.
 
-// Option 2: Explicit decrypt call
-auto record = GetUserRecord(buffer);
-std::string encrypted = record->password_hash();     // Returns encrypted bytes
-std::string decrypted = Decrypt(encrypted, key, field_id);
+| Language | Functions (key: 32 bytes, record index: uint32) | Crypto |
+|----------|--------------------------------------------------|--------|
+| C# | `Node.EncryptBuffer(ByteBuffer, byte[] key, uint recordIndex)`, `DecryptBuffer`: in place from `Position`, `ArgumentException` | `System.Security.Cryptography` |
+| Dart | `Node.encryptBuffer(Uint8List bytes, List<int> key, [int recordIndex])`, `decryptBuffer`: in place, `ArgumentError` | pure Dart, no package |
+| Go | `NodeEncryptBuffer(buf, key []byte, recordIndex uint32) error`, `NodeDecryptBuffer`: in place | standard library |
+| Java | `Node.encryptBuffer(ByteBuffer, byte[] key, int recordIndex)`, `decryptBuffer`: in place from `position()`, `IllegalArgumentException` | `javax.crypto` |
+| Kotlin | `Node.encryptBuffer(ByteBuffer, ByteArray, Int)`, `decryptBuffer` (companion object): as Java | `javax.crypto` |
+| Lobster | `EncryptNodeBuffer(buf, key, record_index)`, `DecryptNodeBuffer`: return a copy and `""`, or `nil` and why | pure Lobster |
+| PHP | `Node::encryptBuffer($bytes, $key, $recordIndex = 0)`, `decryptBuffer`: return a copy, `InvalidArgumentException` | `openssl`, `hash` |
+| Python | `Node.EncryptBuffer(buf, key, record_index=0)`, `DecryptBuffer`: return a `bytearray` copy, `ValueError` | pure Python AES, `hmac` |
+| Rust | `Node::encrypt_buffer(&mut [u8], &[u8], u32) -> Result<(), flatbuffers_encryption::Error>`, `decrypt_buffer`: in place, `no_std` | pure Rust, no crate |
+| Swift | `Node.encryptBuffer(_: inout [UInt8], key:, recordIndex:) throws`, `decryptBuffer`: in place | pure Swift, no package |
+
+A refused call (a key that is not 32 bytes, or a malformed buffer) changes no
+byte: the helpers check the whole buffer in a dry run first, like
+`EncryptBuffer`. `flatc` refuses, at generation time, a schema whose
+`(encrypted)` fields format 3 cannot encrypt (see Unsupported above).
+
+C++ tables are views over the buffer and have no helper: decrypt the buffer
+with `flatbuffers::DecryptBuffer` (a `.bfbs` built with `--bfbs-builtins`),
+then read it. TypeScript and JavaScript use flatc-wasm (below).
+`--kotlin-kmp` has no helper and refuses `(encrypted)` scalar and string
+fields.
+
+```python
+from MySchema.UserRecord import UserRecord
+
+plain = UserRecord.DecryptBuffer(encrypted, key, record_index)
+record = UserRecord.GetRootAs(plain, 0)
+record.PasswordHash()
 ```
+
+Earlier generated code took an "encryption context" (the key and an IV prefix
+in one byte string) and derived every field's key stream from the field's
+vtable slot alone, so all instances of a slot, in every table and record,
+shared one key stream. That API is gone, and buffers it wrote are not format
+3.
 
 ### JavaScript/WASM API
 

@@ -886,9 +886,95 @@ static void TestMalformedInput() {
   TEST_TRUE(buf == plain);
 }
 
+// tests/encryption_v3 holds the buffers every generated FlatbuffersEncryption
+// helper (Python, Go, Java, Kotlin, C#, PHP, Dart, Rust, Swift) must
+// reproduce: the C++ walker must encrypt the plaintext fixtures to exactly
+// the ciphertext fixtures. With --write-fixtures it writes them instead.
+static void TestGeneratedHelperFixtures(const std::string& dir, bool write) {
+  std::cout << "Testing the generated-helper fixtures in " << dir << "..."
+            << std::endl;
+#if defined(FLATBUFFERS_USE_OPENSSL) || defined(FLATBUFFERS_USE_CRYPTOPP)
+  struct Cipher {
+    uint32_t record;
+    const char* file;
+  };
+  struct Fixture {
+    const char* schema;
+    const char* plain;
+    std::vector<Cipher> ciphers;
+  };
+  const std::vector<Fixture> fixtures = {
+      {"node.fbs", "node.bin", {{0, "node_r0.bin"}, {1, "node_r1.bin"}}},
+      {"bag.fbs", "bag.bin", {{0, "bag_r0.bin"}}},
+  };
+  uint8_t key[32];
+  for (int i = 0; i < 32; i++) key[i] = static_cast<uint8_t>(i);
+  flatbuffers::EncryptionContext ctx(key, 32);
+
+  for (const auto& fixture : fixtures) {
+    std::string schema_text, plain_text;
+    const std::string schema_path = dir + fixture.schema;
+    TEST_TRUE(flatbuffers::LoadFile(schema_path.c_str(), false, &schema_text));
+    TEST_TRUE(flatbuffers::LoadFile((dir + fixture.plain).c_str(), true,
+                                    &plain_text));
+    if (schema_text.empty() || plain_text.empty()) continue;
+
+    flatbuffers::Parser parser;
+    parser.opts.binary_schema_builtins = true;
+    const char* include_paths[] = { dir.c_str(), nullptr };
+    TEST_TRUE(parser.Parse(schema_text.c_str(), include_paths,
+                           schema_path.c_str()));
+    parser.Serialize();
+    const std::vector<uint8_t> bfbs(
+        parser.builder_.GetBufferPointer(),
+        parser.builder_.GetBufferPointer() + parser.builder_.GetSize());
+    const std::vector<uint8_t> plain(plain_text.begin(), plain_text.end());
+
+    for (const auto& cipher : fixture.ciphers) {
+      std::vector<uint8_t> buf = plain;
+      auto result = flatbuffers::EncryptBuffer(buf.data(), buf.size(),
+                                               bfbs.data(), bfbs.size(), ctx,
+                                               cipher.record);
+      TEST_TRUE(result.ok());
+      TEST_TRUE(buf != plain);
+      const std::string path = dir + cipher.file;
+      if (write) {
+        TEST_TRUE(flatbuffers::SaveFile(
+            path.c_str(), reinterpret_cast<const char*>(buf.data()),
+            buf.size(), true));
+      } else {
+        std::string expected;
+        TEST_TRUE(flatbuffers::LoadFile(path.c_str(), true, &expected));
+        TEST_TRUE(std::string(buf.begin(), buf.end()) == expected);
+      }
+      result = flatbuffers::DecryptBuffer(buf.data(), buf.size(), bfbs.data(),
+                                          bfbs.size(), ctx, cipher.record);
+      TEST_TRUE(result.ok());
+      TEST_TRUE(buf == plain);
+    }
+  }
+#else
+  (void)dir;
+  (void)write;
+  std::cout << "  (skipped: the fallback backend has no HKDF-SHA256)"
+            << std::endl;
+#endif
+}
+
 int main(int argc, char* argv[]) {
-  (void)argc;
-  (void)argv;
+  std::string fixtures_dir = "tests/encryption_v3/";
+  bool write_fixtures = false;
+  for (int i = 1; i < argc; i++) {
+    const std::string arg = argv[i];
+    if (arg == "--write-fixtures") {
+      write_fixtures = true;
+    } else if (arg == "--fixtures-dir" && i + 1 < argc) {
+      fixtures_dir = argv[++i];
+      if (!fixtures_dir.empty() && fixtures_dir.back() != '/') {
+        fixtures_dir += '/';
+      }
+    }
+  }
 
   std::cout << "=== FlatBuffers Encryption Tests ===" << std::endl;
 
@@ -907,6 +993,7 @@ int main(int argc, char* argv[]) {
   TestEncryptedVectorsAndStructs();
   TestUnsupportedFieldsRefused();
   TestMalformedInput();
+  TestGeneratedHelperFixtures(fixtures_dir, write_fixtures);
 
   std::cout << std::endl;
   std::cout << "=== Results ===" << std::endl;

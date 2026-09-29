@@ -44,6 +44,9 @@ function generate_code() {
   ${test_dir}/../flatc -p -o ${gen_code_path} -I include_test nested_union_test.fbs --gen-object-api --python-typing --python-decode-obj-api-strings ${preserve_case_opt}
   ${test_dir}/../flatc -p -o ${gen_code_path} -I include_test service_test.fbs --grpc --grpc-python-typed-handlers --python-typing --no-python-gen-numpy --gen-onefile ${preserve_case_opt}
   ${test_dir}/../flatc -p -o ${gen_code_path} union_name_test.fbs --gen-object-api ${preserve_case_opt}
+  # Field-encryption format 3 (encryption_test.py), with the flags of
+  # scripts/generate_code.py so the checked-in EncryptionV3 code is unchanged.
+  ${test_dir}/../flatc -p -o ${gen_code_path} -I encryption_v3 encryption_v3/node.fbs encryption_v3/bag.fbs
 }
 
 # Syntax: run_tests <interpreter> <benchmark vtable dedupes>
@@ -75,6 +78,11 @@ function run_tests() {
       PYTHONDONTWRITEBYTECODE=1 \
       PYTHONPATH=${runtime_library_dir}:${gen_code_path} \
       $1 py_flexbuffers_test.py
+
+      # The generated FlatbuffersEncryption helper against the C++ walker.
+      PYTHONDONTWRITEBYTECODE=1 \
+      PYTHONPATH=${runtime_library_dir}:${gen_code_path} \
+      $1 encryption_test.py
     fi
     interpreters_tested+=(${1})
     echo

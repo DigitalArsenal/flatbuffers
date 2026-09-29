@@ -22,6 +22,7 @@
 #include "flatbuffers/code_generators.h"
 #include "flatbuffers/idl.h"
 #include "flatbuffers/util.h"
+#include "idl_gen_encryption.h"
 #include "idl_gen_kotlin.h"
 #include "idl_namer.h"
 
@@ -1121,9 +1122,6 @@ class KotlinKMPGenerator : public BaseGenerator {
         } else {
           GenerateGetterOneLine(writer, field_name, return_type, [&]() {
             std::string found = "{{bbgetter}}(it + bufferPos)";
-            if (field.attributes.Lookup("encrypted") != nullptr) {
-              found = "FlatbuffersEncryption.decryptScalar(" + found + ", this.encryptionCtx, " + NumToString(field.value.offset) + ")";
-            }
             writer += LookupFieldOneLine(offset_val,
                                          WrapEnumValue(field.value.type, found),
                                          "{{field_default}}");
@@ -1172,11 +1170,8 @@ class KotlinKMPGenerator : public BaseGenerator {
             //     }
             // ? adds nullability annotation
             GenerateGetterOneLine(writer, field_name, return_type, [&]() {
-              std::string found = "string(it + bufferPos)";
-              if (field.attributes.Lookup("encrypted") != nullptr) {
-                found = "(if (this.encryptionCtx == null) " + found + " else FlatbuffersEncryption.decryptString(" + found + ", this.encryptionCtx, " + NumToString(field.value.offset) + "))";
-              }
-              writer += LookupFieldOneLine(offset_val, found, "null");
+              writer += LookupFieldOneLine(offset_val, "string(it + bufferPos)",
+                                           "null");
             });
             break;
           case BASE_TYPE_VECTOR: {
@@ -1657,6 +1652,14 @@ class KotlinKMPCodeGenerator : public CodeGenerator {
  public:
   Status GenerateCode(const Parser& parser, const std::string& path,
                       const std::string& filename) override {
+    // --kotlin-kmp has no FlatbuffersEncryption helper (it would need AES and
+    // SHA-256 on every Kotlin target).
+    const std::string refused =
+        encryption_codegen::RefuseEncryptedAccessors(parser, "--kotlin-kmp");
+    if (!refused.empty()) {
+      status_detail = ": " + refused;
+      return Status::ERROR;
+    }
     if (!GenerateKotlinKMP(parser, path, filename)) {
       return Status::ERROR;
     }

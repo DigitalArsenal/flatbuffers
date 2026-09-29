@@ -80,9 +80,40 @@ function run_go_suite() {
   fi
 }
 
+# Field-encryption format 3: the generated FlatbuffersEncryption helper
+# against the buffers the C++ walker encrypted (encryption_v3).
+function run_go_encryption_test() {
+  local go_path_variant=${go_path_base}_encryption
+  local go_src=${go_path_variant}/src
+
+  echo "Running Go field-encryption tests"
+
+  rm -rf "${go_path_variant}"
+  mkdir -p "${go_src}/encryption_test" \
+           "${go_src}/github.com/google/flatbuffers/go"
+  ../flatc -g -I encryption_v3 -o ${go_src} \
+    encryption_v3/node.fbs encryption_v3/bag.fbs
+  cp -a ../go/* ${go_src}/github.com/google/flatbuffers/go
+  cp -a ./go_encryption_test.go ${go_src}/encryption_test/encryption_test.go
+
+  go env -w GO111MODULE=off
+  GOPATH=${go_path_variant} go test encryption_test \
+                       --fixtures=${test_dir}/encryption_v3
+
+  local go_test_result=$?
+  rm -rf ${go_path_variant}
+
+  if [[ ${go_test_result} != 0 ]]; then
+    echo "KO: Go field-encryption tests failed."
+    go env -w GO111MODULE=on
+    exit 1
+  fi
+}
+
 # Run both default and preserve-case variants.
 run_go_suite "default" "false" "./go_test.go"
 run_go_suite "preserve_case" "true" "./go_test_preserve_case.go"
+run_go_encryption_test
 
 echo "OK: Go tests passed for default and preserve-case variants."
 

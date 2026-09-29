@@ -481,6 +481,35 @@ flatc(BASE_OPTS + DART_OPTS, prefix="../dart/test/", schema="keyword_test.fbs")
 dictionary_lookup_schema = "dictionary_lookup.fbs"
 flatc(["--java", "--kotlin"], schema=dictionary_lookup_schema)
 
+# Field-encryption format 3: each generated FlatbuffersEncryption helper is
+# checked against the buffers the C++ walker encrypted (tests/encryption_v3).
+# bag.fbs has a vector of unions, which Dart and Lobster do not support and
+# which the Rust generator does not compile yet.
+encryption_v3_schemas = ["encryption_v3/node.fbs", "encryption_v3/bag.fbs"]
+flatc(
+    ["--python", "--java", "--kotlin", "--csharp", "--php"],
+    schema=encryption_v3_schemas,
+    include="encryption_v3",
+)
+flatc(
+    RUST_OPTS,
+    prefix="encryption_v3_rust",
+    schema="encryption_v3/node.fbs",
+    include="encryption_v3",
+)
+flatc(
+    ["--dart"],
+    prefix="../dart/test/",
+    schema="encryption_v3/node.fbs",
+    include="encryption_v3",
+)
+flatc(
+    ["--lobster"],
+    prefix="encryption_v3",
+    schema="encryption_v3/node.fbs",
+    include="encryption_v3",
+)
+
 # Swift Tests
 swift_prefix = "swift/Tests/Flatbuffers"
 flatc(
@@ -512,6 +541,14 @@ flatc(
 flatc(
     SWIFT_OPTS + BASE_OPTS,
     schema="MutatingBool.fbs",
+    prefix=swift_prefix,
+)
+# Field-encryption format 3 (without --gen-json-emit, which does not handle a
+# vector of unions other than union_vector.fbs's).
+flatc(
+    ["--swift"],
+    schema=encryption_v3_schemas,
+    include="encryption_v3",
     prefix=swift_prefix,
 )
 

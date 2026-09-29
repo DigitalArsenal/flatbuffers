@@ -23,93 +23,18 @@
 #include "flatbuffers/flatbuffers.h"
 #include "flatbuffers/idl.h"
 #include "flatbuffers/util.h"
+#include "idl_gen_encryption.h"
 
 namespace flatbuffers {
 namespace lobster {
-
-// Check if a struct has any encrypted fields
-static bool HasEncryptedFields(const StructDef &struct_def) {
-  for (auto it = struct_def.fields.vec.begin();
-       it != struct_def.fields.vec.end(); ++it) {
-    const FieldDef &field = **it;
-    if (field.attributes.Lookup("encrypted")) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Check if parser has any structs with encrypted fields
-static bool ParserHasEncryptedFields(const Parser &parser) {
-  for (auto it = parser.structs_.vec.begin();
-       it != parser.structs_.vec.end(); ++it) {
-    if (HasEncryptedFields(**it)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-// Generate the FlatbuffersEncryption module for Lobster
-static std::string GenerateEncryptionModule() {
-  std::string code;
-  code += "// FlatBuffers field-level encryption support using AES-256-CTR.\n";
-  code += "// NOTE: This is a placeholder implementation. In production,\n";
-  code += "// you should use a proper AES library binding for Lobster.\n\n";
-
-  code += "class flatbuffers_encryption_ctx:\n";
-  code += "    key:string  // 32 bytes\n";
-  code += "    nonce_prefix:string  // 12 bytes\n\n";
-
-  code += "// Derive a 16-byte nonce from encryption context and field offset.\n";
-  code += "def flatbuffers_encryption_derive_nonce(ctx:flatbuffers_encryption_ctx, field_offset:int) -> string:\n";
-  code += "    // nonce = first 12 bytes of ctx.nonce_prefix + 4 bytes little-endian field_offset\n";
-  code += "    return ctx.nonce_prefix.substring(0, 12) +\n";
-  code += "           string_from_utf32([field_offset & 0xFF,\n";
-  code += "                              (field_offset >> 8) & 0xFF,\n";
-  code += "                              (field_offset >> 16) & 0xFF,\n";
-  code += "                              (field_offset >> 24) & 0xFF])\n\n";
-
-  code += "// XOR two strings of equal length.\n";
-  code += "def flatbuffers_xor_strings(a:string, b:string) -> string:\n";
-  code += "    assert a.length == b.length\n";
-  code += "    return string_from_utf32(map(a.length) i: a[i] ^^ b[i])\n\n";
-
-  code += "// Placeholder AES-256-CTR decryption (you must implement or bind a real AES library).\n";
-  code += "// This placeholder simply returns the input unchanged.\n";
-  code += "// IMPORTANT: Replace this with actual AES-256-CTR implementation!\n";
-  code += "def flatbuffers_aes256_ctr_decrypt(data:string, key:string, nonce:string) -> string:\n";
-  code += "    // TODO: Implement actual AES-256-CTR decryption here\n";
-  code += "    // For testing, this returns data unchanged (NOT SECURE!)\n";
-  code += "    return data\n\n";
-
-  code += "// Decrypt bytes using AES-256-CTR.\n";
-  code += "def flatbuffers_encryption_decrypt_bytes(data:string, ctx:flatbuffers_encryption_ctx?, field_offset:int) -> string:\n";
-  code += "    if not ctx: return data\n";
-  code += "    let nonce = flatbuffers_encryption_derive_nonce(ctx, field_offset)\n";
-  code += "    return flatbuffers_aes256_ctr_decrypt(data, ctx.key, nonce)\n\n";
-
-  code += "// Decrypt a scalar value.\n";
-  code += "def flatbuffers_encryption_decrypt_scalar(value, ctx:flatbuffers_encryption_ctx?, field_offset:int):\n";
-  code += "    // For scalars, we need to encrypt/decrypt the raw bytes\n";
-  code += "    // This is a placeholder - in practice you'd need type-specific handling\n";
-  code += "    if not ctx: return value\n";
-  code += "    return value  // Placeholder: returns value unchanged\n\n";
-
-  code += "// Decrypt a string value.\n";
-  code += "def flatbuffers_encryption_decrypt_string(value:string, ctx:flatbuffers_encryption_ctx?, field_offset:int) -> string:\n";
-  code += "    if not ctx: return value\n";
-  code += "    return flatbuffers_encryption_decrypt_bytes(value, ctx, field_offset)\n\n";
-
-  return code;
-}
 
 class LobsterGenerator : public BaseGenerator {
  public:
   LobsterGenerator(const Parser& parser, const std::string& path,
                    const std::string& file_name)
       : BaseGenerator(parser, path, file_name, "" /* not used */, ".",
-                      "lobster") {
+                      "lobster"),
+        encryption_plan_(parser) {
     static const char* const keywords[] = {
         "nil",    "true",    "false",     "return",  "struct",    "class",
         "import", "int",     "float",     "string",  "any",       "def",
@@ -205,10 +130,6 @@ class LobsterGenerator : public BaseGenerator {
       }
       if (field.value.type.enum_def)
         acc = NormalizedName(*field.value.type.enum_def) + "(" + acc + ")";
-      if (field.attributes.Lookup("encrypted") != nullptr) {
-        acc = "flatbuffers_encryption_decrypt_scalar(" + acc +
-              ", encryption_ctx, " + NumToString(field.value.offset) + ")";
-      }
       if (field.IsOptional()) {
         acc += ", flatbuffers.field_present(buf_, pos_, " + offsets + ")";
         code += def + "() -> " + LobsterType(field.value.type) +
@@ -241,16 +162,10 @@ class LobsterGenerator : public BaseGenerator {
         break;
       }
       case BASE_TYPE_STRING:
-        code += def + "() -> string:\n        return ";
-        if (field.attributes.Lookup("encrypted") != nullptr) {
-          code += "flatbuffers_encryption_decrypt_string("
-                  "flatbuffers.field_string(buf_, pos_, " +
-                  offsets + "), encryption_ctx, " +
-                  NumToString(field.value.offset) + ")";
-        } else {
-          code += "flatbuffers.field_string(buf_, pos_, " + offsets + ")";
-        }
-        code += "\n";
+        code += def +
+                "() -> string:\n        return "
+                "flatbuffers.field_string(buf_, pos_, " +
+                offsets + ")\n";
         break;
       case BASE_TYPE_VECTOR: {
         auto vectortype = field.value.type.VectorType();
@@ -362,17 +277,434 @@ class LobsterGenerator : public BaseGenerator {
   }
 
   // Generate struct or table methods.
+  // The FlatbuffersEncryption helper (field-encryption format 3), private to
+  // the generated file: pure Lobster AES-256 (encryption only, for CTR mode)
+  // and SHA-256.
+  static std::string EncryptionHelperCode() {
+    std::string code;
+    code += R"LOBSTER(// Field-encryption format 3: encrypts or decrypts every (encrypted) field
+// instance of a buffer exactly as the C++ walker
+// (flatbuffers::EncryptBuffer/DecryptBuffer, version 3) and flatc-wasm do.
+// The record's key is
+// K = HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(record_index)),
+// and each instance is AES-256-CTR encrypted with K and the IV
+// BE32(position of its first byte in the buffer) || 12 zero bytes, so no two
+// instances share a key stream. (key, record_index) must be unique per buffer.
+// Generated tables call it with their walk program.
+
+import dictionary
+
+private let flatbuffers_encryption_sbox = [
+    0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
+    0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
+    0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc, 0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15,
+    0x04, 0xc7, 0x23, 0xc3, 0x18, 0x96, 0x05, 0x9a, 0x07, 0x12, 0x80, 0xe2, 0xeb, 0x27, 0xb2, 0x75,
+    0x09, 0x83, 0x2c, 0x1a, 0x1b, 0x6e, 0x5a, 0xa0, 0x52, 0x3b, 0xd6, 0xb3, 0x29, 0xe3, 0x2f, 0x84,
+    0x53, 0xd1, 0x00, 0xed, 0x20, 0xfc, 0xb1, 0x5b, 0x6a, 0xcb, 0xbe, 0x39, 0x4a, 0x4c, 0x58, 0xcf,
+    0xd0, 0xef, 0xaa, 0xfb, 0x43, 0x4d, 0x33, 0x85, 0x45, 0xf9, 0x02, 0x7f, 0x50, 0x3c, 0x9f, 0xa8,
+    0x51, 0xa3, 0x40, 0x8f, 0x92, 0x9d, 0x38, 0xf5, 0xbc, 0xb6, 0xda, 0x21, 0x10, 0xff, 0xf3, 0xd2,
+    0xcd, 0x0c, 0x13, 0xec, 0x5f, 0x97, 0x44, 0x17, 0xc4, 0xa7, 0x7e, 0x3d, 0x64, 0x5d, 0x19, 0x73,
+    0x60, 0x81, 0x4f, 0xdc, 0x22, 0x2a, 0x90, 0x88, 0x46, 0xee, 0xb8, 0x14, 0xde, 0x5e, 0x0b, 0xdb,
+    0xe0, 0x32, 0x3a, 0x0a, 0x49, 0x06, 0x24, 0x5c, 0xc2, 0xd3, 0xac, 0x62, 0x91, 0x95, 0xe4, 0x79,
+    0xe7, 0xc8, 0x37, 0x6d, 0x8d, 0xd5, 0x4e, 0xa9, 0x6c, 0x56, 0xf4, 0xea, 0x65, 0x7a, 0xae, 0x08,
+    0xba, 0x78, 0x25, 0x2e, 0x1c, 0xa6, 0xb4, 0xc6, 0xe8, 0xdd, 0x74, 0x1f, 0x4b, 0xbd, 0x8b, 0x8a,
+    0x70, 0x3e, 0xb5, 0x66, 0x48, 0x03, 0xf6, 0x0e, 0x61, 0x35, 0x57, 0xb9, 0x86, 0xc1, 0x1d, 0x9e,
+    0xe1, 0xf8, 0x98, 0x11, 0x69, 0xd9, 0x8e, 0x94, 0x9b, 0x1e, 0x87, 0xe9, 0xce, 0x55, 0x28, 0xdf,
+    0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16,
+]
+
+private let flatbuffers_encryption_k = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+]
+
+private def flatbuffers_encryption_rotr(x:int, n:int) -> int:
+    return ((x >> n) | (x << (32 - n))) & 0xFFFFFFFF
+
+private def flatbuffers_encryption_sha256(message:[int]) -> [int]:
+    let h = [ 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+              0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 ]
+    let data = copy(message)
+    data.push(0x80)
+    while data.length % 64 != 56:
+        data.push(0)
+    let bits = message.length * 8
+    for(8) i:
+        data.push((bits >> (8 * (7 - i))) & 0xFF)
+    let w = map(64): 0
+    var chunk = 0
+    while chunk < data.length:
+        for(16) i:
+            let j = chunk + 4 * i
+            w[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | data[j + 3]
+        for(48) t:
+            let i = t + 16
+            let s0 = flatbuffers_encryption_rotr(w[i - 15], 7) ^
+                     flatbuffers_encryption_rotr(w[i - 15], 18) ^ (w[i - 15] >> 3)
+            let s1 = flatbuffers_encryption_rotr(w[i - 2], 17) ^
+                     flatbuffers_encryption_rotr(w[i - 2], 19) ^ (w[i - 2] >> 10)
+            w[i] = (w[i - 16] + s0 + w[i - 7] + s1) & 0xFFFFFFFF
+        let v = copy(h)
+        for(64) i:
+            let s1 = flatbuffers_encryption_rotr(v[4], 6) ^ flatbuffers_encryption_rotr(v[4], 11) ^
+                     flatbuffers_encryption_rotr(v[4], 25)
+            let ch = (v[4] & v[5]) ^ ((v[4] ^ 0xFFFFFFFF) & v[6])
+            let t1 = (v[7] + s1 + ch + flatbuffers_encryption_k[i] + w[i]) & 0xFFFFFFFF
+            let s0 = flatbuffers_encryption_rotr(v[0], 2) ^ flatbuffers_encryption_rotr(v[0], 13) ^
+                     flatbuffers_encryption_rotr(v[0], 22)
+            let maj = (v[0] & v[1]) ^ (v[0] & v[2]) ^ (v[1] & v[2])
+            v[7] = v[6]
+            v[6] = v[5]
+            v[5] = v[4]
+            v[4] = (v[3] + t1) & 0xFFFFFFFF
+            v[3] = v[2]
+            v[2] = v[1]
+            v[1] = v[0]
+            v[0] = (t1 + s0 + maj) & 0xFFFFFFFF
+        for(8) i:
+            h[i] = (h[i] + v[i]) & 0xFFFFFFFF
+        chunk += 64
+    let out:[int] = []
+    for(h) value:
+        out.push((value >> 24) & 0xFF)
+        out.push((value >> 16) & 0xFF)
+        out.push((value >> 8) & 0xFF)
+        out.push(value & 0xFF)
+    return out
+
+private def flatbuffers_encryption_hmac(key:[int], message:[int]) -> [int]:
+    let inner:[int] = []
+    let outer:[int] = []
+    for(64) i:
+        let k = if i < key.length: key[i] else: 0
+        inner.push(k ^ 0x36)
+        outer.push(k ^ 0x5c)
+    for(message) b:
+        inner.push(b)
+    for(flatbuffers_encryption_sha256(inner)) b:
+        outer.push(b)
+    return flatbuffers_encryption_sha256(outer)
+
+private def flatbuffers_encryption_bytes(s:string) -> [int]:
+    return map(s.length) i: s.read_uint8_le(i)
+
+// HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(record_index)).
+private def flatbuffers_encryption_buffer_key(key:string, record_index:int) -> [int]:
+    let prk = flatbuffers_encryption_hmac(map(32): 0, flatbuffers_encryption_bytes(key))
+    let info = flatbuffers_encryption_bytes("flatbuffers-buffer-v3")
+    info.push((record_index >> 24) & 0xFF)
+    info.push((record_index >> 16) & 0xFF)
+    info.push((record_index >> 8) & 0xFF)
+    info.push(record_index & 0xFF)
+    info.push(1)
+    return flatbuffers_encryption_hmac(prk, info)
+
+private def flatbuffers_encryption_xtime(a:int) -> int:
+    return ((a << 1) ^ (if a & 0x80: 0x1b else: 0)) & 0xFF
+
+private def flatbuffers_encryption_expand_key(key:[int]) -> [int]:
+    let w = copy(key)
+    var rcon = 1
+    while w.length < 240:
+        let i = w.length
+        var t0 = w[i - 4]
+        var t1 = w[i - 3]
+        var t2 = w[i - 2]
+        var t3 = w[i - 1]
+        if i % 32 == 0:
+            let r0 = flatbuffers_encryption_sbox[t1] ^ rcon
+            t1 = flatbuffers_encryption_sbox[t2]
+            t2 = flatbuffers_encryption_sbox[t3]
+            t3 = flatbuffers_encryption_sbox[t0]
+            t0 = r0
+            rcon = flatbuffers_encryption_xtime(rcon)
+        elif i % 32 == 16:
+            t0 = flatbuffers_encryption_sbox[t0]
+            t1 = flatbuffers_encryption_sbox[t1]
+            t2 = flatbuffers_encryption_sbox[t2]
+            t3 = flatbuffers_encryption_sbox[t3]
+        w.push(w[i - 32] ^ t0)
+        w.push(w[i - 31] ^ t1)
+        w.push(w[i - 30] ^ t2)
+        w.push(w[i - 29] ^ t3)
+    return w
+
+private def flatbuffers_encryption_encrypt_block(w:[int], block:[int]) -> [int]:
+    var s = map(16) i: block[i] ^ w[i]
+    for(14) r:
+        let round = r + 1
+        let t = map(s) b: flatbuffers_encryption_sbox[b]
+        s = [ t[0], t[5], t[10], t[15], t[4], t[9], t[14], t[3],
+              t[8], t[13], t[2], t[7], t[12], t[1], t[6], t[11] ]
+        if round < 14:
+            for(4) column:
+                let c = column * 4
+                let a0 = s[c]
+                let a1 = s[c + 1]
+                let a2 = s[c + 2]
+                let a3 = s[c + 3]
+                let x = a0 ^ a1 ^ a2 ^ a3
+                s[c] = a0 ^ x ^ flatbuffers_encryption_xtime(a0 ^ a1)
+                s[c + 1] = a1 ^ x ^ flatbuffers_encryption_xtime(a1 ^ a2)
+                s[c + 2] = a2 ^ x ^ flatbuffers_encryption_xtime(a2 ^ a3)
+                s[c + 3] = a3 ^ x ^ flatbuffers_encryption_xtime(a3 ^ a0)
+        for(16) i:
+            s[i] = s[i] ^ w[16 * round + i]
+    return s
+
+private def flatbuffers_encryption_guard(body) -> string?:
+    body()
+    return nil
+
+private def flatbuffers_encryption_fail(what:string):
+    return "FlatbuffersEncryption: " + what from flatbuffers_encryption_guard
+
+private class flatbuffers_encryption_walk:
+    buf:string
+    walk_program:[int]
+    round_keys:[int]?  // nil: a dry run that only checks the buffer
+    tables:dictionary<int, bool>
+    regions:dictionary<int, bool>
+
+)LOBSTER";
+    code += R"LOBSTER(    def check(pos:int, length:int):
+        if pos < 0 or length < 0 or pos > buf.length or length > buf.length - pos:
+            flatbuffers_encryption_fail("the buffer is malformed (offset " + string(pos) +
+                                        " out of bounds)")
+
+    def u8(pos:int) -> int:
+        check(pos, 1)
+        return buf.read_uint8_le(pos)
+
+    def u16(pos:int) -> int:
+        check(pos, 2)
+        return buf.read_uint16_le(pos)
+
+    def u32(pos:int) -> int:
+        check(pos, 4)
+        return buf.read_uint32_le(pos)
+
+    def follow(pos:int) -> int:
+        let target = pos + u32(pos)
+        check(target, 4)
+        return target
+
+    def count(pos:int, element_size:int) -> int:
+        let n = u32(pos)
+        check(pos + 4, n * element_size)
+        return n
+
+    def crypt(start:int, length:int):
+        if length == 0 or regions.get(start, false):
+            return
+        regions.set(start, true)
+        let w = round_keys
+        if not w:
+            return
+        let counter = map(16): 0
+        counter[0] = (start >> 24) & 0xFF
+        counter[1] = (start >> 16) & 0xFF
+        counter[2] = (start >> 8) & 0xFF
+        counter[3] = start & 0xFF
+        var done = 0
+        while done < length:
+            let stream = flatbuffers_encryption_encrypt_block(w, counter)
+            for(16) i:
+                if done + i < length:
+                    let at = start + done + i
+                    buf.write_int8_le(at, buf.read_uint8_le(at) ^ stream[i])
+            var k = 15
+            while k >= 0:
+                counter[k] = (counter[k] + 1) & 0xFF
+                k = if counter[k] != 0: -1 else: k - 1
+            done += 16
+
+    def string_bytes(pos:int):
+        let s = follow(pos)
+        let n = u32(s)
+        check(s + 4, n + 1)
+        crypt(s + 4, n)
+
+    def vtable(table:int) -> int:
+        let soffset = u32(table)
+        return table - (if soffset >= 0x80000000: soffset - 0x100000000 else: soffset)
+
+    def field(table:int, slot:int) -> int:
+        let vt = vtable(table)
+        if slot + 2 > u16(vt):
+            return 0
+        let offset = u16(vt + slot)
+        return if offset == 0: 0 else: table + offset
+
+    def enter(table:int, depth:int) -> bool:
+        if depth > 64:
+            flatbuffers_encryption_fail("tables nested deeper than 64 levels")
+        if tables.get(table, false):
+            return false
+        tables.set(table, true)
+        let vt = vtable(table)
+        check(vt, 4)
+        let vtable_size = u16(vt)
+        let table_size = u16(vt + 2)
+        if vtable_size < 4 or (vtable_size & 1) != 0:
+            flatbuffers_encryption_fail("the buffer is malformed (bad vtable)")
+        check(vt, vtable_size)
+        check(table, table_size)
+        var slot = 4
+        while slot < vtable_size:
+            let offset = u16(vt + slot)
+            if offset != 0 and offset >= table_size:
+                flatbuffers_encryption_fail("the buffer is malformed (bad field offset)")
+            slot += 2
+        return true
+
+)LOBSTER";
+    code += R"LOBSTER(    def union_member(at:int, n:int, union_type:int) -> int:
+        for(n) i:
+            if walk_program[at + 2 * i] == union_type:
+                return walk_program[at + 2 * i + 1]
+        return -1
+
+    def walk(index:int, table:int, depth:int) -> void:
+        if not enter(table, depth):
+            return
+        let p = walk_program
+        var at = p[1 + index]
+        let ops = p[at]
+        at += 1
+        for(ops):
+            let kind = p[at]
+            let slot = p[at + 1]
+            at += 2
+            var arg = 0
+            var type_slot = 0
+            var members = 0
+            var n = 0
+            if kind == 0 or kind == 2 or kind == 4 or kind == 5:
+                arg = p[at]
+                at += 1
+            elif kind == 6 or kind == 7:
+                type_slot = p[at]
+                n = p[at + 1]
+                members = at + 2
+                at += 2 + 2 * n
+            let loc = field(table, slot)
+            if loc != 0:
+                if kind == 0:
+                    check(loc, arg)
+                    crypt(loc, arg)
+                elif kind == 1:
+                    string_bytes(loc)
+                elif kind == 2:
+                    let v = follow(loc)
+                    crypt(v + 4, count(v, arg) * arg)
+                elif kind == 3:
+                    let v = follow(loc)
+                    for(count(v, 4)) i:
+                        string_bytes(v + 4 + 4 * i)
+                elif kind == 4:
+                    walk(arg, follow(loc), depth + 1)
+                elif kind == 5:
+                    let v = follow(loc)
+                    for(count(v, 4)) i:
+                        walk(arg, follow(v + 4 + 4 * i), depth + 1)
+                elif kind == 6:
+                    let type_loc = field(table, type_slot)
+                    if type_loc != 0:
+                        let m = union_member(members, n, u8(type_loc))
+                        if m >= 0:
+                            walk(m, follow(loc), depth + 1)
+                elif kind == 7:
+                    let type_loc = field(table, type_slot)
+                    if type_loc != 0:
+                        let types = follow(type_loc)
+                        let c = count(types, 1)
+                        let values = follow(loc)
+                        if count(values, 4) != c:
+                            flatbuffers_encryption_fail("the buffer is malformed (union vectors differ)")
+                        for(c) i:
+                            let m = union_member(members, n, u8(types + 4 + i))
+                            if m >= 0:
+                                walk(m, follow(values + 4 + 4 * i), depth + 1)
+                else:
+                    flatbuffers_encryption_fail("unknown walk walk_program op " + string(kind))
+
+// Returns a copy of buf with every (encrypted) field instance encrypted, or
+// decrypted (the same operation), by a table's walk walk_program, and "". For a
+// bad key or a malformed buffer, returns nil and why.
+private def flatbuffers_encryption_crypt_buffer(buf:string, key:string, record_index:int,
+                                                walk_program:[int]) -> string?, string:
+    if key.length != 32:
+        return nil, "FlatbuffersEncryption: the key must be 32 bytes"
+    if record_index < 0 or record_index > 0xFFFFFFFF:
+        return nil, "FlatbuffersEncryption: record_index must fit in 32 bits"
+    if buf.length < 4 or buf.length > 0x7FFFFFFF:
+        return nil, "FlatbuffersEncryption: invalid buffer"
+    let out = copy(buf)
+    let err = flatbuffers_encryption_guard():
+        let dry = flatbuffers_encryption_walk { out, walk_program, nil, dictionary<int, bool>(67),
+                                                dictionary<int, bool>(67) }
+        let root = dry.u32(0)
+        dry.check(root, 4)
+        dry.walk(0, root, 0)
+        let round_keys = flatbuffers_encryption_expand_key(
+            flatbuffers_encryption_buffer_key(key, record_index))
+        let w = flatbuffers_encryption_walk { out, walk_program, round_keys, dictionary<int, bool>(67),
+                                              dictionary<int, bool>(67) }
+        w.walk(0, root, 0)
+    if err:
+        return nil, err
+    return out, ""
+
+
+)LOBSTER";
+    return code;
+  }
+
+  // EncryptXBuffer/DecryptXBuffer of a table that reaches an (encrypted)
+  // field.
+  void GenEncryptionFunctions(const StructDef& struct_def,
+                              std::string* code_ptr) const {
+    std::string& code = *code_ptr;
+    const std::string name = NormalizedName(struct_def);
+    const std::string program = "flatbuffers_encryption_program_" + name;
+    code += "// Field-encryption format 3 walk program of " + name +
+            " (see the FlatbuffersEncryption helper above).\n";
+    code += "private let " + program + " = [\n";
+    for (const auto& line : encryption_plan_.ProgramLines(struct_def)) {
+      code += "    " + line + "\n";
+    }
+    code += "]\n\n";
+    const char* kVerbs[] = { "Encrypt", "Decrypt" };
+    const char* kParticiples[] = { "encrypted", "decrypted" };
+    for (int i = 0; i < 2; i++) {
+      code += "// Returns a copy of a " + name +
+              " buffer with its (encrypted) fields " + kParticiples[i] +
+              " with\n";
+      code += "// field-encryption format 3 (key: 32 bytes; record_index: "
+              "unique per buffer\n";
+      code += "// under the key), and \"\". For a bad key or a malformed "
+              "buffer, returns nil and why.\n";
+      code += "def " + std::string(kVerbs[i]) + name +
+              "Buffer(buf:string, key:string, record_index:int) -> string?, "
+              "string:\n";
+      code += "    return flatbuffers_encryption_crypt_buffer(buf, key, "
+              "record_index, " + program + ")\n\n";
+    }
+  }
+
   void GenStruct(const StructDef& struct_def, std::string* code_ptr) {
     if (struct_def.generated) return;
     std::string& code = *code_ptr;
     CheckNameSpace(struct_def, &code);
     GenComment(struct_def.doc_comment, code_ptr, nullptr, "");
-    const bool has_encrypted = HasEncryptedFields(struct_def);
-
     code += "class " + NormalizedName(struct_def) + " : flatbuffers.handle\n";
-    if (has_encrypted) {
-      code += "    encryption_ctx:flatbuffers_encryption_ctx? = nil\n";
-    }
     for (auto it = struct_def.fields.vec.begin();
          it != struct_def.fields.vec.end(); ++it) {
       auto& field = **it;
@@ -385,16 +717,10 @@ class LobsterGenerator : public BaseGenerator {
       // the root type.
       code += "def GetRootAs" + NormalizedName(struct_def) +
               "(buf:string): return " + NormalizedName(struct_def) +
-              " { buf, flatbuffers.indirect(buf, 0) }\n";
-      if (has_encrypted) {
-        code += "def GetRootAs" + NormalizedName(struct_def) +
-                "WithEncryption(buf:string, ctx:flatbuffers_encryption_ctx):\n";
-        code += "    let obj = " + NormalizedName(struct_def) +
-                " { buf, flatbuffers.indirect(buf, 0) }\n";
-        code += "    obj.encryption_ctx = ctx\n";
-        code += "    return obj\n";
+              " { buf, flatbuffers.indirect(buf, 0) }\n\n";
+      if (encryption_plan_.NeedsWalk(struct_def)) {
+        GenEncryptionFunctions(struct_def, code_ptr);
       }
-      code += "\n";
     }
     if (struct_def.fixed) {
       // create a struct constructor function
@@ -489,12 +815,7 @@ class LobsterGenerator : public BaseGenerator {
     std::string code;
     code += std::string("// ") + FlatBuffersGeneratedWarning() +
             "\nimport flatbuffers\n\n";
-
-    // Add encryption support if needed
-    if (ParserHasEncryptedFields(parser_)) {
-      code += GenerateEncryptionModule();
-    }
-
+    if (encryption_plan_.AnyGenerated()) code += EncryptionHelperCode();
     for (auto it = parser_.enums_.vec.begin(); it != parser_.enums_.vec.end();
          ++it) {
       auto& enum_def = **it;
@@ -518,6 +839,7 @@ class LobsterGenerator : public BaseGenerator {
  private:
   std::unordered_set<std::string> keywords_;
   std::string current_namespace_;
+  const encryption_codegen::Plan encryption_plan_;
 };
 
 }  // namespace lobster
@@ -534,6 +856,11 @@ class LobsterCodeGenerator : public CodeGenerator {
  public:
   Status GenerateCode(const Parser& parser, const std::string& path,
                       const std::string& filename) override {
+    const encryption_codegen::Plan plan(parser);
+    if (!plan.ok()) {
+      status_detail = ": " + plan.error();
+      return Status::ERROR;
+    }
     if (!GenerateLobster(parser, path, filename)) {
       return Status::ERROR;
     }

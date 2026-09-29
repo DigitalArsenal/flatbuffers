@@ -18,10 +18,13 @@
 
 #include "idl_gen_java.h"
 
+#include <set>
+
 #include "flatbuffers/code_generators.h"
 #include "flatbuffers/flatbuffers.h"
 #include "flatbuffers/idl.h"
 #include "flatbuffers/util.h"
+#include "idl_gen_encryption.h"
 #include "idl_namer.h"
 
 namespace flatbuffers {
@@ -96,7 +99,8 @@ class JavaGenerator : public BaseGenerator {
       : BaseGenerator(parser, path, file_name, "", ".", "java"),
         cur_name_space_(nullptr),
         namer_(WithFlagOptions(JavaDefaultConfig(), parser.opts, path),
-               JavaKeywords()) {
+               JavaKeywords()),
+        encryption_plan_(parser) {
     if (!package_prefix.empty()) {
       std::istringstream iss(package_prefix);
       std::string component;
@@ -108,18 +112,6 @@ class JavaGenerator : public BaseGenerator {
   }
 
   JavaGenerator& operator=(const JavaGenerator&);
-
-  // Check if a struct has any encrypted fields.
-  bool HasEncryptedFields(const StructDef& struct_def) const {
-    for (auto it = struct_def.fields.vec.begin();
-         it != struct_def.fields.vec.end(); ++it) {
-      if ((*it)->attributes.Lookup("encrypted") != nullptr) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   bool generate() {
     std::string one_file_code;
     cur_name_space_ = parser_.current_namespace_;
@@ -181,19 +173,19 @@ class JavaGenerator : public BaseGenerator {
       }
     }
 
-    // Generate encryption module for namespaces that need it
-    std::set<std::string> encryption_namespaces;
+    // One FlatbuffersEncryption class per package that needs it.
+    std::set<std::string> encryption_packages;
     for (auto it = parser_.structs_.vec.begin();
          it != parser_.structs_.vec.end(); ++it) {
-      auto& struct_def = **it;
-      if (HasEncryptedFields(struct_def) && !parser_.opts.one_file) {
-        const std::string ns_key = FullNamespace(".", *struct_def.defined_namespace);
-        if (encryption_namespaces.find(ns_key) == encryption_namespaces.end()) {
-          encryption_namespaces.insert(ns_key);
-          if (!GenerateEncryptionModule(*struct_def.defined_namespace)) {
-            return false;
-          }
-        }
+      const auto& struct_def = **it;
+      if (struct_def.generated || !encryption_plan_.NeedsWalk(struct_def)) {
+        continue;
+      }
+      const Namespace& ns = parser_.opts.one_file ? *parser_.current_namespace_
+                                                  : *struct_def.defined_namespace;
+      if (encryption_packages.insert(FullNamespace(".", ns)).second &&
+          !GenerateEncryptionModule(ns)) {
+        return false;
       }
     }
 
@@ -204,123 +196,312 @@ class JavaGenerator : public BaseGenerator {
     return true;
   }
 
-  // Generate the FlatbuffersEncryption helper class for a namespace.
+  // The FlatbuffersEncryption helper (field-encryption format 3) of a
+  // package: javax.crypto only.
   bool GenerateEncryptionModule(const Namespace& ns) const {
     std::string code;
     code = "// " + std::string(FlatBuffersGeneratedWarning()) + "\n\n";
-
     Namespace combined_ns = package_prefix_ns_;
     std::copy(ns.components.begin(), ns.components.end(),
               std::back_inserter(combined_ns.components));
-
     const std::string namespace_name = FullNamespace(".", combined_ns);
     if (!namespace_name.empty()) {
       code += "package " + namespace_name + ";\n\n";
     }
+    code += R"JAVA(import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.util.HashSet;
+import java.util.Set;
+import javax.crypto.Cipher;
+import javax.crypto.Mac;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
-    code += "import javax.crypto.Cipher;\n";
-    code += "import javax.crypto.spec.IvParameterSpec;\n";
-    code += "import javax.crypto.spec.SecretKeySpec;\n";
-    code += "import java.nio.ByteBuffer;\n";
-    code += "import java.nio.ByteOrder;\n\n";
-    code += "/**\n";
-    code += " * FlatBuffers field-level encryption support using AES-256-CTR.\n";
-    code += " */\n";
-    code += "public class FlatbuffersEncryption {\n\n";
-    code += "  private static byte[] deriveNonce(byte[] ctx, int fieldOffset) {\n";
-    code += "    if (ctx == null || ctx.length < 12) {\n";
-    code += "      throw new IllegalArgumentException(\"Encryption context must be at least 12 bytes\");\n";
-    code += "    }\n";
-    code += "    byte[] nonce = new byte[16];\n";
-    code += "    System.arraycopy(ctx, 0, nonce, 0, 12);\n";
-    code += "    ByteBuffer.wrap(nonce, 12, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(fieldOffset);\n";
-    code += "    return nonce;\n";
-    code += "  }\n\n";
-    code += "  private static byte[] decryptBytes(byte[] data, byte[] ctx, int fieldOffset) {\n";
-    code += "    if (ctx == null) {\n";
-    code += "      throw new IllegalArgumentException(\"Encryption context required\");\n";
-    code += "    }\n";
-    code += "    if (ctx.length < 32) {\n";
-    code += "      throw new IllegalArgumentException(\"Encryption context must be at least 32 bytes\");\n";
-    code += "    }\n";
-    code += "    try {\n";
-    code += "      byte[] key = new byte[32];\n";
-    code += "      System.arraycopy(ctx, 0, key, 0, 32);\n";
-    code += "      byte[] nonce = deriveNonce(ctx, fieldOffset);\n";
-    code += "      SecretKeySpec keySpec = new SecretKeySpec(key, \"AES\");\n";
-    code += "      IvParameterSpec ivSpec = new IvParameterSpec(nonce);\n";
-    code += "      Cipher cipher = Cipher.getInstance(\"AES/CTR/NoPadding\");\n";
-    code += "      cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec);\n";
-    code += "      return cipher.doFinal(data);\n";
-    code += "    } catch (Exception e) {\n";
-    code += "      throw new RuntimeException(\"Decryption failed\", e);\n";
-    code += "    }\n";
-    code += "  }\n\n";
-    code += "  public static boolean decryptScalar(boolean value, byte[] ctx, int fieldOffset) {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    byte[] data = new byte[] { (byte)(value ? 1 : 0) };\n";
-    code += "    byte[] decrypted = decryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return decrypted[0] != 0;\n";
-    code += "  }\n\n";
-    code += "  public static byte decryptScalar(byte value, byte[] ctx, int fieldOffset) {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    byte[] data = new byte[] { value };\n";
-    code += "    byte[] decrypted = decryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return decrypted[0];\n";
-    code += "  }\n\n";
-    code += "  public static short decryptScalar(short value, byte[] ctx, int fieldOffset) {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    byte[] data = ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(value).array();\n";
-    code += "    byte[] decrypted = decryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getShort();\n";
-    code += "  }\n\n";
-    code += "  public static float decryptScalar(float value, byte[] ctx, int fieldOffset) {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    byte[] data = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putFloat(value).array();\n";
-    code += "    byte[] decrypted = decryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getFloat();\n";
-    code += "  }\n\n";
-    code += "  public static double decryptScalar(double value, byte[] ctx, int fieldOffset) {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    byte[] data = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putDouble(value).array();\n";
-    code += "    byte[] decrypted = decryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getDouble();\n";
-    code += "  }\n\n";
-    code += "  public static int decryptScalar(int value, byte[] ctx, int fieldOffset) {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    byte[] data = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(value).array();\n";
-    code += "    byte[] decrypted = decryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getInt();\n";
-    code += "  }\n\n";
-    code += "  public static long decryptScalar(long value, byte[] ctx, int fieldOffset) {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    byte[] data = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(value).array();\n";
-    code += "    byte[] decrypted = decryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getLong();\n";
-    code += "  }\n\n";
-    code += "  public static String decryptString(ByteBuffer bb, int offset, byte[] ctx, int fieldOffset) {\n";
-    code += "    if (ctx == null) {\n";
-    code += "      // No encryption context, decode as regular string\n";
-    code += "      int pos = offset + bb.getInt(offset);\n";
-    code += "      int len = bb.getInt(pos);\n";
-    code += "      byte[] data = new byte[len];\n";
-    code += "      for (int i = 0; i < len; i++) data[i] = bb.get(pos + 4 + i);\n";
-    code += "      return new String(data, java.nio.charset.StandardCharsets.UTF_8);\n";
-    code += "    }\n";
-    code += "    // Read raw bytes and decrypt\n";
-    code += "    int pos = offset + bb.getInt(offset);\n";
-    code += "    int len = bb.getInt(pos);\n";
-    code += "    byte[] data = new byte[len];\n";
-    code += "    for (int i = 0; i < len; i++) data[i] = bb.get(pos + 4 + i);\n";
-    code += "    byte[] decrypted = decryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return new String(decrypted, java.nio.charset.StandardCharsets.UTF_8);\n";
-    code += "  }\n";
-    code += "}\n";
+/**
+ * Field-encryption format 3: encrypts or decrypts, in place, every (encrypted)
+ * field instance of a buffer exactly as the C++ walker
+ * (flatbuffers::EncryptBuffer/DecryptBuffer, version 3) and flatc-wasm do. The
+ * record's key is
+ * K = HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(recordIndex)),
+ * and each instance is AES-256-CTR encrypted with K and the IV
+ * BE32(position of its first byte in the buffer) || 12 zero bytes, so no two
+ * instances share a key stream. (key, recordIndex) must be unique per buffer.
+ * Generated tables call it with their walk program.
+ */
+public final class FlatbuffersEncryption {
+  private FlatbuffersEncryption() {}
 
+  /** HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(recordIndex)). */
+  public static byte[] bufferKey(byte[] key, int recordIndex) {
+    try {
+      Mac mac = Mac.getInstance("HmacSHA256");
+      mac.init(new SecretKeySpec(new byte[32], "HmacSHA256"));
+      byte[] prk = mac.doFinal(key);
+      mac.init(new SecretKeySpec(prk, "HmacSHA256"));
+      byte[] info = "flatbuffers-buffer-v3\0\0\0\0\1".getBytes(StandardCharsets.US_ASCII);
+      info[21] = (byte) (recordIndex >>> 24);
+      info[22] = (byte) (recordIndex >>> 16);
+      info[23] = (byte) (recordIndex >>> 8);
+      info[24] = (byte) recordIndex;
+      return mac.doFinal(info);
+    } catch (GeneralSecurityException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  /**
+   * Encrypts or decrypts (the same operation), in place, every (encrypted)
+   * field instance of the buffer that starts at bb.position(), by a table's
+   * walk program. recordIndex is an unsigned 32-bit value. Throws
+   * IllegalArgumentException, before any byte changes, for a bad key or a
+   * malformed buffer.
+   */
+  public static void cryptBuffer(ByteBuffer bb, byte[] key, int recordIndex, int[] program) {
+    if (key == null || key.length != 32) {
+      throw new IllegalArgumentException("FlatbuffersEncryption: the key must be 32 bytes");
+    }
+    int size = bb.limit() - bb.position();
+    if (size < 4) throw new IllegalArgumentException("FlatbuffersEncryption: invalid buffer");
+    Walk dry = new Walk(bb, program, null);
+    long root = dry.u32(0);
+    dry.check(root, 4);
+    dry.walk(0, root, 0);
+    new Walk(bb, program, new SecretKeySpec(bufferKey(key, recordIndex), "AES")).walk(0, root, 0);
+  }
+
+  private static final class Walk {
+    private final ByteBuffer bb;
+    private final int base;
+    private final long size;
+    private final int[] program;
+    private final SecretKeySpec key;  // null: a dry run that only checks the buffer
+    private final Set<Long> tables = new HashSet<Long>();
+    private final Set<Long> regions = new HashSet<Long>();
+
+    Walk(ByteBuffer bb, int[] program, SecretKeySpec key) {
+      this.bb = bb;
+      this.base = bb.position();
+      this.size = bb.limit() - bb.position();
+      this.program = program;
+      this.key = key;
+    }
+
+    static void fail(String what) {
+      throw new IllegalArgumentException("FlatbuffersEncryption: " + what);
+    }
+
+    void check(long pos, long length) {
+      if (pos < 0 || length < 0 || pos > size || length > size - pos) {
+        fail("the buffer is malformed (offset " + pos + " out of bounds)");
+      }
+    }
+
+    long u8(long pos) {
+      check(pos, 1);
+      return bb.get(base + (int) pos) & 0xFF;
+    }
+
+    long u16(long pos) {
+      check(pos, 2);
+      return u8(pos) | (u8(pos + 1) << 8);
+    }
+
+    long u32(long pos) {
+      check(pos, 4);
+      return u16(pos) | (u16(pos + 2) << 16);
+    }
+
+    long follow(long pos) {
+      long target = pos + u32(pos);
+      check(target, 4);
+      return target;
+    }
+
+    long count(long pos, long elementSize) {
+      long n = u32(pos);
+      check(pos + 4, n * elementSize);
+      return n;
+    }
+
+    void crypt(long start, long length) {
+      if (length == 0 || !regions.add(start) || key == null) return;
+      byte[] iv = new byte[16];
+      iv[0] = (byte) (start >>> 24);
+      iv[1] = (byte) (start >>> 16);
+      iv[2] = (byte) (start >>> 8);
+      iv[3] = (byte) start;
+      byte[] data = new byte[(int) length];
+      for (int i = 0; i < data.length; i++) data[i] = bb.get(base + (int) start + i);
+      try {
+        Cipher cipher = Cipher.getInstance("AES/CTR/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, key, new IvParameterSpec(iv));
+        data = cipher.doFinal(data);
+      } catch (GeneralSecurityException e) {
+        throw new IllegalStateException(e);
+      }
+      for (int i = 0; i < data.length; i++) bb.put(base + (int) start + i, data[i]);
+    }
+
+    void string(long pos) {
+      long s = follow(pos);
+      long n = u32(s);
+      check(s + 4, n + 1);
+      crypt(s + 4, n);
+    }
+
+    long vtable(long table) {
+      return table - (int) u32(table);
+    }
+
+    long field(long table, long slot) {
+      long vtable = vtable(table);
+      if (slot + 2 > u16(vtable)) return 0;
+      long offset = u16(vtable + slot);
+      return offset == 0 ? 0 : table + offset;
+    }
+
+    boolean enter(long table, int depth) {
+      if (depth > 64) fail("tables nested deeper than 64 levels");
+      if (!tables.add(table)) return false;
+      long vtable = vtable(table);
+      check(vtable, 4);
+      long vtableSize = u16(vtable);
+      long tableSize = u16(vtable + 2);
+      if (vtableSize < 4 || (vtableSize & 1) != 0) fail("the buffer is malformed (bad vtable)");
+      check(vtable, vtableSize);
+      check(table, tableSize);
+      for (long slot = 4; slot < vtableSize; slot += 2) {
+        long offset = u16(vtable + slot);
+        if (offset != 0 && offset >= tableSize) fail("the buffer is malformed (bad field offset)");
+      }
+      return true;
+    }
+
+    static int member(int[] p, int at, int n, long unionType) {
+      for (int i = 0; i < n; i++) {
+        if (p[at + 2 * i] == unionType) return p[at + 2 * i + 1];
+      }
+      return -1;
+    }
+
+    void walk(int index, long table, int depth) {
+      if (!enter(table, depth)) return;
+      int[] p = program;
+      int at = p[1 + index];
+      int ops = p[at++];
+      for (int op = 0; op < ops; op++) {
+        int kind = p[at];
+        long slot = p[at + 1];
+        at += 2;
+        int arg = 0;
+        long typeSlot = 0;
+        int members = 0;
+        int n = 0;
+        if (kind == 0 || kind == 2 || kind == 4 || kind == 5) {
+          arg = p[at++];
+        } else if (kind == 6 || kind == 7) {
+          typeSlot = p[at];
+          n = p[at + 1];
+          members = at + 2;
+          at += 2 + 2 * n;
+        }
+        long loc = field(table, slot);
+        if (loc == 0) continue;
+        switch (kind) {
+          case 0:
+            check(loc, arg);
+            crypt(loc, arg);
+            break;
+          case 1:
+            string(loc);
+            break;
+          case 2: {
+            long v = follow(loc);
+            crypt(v + 4, count(v, arg) * arg);
+            break;
+          }
+          case 3: {
+            long v = follow(loc);
+            long c = count(v, 4);
+            for (long i = 0; i < c; i++) string(v + 4 + 4 * i);
+            break;
+          }
+          case 4:
+            walk(arg, follow(loc), depth + 1);
+            break;
+          case 5: {
+            long v = follow(loc);
+            long c = count(v, 4);
+            for (long i = 0; i < c; i++) walk(arg, follow(v + 4 + 4 * i), depth + 1);
+            break;
+          }
+          case 6: {
+            long typeLoc = field(table, typeSlot);
+            if (typeLoc == 0) break;
+            int member = member(p, members, n, u8(typeLoc));
+            if (member >= 0) walk(member, follow(loc), depth + 1);
+            break;
+          }
+          case 7: {
+            long typeLoc = field(table, typeSlot);
+            if (typeLoc == 0) break;
+            long types = follow(typeLoc);
+            long c = count(types, 1);
+            long values = follow(loc);
+            if (count(values, 4) != c) fail("the buffer is malformed (union vectors differ)");
+            for (long i = 0; i < c; i++) {
+              int member = member(p, members, n, u8(types + 4 + i));
+              if (member >= 0) walk(member, follow(values + 4 + 4 * i), depth + 1);
+            }
+            break;
+          }
+          default:
+            fail("unknown walk program op " + kind);
+        }
+      }
+    }
+  }
+}
+)JAVA";
     auto dirs = namer_.Directories(combined_ns);
     EnsureDirExists(dirs);
     return parser_.opts.file_saver->SaveFile(
         (dirs + "FlatbuffersEncryption.java").c_str(), code, false);
+  }
+
+  // encryptBuffer/decryptBuffer of a table that reaches an (encrypted) field.
+  void GenEncryptionMethods(const StructDef& struct_def,
+                            std::string& code) const {
+    const std::string type = namer_.Type(struct_def);
+    code += "  // Field-encryption format 3 walk program of " + type +
+            " (see FlatbuffersEncryption).\n";
+    code += "  private static final int[] FLATBUFFERS_ENCRYPTION_PROGRAM = {\n";
+    for (const auto& line : encryption_plan_.ProgramLines(struct_def)) {
+      code += "    " + line + "\n";
+    }
+    code += "  };\n";
+    const char* kVerbs[] = { "encrypt", "decrypt" };
+    const char* kDoc[] = { "Encrypts", "Decrypts" };
+    for (int i = 0; i < 2; i++) {
+      code += "  /**\n";
+      code += "   * " + std::string(kDoc[i]) +
+              ", in place, the (encrypted) fields of the " + type +
+              " buffer that starts at\n";
+      code += "   * _bb.position(), with field-encryption format 3 (key: 32 "
+              "bytes; recordIndex:\n";
+      code += "   * an unsigned 32-bit value, unique per buffer under the "
+              "key). Throws\n";
+      code += "   * IllegalArgumentException, before any byte changes, for a "
+              "bad key or a\n";
+      code += "   * malformed buffer.\n";
+      code += "   */\n";
+      code += "  public static void " + std::string(kVerbs[i]) +
+              "Buffer(ByteBuffer _bb, byte[] key, int recordIndex) {\n";
+      code += "    FlatbuffersEncryption.cryptBuffer(_bb, key, recordIndex, "
+              "FLATBUFFERS_ENCRYPTION_PROGRAM);\n";
+      code += "  }\n";
+    }
   }
 
   // Save out the generated code for a single class while adding
@@ -868,11 +1049,6 @@ class JavaGenerator : public BaseGenerator {
     code += struct_def.fixed ? "Struct" : "com.google.flatbuffers.Table";
     code += " {\n";
 
-    bool has_encrypted = HasEncryptedFields(struct_def);
-    if (has_encrypted) {
-      code += "  private byte[] encryptionCtx;\n\n";
-    }
-
     if (!struct_def.fixed) {
       // Generate version check method.
       // Force compile time error if not using the same version runtime.
@@ -902,15 +1078,6 @@ class JavaGenerator : public BaseGenerator {
       code += ") + _bb.";
       code += "position()";
       code += ", _bb)); }\n";
-
-      // Add encryption context variants if struct has encrypted fields
-      if (has_encrypted) {
-        code += method_signature + "(ByteBuffer _bb, byte[] encryptionCtx) ";
-        code += "{ return " + method_name + "(_bb, new " + struct_class + "(), encryptionCtx); }\n";
-        code += method_signature + "(ByteBuffer _bb, " + struct_class + " obj, byte[] encryptionCtx) { ";
-        code += "_bb.order(ByteOrder.LITTLE_ENDIAN); ";
-        code += "return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb, encryptionCtx)); }\n";
-      }
       if (parser_.root_struct_def_ == &struct_def) {
         if (parser_.file_identifier_.length()) {
           // Check if a buffer has the identifier.
@@ -931,19 +1098,12 @@ class JavaGenerator : public BaseGenerator {
     code += "{ ";
     code += "__reset(_i, _bb); ";
     code += "}\n";
-    if (has_encrypted) {
-      code += "  public void __init(int _i, ByteBuffer _bb, byte[] _encryptionCtx) ";
-      code += "{ ";
-      code += "__reset(_i, _bb); this.encryptionCtx = _encryptionCtx; ";
-      code += "}\n";
-    }
     code += "  public " + struct_class + " __assign(int _i, ByteBuffer _bb) ";
-    code += "{ __init(_i, _bb); return this; }\n";
-    if (has_encrypted) {
-      code += "  public " + struct_class + " __assign(int _i, ByteBuffer _bb, byte[] _encryptionCtx) ";
-      code += "{ __init(_i, _bb, _encryptionCtx); return this; }\n";
+    code += "{ __init(_i, _bb); return this; }\n\n";
+    if (!struct_def.fixed && encryption_plan_.NeedsWalk(struct_def)) {
+      GenEncryptionMethods(struct_def, code);
+      code += "\n";
     }
-    code += "\n";
     for (auto it = struct_def.fields.vec.begin();
          it != struct_def.fields.vec.end(); ++it) {
       auto& field = **it;
@@ -994,24 +1154,15 @@ class JavaGenerator : public BaseGenerator {
         code += "()";
         member_suffix += "";
         if (struct_def.fixed) {
-          auto raw_value = getter + "(bb_pos + " + NumToString(field.value.offset) + ")" + dest_mask;
-          if (field.attributes.Lookup("encrypted") != nullptr) {
-            code += " { return FlatbuffersEncryption.decryptScalar(" + raw_value + ", this.encryptionCtx, " + NumToString(field.value.offset) + ")";
-          } else {
-            code += " { return " + raw_value;
-          }
+          code += " { return " + getter;
+          code += "(bb_pos + ";
+          code += NumToString(field.value.offset) + ")";
+          code += dest_mask;
         } else {
-          auto raw_getter = getter + "(o + bb_pos)" + dest_mask;
-          if (field.attributes.Lookup("encrypted") != nullptr) {
-            code += offset_prefix;
-            code += "FlatbuffersEncryption.decryptScalar(" + raw_getter + ", this.encryptionCtx, " + NumToString(field.value.offset) + ")";
-            code += " : ";
-            code += GenDefaultValue(field);
-          } else {
-            code += offset_prefix + raw_getter;
-            code += " : ";
-            code += GenDefaultValue(field);
-          }
+          code += offset_prefix + getter;
+          code += "(o + bb_pos)" + dest_mask;
+          code += " : ";
+          code += GenDefaultValue(field);
         }
       } else {
         switch (field.value.type.base_type) {
@@ -1033,14 +1184,8 @@ class JavaGenerator : public BaseGenerator {
           case BASE_TYPE_STRING:
             code += "()";
             member_suffix += "";
-            {
-              if (field.attributes.Lookup("encrypted") != nullptr) {
-                code += offset_prefix + "FlatbuffersEncryption.decryptString(bb, o + bb_pos, this.encryptionCtx, " + NumToString(field.value.offset) + ") : null";
-              } else {
-                auto raw_getter = getter + "(o + bb_pos)";
-                code += offset_prefix + raw_getter + " : null";
-              }
-            }
+            code += offset_prefix + getter + "(o + ";
+            code += "bb_pos) : null";
             break;
           case BASE_TYPE_ARRAY:
             FLATBUFFERS_FALLTHROUGH();  // fall thru
@@ -2428,6 +2573,7 @@ class JavaGenerator : public BaseGenerator {
 
   std::string package_prefix_;
   Namespace package_prefix_ns_;
+  const encryption_codegen::Plan encryption_plan_;
 };
 }  // namespace java
 
@@ -2444,6 +2590,11 @@ class JavaCodeGenerator : public CodeGenerator {
  public:
   Status GenerateCode(const Parser& parser, const std::string& path,
                       const std::string& filename) override {
+    const encryption_codegen::Plan plan(parser);
+    if (!plan.ok()) {
+      status_detail = ": " + plan.error();
+      return Status::ERROR;
+    }
     if (!GenerateJava(parser, path, filename)) {
       return Status::ERROR;
     }

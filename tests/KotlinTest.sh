@@ -41,6 +41,8 @@ kotlinc $all_kt_files -classpath $targetdir -include-runtime -d $targetdir
 jar cvf ${testdir}/kotlin_test.jar -C $targetdir . > /dev/null
 # Run test
 kotlin -J"-ea" -cp ${testdir}/kotlin_test.jar KotlinTest
+# The generated FlatbuffersEncryption helper against the C++ walker.
+kotlin -J"-ea" -cp ${testdir}/kotlin_test.jar KotlinEncryptionTest
 # clean up
 rm -rf $targetdir
 rm ${testdir}/kotlin_test.jar

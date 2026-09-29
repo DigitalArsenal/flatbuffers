@@ -1,0 +1,33 @@
+{
+  name: "root",
+  secret: "the same secret",
+  pin: 1234,
+  flag: true,
+  level: "High",
+  count: -7,
+  total: 9000000000,
+  ratio: 2.5,
+  position: { x: 1.5, y: -2.0, z: 3.25 },
+  bytes: [1, 2, 3, 4, 5],
+  readings: [0.5, 1.5],
+  points: [{ x: 1.0, y: 2.0, z: 3.0 }, { x: 4.0, y: 5.0, z: 6.0 }],
+  tags: ["alpha", "beta"],
+  child: {
+    name: "child",
+    secret: "the same secret",
+    pin: 1234,
+    flag: true,
+    level: "High",
+    count: -7,
+    total: 9000000000,
+    ratio: 2.5,
+    position: { x: 1.5, y: -2.0, z: 3.25 }
+  },
+  children: [
+    { name: "first", secret: "the same secret", pin: 1234 },
+    { name: "second", secret: "another secret", pin: 5678 }
+  ],
+  payload_type: "Leaf",
+  payload: { secret: "the same secret", pin: 1234 },
+  plain: 42
+}

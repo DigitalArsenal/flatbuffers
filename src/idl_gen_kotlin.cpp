@@ -19,12 +19,14 @@
 #include "idl_gen_kotlin.h"
 
 #include <functional>
+#include <set>
 #include <unordered_set>
 
 #include "flatbuffers/code_generators.h"
 #include "flatbuffers/flatbuffers.h"
 #include "flatbuffers/idl.h"
 #include "flatbuffers/util.h"
+#include "idl_gen_encryption.h"
 #include "idl_namer.h"
 
 namespace flatbuffers {
@@ -79,18 +81,8 @@ class KotlinGenerator : public BaseGenerator {
                   const std::string& file_name)
       : BaseGenerator(parser, path, file_name, "", ".", "kt"),
         namer_(WithFlagOptions(KotlinDefaultConfig(), parser.opts, path),
-               KotlinKeywords()) {}
-
-  // Check if a struct has any encrypted fields
-  bool HasEncryptedFields(const StructDef& struct_def) const {
-    for (auto it = struct_def.fields.vec.begin();
-         it != struct_def.fields.vec.end(); ++it) {
-      if ((*it)->attributes.Lookup("encrypted") != nullptr) {
-        return true;
-      }
-    }
-    return false;
-  }
+               KotlinKeywords()),
+        encryption_plan_(parser) {}
 
   KotlinGenerator& operator=(const KotlinGenerator&);
   bool generate() FLATBUFFERS_OVERRIDE {
@@ -124,24 +116,21 @@ class KotlinGenerator : public BaseGenerator {
       }
     }
 
-    // Generate encryption class if any struct has encrypted fields
-    bool needs_encryption = false;
+    // One FlatbuffersEncryption object per package that needs it.
+    std::set<std::string> encryption_packages;
     for (auto it = parser_.structs_.vec.begin();
          it != parser_.structs_.vec.end(); ++it) {
-      if (HasEncryptedFields(**it)) {
-        needs_encryption = true;
-        break;
+      const auto& struct_def = **it;
+      if (struct_def.generated || !encryption_plan_.NeedsWalk(struct_def)) {
+        continue;
       }
-    }
-    if (needs_encryption) {
-      CodeWriter encryptionWriter(ident_pad);
-      GenEncryptionClass(encryptionWriter);
-      if (parser_.opts.one_file) {
-        one_file_code += encryptionWriter.ToString();
-      } else {
-        if (!SaveType("FlatbuffersEncryption", *parser_.current_namespace_,
-                      encryptionWriter.ToString(), true))
-          return false;
+      const Namespace& ns = parser_.opts.one_file ? *parser_.current_namespace_
+                                                  : *struct_def.defined_namespace;
+      // Its own file even with --gen-onefile, so that two generated files of
+      // one package do not both define it.
+      if (encryption_packages.insert(FullNamespace(".", ns)).second &&
+          !SaveType("FlatbuffersEncryption", ns, EncryptionModuleCode(), true)) {
+        return false;
       }
     }
 
@@ -152,152 +141,273 @@ class KotlinGenerator : public BaseGenerator {
     return true;
   }
 
-  // Generate the FlatbuffersEncryption class using javax.crypto
-  void GenEncryptionClass(CodeWriter& writer) const {
-    // Note: java.nio.ByteBuffer and java.nio.ByteOrder are already imported
-    // by the standard Kotlin file generation
-    writer += "import javax.crypto.Cipher";
-    writer += "import javax.crypto.spec.IvParameterSpec";
-    writer += "import javax.crypto.spec.SecretKeySpec";
-    writer += "";
-    writer += "/**";
-    writer += " * FlatBuffers field-level encryption support using AES-256-CTR.";
-    writer += " */";
-    writer += "object FlatbuffersEncryption {";
+  // The FlatbuffersEncryption helper (field-encryption format 3) of a
+  // package: javax.crypto only, fully qualified so it needs no imports.
+  static std::string EncryptionModuleCode() {
+    return R"KT(/**
+ * Field-encryption format 3: encrypts or decrypts, in place, every (encrypted)
+ * field instance of a buffer exactly as the C++ walker
+ * (flatbuffers::EncryptBuffer/DecryptBuffer, version 3) and flatc-wasm do. The
+ * record's key is
+ * K = HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(recordIndex)),
+ * and each instance is AES-256-CTR encrypted with K and the IV
+ * BE32(position of its first byte in the buffer) || 12 zero bytes, so no two
+ * instances share a key stream. (key, recordIndex) must be unique per buffer.
+ * Generated tables call it with their walk program.
+ */
+object FlatbuffersEncryption {
+    /** HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(recordIndex)). */
+    @JvmStatic
+    fun bufferKey(key: ByteArray, recordIndex: Int): ByteArray {
+        val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+        mac.init(javax.crypto.spec.SecretKeySpec(ByteArray(32), "HmacSHA256"))
+        val prk = mac.doFinal(key)
+        mac.init(javax.crypto.spec.SecretKeySpec(prk, "HmacSHA256"))
+        val info = "flatbuffers-buffer-v3".toByteArray(Charsets.US_ASCII) + byteArrayOf(
+            (recordIndex ushr 24).toByte(), (recordIndex ushr 16).toByte(),
+            (recordIndex ushr 8).toByte(), recordIndex.toByte(), 1)
+        return mac.doFinal(info)
+    }
+
+    /**
+     * Encrypts or decrypts (the same operation), in place, every (encrypted)
+     * field instance of the buffer that starts at bb.position(), by a table's
+     * walk program. recordIndex is an unsigned 32-bit value. Throws
+     * IllegalArgumentException, before any byte changes, for a bad key or a
+     * malformed buffer.
+     */
+    @JvmStatic
+    fun cryptBuffer(bb: ByteBuffer, key: ByteArray, recordIndex: Int, program: IntArray) {
+        require(key.size == 32) { "FlatbuffersEncryption: the key must be 32 bytes" }
+        require(bb.limit() - bb.position() >= 4) { "FlatbuffersEncryption: invalid buffer" }
+        val dry = Walk(bb, program, null)
+        val root = dry.u32(0)
+        dry.check(root, 4)
+        dry.walk(0, root, 0)
+        val aesKey = javax.crypto.spec.SecretKeySpec(bufferKey(key, recordIndex), "AES")
+        Walk(bb, program, aesKey).walk(0, root, 0)
+    }
+
+    private class Walk(
+        private val bb: ByteBuffer,
+        private val program: IntArray,
+        // null: a dry run that only checks the buffer
+        private val key: javax.crypto.spec.SecretKeySpec?
+    ) {
+        private val base = bb.position()
+        private val size = (bb.limit() - bb.position()).toLong()
+        private val tables = HashSet<Long>()
+        private val regions = HashSet<Long>()
+
+        fun fail(what: String): Nothing =
+            throw IllegalArgumentException("FlatbuffersEncryption: " + what)
+
+        fun check(pos: Long, length: Long) {
+            if (pos < 0 || length < 0 || pos > size || length > size - pos) {
+                fail("the buffer is malformed (offset " + pos + " out of bounds)")
+            }
+        }
+
+        fun u8(pos: Long): Long {
+            check(pos, 1)
+            return (bb.get(base + pos.toInt()).toInt() and 0xFF).toLong()
+        }
+
+        fun u16(pos: Long): Long {
+            check(pos, 2)
+            return u8(pos) or (u8(pos + 1) shl 8)
+        }
+
+        fun u32(pos: Long): Long {
+            check(pos, 4)
+            return u16(pos) or (u16(pos + 2) shl 16)
+        }
+
+        fun follow(pos: Long): Long {
+            val target = pos + u32(pos)
+            check(target, 4)
+            return target
+        }
+
+        fun count(pos: Long, elementSize: Long): Long {
+            val n = u32(pos)
+            check(pos + 4, n * elementSize)
+            return n
+        }
+
+        fun crypt(start: Long, length: Long) {
+            if (length == 0L || !regions.add(start) || key == null) return
+            val iv = ByteArray(16)
+            iv[0] = (start ushr 24).toByte()
+            iv[1] = (start ushr 16).toByte()
+            iv[2] = (start ushr 8).toByte()
+            iv[3] = start.toByte()
+            val at = base + start.toInt()
+            val data = ByteArray(length.toInt()) { bb.get(at + it) }
+            val cipher = javax.crypto.Cipher.getInstance("AES/CTR/NoPadding")
+            cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, key,
+                javax.crypto.spec.IvParameterSpec(iv))
+            val out = cipher.doFinal(data)
+            for (i in out.indices) bb.put(at + i, out[i])
+        }
+
+        fun string(pos: Long) {
+            val s = follow(pos)
+            val n = u32(s)
+            check(s + 4, n + 1)
+            crypt(s + 4, n)
+        }
+
+        fun vtable(table: Long): Long = table - u32(table).toInt()
+
+        fun field(table: Long, slot: Long): Long {
+            val vtable = vtable(table)
+            if (slot + 2 > u16(vtable)) return 0
+            val offset = u16(vtable + slot)
+            return if (offset == 0L) 0 else table + offset
+        }
+
+        fun enter(table: Long, depth: Int): Boolean {
+            if (depth > 64) fail("tables nested deeper than 64 levels")
+            if (!tables.add(table)) return false
+            val vtable = vtable(table)
+            check(vtable, 4)
+            val vtableSize = u16(vtable)
+            val tableSize = u16(vtable + 2)
+            if (vtableSize < 4 || (vtableSize and 1L) != 0L) {
+                fail("the buffer is malformed (bad vtable)")
+            }
+            check(vtable, vtableSize)
+            check(table, tableSize)
+            var slot = 4L
+            while (slot < vtableSize) {
+                val offset = u16(vtable + slot)
+                if (offset != 0L && offset >= tableSize) {
+                    fail("the buffer is malformed (bad field offset)")
+                }
+                slot += 2
+            }
+            return true
+        }
+
+        fun member(at: Int, n: Int, unionType: Long): Int {
+            for (i in 0 until n) {
+                if (program[at + 2 * i].toLong() == unionType) return program[at + 2 * i + 1]
+            }
+            return -1
+        }
+
+        fun walk(index: Int, table: Long, depth: Int) {
+            if (!enter(table, depth)) return
+            val p = program
+            var at = p[1 + index]
+            val ops = p[at++]
+            for (op in 0 until ops) {
+                val kind = p[at]
+                val slot = p[at + 1].toLong()
+                at += 2
+                var arg = 0
+                var typeSlot = 0L
+                var members = 0
+                var n = 0
+                if (kind == 0 || kind == 2 || kind == 4 || kind == 5) {
+                    arg = p[at++]
+                } else if (kind == 6 || kind == 7) {
+                    typeSlot = p[at].toLong()
+                    n = p[at + 1]
+                    members = at + 2
+                    at += 2 + 2 * n
+                }
+                val loc = field(table, slot)
+                if (loc == 0L) continue
+                when (kind) {
+                    0 -> {
+                        check(loc, arg.toLong())
+                        crypt(loc, arg.toLong())
+                    }
+                    1 -> string(loc)
+                    2 -> {
+                        val v = follow(loc)
+                        crypt(v + 4, count(v, arg.toLong()) * arg)
+                    }
+                    3 -> {
+                        val v = follow(loc)
+                        val c = count(v, 4)
+                        for (i in 0 until c) string(v + 4 + 4 * i)
+                    }
+                    4 -> walk(arg, follow(loc), depth + 1)
+                    5 -> {
+                        val v = follow(loc)
+                        val c = count(v, 4)
+                        for (i in 0 until c) walk(arg, follow(v + 4 + 4 * i), depth + 1)
+                    }
+                    6 -> {
+                        val typeLoc = field(table, typeSlot)
+                        if (typeLoc != 0L) {
+                            val member = member(members, n, u8(typeLoc))
+                            if (member >= 0) walk(member, follow(loc), depth + 1)
+                        }
+                    }
+                    7 -> {
+                        val typeLoc = field(table, typeSlot)
+                        if (typeLoc != 0L) {
+                            val types = follow(typeLoc)
+                            val c = count(types, 1)
+                            val values = follow(loc)
+                            if (count(values, 4) != c) {
+                                fail("the buffer is malformed (union vectors differ)")
+                            }
+                            for (i in 0 until c) {
+                                val member = member(members, n, u8(types + 4 + i))
+                                if (member >= 0) walk(member, follow(values + 4 + 4 * i), depth + 1)
+                            }
+                        }
+                    }
+                    else -> fail("unknown walk program op " + kind)
+                }
+            }
+        }
+    }
+}
+)KT";
+  }
+
+  // encryptBuffer/decryptBuffer of a table that reaches an (encrypted) field,
+  // in its companion object.
+  void GenerateEncryptionFunctions(const StructDef& struct_def,
+                                   CodeWriter& writer,
+                                   const IDLOptions& options) const {
+    const std::string type = namer_.Type(struct_def);
+    writer += "// Field-encryption format 3 walk program of " + type +
+              " (see FlatbuffersEncryption).";
+    writer += "private val FLATBUFFERS_ENCRYPTION_PROGRAM = intArrayOf(";
     writer.IncrementIdentLevel();
-    writer += "";
-    writer += "private fun deriveNonce(ctx: ByteArray, fieldOffset: Int): ByteArray {";
-    writer.IncrementIdentLevel();
-    writer += "require(ctx.size >= 12) { \"Encryption context must be at least 12 bytes\" }";
-    writer += "val nonce = ByteArray(16)";
-    writer += "System.arraycopy(ctx, 0, nonce, 0, 12)";
-    writer += "ByteBuffer.wrap(nonce, 12, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(fieldOffset)";
-    writer += "return nonce";
+    for (const auto& line : encryption_plan_.ProgramLines(struct_def)) {
+      writer += line;
+    }
     writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
-    writer += "private fun decryptBytes(data: ByteArray, ctx: ByteArray, fieldOffset: Int): ByteArray {";
-    writer.IncrementIdentLevel();
-    writer += "require(ctx.size >= 32) { \"Encryption context must be at least 32 bytes\" }";
-    writer += "val key = ctx.copyOfRange(0, 32)";
-    writer += "val nonce = deriveNonce(ctx, fieldOffset)";
-    writer += "val keySpec = SecretKeySpec(key, \"AES\")";
-    writer += "val ivSpec = IvParameterSpec(nonce)";
-    writer += "val cipher = Cipher.getInstance(\"AES/CTR/NoPadding\")";
-    writer += "cipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec)";
-    writer += "return cipher.doFinal(data)";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
-    writer += "fun decryptScalar(value: Boolean, ctx: ByteArray?, fieldOffset: Int): Boolean {";
-    writer.IncrementIdentLevel();
-    writer += "if (ctx == null) return value";
-    writer += "val data = byteArrayOf(if (value) 1.toByte() else 0.toByte())";
-    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
-    writer += "return decrypted[0] != 0.toByte()";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
-    writer += "fun decryptScalar(value: Byte, ctx: ByteArray?, fieldOffset: Int): Byte {";
-    writer.IncrementIdentLevel();
-    writer += "if (ctx == null) return value";
-    writer += "val data = byteArrayOf(value)";
-    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
-    writer += "return decrypted[0]";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
-    writer += "fun decryptScalar(value: Short, ctx: ByteArray?, fieldOffset: Int): Short {";
-    writer.IncrementIdentLevel();
-    writer += "if (ctx == null) return value";
-    writer += "val data = ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(value).array()";
-    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
-    writer += "return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getShort()";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
-    writer += "fun decryptScalar(value: Int, ctx: ByteArray?, fieldOffset: Int): Int {";
-    writer.IncrementIdentLevel();
-    writer += "if (ctx == null) return value";
-    writer += "val data = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(value).array()";
-    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
-    writer += "return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getInt()";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
-    writer += "fun decryptScalar(value: Long, ctx: ByteArray?, fieldOffset: Int): Long {";
-    writer.IncrementIdentLevel();
-    writer += "if (ctx == null) return value";
-    writer += "val data = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(value).array()";
-    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
-    writer += "return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getLong()";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
-    writer += "fun decryptScalar(value: Float, ctx: ByteArray?, fieldOffset: Int): Float {";
-    writer.IncrementIdentLevel();
-    writer += "if (ctx == null) return value";
-    writer += "val data = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putFloat(value).array()";
-    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
-    writer += "return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getFloat()";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
-    writer += "fun decryptScalar(value: Double, ctx: ByteArray?, fieldOffset: Int): Double {";
-    writer.IncrementIdentLevel();
-    writer += "if (ctx == null) return value";
-    writer += "val data = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putDouble(value).array()";
-    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
-    writer += "return ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN).getDouble()";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
-    // Unsigned type overloads
-    writer += "fun decryptScalar(value: UByte, ctx: ByteArray?, fieldOffset: Int): UByte {";
-    writer.IncrementIdentLevel();
-    writer += "return decryptScalar(value.toByte(), ctx, fieldOffset).toUByte()";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
-    writer += "fun decryptScalar(value: UShort, ctx: ByteArray?, fieldOffset: Int): UShort {";
-    writer.IncrementIdentLevel();
-    writer += "return decryptScalar(value.toShort(), ctx, fieldOffset).toUShort()";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
-    writer += "fun decryptScalar(value: UInt, ctx: ByteArray?, fieldOffset: Int): UInt {";
-    writer.IncrementIdentLevel();
-    writer += "return decryptScalar(value.toInt(), ctx, fieldOffset).toUInt()";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
-    writer += "fun decryptScalar(value: ULong, ctx: ByteArray?, fieldOffset: Int): ULong {";
-    writer.IncrementIdentLevel();
-    writer += "return decryptScalar(value.toLong(), ctx, fieldOffset).toULong()";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
-    writer += "fun decryptString(bb: ByteBuffer, offset: Int, ctx: ByteArray?, fieldOffset: Int): String? {";
-    writer.IncrementIdentLevel();
-    writer += "// Read raw bytes from the vector";
-    writer += "val pos = offset + bb.getInt(offset)";
-    writer += "val len = bb.getInt(pos)";
-    writer += "val data = ByteArray(len)";
-    writer += "for (i in 0 until len) data[i] = bb.get(pos + 4 + i)";
-    writer += "if (ctx == null) {";
-    writer.IncrementIdentLevel();
-    writer += "// No encryption context, decode as regular string";
-    writer += "return String(data, Charsets.UTF_8)";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "// Decrypt and decode";
-    writer += "val decrypted = decryptBytes(data, ctx, fieldOffset)";
-    writer += "return String(decrypted, Charsets.UTF_8)";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer.DecrementIdentLevel();
-    writer += "}";
-    writer += "";
+    writer += ")";
+    const char* kVerbs[] = { "encrypt", "decrypt" };
+    const char* kDoc[] = { "Encrypts", "Decrypts" };
+    for (int i = 0; i < 2; i++) {
+      writer += "/**";
+      writer += " * " + std::string(kDoc[i]) +
+                ", in place, the (encrypted) fields of the " + type +
+                " buffer that starts at";
+      writer += " * _bb.position(), with field-encryption format 3 (key: 32 "
+                "bytes; recordIndex:";
+      writer += " * an unsigned 32-bit value, unique per buffer under the "
+                "key). Throws";
+      writer += " * IllegalArgumentException, before any byte changes, for a "
+                "bad key or a";
+      writer += " * malformed buffer.";
+      writer += " */";
+      GenerateJvmStaticAnnotation(writer, options.gen_jvmstatic);
+      writer += "fun " + std::string(kVerbs[i]) +
+                "Buffer(_bb: ByteBuffer, key: ByteArray, recordIndex: Int) = "
+                "FlatbuffersEncryption.cryptBuffer(_bb, key, recordIndex, "
+                "FLATBUFFERS_ENCRYPTION_PROGRAM)";
+    }
   }
 
   // Save out the generated code for a single class while adding
@@ -697,7 +807,6 @@ class KotlinGenerator : public BaseGenerator {
 
     GenerateComment(struct_def.doc_comment, writer, &comment_config);
     auto fixed = struct_def.fixed;
-    bool has_encrypted = HasEncryptedFields(struct_def);
 
     writer.SetValue("struct_name", namer_.Type(struct_def));
     writer.SetValue("superclass", fixed ? "Struct" : "Table");
@@ -707,27 +816,11 @@ class KotlinGenerator : public BaseGenerator {
 
     writer.IncrementIdentLevel();
 
-    // Add encryptionCtx property for structs with encrypted fields
-    if (has_encrypted) {
-      writer += "/** Encryption context for decrypting encrypted fields */";
-      writer += "var encryptionCtx: ByteArray? = null";
-      writer += "";
-    }
-
     {
       // Generate the __init() method that sets the field in a pre-existing
       // accessor object. This is to allow object reuse.
       GenerateFun(writer, "__init", "_i: Int, _bb: ByteBuffer", "",
                   [&]() { writer += "__reset(_i, _bb)"; });
-
-      // Generate __init with encryption context
-      if (has_encrypted) {
-        GenerateFun(writer, "__init", "_i: Int, _bb: ByteBuffer, _encryptionCtx: ByteArray?", "",
-                    [&]() {
-                      writer += "__reset(_i, _bb)";
-                      writer += "encryptionCtx = _encryptionCtx";
-                    });
-      }
 
       // Generate assign method
       GenerateFun(writer, "__assign", "_i: Int, _bb: ByteBuffer",
@@ -735,15 +828,6 @@ class KotlinGenerator : public BaseGenerator {
                     writer += "__init(_i, _bb)";
                     writer += "return this";
                   });
-
-      // Generate assign with encryption context
-      if (has_encrypted) {
-        GenerateFun(writer, "__assign", "_i: Int, _bb: ByteBuffer, _encryptionCtx: ByteArray?",
-                    namer_.Type(struct_def), [&]() {
-                      writer += "__init(_i, _bb, _encryptionCtx)";
-                      writer += "return this";
-                    });
-      }
 
       // Generate all getters
       GenerateStructGetters(struct_def, writer);
@@ -761,7 +845,10 @@ class KotlinGenerator : public BaseGenerator {
               [&]() { writer += "Constants.FLATBUFFERS_25_12_19()"; },
               options.gen_jvmstatic);
 
-          GenerateGetRootAsAccessors(struct_def, namer_.Type(struct_def), writer, options);
+          GenerateGetRootAsAccessors(namer_.Type(struct_def), writer, options);
+          if (encryption_plan_.NeedsWalk(struct_def)) {
+            GenerateEncryptionFunctions(struct_def, writer, options);
+          }
           GenerateBufferHasIdentifier(struct_def, writer, options);
           GenerateTableCreator(struct_def, writer, options);
 
@@ -1212,19 +1299,10 @@ class KotlinGenerator : public BaseGenerator {
         } else {
           GenerateGetter(writer, field_name, return_type, [&]() {
             writer += "val o = __offset({{offset}})";
-            if (field.attributes.Lookup("encrypted") != nullptr) {
-              writer += "return if(o != 0) {";
-              writer.IncrementIdentLevel();
-              writer += "val rawValue = {{bbgetter}}(o + bb_pos){{ucast}}";
-              writer += "FlatbuffersEncryption.decryptScalar(rawValue, this.encryptionCtx, " + NumToString(field.value.offset) + ")";
-              writer.DecrementIdentLevel();
-              writer += "} else {{field_default}}";
-            } else {
-              writer +=
-                  "return if(o != 0) {{bbgetter}}"
-                  "(o + bb_pos){{ucast}} else "
-                  "{{field_default}}";
-            }
+            writer +=
+                "return if(o != 0) {{bbgetter}}"
+                "(o + bb_pos){{ucast}} else "
+                "{{field_default}}";
           });
         }
       } else {
@@ -1287,11 +1365,7 @@ class KotlinGenerator : public BaseGenerator {
               writer += "val o = __offset({{offset}})";
               writer += "return if (o != 0) {";
               writer.IncrementIdentLevel();
-              if (field.attributes.Lookup("encrypted") != nullptr) {
-                writer += "FlatbuffersEncryption.decryptString(bb, o + bb_pos, this.encryptionCtx, " + NumToString(field.value.offset) + ")";
-              } else {
-                writer += "__string(o + bb_pos)";
-              }
+              writer += "__string(o + bb_pos)";
               writer.DecrementIdentLevel();
               writer += "} else {";
               writer.IncrementIdentLevel();
@@ -1636,16 +1710,13 @@ class KotlinGenerator : public BaseGenerator {
     }
   }
 
-  void GenerateGetRootAsAccessors(const StructDef& struct_def,
-                                  const std::string& struct_name,
+  void GenerateGetRootAsAccessors(const std::string& struct_name,
                                   CodeWriter& writer,
                                   IDLOptions options) const {
     // Generate a special accessor for the table that when used as the root
     // ex: fun getRootAsMonster(_bb: ByteBuffer): Monster {...}
     writer.SetValue("gr_name", struct_name);
     writer.SetValue("gr_method", "getRootAs" + struct_name);
-
-    bool has_encrypted = HasEncryptedFields(struct_def);
 
     // create convenience method that doesn't require an existing object
     GenerateJvmStaticAnnotation(writer, options.gen_jvmstatic);
@@ -1665,27 +1736,6 @@ class KotlinGenerator : public BaseGenerator {
         " + _bb.position(), _bb))";
     writer.DecrementIdentLevel();
     writer += "}";
-
-    // For tables with encrypted fields, add overloads that accept encryption context
-    if (has_encrypted) {
-      // convenience method with encryption context
-      GenerateJvmStaticAnnotation(writer, options.gen_jvmstatic);
-      writer += "fun {{gr_method}}(_bb: ByteBuffer, _encryptionCtx: ByteArray?): {{gr_name}} = \\";
-      writer += "{{gr_method}}(_bb, {{gr_name}}(), _encryptionCtx)";
-
-      // method with object reuse and encryption context
-      GenerateJvmStaticAnnotation(writer, options.gen_jvmstatic);
-      writer +=
-          "fun {{gr_method}}"
-          "(_bb: ByteBuffer, obj: {{gr_name}}, _encryptionCtx: ByteArray?): {{gr_name}} {";
-      writer.IncrementIdentLevel();
-      writer += "_bb.order(ByteOrder.LITTLE_ENDIAN)";
-      writer +=
-          "return (obj.__assign(_bb.getInt(_bb.position())"
-          " + _bb.position(), _bb, _encryptionCtx))";
-      writer.DecrementIdentLevel();
-      writer += "}";
-    }
   }
 
   void GenerateStaticConstructor(const StructDef& struct_def, CodeWriter& code,
@@ -1899,6 +1949,7 @@ class KotlinGenerator : public BaseGenerator {
   }
 
   const IdlNamer namer_;
+  const encryption_codegen::Plan encryption_plan_;
 };
 }  // namespace kotlin
 
@@ -1914,6 +1965,11 @@ class KotlinCodeGenerator : public CodeGenerator {
  public:
   Status GenerateCode(const Parser& parser, const std::string& path,
                       const std::string& filename) override {
+    const encryption_codegen::Plan plan(parser);
+    if (!plan.ok()) {
+      status_detail = ": " + plan.error();
+      return Status::ERROR;
+    }
     if (!GenerateKotlin(parser, path, filename)) {
       return Status::ERROR;
     }

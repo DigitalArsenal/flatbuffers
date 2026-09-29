@@ -18,6 +18,8 @@
 
 #include "idl_gen_python.h"
 
+#include "idl_gen_encryption.h"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -55,7 +57,8 @@ class PythonStubGenerator {
       : parser_{parser},
         namer_{WithFlagOptions(kStubConfig, parser.opts, path),
                Keywords(version)},
-        version_(version) {}
+        version_(version),
+        encryption_plan_(parser) {}
 
   bool Generate() {
     if (parser_.opts.one_file) {
@@ -413,6 +416,14 @@ class PythonStubGenerator {
              << "BufferHasIdentifier(cls, buf: bytes, offset: int, "
                 "size_prefixed: bool) -> bool: ...\n";
       }
+      if (encryption_plan_.NeedsWalk(*struct_def)) {
+        for (const char* verb : { "Encrypt", "Decrypt" }) {
+          stub << "  @classmethod\n";
+          stub << "  def " << verb
+               << "Buffer(cls, buf: bytes, key: bytes, record_index: int = "
+                  "0) -> bytearray: ...\n";
+        }
+      }
     }
 
     stub << "  def Init(self, buf: bytes, pos: int) -> None: ...\n";
@@ -705,6 +716,7 @@ class PythonStubGenerator {
   const Parser& parser_;
   const IdlNamer namer_;
   const Version version_;
+  const encryption_codegen::Plan encryption_plan_;
 };
 }  // namespace
 
@@ -715,8 +727,8 @@ class PythonGenerator : public BaseGenerator {
       : BaseGenerator(parser, path, file_name, "" /* not used */,
                       "" /* not used */, "py"),
         float_const_gen_("float('nan')", "float('inf')", "float('-inf')"),
-        namer_(WithFlagOptions(kConfig, parser.opts, path), Keywords(version)) {
-  }
+        namer_(WithFlagOptions(kConfig, parser.opts, path), Keywords(version)),
+        encryption_plan_(parser) {}
 
   // Most field accessors need to retrieve and test the field offset first,
   // this is the prefix code for that.
@@ -727,26 +739,11 @@ class PythonGenerator : public BaseGenerator {
            Indent + Indent + "if o != 0:" + (new_line ? "\n" : "");
   }
 
-  // Check if a struct has any encrypted fields.
-  bool HasEncryptedFields(const StructDef& struct_def) const {
-    for (auto it = struct_def.fields.vec.begin();
-         it != struct_def.fields.vec.end(); ++it) {
-      if ((*it)->attributes.Lookup("encrypted") != nullptr) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   // Begin a class declaration.
   void BeginClass(const StructDef& struct_def, std::string* code_ptr) const {
     auto& code = *code_ptr;
     code += "class " + namer_.Type(struct_def) + "(object):\n";
-    if (HasEncryptedFields(struct_def)) {
-      code += Indent + "__slots__ = ['_tab', '_encryption_ctx']";
-    } else {
-      code += Indent + "__slots__ = ['_tab']";
-    }
+    code += Indent + "__slots__ = ['_tab']";
     code += "\n\n";
   }
 
@@ -776,52 +773,32 @@ class PythonGenerator : public BaseGenerator {
                              std::string* code_ptr) const {
     auto& code = *code_ptr;
     const std::string struct_type = namer_.Type(struct_def);
-    bool has_encrypted = HasEncryptedFields(struct_def);
 
     code += Indent + "@classmethod\n";
     code += Indent + "def GetRootAs";
     if (parser_.opts.python_typing) {
-      if (has_encrypted) {
-        code += "(cls, buf, offset: int = 0, encryption_ctx: bytes = None):";
-      } else {
-        code += "(cls, buf, offset: int = 0):";
-      }
+      code += "(cls, buf, offset: int = 0):";
     } else {
-      if (has_encrypted) {
-        code += "(cls, buf, offset=0, encryption_ctx=None):";
-      } else {
-        code += "(cls, buf, offset=0):";
-      }
+      code += "(cls, buf, offset=0):";
     }
     code += "\n";
     code += Indent + Indent;
     code += "n = flatbuffers.encode.Get";
     code += "(flatbuffers.packer.uoffset, buf, offset)\n";
     code += Indent + Indent + "x = " + struct_type + "()\n";
-    if (has_encrypted) {
-      code += Indent + Indent + "x.Init(buf, n + offset, encryption_ctx)\n";
-    } else {
-      code += Indent + Indent + "x.Init(buf, n + offset)\n";
-    }
+    code += Indent + Indent + "x.Init(buf, n + offset)\n";
     code += Indent + Indent + "return x\n";
     code += "\n";
 
     if (!parser_.opts.python_no_type_prefix_suffix) {
       // Add an alias with the old name
       code += Indent + "@classmethod\n";
-      if (has_encrypted) {
-        code += Indent + "def GetRootAs" + struct_type + "(cls, buf, offset=0, encryption_ctx=None):\n";
-      } else {
-        code += Indent + "def GetRootAs" + struct_type + "(cls, buf, offset=0):\n";
-      }
+      code +=
+          Indent + "def GetRootAs" + struct_type + "(cls, buf, offset=0):\n";
       code += Indent + Indent +
               "\"\"\"This method is deprecated. Please switch to "
               "GetRootAs.\"\"\"\n";
-      if (has_encrypted) {
-        code += Indent + Indent + "return cls.GetRootAs(buf, offset, encryption_ctx)\n";
-      } else {
-        code += Indent + Indent + "return cls.GetRootAs(buf, offset)\n";
-      }
+      code += Indent + Indent + "return cls.GetRootAs(buf, offset)\n";
     }
   }
 
@@ -829,26 +806,14 @@ class PythonGenerator : public BaseGenerator {
   void InitializeExisting(const StructDef& struct_def,
                           std::string* code_ptr) const {
     auto& code = *code_ptr;
-    bool has_encrypted = HasEncryptedFields(struct_def);
 
     GenReceiver(struct_def, code_ptr);
     if (parser_.opts.python_typing) {
-      if (has_encrypted) {
-        code += "Init(self, buf: bytes, pos: int, encryption_ctx: bytes = None):\n";
-      } else {
-        code += "Init(self, buf: bytes, pos: int):\n";
-      }
+      code += "Init(self, buf: bytes, pos: int):\n";
     } else {
-      if (has_encrypted) {
-        code += "Init(self, buf, pos, encryption_ctx=None):\n";
-      } else {
-        code += "Init(self, buf, pos):\n";
-      }
+      code += "Init(self, buf, pos):\n";
     }
     code += Indent + Indent + "self._tab = flatbuffers.table.Table(buf, pos)\n";
-    if (has_encrypted) {
-      code += Indent + Indent + "self._encryption_ctx = encryption_ctx\n";
-    }
     code += "\n";
   }
 
@@ -919,14 +884,6 @@ class PythonGenerator : public BaseGenerator {
     code += "(self):";
     code += OffsetPrefix(field);
     getter += "o + self._tab.Pos)";
-    
-    // Check if field has encryption attribute and wrap with decryption
-    if (field.attributes.Lookup("encrypted") != nullptr) {
-      getter = "FlatbuffersEncryption.decrypt_scalar(" + getter + 
-               ", self._encryption_ctx, " + 
-               NumToString(field.value.offset) + ")";
-    }
-
     auto is_bool = IsBool(field.value.type.base_type);
     if (is_bool) {
       getter = "bool(" + getter + ")";
@@ -1073,16 +1030,8 @@ class PythonGenerator : public BaseGenerator {
     }
 
     code += OffsetPrefix(field);
-    
-    // Check if field has encryption attribute and wrap with decryption
-    if (field.attributes.Lookup("encrypted") != nullptr) {
-      code += Indent + Indent + Indent + "return FlatbuffersEncryption.decrypt_string(";
-      code += GenGetter(field.value.type) + "o + self._tab.Pos), self._encryption_ctx, ";
-      code += NumToString(field.value.offset) + ")\n";
-    } else {
-      code += Indent + Indent + Indent + "return " + GenGetter(field.value.type);
-      code += "o + self._tab.Pos)\n";
-    }
+    code += Indent + Indent + Indent + "return " + GenGetter(field.value.type);
+    code += "o + self._tab.Pos)\n";
     code += Indent + Indent + "return None\n\n";
   }
 
@@ -1833,9 +1782,10 @@ class PythonGenerator : public BaseGenerator {
                  ImportMap& imports) const {
     if (struct_def.generated) return;
 
-    // Add import for FlatbuffersEncryption if struct has encrypted fields
-    if (HasEncryptedFields(struct_def)) {
-      imports.insert(ImportMapEntry{".FlatbuffersEncryption", "FlatbuffersEncryption"});
+    const bool encrypts = encryption_plan_.NeedsWalk(struct_def);
+    if (encrypts && !parser_.opts.one_file) {
+      imports.insert(
+          ImportMapEntry{ ".FlatbuffersEncryption", "FlatbuffersEncryption" });
     }
 
     GenComment(struct_def.doc_comment, code_ptr, &def_comment);
@@ -1855,6 +1805,7 @@ class PythonGenerator : public BaseGenerator {
     // Generates the Init method that sets the field in a pre-existing
     // accessor object. This is to allow object reuse.
     InitializeExisting(struct_def, code_ptr);
+    if (encrypts) GenEncryptionMethods(struct_def, code_ptr);
     for (auto it = struct_def.fields.vec.begin();
          it != struct_def.fields.vec.end(); ++it) {
       auto& field = **it;
@@ -2955,87 +2906,310 @@ class PythonGenerator : public BaseGenerator {
     EndBuilderBody(code_ptr);
   }
 
-  // Check if any struct in the schema has encrypted fields.
-  bool HasAnyEncryptedFields() const {
-    for (auto it = parser_.structs_.vec.begin();
-         it != parser_.structs_.vec.end(); ++it) {
-      if (HasEncryptedFields(**it)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Get the FlatbuffersEncryption module code.
-  std::string GetEncryptionModuleCode() const {
+  // The FlatbuffersEncryption helper (field-encryption format 3). Pure
+  // Python AES-256 (encryption only, for CTR mode) and hashlib/hmac, so the
+  // generated code needs no extra package.
+  static std::string GetEncryptionModuleCode() {
     std::string code;
-    code += std::string("# ") + FlatBuffersGeneratedWarning() + "\n\n";
-    code += "\"\"\"FlatBuffers field-level encryption support using AES-256-CTR.\"\"\"\n\n";
-    code += "import struct\n";
-    code += "from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes\n\n";
-    code += "class FlatbuffersEncryption:\n";
-    code += "    \"\"\"Handles decryption of encrypted FlatBuffer fields.\"\"\"\n\n";
-    code += "    @staticmethod\n";
-    code += "    def _derive_nonce(ctx: bytes, field_offset: int) -> bytes:\n";
-    code += "        \"\"\"Derive a 16-byte nonce from encryption context and field offset.\"\"\"\n";
-    code += "        # Use first 12 bytes of context + 4-byte field offset as nonce\n";
-    code += "        if ctx is None or len(ctx) < 12:\n";
-    code += "            raise ValueError(\"Encryption context must be at least 12 bytes\")\n";
-    code += "        return ctx[:12] + struct.pack('<I', field_offset)\n\n";
-    code += "    @staticmethod\n";
-    code += "    def _decrypt_bytes(data: bytes, ctx: bytes, field_offset: int) -> bytes:\n";
-    code += "        \"\"\"Decrypt bytes using AES-256-CTR.\"\"\"\n";
-    code += "        if ctx is None:\n";
-    code += "            raise ValueError(\"Encryption context required for encrypted field\")\n";
-    code += "        if len(ctx) < 32:\n";
-    code += "            raise ValueError(\"Encryption context must be at least 32 bytes (256-bit key)\")\n";
-    code += "        key = ctx[:32]\n";
-    code += "        nonce = FlatbuffersEncryption._derive_nonce(ctx, field_offset)\n";
-    code += "        cipher = Cipher(algorithms.AES(key), modes.CTR(nonce))\n";
-    code += "        decryptor = cipher.decryptor()\n";
-    code += "        return decryptor.update(data) + decryptor.finalize()\n\n";
-    code += "    @staticmethod\n";
-    code += "    def decrypt_scalar(value, ctx: bytes, field_offset: int):\n";
-    code += "        \"\"\"Decrypt a scalar value (int, float, etc.).\n\n";
-    code += "        For AES-CTR, we encrypt the bytes representation of the scalar.\n";
-    code += "        This preserves the length and allows in-place decryption.\n";
-    code += "        \"\"\"\n";
-    code += "        if ctx is None:\n";
-    code += "            return value  # No encryption context, return as-is\n";
-    code += "        # Determine the byte representation based on type\n";
-    code += "        if isinstance(value, float):\n";
-    code += "            # Float32 - 4 bytes\n";
-    code += "            data = struct.pack('<f', value)\n";
-    code += "            decrypted = FlatbuffersEncryption._decrypt_bytes(data, ctx, field_offset)\n";
-    code += "            return struct.unpack('<f', decrypted)[0]\n";
-    code += "        elif isinstance(value, int):\n";
-    code += "            # Determine size based on value range (assume 4 bytes for now)\n";
-    code += "            data = struct.pack('<i', value)\n";
-    code += "            decrypted = FlatbuffersEncryption._decrypt_bytes(data, ctx, field_offset)\n";
-    code += "            return struct.unpack('<i', decrypted)[0]\n";
-    code += "        return value\n\n";
-    code += "    @staticmethod\n";
-    code += "    def decrypt_string(data: bytes, ctx: bytes, field_offset: int) -> bytes:\n";
-    code += "        \"\"\"Decrypt a string/byte vector field.\"\"\"\n";
-    code += "        if ctx is None or data is None:\n";
-    code += "            return data  # No encryption context, return as-is\n";
-    code += "        return FlatbuffersEncryption._decrypt_bytes(data, ctx, field_offset)\n";
+    code += R"PY(
+"""FlatBuffers field-encryption format 3.
+
+Encrypts or decrypts, in a copy of a buffer, every (encrypted) field instance
+exactly as the C++ walker (flatbuffers::EncryptBuffer/DecryptBuffer, version
+3) and flatc-wasm do: the record's key is
+K = HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(record_index)),
+and each instance is AES-256-CTR encrypted with K and the IV
+BE32(position of its first byte in the buffer) || 12 zero bytes, so no two
+instances share a key stream. (key, record_index) must be unique per buffer.
+"""
+
+import hashlib
+import hmac
+import struct
+
+
+_SBOX = bytearray.fromhex(
+    "637c777bf26b6fc53001672bfed7ab76ca82c97dfa5947f0add4a2af9ca472c0"
+    "b7fd9326363ff7cc34a5e5f171d8311504c723c31896059a071280e2eb27b275"
+    "09832c1a1b6e5aa0523bd6b329e32f8453d100ed20fcb15b6acbbe394a4c58cf"
+    "d0efaafb434d338545f9027f503c9fa851a3408f929d38f5bcb6da2110fff3d2"
+    "cd0c13ec5f974417c4a77e3d645d197360814fdc222a908846eeb814de5e0bdb"
+    "e0323a0a4906245cc2d3ac629195e479e7c8376d8dd54ea96c56f4ea657aae08"
+    "ba78252e1ca6b4c6e8dd741f4bbd8b8a703eb5664803f60e613557b986c11d9e"
+    "e1f8981169d98e949b1e87e9ce5528df8ca1890dbfe6426841992d0fb054bb16")
+
+
+def _xtime(a):
+    return ((a << 1) ^ 0x1B) & 0xFF if a & 0x80 else a << 1
+
+
+def _expand_key(key):
+    w = list(bytearray(key))
+    rcon = 1
+    while len(w) < 240:
+        t = w[-4:]
+        if len(w) % 32 == 0:
+            t = [_SBOX[t[1]] ^ rcon, _SBOX[t[2]], _SBOX[t[3]], _SBOX[t[0]]]
+            rcon = _xtime(rcon)
+        elif len(w) % 32 == 16:
+            t = [_SBOX[b] for b in t]
+        i = len(w)
+        w.extend(w[i - 32 + j] ^ t[j] for j in range(4))
+    return w
+
+
+def _encrypt_block(w, block):
+    s = [block[i] ^ w[i] for i in range(16)]
+    for r in range(1, 15):
+        s = [_SBOX[b] for b in s]
+        s = [s[0], s[5], s[10], s[15], s[4], s[9], s[14], s[3],
+             s[8], s[13], s[2], s[7], s[12], s[1], s[6], s[11]]
+        if r < 14:
+            m = []
+            for c in range(0, 16, 4):
+                a0, a1, a2, a3 = s[c], s[c + 1], s[c + 2], s[c + 3]
+                t = a0 ^ a1 ^ a2 ^ a3
+                m += [a0 ^ t ^ _xtime(a0 ^ a1), a1 ^ t ^ _xtime(a1 ^ a2),
+                      a2 ^ t ^ _xtime(a2 ^ a3), a3 ^ t ^ _xtime(a3 ^ a0)]
+            s = m
+        s = [s[i] ^ w[16 * r + i] for i in range(16)]
+    return s
+
+
+class _Walk(object):
+    __slots__ = ('buf', 'size', 'program', 'round_keys', 'tables', 'regions')
+
+    def __init__(self, buf, program, round_keys):
+        self.buf = buf
+        self.size = len(buf)
+        self.program = program
+        self.round_keys = round_keys  # None: a dry run that checks the buffer
+        self.tables = set()
+        self.regions = set()
+
+    @staticmethod
+    def fail(what):
+        raise ValueError('FlatbuffersEncryption: ' + what)
+
+    def check(self, pos, length):
+        if pos < 0 or length < 0 or pos + length > self.size:
+            self.fail('the buffer is malformed (offset %d out of bounds)' % pos)
+
+    def u8(self, pos):
+        self.check(pos, 1)
+        return self.buf[pos]
+
+    def u16(self, pos):
+        self.check(pos, 2)
+        return struct.unpack_from('<H', self.buf, pos)[0]
+
+    def u32(self, pos):
+        self.check(pos, 4)
+        return struct.unpack_from('<I', self.buf, pos)[0]
+
+    def follow(self, pos):
+        target = pos + self.u32(pos)
+        self.check(target, 4)
+        return target
+
+    def count(self, pos, element_size):
+        n = self.u32(pos)
+        self.check(pos + 4, n * element_size)
+        return n
+
+    def crypt(self, start, length):
+        if length == 0 or start in self.regions:
+            return
+        self.regions.add(start)
+        if self.round_keys is None:
+            return
+        buf = self.buf
+        for block in range(0, length, 16):
+            # BE32(start) || 12 zero bytes, plus the block number.
+            counter = bytearray(struct.pack('>I8xI', start, block // 16))
+            stream = _encrypt_block(self.round_keys, counter)
+            for i in range(min(16, length - block)):
+                buf[start + block + i] ^= stream[i]
+
+    def string(self, pos):
+        s = self.follow(pos)
+        n = self.u32(s)
+        self.check(s + 4, n + 1)
+        self.crypt(s + 4, n)
+
+    def field(self, table, slot):
+        vtable = table - struct.unpack_from('<i', self.buf, table)[0]
+        if slot + 2 > self.u16(vtable):
+            return 0
+        offset = self.u16(vtable + slot)
+        return table + offset if offset else 0
+
+    def enter(self, table, depth):
+        if depth > 64:
+            self.fail('tables nested deeper than 64 levels')
+        if table in self.tables:
+            return False
+        self.tables.add(table)
+        self.check(table, 4)
+        vtable = table - struct.unpack_from('<i', self.buf, table)[0]
+        self.check(vtable, 4)
+        vtable_size = self.u16(vtable)
+        table_size = self.u16(vtable + 2)
+        if vtable_size < 4 or vtable_size & 1:
+            self.fail('the buffer is malformed (bad vtable)')
+        self.check(vtable, vtable_size)
+        self.check(table, table_size)
+        for slot in range(4, vtable_size, 2):
+            offset = self.u16(vtable + slot)
+            if offset and offset >= table_size:
+                self.fail('the buffer is malformed (bad field offset)')
+        return True
+
+    def walk(self, index, table, depth):
+        if not self.enter(table, depth):
+            return
+        p = self.program
+        at = p[1 + index]
+        ops = p[at]
+        at += 1
+        for _ in range(ops):
+            kind, slot = p[at], p[at + 1]
+            at += 2
+            if kind in (0, 2, 4, 5):
+                arg = p[at]
+                at += 1
+            elif kind in (6, 7):
+                type_slot, n = p[at], p[at + 1]
+                members = dict(zip(p[at + 2:at + 2 + 2 * n:2],
+                                   p[at + 3:at + 3 + 2 * n:2]))
+                at += 2 + 2 * n
+            loc = self.field(table, slot)
+            if loc == 0:
+                continue
+            if kind == 0:
+                self.check(loc, arg)
+                self.crypt(loc, arg)
+            elif kind == 1:
+                self.string(loc)
+            elif kind == 2:
+                v = self.follow(loc)
+                self.crypt(v + 4, self.count(v, arg) * arg)
+            elif kind == 3:
+                v = self.follow(loc)
+                for i in range(self.count(v, 4)):
+                    self.string(v + 4 + 4 * i)
+            elif kind == 4:
+                self.walk(arg, self.follow(loc), depth + 1)
+            elif kind == 5:
+                v = self.follow(loc)
+                for i in range(self.count(v, 4)):
+                    self.walk(arg, self.follow(v + 4 + 4 * i), depth + 1)
+            elif kind == 6:
+                type_loc = self.field(table, type_slot)
+                if type_loc and self.u8(type_loc) in members:
+                    self.walk(members[self.u8(type_loc)], self.follow(loc),
+                              depth + 1)
+            elif kind == 7:
+                type_loc = self.field(table, type_slot)
+                if type_loc == 0:
+                    continue
+                types = self.follow(type_loc)
+                n = self.count(types, 1)
+                values = self.follow(loc)
+                if self.count(values, 4) != n:
+                    self.fail('the buffer is malformed (union vectors differ)')
+                for i in range(n):
+                    member = members.get(self.u8(types + 4 + i))
+                    if member is not None:
+                        self.walk(member, self.follow(values + 4 + 4 * i),
+                                  depth + 1)
+
+
+class FlatbuffersEncryption(object):
+    """Field-encryption format 3 for generated tables."""
+
+    @staticmethod
+    def buffer_key(key, record_index):
+        """K = HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" ||
+        BE32(record_index))."""
+        prk = hmac.new(b'\x00' * 32, key, hashlib.sha256).digest()
+        info = b'flatbuffers-buffer-v3' + struct.pack('>I', record_index)
+        return hmac.new(prk, info + b'\x01', hashlib.sha256).digest()
+
+    @staticmethod
+    def crypt_buffer(buf, key, record_index, program):
+        """Returns a copy of buf with every (encrypted) field instance
+        encrypted, or decrypted (the same operation), by the table's walk
+        program. Raises ValueError, before any byte changes, for a bad key or
+        a malformed buffer."""
+        key = bytes(bytearray(key))
+        if len(key) != 32:
+            raise ValueError('FlatbuffersEncryption: the key must be 32 bytes')
+        if not 0 <= record_index <= 0xFFFFFFFF:
+            raise ValueError(
+                'FlatbuffersEncryption: record_index must fit in 32 bits')
+        data = bytearray(buf)
+        if len(data) < 4 or len(data) > 0x7FFFFFFF:
+            raise ValueError('FlatbuffersEncryption: invalid buffer')
+        root = struct.unpack_from('<I', data, 0)[0]
+        _Walk(data, program, None).check(root, 4)
+        _Walk(data, program, None).walk(0, root, 0)
+        round_keys = _expand_key(
+            FlatbuffersEncryption.buffer_key(key, record_index))
+        _Walk(data, program, round_keys).walk(0, root, 0)
+        return data
+)PY";
     return code;
   }
 
   // Generate the FlatbuffersEncryption module in a namespace directory.
   bool GenerateEncryptionModule(const Namespace& ns) const {
-    const std::string code = GetEncryptionModuleCode();
+    const std::string code = std::string("# ") +
+                             FlatBuffersGeneratedWarning() + "\n" +
+                             GetEncryptionModuleCode();
     const std::string directories = namer_.Directories(ns.components);
     EnsureDirExists(directories);
     const std::string filename = directories + "FlatbuffersEncryption.py";
     return parser_.opts.file_saver->SaveFile(filename.c_str(), code, false);
   }
 
+  // EncryptBuffer/DecryptBuffer of a table that reaches an (encrypted) field.
+  void GenEncryptionMethods(const StructDef& struct_def,
+                            std::string* code_ptr) const {
+    auto& code = *code_ptr;
+    const std::string type = namer_.Type(struct_def);
+    code += Indent + "# Field-encryption format 3 walk program of " + type +
+            " (see FlatbuffersEncryption).\n";
+    code += Indent + "_FLATBUFFERS_ENCRYPTION_PROGRAM = (\n";
+    for (const auto& line : encryption_plan_.ProgramLines(struct_def)) {
+      code += Indent + Indent + line + "\n";
+    }
+    code += Indent + ")\n\n";
+    const char* kVerbs[] = { "Encrypt", "Decrypt" };
+    const char* kParticiples[] = { "encrypted", "decrypted" };
+    for (int i = 0; i < 2; i++) {
+      code += Indent + "@classmethod\n";
+      code += Indent + "def " + std::string(kVerbs[i]) +
+              "Buffer(cls, buf, key, record_index=0):\n";
+      code += Indent + Indent + "\"\"\"Returns a copy of a " + type +
+              " buffer with its (encrypted) fields\n";
+      code += Indent + Indent + std::string(kParticiples[i]) +
+              " with field-encryption format 3 (key: 32 bytes;\n";
+      code += Indent + Indent +
+              "record_index: unique per buffer under the key).\"\"\"\n";
+      code += Indent + Indent + "return FlatbuffersEncryption.crypt_buffer(\n";
+      code += Indent + Indent + Indent +
+              "buf, key, record_index, cls._FLATBUFFERS_ENCRYPTION_PROGRAM)\n\n";
+    }
+  }
+
   bool generate() {
     std::string one_file_code;
     ImportMap one_file_imports;
 
+    if (parser_.opts.one_file && encryption_plan_.AnyGenerated()) {
+      one_file_code += GetEncryptionModuleCode() + "\n\n";
+    }
     if (!generateEnums(&one_file_code)) return false;
     if (!generateStructs(&one_file_code, one_file_imports)) return false;
 
@@ -3079,7 +3253,7 @@ class PythonGenerator : public BaseGenerator {
 
   bool generateStructs(std::string* one_file_code,
                        ImportMap& one_file_imports) const {
-    // Track namespaces that need encryption module
+    // Namespaces that got a FlatbuffersEncryption module.
     std::set<std::string> encryption_namespaces;
 
     for (auto it = parser_.structs_.vec.begin();
@@ -3093,7 +3267,8 @@ class PythonGenerator : public BaseGenerator {
       }
 
       // Generate encryption module for this namespace if needed
-      if (HasEncryptedFields(struct_def) && !parser_.opts.one_file) {
+      if (!struct_def.generated && encryption_plan_.NeedsWalk(struct_def) &&
+          !parser_.opts.one_file) {
         const std::string ns_key = namer_.Directories(
             struct_def.defined_namespace->components);
         if (encryption_namespaces.find(ns_key) == encryption_namespaces.end()) {
@@ -3200,14 +3375,20 @@ class PythonGenerator : public BaseGenerator {
  private:
   const SimpleFloatConstantGenerator float_const_gen_;
   const IdlNamer namer_;
+  const encryption_codegen::Plan encryption_plan_;
 };
 
 }  // namespace python
 
-static const char* GeneratePython(const Parser& parser, const std::string& path,
+static std::string GeneratePython(const Parser& parser,
+                                  const std::string& path,
                                   const std::string& file_name) {
   python::Version version{parser.opts.python_version};
   if (!version.IsValid()) return "The provided Python version is not valid";
+  {
+    const encryption_codegen::Plan plan(parser);
+    if (!plan.ok()) return plan.error();
+  }
 
   python::PythonGenerator generator(parser, path, file_name, version);
   if (!generator.generate()) return "could not generate Python code";
@@ -3217,7 +3398,7 @@ static const char* GeneratePython(const Parser& parser, const std::string& path,
     if (!stub_generator.Generate())
       return "could not generate Python type stubs";
   }
-  return nullptr;
+  return "";
 }
 
 namespace {
@@ -3226,9 +3407,9 @@ class PythonCodeGenerator : public CodeGenerator {
  public:
   Status GenerateCode(const Parser& parser, const std::string& path,
                       const std::string& filename) override {
-    auto err = GeneratePython(parser, path, filename);
-    if (err) {
-      status_detail = " " + std::string(err);
+    const std::string err = GeneratePython(parser, path, filename);
+    if (!err.empty()) {
+      status_detail = " " + err;
       return Status::ERROR;
     }
     return Status::OK;

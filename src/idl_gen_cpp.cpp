@@ -2784,11 +2784,7 @@ class CppGenerator : public BaseGenerator {
                                   field.value.constant.length(), &escaped,
                                   true, false);
         code_ += "    auto* ptr = {{FIELD_VALUE}};";
-        if (field.attributes.Lookup("encrypted") != nullptr) {
-          code_ += "    if (ptr) return ::flatbuffers::encryption::DecryptString(ptr, encryption_ctx_, " + offset_str + ");";
-        } else {
-          code_ += "    if (ptr) return ptr;";
-        }
+        code_ += "    if (ptr) return ptr;";
         code_ += "    static const struct { uint32_t len; const char s[" +
                  NumToString(field.value.constant.length() + 1) +
                  "]; } bfbs_string = { " +
@@ -2798,17 +2794,7 @@ class CppGenerator : public BaseGenerator {
             "    return reinterpret_cast<const ::flatbuffers::String "
             " *>(&bfbs_string);";
       } else {
-        if (field.attributes.Lookup("encrypted") != nullptr) {
-          if (is_scalar) {
-            code_ += "    return ::flatbuffers::encryption::DecryptScalar({{FIELD_VALUE}}, encryption_ctx_, " + offset_str + ");";
-          } else if (IsString(type)) {
-            code_ += "    return ::flatbuffers::encryption::DecryptString({{FIELD_VALUE}}, encryption_ctx_, " + offset_str + ");";
-          } else {
-            code_ += "    return {{FIELD_VALUE}};";
-          }
-        } else {
-          code_ += "    return {{FIELD_VALUE}};";
-        }
+        code_ += "    return {{FIELD_VALUE}};";
       }
       code_ += "  }";
     } else {
@@ -2818,15 +2804,7 @@ class CppGenerator : public BaseGenerator {
                        offset_str + ")";
       code_.SetValue("FIELD_TYPE", GenOptionalDecl(type));
       code_ += "  {{FIELD_TYPE}} {{FIELD_NAME}}() const {";
-      if (field.attributes.Lookup("encrypted") != nullptr) {
-        code_ += "    auto raw_value = " + opt_value + ";";
-        code_ += "    if (raw_value.has_value()) {";
-        code_ += "      return ::flatbuffers::encryption::DecryptScalar(*raw_value, encryption_ctx_, " + offset_str + ");";
-        code_ += "    }";
-        code_ += "    return raw_value;";
-      } else {
-        code_ += "    return " + opt_value + ";";
-      }
+      code_ += "    return " + opt_value + ";";
       code_ += "  }";
     }
 

@@ -178,6 +178,9 @@
     <Compile Include="..\union_value_collsion\union_value_collision_generated.cs">
       <Link>union_value_collsion\union_value_collision_generated.cs</Link>
     </Compile>
+    <Compile Include="..\EncryptionV3\*.cs">
+      <Link>EncryptionV3\%(Filename)%(Extension)</Link>
+    </Compile>
   </ItemGroup>
 
   <ItemGroup>
@@ -195,6 +198,10 @@
     </Content>
     <Content Include="..\monsterdata_test.json">
       <Link>monsterdata_test.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\encryption_v3\*.bin">
+      <Link>encryption_v3\%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

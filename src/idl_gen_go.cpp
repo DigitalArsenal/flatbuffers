@@ -30,6 +30,7 @@
 #include "flatbuffers/idl.h"
 #include "flatbuffers/options.h"
 #include "flatbuffers/util.h"
+#include "idl_gen_encryption.h"
 #include "idl_namer.h"
 
 #ifdef _WIN32
@@ -95,7 +96,8 @@ class GoGenerator : public BaseGenerator {
                       "" /* not used */, "go"),
         cur_name_space_(nullptr),
         namer_(WithFlagOptions(GoDefaultConfig(), parser.opts, path),
-               GoKeywords()) {
+               GoKeywords()),
+        encryption_plan_(parser) {
     std::istringstream iss(go_namespace);
     std::string component;
     while (std::getline(iss, component, '.')) {
@@ -155,125 +157,322 @@ class GoGenerator : public BaseGenerator {
     GenNativeUnionUnPack(enum_def, code_ptr);
   }
 
-  // Check if any struct in the schema has encrypted fields.
-  bool HasAnyEncryptedFields() const {
-    for (auto it = parser_.structs_.vec.begin();
-         it != parser_.structs_.vec.end(); ++it) {
-      if (HasEncryptedFields(**it)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Get the Go encryption module code.
+  // The FlatbuffersEncryption helper (field-encryption format 3), one file
+  // per package; the standard library only.
   std::string GetEncryptionModuleCode(const std::string& package_name) const {
     std::string code;
-    code += "// " + std::string(FlatBuffersGeneratedWarning()) + "\n\n";
-    code += "package " + package_name + "\n\n";
-    code += "import (\n";
-    code += "\t\"crypto/aes\"\n";
-    code += "\t\"crypto/cipher\"\n";
-    code += "\t\"encoding/binary\"\n";
-    code += "\t\"math\"\n";
-    code += ")\n\n";
-    code += "// deriveNonce derives a 16-byte nonce from encryption context and field offset.\n";
-    code += "func deriveNonce(ctx []byte, fieldOffset uint16) []byte {\n";
-    code += "\tif len(ctx) < 12 {\n";
-    code += "\t\tpanic(\"encryption context must be at least 12 bytes\")\n";
-    code += "\t}\n";
-    code += "\tnonce := make([]byte, 16)\n";
-    code += "\tcopy(nonce[:12], ctx[:12])\n";
-    code += "\tbinary.LittleEndian.PutUint32(nonce[12:], uint32(fieldOffset))\n";
-    code += "\treturn nonce\n";
-    code += "}\n\n";
-    code += "// decryptBytes decrypts bytes using AES-256-CTR.\n";
-    code += "func decryptBytes(data []byte, ctx []byte, fieldOffset uint16) []byte {\n";
-    code += "\tif ctx == nil {\n";
-    code += "\t\tpanic(\"encryption context required for encrypted field\")\n";
-    code += "\t}\n";
-    code += "\tif len(ctx) < 32 {\n";
-    code += "\t\tpanic(\"encryption context must be at least 32 bytes (256-bit key)\")\n";
-    code += "\t}\n";
-    code += "\tkey := ctx[:32]\n";
-    code += "\tnonce := deriveNonce(ctx, fieldOffset)\n";
-    code += "\tblock, err := aes.NewCipher(key)\n";
-    code += "\tif err != nil {\n";
-    code += "\t\tpanic(err)\n";
-    code += "\t}\n";
-    code += "\tstream := cipher.NewCTR(block, nonce)\n";
-    code += "\tresult := make([]byte, len(data))\n";
-    code += "\tstream.XORKeyStream(result, data)\n";
-    code += "\treturn result\n";
-    code += "}\n\n";
-    code += "// DecryptScalar decrypts a scalar value.\n";
-    code += "func DecryptScalar[T any](value T, ctx []byte, fieldOffset uint16) T {\n";
-    code += "\tif ctx == nil {\n";
-    code += "\t\treturn value // No encryption context, return as-is\n";
-    code += "\t}\n";
-    code += "\tvar result T\n";
-    code += "\tswitch v := any(value).(type) {\n";
-    code += "\tcase float32:\n";
-    code += "\t\tbits := math.Float32bits(v)\n";
-    code += "\t\tdata := make([]byte, 4)\n";
-    code += "\t\tbinary.LittleEndian.PutUint32(data, bits)\n";
-    code += "\t\tdecrypted := decryptBytes(data, ctx, fieldOffset)\n";
-    code += "\t\tdecryptedBits := binary.LittleEndian.Uint32(decrypted)\n";
-    code += "\t\tresult = any(math.Float32frombits(decryptedBits)).(T)\n";
-    code += "\tcase float64:\n";
-    code += "\t\tbits := math.Float64bits(v)\n";
-    code += "\t\tdata := make([]byte, 8)\n";
-    code += "\t\tbinary.LittleEndian.PutUint64(data, bits)\n";
-    code += "\t\tdecrypted := decryptBytes(data, ctx, fieldOffset)\n";
-    code += "\t\tdecryptedBits := binary.LittleEndian.Uint64(decrypted)\n";
-    code += "\t\tresult = any(math.Float64frombits(decryptedBits)).(T)\n";
-    code += "\tcase int32:\n";
-    code += "\t\tdata := make([]byte, 4)\n";
-    code += "\t\tbinary.LittleEndian.PutUint32(data, uint32(v))\n";
-    code += "\t\tdecrypted := decryptBytes(data, ctx, fieldOffset)\n";
-    code += "\t\tresult = any(int32(binary.LittleEndian.Uint32(decrypted))).(T)\n";
-    code += "\tcase uint32:\n";
-    code += "\t\tdata := make([]byte, 4)\n";
-    code += "\t\tbinary.LittleEndian.PutUint32(data, v)\n";
-    code += "\t\tdecrypted := decryptBytes(data, ctx, fieldOffset)\n";
-    code += "\t\tresult = any(binary.LittleEndian.Uint32(decrypted)).(T)\n";
-    code += "\tcase int64:\n";
-    code += "\t\tdata := make([]byte, 8)\n";
-    code += "\t\tbinary.LittleEndian.PutUint64(data, uint64(v))\n";
-    code += "\t\tdecrypted := decryptBytes(data, ctx, fieldOffset)\n";
-    code += "\t\tresult = any(int64(binary.LittleEndian.Uint64(decrypted))).(T)\n";
-    code += "\tcase uint64:\n";
-    code += "\t\tdata := make([]byte, 8)\n";
-    code += "\t\tbinary.LittleEndian.PutUint64(data, v)\n";
-    code += "\t\tdecrypted := decryptBytes(data, ctx, fieldOffset)\n";
-    code += "\t\tresult = any(binary.LittleEndian.Uint64(decrypted)).(T)\n";
-    code += "\tdefault:\n";
-    code += "\t\tresult = value\n";
-    code += "\t}\n";
-    code += "\treturn result\n";
-    code += "}\n\n";
-    code += "// DecryptString decrypts a string/byte vector field.\n";
-    code += "func DecryptString(data []byte, ctx []byte, fieldOffset uint16) []byte {\n";
-    code += "\tif ctx == nil || data == nil {\n";
-    code += "\t\treturn data // No encryption context, return as-is\n";
-    code += "\t}\n";
-    code += "\treturn decryptBytes(data, ctx, fieldOffset)\n";
-    code += "}\n";
+    code += "// Code generated by the FlatBuffers compiler. DO NOT EDIT.\n\n";
+    code += "package " + package_name + "\n";
+    code += R"GO(
+import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/binary"
+	"fmt"
+)
+
+// Field-encryption format 3: flatbuffersEncryptionCrypt encrypts or decrypts,
+// in place, every (encrypted) field instance of a buffer exactly as the C++
+// walker (flatbuffers::EncryptBuffer/DecryptBuffer, version 3) and flatc-wasm
+// do. The record's key is
+// K = HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(recordIndex)),
+// and each instance is AES-256-CTR encrypted with K and the IV
+// BE32(position of its first byte in the buffer) || 12 zero bytes, so no two
+// instances share a key stream. (key, recordIndex) must be unique per buffer.
+
+type flatbuffersEncryptionError string
+
+func (e flatbuffersEncryptionError) Error() string { return string(e) }
+
+type flatbuffersEncryptionWalk struct {
+	buf     []byte
+	program []int
+	block   cipher.Block // nil: a dry run that only checks the buffer
+	tables  map[int64]bool
+	regions map[int64]bool
+}
+
+func (w *flatbuffersEncryptionWalk) fail(what string) {
+	panic(flatbuffersEncryptionError("FlatbuffersEncryption: " + what))
+}
+
+func (w *flatbuffersEncryptionWalk) check(pos, length int64) {
+	size := int64(len(w.buf))
+	if pos < 0 || length < 0 || pos > size || length > size-pos {
+		w.fail(fmt.Sprintf("the buffer is malformed (offset %d out of bounds)", pos))
+	}
+}
+
+func (w *flatbuffersEncryptionWalk) u8(pos int64) int64 {
+	w.check(pos, 1)
+	return int64(w.buf[pos])
+}
+
+func (w *flatbuffersEncryptionWalk) u16(pos int64) int64 {
+	w.check(pos, 2)
+	return int64(binary.LittleEndian.Uint16(w.buf[pos:]))
+}
+
+func (w *flatbuffersEncryptionWalk) u32(pos int64) int64 {
+	w.check(pos, 4)
+	return int64(binary.LittleEndian.Uint32(w.buf[pos:]))
+}
+
+func (w *flatbuffersEncryptionWalk) i32(pos int64) int64 {
+	w.check(pos, 4)
+	return int64(int32(binary.LittleEndian.Uint32(w.buf[pos:])))
+}
+
+func (w *flatbuffersEncryptionWalk) follow(pos int64) int64 {
+	target := pos + w.u32(pos)
+	w.check(target, 4)
+	return target
+}
+
+func (w *flatbuffersEncryptionWalk) count(pos, elementSize int64) int64 {
+	n := w.u32(pos)
+	w.check(pos+4, n*elementSize)
+	return n
+}
+
+func (w *flatbuffersEncryptionWalk) crypt(start, length int64) {
+	if length == 0 || w.regions[start] {
+		return
+	}
+	w.regions[start] = true
+	if w.block == nil {
+		return
+	}
+	iv := make([]byte, aes.BlockSize)
+	binary.BigEndian.PutUint32(iv, uint32(start))
+	region := w.buf[start : start+length]
+	cipher.NewCTR(w.block, iv).XORKeyStream(region, region)
+}
+
+func (w *flatbuffersEncryptionWalk) str(pos int64) {
+	s := w.follow(pos)
+	n := w.u32(s)
+	w.check(s+4, n+1)
+	w.crypt(s+4, n)
+}
+
+func (w *flatbuffersEncryptionWalk) field(table, slot int64) int64 {
+	vtable := table - w.i32(table)
+	if slot+2 > w.u16(vtable) {
+		return 0
+	}
+	if offset := w.u16(vtable + slot); offset != 0 {
+		return table + offset
+	}
+	return 0
+}
+
+func (w *flatbuffersEncryptionWalk) enter(table int64, depth int) bool {
+	if depth > 64 {
+		w.fail("tables nested deeper than 64 levels")
+	}
+	if w.tables[table] {
+		return false
+	}
+	w.tables[table] = true
+	vtable := table - w.i32(table)
+	w.check(vtable, 4)
+	vtableSize, tableSize := w.u16(vtable), w.u16(vtable+2)
+	if vtableSize < 4 || vtableSize&1 != 0 {
+		w.fail("the buffer is malformed (bad vtable)")
+	}
+	w.check(vtable, vtableSize)
+	w.check(table, tableSize)
+	for slot := int64(4); slot < vtableSize; slot += 2 {
+		if offset := w.u16(vtable + slot); offset != 0 && offset >= tableSize {
+			w.fail("the buffer is malformed (bad field offset)")
+		}
+	}
+	return true
+}
+
+func flatbuffersEncryptionMember(members []int, unionType int64) int {
+	for i := 0; i+1 < len(members); i += 2 {
+		if int64(members[i]) == unionType {
+			return members[i+1]
+		}
+	}
+	return -1
+}
+
+func (w *flatbuffersEncryptionWalk) walk(index int, table int64, depth int) {
+	if !w.enter(table, depth) {
+		return
+	}
+	p := w.program
+	at := p[1+index]
+	ops := p[at]
+	at++
+	for op := 0; op < ops; op++ {
+		kind, slot := p[at], int64(p[at+1])
+		at += 2
+		arg, typeSlot, members := 0, int64(0), []int(nil)
+		switch kind {
+		case 0, 2, 4, 5:
+			arg = p[at]
+			at++
+		case 6, 7:
+			typeSlot = int64(p[at])
+			n := p[at+1]
+			members = p[at+2 : at+2+2*n]
+			at += 2 + 2*n
+		}
+		loc := w.field(table, slot)
+		if loc == 0 {
+			continue
+		}
+		switch kind {
+		case 0:
+			w.check(loc, int64(arg))
+			w.crypt(loc, int64(arg))
+		case 1:
+			w.str(loc)
+		case 2:
+			v := w.follow(loc)
+			w.crypt(v+4, w.count(v, int64(arg))*int64(arg))
+		case 3:
+			v := w.follow(loc)
+			n := w.count(v, 4)
+			for i := int64(0); i < n; i++ {
+				w.str(v + 4 + 4*i)
+			}
+		case 4:
+			w.walk(arg, w.follow(loc), depth+1)
+		case 5:
+			v := w.follow(loc)
+			n := w.count(v, 4)
+			for i := int64(0); i < n; i++ {
+				w.walk(arg, w.follow(v+4+4*i), depth+1)
+			}
+		case 6:
+			typeLoc := w.field(table, typeSlot)
+			if typeLoc == 0 {
+				continue
+			}
+			if member := flatbuffersEncryptionMember(members, w.u8(typeLoc)); member >= 0 {
+				w.walk(member, w.follow(loc), depth+1)
+			}
+		case 7:
+			typeLoc := w.field(table, typeSlot)
+			if typeLoc == 0 {
+				continue
+			}
+			types := w.follow(typeLoc)
+			n := w.count(types, 1)
+			values := w.follow(loc)
+			if w.count(values, 4) != n {
+				w.fail("the buffer is malformed (union vectors differ)")
+			}
+			for i := int64(0); i < n; i++ {
+				if member := flatbuffersEncryptionMember(members, w.u8(types+4+i)); member >= 0 {
+					w.walk(member, w.follow(values+4+4*i), depth+1)
+				}
+			}
+		}
+	}
+}
+
+// flatbuffersEncryptionBufferKey returns the record's key:
+// HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(recordIndex)).
+func flatbuffersEncryptionBufferKey(key []byte, recordIndex uint32) []byte {
+	extract := hmac.New(sha256.New, make([]byte, sha256.Size))
+	extract.Write(key)
+	expand := hmac.New(sha256.New, extract.Sum(nil))
+	info := []byte("flatbuffers-buffer-v3\x00\x00\x00\x00\x01")
+	binary.BigEndian.PutUint32(info[21:], recordIndex)
+	expand.Write(info)
+	return expand.Sum(nil)
+}
+
+// flatbuffersEncryptionCrypt encrypts or decrypts (the same operation), in
+// place, every (encrypted) field instance of buf by a table's walk program.
+// When it returns an error (a bad key or a malformed buffer) no byte has
+// changed.
+func flatbuffersEncryptionCrypt(buf, key []byte, recordIndex uint32, program []int) (err error) {
+	if len(key) != 32 {
+		return flatbuffersEncryptionError("FlatbuffersEncryption: the key must be 32 bytes")
+	}
+	if len(buf) < 4 || int64(len(buf)) > 0x7FFFFFFF {
+		return flatbuffersEncryptionError("FlatbuffersEncryption: invalid buffer")
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			e, ok := r.(flatbuffersEncryptionError)
+			if !ok {
+				panic(r)
+			}
+			err = e
+		}
+	}()
+	root := int64(binary.LittleEndian.Uint32(buf))
+	dry := &flatbuffersEncryptionWalk{buf: buf, program: program,
+		tables: map[int64]bool{}, regions: map[int64]bool{}}
+	dry.check(root, 4)
+	dry.walk(0, root, 0)
+	block, e := aes.NewCipher(flatbuffersEncryptionBufferKey(key, recordIndex))
+	if e != nil {
+		return e
+	}
+	w := &flatbuffersEncryptionWalk{buf: buf, program: program, block: block,
+		tables: map[int64]bool{}, regions: map[int64]bool{}}
+	w.walk(0, root, 0)
+	return nil
+}
+)GO";
     return code;
   }
 
-  // Generate the encryption module for a namespace.
-  bool GenerateEncryptionModule(const Namespace& ns) const {
-    std::string package_name = ns.components.empty() ? "main" : LastNamespacePart(ns);
-    std::string code = GetEncryptionModuleCode(package_name);
-    std::string directory = namer_.Directories(ns);
+  // Generate the encryption module for a namespace (package).
+  bool GenerateEncryptionModule(const Namespace& ns,
+                                const std::string& package_name) const {
+    const std::string directory =
+        parser_.opts.one_file ? path_ : namer_.Directories(ns);
     EnsureDirExists(directory);
-    std::string filename = directory + "flatbuffers_encryption.go";
-    return parser_.opts.file_saver->SaveFile(filename.c_str(), code, false);
+    const std::string filename = directory + "flatbuffers_encryption.go";
+    return parser_.opts.file_saver->SaveFile(
+        filename.c_str(), GetEncryptionModuleCode(package_name), false);
+  }
+
+  // EncryptBuffer/DecryptBuffer of a table that reaches an (encrypted) field.
+  void GenEncryptionFunctions(const StructDef& struct_def,
+                              std::string* code_ptr) const {
+    std::string& code = *code_ptr;
+    const std::string type = namer_.Type(struct_def);
+    const std::string program = "flatbuffersEncryptionProgram" + type;
+    code += "// Field-encryption format 3 walk program of " + type +
+            " (see flatbuffers_encryption.go).\n";
+    code += "var " + program + " = []int{\n";
+    for (const auto& line : encryption_plan_.ProgramLines(struct_def)) {
+      code += "\t" + line + (line.back() == ',' ? "" : ",") + "\n";
+    }
+    code += "}\n\n";
+    const char* kVerbs[] = { "Encrypt", "Decrypt" };
+    const char* kLower[] = { "encrypts", "decrypts" };
+    for (int i = 0; i < 2; i++) {
+      const std::string name = type + kVerbs[i] + "Buffer";
+      code += "// " + name + " " + kLower[i] +
+              ", in place, the (encrypted) fields of a " + type + "\n";
+      code += "// buffer with field-encryption format 3 (key: 32 bytes; "
+              "recordIndex: unique\n";
+      code += "// per buffer under the key). No byte changes when it returns "
+              "an error.\n";
+      code += "func " + name +
+              "(buf, key []byte, recordIndex uint32) error {\n";
+      code += "\treturn flatbuffersEncryptionCrypt(buf, key, recordIndex, " +
+              program + ")\n";
+      code += "}\n\n";
+    }
   }
 
   bool generateStructs(std::string* one_file_code) {
-    // Track namespaces that need encryption module
+    // Packages (directories) that got a flatbuffers_encryption.go.
     std::set<std::string> encryption_namespaces;
 
     for (auto it = parser_.structs_.vec.begin();
@@ -285,17 +484,21 @@ class GoGenerator : public BaseGenerator {
       auto& struct_def = **it;
       GenStruct(struct_def, &declcode);
 
-      // Generate encryption module for this namespace if needed
-      if (HasEncryptedFields(struct_def) && !parser_.opts.one_file) {
+      // One flatbuffers_encryption.go per package that needs it, with the
+      // package name the table's own file gets.
+      if (!struct_def.generated && encryption_plan_.NeedsWalk(struct_def)) {
         Namespace& ns = go_namespace_.components.empty()
                             ? *struct_def.defined_namespace
                             : go_namespace_;
-        const std::string ns_key = namer_.Directories(ns);
-        if (encryption_namespaces.find(ns_key) == encryption_namespaces.end()) {
-          encryption_namespaces.insert(ns_key);
-          if (!GenerateEncryptionModule(ns)) {
-            return false;
-          }
+        const std::string directory =
+            parser_.opts.one_file ? path_ : namer_.Directories(ns);
+        if (encryption_namespaces.insert(directory).second) {
+          const std::string package_name =
+              parser_.opts.one_file
+                  ? LastNamespacePart(go_namespace_)
+                  : (ns.components.empty() ? struct_def.name
+                                           : LastNamespacePart(ns));
+          if (!GenerateEncryptionModule(ns, package_name)) return false;
         }
       }
 
@@ -311,6 +514,7 @@ class GoGenerator : public BaseGenerator {
   Namespace go_namespace_;
   Namespace* cur_name_space_;
   const IdlNamer namer_;
+  const encryption_codegen::Plan encryption_plan_;
 
   struct NamespacePtrLess {
     bool operator()(const Definition* a, const Definition* b) const {
@@ -328,21 +532,9 @@ class GoGenerator : public BaseGenerator {
            NumToString(field.value.offset) + "))\n\tif o != 0 {\n";
   }
 
-  // Check if a struct has any encrypted fields.
-  bool HasEncryptedFields(const StructDef& struct_def) const {
-    for (auto it = struct_def.fields.vec.begin();
-         it != struct_def.fields.vec.end(); ++it) {
-      if ((*it)->attributes.Lookup("encrypted") != nullptr) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   // Begin a class declaration.
   void BeginClass(const StructDef& struct_def, std::string* code_ptr) {
     std::string& code = *code_ptr;
-    bool has_encrypted = HasEncryptedFields(struct_def);
 
     code += "type " + namer_.Type(struct_def) + " struct {\n\t";
 
@@ -350,9 +542,6 @@ class GoGenerator : public BaseGenerator {
     // conflict:
     code += "_tab ";
     code += struct_def.fixed ? "flatbuffers.Struct" : "flatbuffers.Table";
-    if (has_encrypted) {
-      code += "\n\tencryptionCtx []byte";
-    }
     code += "\n}\n\n";
   }
 
@@ -465,7 +654,6 @@ class GoGenerator : public BaseGenerator {
     std::string& code = *code_ptr;
     const std::string size_prefix[] = {"", "SizePrefixed"};
     const std::string struct_type = namer_.Type(struct_def);
-    bool has_encrypted = HasEncryptedFields(struct_def);
 
     bool has_file_identifier = (parser_.root_struct_def_ == &struct_def) &&
                                parser_.file_identifier_.length();
@@ -477,11 +665,7 @@ class GoGenerator : public BaseGenerator {
 
     for (int i = 0; i < 2; i++) {
       code += "func Get" + size_prefix[i] + "RootAs" + struct_type;
-      if (has_encrypted) {
-        code += "(buf []byte, offset flatbuffers.UOffsetT, encryptionCtx ...[]byte) ";
-      } else {
-        code += "(buf []byte, offset flatbuffers.UOffsetT) ";
-      }
+      code += "(buf []byte, offset flatbuffers.UOffsetT) ";
       code += "*" + struct_type + "";
       code += " {\n";
       if (i == 0) {
@@ -492,18 +676,10 @@ class GoGenerator : public BaseGenerator {
             "flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])\n";
       }
       code += "\tx := &" + struct_type + "{}\n";
-      if (has_encrypted) {
-        if (i == 0) {
-          code += "\tx.Init(buf, n+offset, encryptionCtx...)\n";
-        } else {
-          code += "\tx.Init(buf, n+offset+flatbuffers.SizeUint32, encryptionCtx...)\n";
-        }
+      if (i == 0) {
+        code += "\tx.Init(buf, n+offset)\n";
       } else {
-        if (i == 0) {
-          code += "\tx.Init(buf, n+offset)\n";
-        } else {
-          code += "\tx.Init(buf, n+offset+flatbuffers.SizeUint32)\n";
-        }
+        code += "\tx.Init(buf, n+offset+flatbuffers.SizeUint32)\n";
       }
       code += "\treturn x\n";
       code += "}\n\n";
@@ -533,22 +709,12 @@ class GoGenerator : public BaseGenerator {
   // Initialize an existing object with other data, to avoid an allocation.
   void InitializeExisting(const StructDef& struct_def, std::string* code_ptr) {
     std::string& code = *code_ptr;
-    bool has_encrypted = HasEncryptedFields(struct_def);
 
     GenReceiver(struct_def, code_ptr);
-    if (has_encrypted) {
-      code += " Init(buf []byte, i flatbuffers.UOffsetT, encryptionCtx ...[]byte) ";
-    } else {
-      code += " Init(buf []byte, i flatbuffers.UOffsetT) ";
-    }
+    code += " Init(buf []byte, i flatbuffers.UOffsetT) ";
     code += "{\n";
     code += "\trcv._tab.Bytes = buf\n";
     code += "\trcv._tab.Pos = i\n";
-    if (has_encrypted) {
-      code += "\tif len(encryptionCtx) > 0 {\n";
-      code += "\t\trcv.encryptionCtx = encryptionCtx[0]\n";
-      code += "\t}\n";
-    }
     code += "}\n\n";
   }
 
@@ -652,19 +818,7 @@ class GoGenerator : public BaseGenerator {
     } else {
       code += "\t\treturn ";
     }
-    
-    // Check if field has encryption attribute and wrap with decryption
-    if (field.attributes.Lookup("encrypted") != nullptr) {
-      code += "DecryptScalar(";
-    }
-
     code += CastToEnum(field.value.type, getter + "(o + rcv._tab.Pos)");
-
-    // Close encryption wrapper if needed
-    if (field.attributes.Lookup("encrypted") != nullptr) {
-      code += ", rcv.encryptionCtx, " + NumToString(field.value.offset) + ")";
-    }
-    
     if (field.IsScalarOptional()) {
       code += "\n\t\treturn &v";
     }
@@ -750,16 +904,8 @@ class GoGenerator : public BaseGenerator {
     code += " " + base_name;
     code += "() " + TypeName(field) + " ";
     code += OffsetPrefix(field);
-    
-    // Check if field has encryption attribute
-    if (field.attributes.Lookup("encrypted") != nullptr) {
-      code += "\t\treturn DecryptString(" + GenGetter(field.value.type);
-      code += "(o + rcv._tab.Pos), rcv.encryptionCtx, " + NumToString(field.value.offset) + ")\n";
-    } else {
-      code += "\t\treturn " + GenGetter(field.value.type);
-      code += "(o + rcv._tab.Pos)\n";
-    }
-    
+    code += "\t\treturn " + GenGetter(field.value.type);
+    code += "(o + rcv._tab.Pos)\n";
     code += "\t}\n\treturn nil\n";
     code += "}\n\n";
 
@@ -1299,6 +1445,9 @@ class GoGenerator : public BaseGenerator {
     InitializeExisting(struct_def, code_ptr);
     // Generate _tab accessor
     GenTableAccessor(struct_def, code_ptr);
+    if (!struct_def.fixed && encryption_plan_.NeedsWalk(struct_def)) {
+      GenEncryptionFunctions(struct_def, code_ptr);
+    }
 
     // Generate struct fields accessors
     for (auto it = struct_def.fields.vec.begin();
@@ -2108,6 +2257,11 @@ class GoCodeGenerator : public CodeGenerator {
  public:
   Status GenerateCode(const Parser& parser, const std::string& path,
                       const std::string& filename) override {
+    const encryption_codegen::Plan plan(parser);
+    if (!plan.ok()) {
+      status_detail = ": " + plan.error();
+      return Status::ERROR;
+    }
     if (!GenerateGo(parser, path, filename)) {
       return Status::ERROR;
     }

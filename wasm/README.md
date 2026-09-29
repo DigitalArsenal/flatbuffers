@@ -2203,28 +2203,18 @@ flatc-wasm supports per-field AES-256-CTR encryption for FlatBuffer data. Fields
 
 ### Generated Code Encryption Support
 
-All 12 code generators now emit encryption support automatically when your schema contains `(encrypted)` fields:
-
-| Language | Library/Implementation | Notes |
-|----------|----------------------|-------|
-| C++ | `flatbuffers/encryption.h` | Inline helpers in `encryption` namespace |
-| TypeScript | Pure TypeScript AES-256-CTR | No external dependencies |
-| Python | `cryptography` library | Uses Fernet-compatible primitives |
-| Go | `crypto/aes` + `crypto/cipher` | Standard library only |
-| Rust | Pure Rust AES-256-CTR | No external crates required |
-| Java | `javax.crypto.Cipher` | Standard JCE APIs |
-| C# | `System.Security.Cryptography` | .NET built-in crypto |
-| Swift | Pure Swift AES-256-CTR | No Foundation dependencies |
-| Kotlin | `javax.crypto.Cipher` | Android/JVM compatible |
-| PHP | `openssl_encrypt/decrypt` | OpenSSL extension |
-| Dart | `pointycastle` library | Pure Dart implementation |
-| Lobster | Placeholder | Language lacks crypto library |
-
-The generated code automatically:
-- Adds an `encryptionCtx` field to tables with encrypted fields
-- Generates `withEncryption()` factory constructors
-- Transparently decrypts fields when accessed with a valid context
-- Returns raw (encrypted) bytes when accessed without context
+The C#, Dart, Go, Java, Kotlin, Lobster, PHP, Python, Rust and Swift
+generators emit, for every table that has or reaches an `(encrypted)` field,
+buffer-level functions that encrypt and decrypt field-encryption format 3
+exactly as flatc-wasm and the C++ `EncryptBuffer`/`DecryptBuffer` do (the same
+ciphertext, byte for byte), for example `Node.DecryptBuffer(buf, key,
+record_index)` in Python or `NodeDecryptBuffer(buf, key, recordIndex)` in Go.
+Their crypto is the language's standard library, or a pure implementation
+where there is none (Dart, Lobster, Python AES, Rust, Swift), so the generated
+code needs no package. Read the decrypted buffer with the ordinary accessors.
+C++ uses `DecryptBuffer`, and TypeScript and JavaScript use this package.
+`flatc` refuses a schema whose `(encrypted)` fields format 3 cannot encrypt.
+See the field-encryption documentation for each language's signatures.
 
 ### Per-Field Encryption
 

@@ -27,6 +27,11 @@ foreach ($iterator as $file) {
         require $file;
     }
 }
+// Field-encryption format 3 (test_encryption_v3): the checked-in EncryptionV3
+// classes, whatever the generated root.
+foreach (glob(join(DIRECTORY_SEPARATOR, array(__DIR__, "EncryptionV3", "*.php"))) as $file) {
+    require_once $file;
+}
 
 function main()
 {
@@ -96,6 +101,7 @@ function main()
 
     testByteBuffer($assert);
     fuzzTest1($assert);
+    test_encryption_v3($assert);
 //    testUnicode($assert);
 
     echo 'FlatBuffers php test: completed successfully' . PHP_EOL;
@@ -615,6 +621,92 @@ function testByteBuffer(Assert $assert) {
     $uut = Google\FlatBuffers\ByteBuffer::wrap($buffer);
     $assert->Equal(0x0D0C0B0A, $uut->readLittleEndian(0, 4, true));
 
+}
+
+// Field-encryption format 3: the generated PHP FlatbuffersEncryption helper
+// against the buffers the C++ walker encrypted (encryption_v3).
+function encryption_v3_load($name) {
+    return file_get_contents(join(DIRECTORY_SEPARATOR, array(__DIR__, "encryption_v3", $name)));
+}
+
+// The root, its child, its first child in the vector and its union member
+// hold equal plaintext in the same field slot.
+function encryption_v3_same_slot(\EncryptionV3\Node $node) {
+    $leaf = $node->getPayload(new \EncryptionV3\Leaf());
+    return array(
+        array($node->getSecret(), $node->getChild()->getSecret(),
+              $node->getChildren(0)->getSecret(), $leaf->getSecret()),
+        array($node->getPin(), $node->getChild()->getPin(),
+              $node->getChildren(0)->getPin(), $leaf->getPin()));
+}
+
+function encryption_v3_root($bytes) {
+    return \EncryptionV3\Node::getRootAsNode(Google\FlatBuffers\ByteBuffer::wrap($bytes));
+}
+
+function test_encryption_v3(Assert $assert) {
+    $key = '';
+    for ($i = 0; $i < 32; $i++) {
+        $key .= chr($i);
+    }
+    $plain = encryption_v3_load('node.bin');
+    foreach (array(0, 1) as $record) {
+        $cipher = encryption_v3_load("node_r{$record}.bin");
+        $assert->ok(\EncryptionV3\Node::encryptBuffer($plain, $key, $record) === $cipher,
+            "record {$record}: the ciphertext differs from the C++ walker's");
+        $assert->ok(\EncryptionV3\Node::decryptBuffer($cipher, $key, $record) === $plain,
+            "record {$record}: decrypting does not restore the plaintext");
+    }
+    $bag = encryption_v3_load('bag.bin');
+    $assert->ok(\EncryptionV3\Bag::encryptBuffer($bag, $key) === encryption_v3_load('bag_r0.bin'),
+        'the vector of unions differs from the C++ walker\'s');
+    $assert->ok(\EncryptionV3\Bag::decryptBuffer(encryption_v3_load('bag_r0.bin'), $key) === $bag,
+        'decrypting the vector of unions does not restore the plaintext');
+
+    // Decrypted fields.
+    $node = encryption_v3_root(\EncryptionV3\Node::decryptBuffer(encryption_v3_load('node_r0.bin'), $key));
+    list($secrets, $pins) = encryption_v3_same_slot($node);
+    $assert->ok($secrets === array_fill(0, 4, 'the same secret'), 'decrypted secrets');
+    $assert->ok($pins === array_fill(0, 4, 1234), 'decrypted pins');
+    $assert->strictEqual($node->getName(), 'root');
+    $assert->strictEqual($node->getChildren(1)->getSecret(), 'another secret');
+    $assert->strictEqual($node->getChildren(1)->getPin(), 5678);
+    $assert->strictEqual($node->getFlag(), true);
+    $assert->strictEqual($node->getLevel(), \EncryptionV3\Level::High);
+    $assert->strictEqual($node->getCount(), -7);
+    $assert->strictEqual($node->getTotal(), 9000000000);
+    $assert->Equal($node->getRatio(), 2.5);
+    $assert->Equal($node->getPosition()->getX(), 1.5);
+    $assert->Equal($node->getPosition()->getY(), -2.0);
+    $assert->Equal($node->getPosition()->getZ(), 3.25);
+    $assert->strictEqual($node->getBytesBytes(), "\x01\x02\x03\x04\x05");
+    $assert->Equal($node->getReadings(1), 1.5);
+    $assert->Equal($node->getPoints(1)->getZ(), 6.0);
+    $assert->strictEqual($node->getTags(0), 'alpha');
+    $assert->strictEqual($node->getTags(1), 'beta');
+    $assert->strictEqual($node->getPayloadType(), \EncryptionV3\Payload::Leaf);
+    $assert->strictEqual($node->getPlain(), 42);
+
+    // Every instance is ciphertext, and no two share a key stream: equal
+    // plaintext gives different ciphertexts, in one record and across records.
+    list($secrets, $pins) = encryption_v3_same_slot(encryption_v3_root(encryption_v3_load('node_r0.bin')));
+    list($other_secrets, $other_pins) = encryption_v3_same_slot(encryption_v3_root(encryption_v3_load('node_r1.bin')));
+    $assert->ok(!in_array('the same secret', $secrets, true) && !in_array(1234, $pins, true),
+        'an instance is plaintext');
+    $assert->ok(count(array_unique($secrets)) === 4 && count(array_unique($pins)) === 4,
+        'two instances share a key stream');
+    for ($i = 0; $i < 4; $i++) {
+        $assert->ok($secrets[$i] !== $other_secrets[$i] && $pins[$i] !== $other_pins[$i],
+            "instance {$i} has the same ciphertext in records 0 and 1");
+    }
+
+    // Refusals.
+    $assert->Throws(new \InvalidArgumentException(), function () use ($plain, $key) {
+        \EncryptionV3\Node::encryptBuffer($plain, substr($key, 0, 31));
+    });
+    $assert->Throws(new \InvalidArgumentException(), function () use ($plain, $key) {
+        \EncryptionV3\Node::encryptBuffer(substr($plain, 0, 200), $key);
+    });
 }
 
 class Assert {

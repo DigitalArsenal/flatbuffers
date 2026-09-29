@@ -1,0 +1,8 @@
+{
+  note: "a note",
+  items_type: ["Leaf", "Leaf"],
+  items: [
+    { secret: "the same secret", pin: 1234 },
+    { secret: "the same secret", pin: 1234 }
+  ]
+}

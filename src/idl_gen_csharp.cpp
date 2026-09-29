@@ -25,6 +25,7 @@
 #include "flatbuffers/flatbuffers.h"
 #include "flatbuffers/idl.h"
 #include "flatbuffers/util.h"
+#include "idl_gen_encryption.h"
 
 namespace flatbuffers {
 
@@ -49,7 +50,8 @@ class CSharpGenerator : public BaseGenerator {
                   const std::string& file_name)
       : BaseGenerator(parser, path, file_name,
                       parser.opts.cs_global_alias ? "global::" : "", ".", "cs"),
-        cur_name_space_(nullptr) {
+        cur_name_space_(nullptr),
+        encryption_plan_(parser) {
     // clang-format off
 
     // List of keywords retrieved from here:
@@ -144,195 +146,6 @@ class CSharpGenerator : public BaseGenerator {
 
   CSharpGenerator& operator=(const CSharpGenerator&);
 
-  // Check if a struct has any encrypted fields
-  bool HasEncryptedFields(const StructDef& struct_def) const {
-    for (auto it = struct_def.fields.vec.begin();
-         it != struct_def.fields.vec.end(); ++it) {
-      if ((*it)->attributes.Lookup("encrypted") != nullptr) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Generate the FlatbuffersEncryption class for a namespace
-  bool GenerateEncryptionModule(const Namespace& ns) const {
-    std::string code;
-    code += "// " + std::string(FlatBuffersGeneratedWarning()) + "\n\n";
-
-    if (!ns.components.empty()) {
-      code += "namespace " + FullNamespace(".", ns) + "\n{\n\n";
-    }
-
-    code += "using System;\n";
-    code += "using System.Security.Cryptography;\n";
-    code += "using System.Text;\n\n";
-
-    code += "/// <summary>\n";
-    code += "/// FlatBuffers field-level encryption support using AES-256-CTR.\n";
-    code += "/// </summary>\n";
-    code += "public static class FlatbuffersEncryption\n{\n";
-
-    // DeriveNonce helper
-    code += "  private static byte[] DeriveNonce(byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    if (ctx == null || ctx.Length < 12)\n";
-    code += "      throw new ArgumentException(\"Encryption context must be at least 12 bytes\");\n";
-    code += "    var nonce = new byte[16];\n";
-    code += "    Array.Copy(ctx, 0, nonce, 0, 12);\n";
-    code += "    nonce[12] = (byte)(fieldOffset & 0xFF);\n";
-    code += "    nonce[13] = (byte)((fieldOffset >> 8) & 0xFF);\n";
-    code += "    nonce[14] = (byte)((fieldOffset >> 16) & 0xFF);\n";
-    code += "    nonce[15] = (byte)((fieldOffset >> 24) & 0xFF);\n";
-    code += "    return nonce;\n";
-    code += "  }\n\n";
-
-    // DecryptBytes helper using AES-CTR
-    code += "  private static byte[] DecryptBytes(byte[] data, byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    if (ctx == null || ctx.Length < 32)\n";
-    code += "      throw new ArgumentException(\"Encryption context must be at least 32 bytes\");\n";
-    code += "    var key = new byte[32];\n";
-    code += "    Array.Copy(ctx, 0, key, 0, 32);\n";
-    code += "    var nonce = DeriveNonce(ctx, fieldOffset);\n";
-    code += "    using (var aes = Aes.Create())\n";
-    code += "    {\n";
-    code += "      aes.Key = key;\n";
-    code += "      aes.Mode = CipherMode.ECB;\n";
-    code += "      aes.Padding = PaddingMode.None;\n";
-    code += "      var result = new byte[data.Length];\n";
-    code += "      var counter = (byte[])nonce.Clone();\n";
-    code += "      var encryptor = aes.CreateEncryptor();\n";
-    code += "      for (int i = 0; i < data.Length; i += 16)\n";
-    code += "      {\n";
-    code += "        var keystream = new byte[16];\n";
-    code += "        encryptor.TransformBlock(counter, 0, 16, keystream, 0);\n";
-    code += "        int blockLen = Math.Min(16, data.Length - i);\n";
-    code += "        for (int j = 0; j < blockLen; j++)\n";
-    code += "          result[i + j] = (byte)(data[i + j] ^ keystream[j]);\n";
-    code += "        // Increment counter\n";
-    code += "        for (int k = 15; k >= 0; k--)\n";
-    code += "          if (++counter[k] != 0) break;\n";
-    code += "      }\n";
-    code += "      return result;\n";
-    code += "    }\n";
-    code += "  }\n\n";
-
-    // DecryptScalar overloads for various types
-    code += "  public static bool DecryptScalar(bool value, byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    var data = new byte[] { (byte)(value ? 1 : 0) };\n";
-    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return decrypted[0] != 0;\n";
-    code += "  }\n\n";
-
-    code += "  public static sbyte DecryptScalar(sbyte value, byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    var data = new byte[] { (byte)value };\n";
-    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return (sbyte)decrypted[0];\n";
-    code += "  }\n\n";
-
-    code += "  public static byte DecryptScalar(byte value, byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    var data = new byte[] { value };\n";
-    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return decrypted[0];\n";
-    code += "  }\n\n";
-
-    code += "  public static short DecryptScalar(short value, byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    var data = BitConverter.GetBytes(value);\n";
-    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return BitConverter.ToInt16(decrypted, 0);\n";
-    code += "  }\n\n";
-
-    code += "  public static ushort DecryptScalar(ushort value, byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    var data = BitConverter.GetBytes(value);\n";
-    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return BitConverter.ToUInt16(decrypted, 0);\n";
-    code += "  }\n\n";
-
-    code += "  public static int DecryptScalar(int value, byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    var data = BitConverter.GetBytes(value);\n";
-    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return BitConverter.ToInt32(decrypted, 0);\n";
-    code += "  }\n\n";
-
-    code += "  public static uint DecryptScalar(uint value, byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    var data = BitConverter.GetBytes(value);\n";
-    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return BitConverter.ToUInt32(decrypted, 0);\n";
-    code += "  }\n\n";
-
-    code += "  public static long DecryptScalar(long value, byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    var data = BitConverter.GetBytes(value);\n";
-    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return BitConverter.ToInt64(decrypted, 0);\n";
-    code += "  }\n\n";
-
-    code += "  public static ulong DecryptScalar(ulong value, byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    var data = BitConverter.GetBytes(value);\n";
-    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return BitConverter.ToUInt64(decrypted, 0);\n";
-    code += "  }\n\n";
-
-    code += "  public static float DecryptScalar(float value, byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    var data = BitConverter.GetBytes(value);\n";
-    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return BitConverter.ToSingle(decrypted, 0);\n";
-    code += "  }\n\n";
-
-    code += "  public static double DecryptScalar(double value, byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    if (ctx == null) return value;\n";
-    code += "    var data = BitConverter.GetBytes(value);\n";
-    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return BitConverter.ToDouble(decrypted, 0);\n";
-    code += "  }\n\n";
-
-    // DecryptString - takes raw bytes from buffer, decrypts, returns string
-    code += "  public static string DecryptString(Google.FlatBuffers.ByteBuffer bb, int offset, byte[] ctx, int fieldOffset)\n";
-    code += "  {\n";
-    code += "    int pos = offset + bb.GetInt(offset);\n";
-    code += "    int len = bb.GetInt(pos);\n";
-    code += "    var data = new byte[len];\n";
-    code += "    for (int i = 0; i < len; i++)\n";
-    code += "      data[i] = bb.Get(pos + 4 + i);\n";
-    code += "    if (ctx == null)\n";
-    code += "      return Encoding.UTF8.GetString(data);\n";
-    code += "    var decrypted = DecryptBytes(data, ctx, fieldOffset);\n";
-    code += "    return Encoding.UTF8.GetString(decrypted);\n";
-    code += "  }\n";
-
-    code += "}\n";
-
-    if (!ns.components.empty()) {
-      code += "\n}\n";
-    }
-
-    std::string directory = NamespaceDir(ns);
-    EnsureDirExists(directory);
-    std::string filename = directory + "FlatbuffersEncryption.cs";
-    return parser_.opts.file_saver->SaveFile(filename.c_str(), code, false);
-  }
-
   bool generate() {
     std::string one_file_code;
     cur_name_space_ = parser_.current_namespace_;
@@ -352,9 +165,6 @@ class CSharpGenerator : public BaseGenerator {
       }
     }
 
-    // Track namespaces that need encryption module
-    std::set<std::string> encryption_namespaces;
-
     for (auto it = parser_.structs_.vec.begin();
          it != parser_.structs_.vec.end(); ++it) {
       std::string declcode;
@@ -363,24 +173,31 @@ class CSharpGenerator : public BaseGenerator {
         cur_name_space_ = struct_def.defined_namespace;
       GenStruct(struct_def, &declcode, parser_.opts);
       GenStructVerifier(struct_def, &declcode);
-
-      // Generate encryption module for this namespace if needed
-      if (HasEncryptedFields(struct_def) && !parser_.opts.one_file) {
-        std::string ns_key = NamespaceDir(*struct_def.defined_namespace);
-        if (encryption_namespaces.find(ns_key) == encryption_namespaces.end()) {
-          encryption_namespaces.insert(ns_key);
-          if (!GenerateEncryptionModule(*struct_def.defined_namespace)) {
-            return false;
-          }
-        }
-      }
-
       if (parser_.opts.one_file) {
         one_file_code += declcode;
       } else {
         if (!SaveType(struct_def.name, *struct_def.defined_namespace, declcode,
                       true, parser_.opts))
           return false;
+      }
+    }
+
+    // One FlatbuffersEncryption class per namespace that needs it.
+    std::set<std::string> encryption_namespaces;
+    for (auto it = parser_.structs_.vec.begin();
+         it != parser_.structs_.vec.end(); ++it) {
+      const auto& struct_def = **it;
+      if (struct_def.generated || !encryption_plan_.NeedsWalk(struct_def)) {
+        continue;
+      }
+      const Namespace& ns = parser_.opts.one_file ? *parser_.current_namespace_
+                                                  : *struct_def.defined_namespace;
+      // Its own file even with --gen-onefile, so that two generated files of
+      // one namespace do not both define it.
+      if (encryption_namespaces.insert(FullNamespace(".", ns)).second &&
+          !SaveType("FlatbuffersEncryption", ns, EncryptionModuleCode(), true,
+                    parser_.opts)) {
+        return false;
       }
     }
 
@@ -392,6 +209,333 @@ class CSharpGenerator : public BaseGenerator {
   }
 
  private:
+  // The FlatbuffersEncryption helper (field-encryption format 3) of a
+  // namespace: System.Security.Cryptography only.
+  static std::string EncryptionModuleCode() {
+    return R"CS(/// <summary>
+/// Field-encryption format 3: encrypts or decrypts, in place, every
+/// (encrypted) field instance of a buffer exactly as the C++ walker
+/// (flatbuffers::EncryptBuffer/DecryptBuffer, version 3) and flatc-wasm do.
+/// The record's key is
+/// K = HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(recordIndex)),
+/// and each instance is AES-256-CTR encrypted with K and the IV
+/// BE32(position of its first byte in the buffer) || 12 zero bytes, so no two
+/// instances share a key stream. (key, recordIndex) must be unique per
+/// buffer. Generated tables call it with their walk program.
+/// </summary>
+public static class FlatbuffersEncryption
+{
+  /// <summary>
+  /// HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(recordIndex)).
+  /// </summary>
+  public static byte[] BufferKey(byte[] key, uint recordIndex)
+  {
+    byte[] prk;
+    using (var extract = new global::System.Security.Cryptography.HMACSHA256(new byte[32]))
+    {
+      prk = extract.ComputeHash(key);
+    }
+    var info = new byte[26];
+    global::System.Text.Encoding.ASCII.GetBytes("flatbuffers-buffer-v3", 0, 21, info, 0);
+    info[21] = (byte)(recordIndex >> 24);
+    info[22] = (byte)(recordIndex >> 16);
+    info[23] = (byte)(recordIndex >> 8);
+    info[24] = (byte)recordIndex;
+    info[25] = 1;
+    using (var expand = new global::System.Security.Cryptography.HMACSHA256(prk))
+    {
+      return expand.ComputeHash(info);
+    }
+  }
+
+  /// <summary>
+  /// Encrypts or decrypts (the same operation), in place, every (encrypted)
+  /// field instance of the buffer that starts at bb.Position, by a table's
+  /// walk program. Throws ArgumentException, before any byte changes, for a
+  /// bad key or a malformed buffer.
+  /// </summary>
+  public static void CryptBuffer(ByteBuffer bb, byte[] key, uint recordIndex, int[] program)
+  {
+    if (key == null || key.Length != 32)
+      throw new ArgumentException("FlatbuffersEncryption: the key must be 32 bytes");
+    if (bb.Length - bb.Position < 4)
+      throw new ArgumentException("FlatbuffersEncryption: invalid buffer");
+    var dry = new Walk(bb, program, null);
+    long root = dry.U32(0);
+    dry.Check(root, 4);
+    dry.Run(0, root, 0);
+    using (var aes = global::System.Security.Cryptography.Aes.Create())
+    {
+      aes.Mode = global::System.Security.Cryptography.CipherMode.ECB;
+      aes.Padding = global::System.Security.Cryptography.PaddingMode.None;
+      aes.Key = BufferKey(key, recordIndex);
+      using (var encryptor = aes.CreateEncryptor())
+      {
+        new Walk(bb, program, encryptor).Run(0, root, 0);
+      }
+    }
+  }
+
+  private sealed class Walk
+  {
+    private readonly ByteBuffer bb;
+    private readonly int start;
+    private readonly long size;
+    private readonly int[] program;
+    // null: a dry run that only checks the buffer
+    private readonly global::System.Security.Cryptography.ICryptoTransform encryptor;
+    private readonly HashSet<long> tables = new HashSet<long>();
+    private readonly HashSet<long> regions = new HashSet<long>();
+
+    public Walk(ByteBuffer bb, int[] program,
+                global::System.Security.Cryptography.ICryptoTransform encryptor)
+    {
+      this.bb = bb;
+      this.start = bb.Position;
+      this.size = bb.Length - bb.Position;
+      this.program = program;
+      this.encryptor = encryptor;
+    }
+
+    private static void Fail(string what)
+    {
+      throw new ArgumentException("FlatbuffersEncryption: " + what);
+    }
+
+    public void Check(long pos, long length)
+    {
+      if (pos < 0 || length < 0 || pos > size || length > size - pos)
+        Fail("the buffer is malformed (offset " + pos + " out of bounds)");
+    }
+
+    private long U8(long pos)
+    {
+      Check(pos, 1);
+      return bb.Get(start + (int)pos);
+    }
+
+    private long U16(long pos)
+    {
+      Check(pos, 2);
+      return U8(pos) | (U8(pos + 1) << 8);
+    }
+
+    public long U32(long pos)
+    {
+      Check(pos, 4);
+      return U16(pos) | (U16(pos + 2) << 16);
+    }
+
+    private long Follow(long pos)
+    {
+      long target = pos + U32(pos);
+      Check(target, 4);
+      return target;
+    }
+
+    private long Count(long pos, long elementSize)
+    {
+      long n = U32(pos);
+      Check(pos + 4, n * elementSize);
+      return n;
+    }
+
+    private void Crypt(long first, long length)
+    {
+      if (length == 0 || !regions.Add(first) || encryptor == null) return;
+      var counter = new byte[16];
+      counter[0] = (byte)(first >> 24);
+      counter[1] = (byte)(first >> 16);
+      counter[2] = (byte)(first >> 8);
+      counter[3] = (byte)first;
+      var stream = new byte[16];
+      for (long done = 0; done < length; done += 16)
+      {
+        encryptor.TransformBlock(counter, 0, 16, stream, 0);
+        for (int i = 0; i < 16 && done + i < length; i++)
+        {
+          int at = start + (int)(first + done + i);
+          bb.PutByte(at, (byte)(bb.Get(at) ^ stream[i]));
+        }
+        for (int k = 15; k >= 0; k--)
+        {
+          if (++counter[k] != 0) break;
+        }
+      }
+    }
+
+    private void Str(long pos)
+    {
+      long s = Follow(pos);
+      long n = U32(s);
+      Check(s + 4, n + 1);
+      Crypt(s + 4, n);
+    }
+
+    private long VTable(long table)
+    {
+      return table - (int)U32(table);
+    }
+
+    private long Field(long table, long slot)
+    {
+      long vtable = VTable(table);
+      if (slot + 2 > U16(vtable)) return 0;
+      long offset = U16(vtable + slot);
+      return offset == 0 ? 0 : table + offset;
+    }
+
+    private bool Enter(long table, int depth)
+    {
+      if (depth > 64) Fail("tables nested deeper than 64 levels");
+      if (!tables.Add(table)) return false;
+      long vtable = VTable(table);
+      Check(vtable, 4);
+      long vtableSize = U16(vtable);
+      long tableSize = U16(vtable + 2);
+      if (vtableSize < 4 || (vtableSize & 1) != 0) Fail("the buffer is malformed (bad vtable)");
+      Check(vtable, vtableSize);
+      Check(table, tableSize);
+      for (long slot = 4; slot < vtableSize; slot += 2)
+      {
+        long offset = U16(vtable + slot);
+        if (offset != 0 && offset >= tableSize) Fail("the buffer is malformed (bad field offset)");
+      }
+      return true;
+    }
+
+    private int Member(int at, int n, long unionType)
+    {
+      for (int i = 0; i < n; i++)
+      {
+        if (program[at + 2 * i] == unionType) return program[at + 2 * i + 1];
+      }
+      return -1;
+    }
+
+    public void Run(int index, long table, int depth)
+    {
+      if (!Enter(table, depth)) return;
+      int[] p = program;
+      int at = p[1 + index];
+      int ops = p[at++];
+      for (int op = 0; op < ops; op++)
+      {
+        int kind = p[at];
+        long slot = p[at + 1];
+        at += 2;
+        int arg = 0, members = 0, n = 0;
+        long typeSlot = 0;
+        if (kind == 0 || kind == 2 || kind == 4 || kind == 5)
+        {
+          arg = p[at++];
+        }
+        else if (kind == 6 || kind == 7)
+        {
+          typeSlot = p[at];
+          n = p[at + 1];
+          members = at + 2;
+          at += 2 + 2 * n;
+        }
+        long loc = Field(table, slot);
+        if (loc == 0) continue;
+        switch (kind)
+        {
+          case 0:
+            Check(loc, arg);
+            Crypt(loc, arg);
+            break;
+          case 1:
+            Str(loc);
+            break;
+          case 2:
+          {
+            long v = Follow(loc);
+            Crypt(v + 4, Count(v, arg) * arg);
+            break;
+          }
+          case 3:
+          {
+            long v = Follow(loc);
+            long c = Count(v, 4);
+            for (long i = 0; i < c; i++) Str(v + 4 + 4 * i);
+            break;
+          }
+          case 4:
+            Run(arg, Follow(loc), depth + 1);
+            break;
+          case 5:
+          {
+            long v = Follow(loc);
+            long c = Count(v, 4);
+            for (long i = 0; i < c; i++) Run(arg, Follow(v + 4 + 4 * i), depth + 1);
+            break;
+          }
+          case 6:
+          {
+            long typeLoc = Field(table, typeSlot);
+            if (typeLoc == 0) break;
+            int member = Member(members, n, U8(typeLoc));
+            if (member >= 0) Run(member, Follow(loc), depth + 1);
+            break;
+          }
+          case 7:
+          {
+            long typeLoc = Field(table, typeSlot);
+            if (typeLoc == 0) break;
+            long types = Follow(typeLoc);
+            long c = Count(types, 1);
+            long values = Follow(loc);
+            if (Count(values, 4) != c) Fail("the buffer is malformed (union vectors differ)");
+            for (long i = 0; i < c; i++)
+            {
+              int member = Member(members, n, U8(types + 4 + i));
+              if (member >= 0) Run(member, Follow(values + 4 + 4 * i), depth + 1);
+            }
+            break;
+          }
+          default:
+            Fail("unknown walk program op " + kind);
+            break;
+        }
+      }
+    }
+  }
+}
+)CS";
+  }
+
+  // EncryptBuffer/DecryptBuffer of a table that reaches an (encrypted) field.
+  void GenEncryptionMethods(const StructDef& struct_def,
+                            std::string* code_ptr) const {
+    auto& code = *code_ptr;
+    code += "  // Field-encryption format 3 walk program of " + struct_def.name +
+            " (see FlatbuffersEncryption).\n";
+    code += "  private static readonly int[] FlatbuffersEncryptionProgram = {\n";
+    for (const auto& line : encryption_plan_.ProgramLines(struct_def)) {
+      code += "    " + line + "\n";
+    }
+    code += "  };\n";
+    const char* kVerbs[] = { "Encrypt", "Decrypt" };
+    const char* kDoc[] = { "Encrypts", "Decrypts" };
+    for (int i = 0; i < 2; i++) {
+      code += "  /// <summary>\n";
+      code += "  /// " + std::string(kDoc[i]) +
+              ", in place, the (encrypted) fields of the " + struct_def.name +
+              " buffer that starts at\n";
+      code += "  /// _bb.Position, with field-encryption format 3 (key: 32 "
+              "bytes; recordIndex:\n";
+      code += "  /// unique per buffer under the key). Throws "
+              "ArgumentException, before any\n";
+      code += "  /// byte changes, for a bad key or a malformed buffer.\n";
+      code += "  /// </summary>\n";
+      code += "  public static void " + std::string(kVerbs[i]) +
+              "Buffer(ByteBuffer _bb, byte[] key, uint recordIndex) { "
+              "FlatbuffersEncryption.CryptBuffer(_bb, key, recordIndex, "
+              "FlatbuffersEncryptionProgram); }\n";
+    }
+  }
+
   std::unordered_set<std::string> keywords_;
 
   std::string EscapeKeyword(const std::string& name) const {
@@ -1092,12 +1236,6 @@ class CSharpGenerator : public BaseGenerator {
     code += struct_def.fixed ? "Struct" : "Table";
     code += " __p;\n";
 
-    // Add encryption context field if struct has encrypted fields
-    bool has_encrypted = HasEncryptedFields(struct_def);
-    if (has_encrypted) {
-      code += "  public byte[] EncryptionCtx;\n";
-    }
-
     code += "  public ByteBuffer ByteBuffer { get { return __p.bb; } }\n";
 
     if (!struct_def.fixed) {
@@ -1125,18 +1263,6 @@ class CSharpGenerator : public BaseGenerator {
       code += "return (obj.__assign(_bb.GetInt(_bb.Position";
       code += ") + _bb.Position";
       code += ", _bb)); }\n";
-
-      // Add overloaded methods with encryption context if needed
-      if (has_encrypted) {
-        code += method_signature + "(ByteBuffer _bb, byte[] encryptionCtx) ";
-        code += "{ return " + method_name + "(_bb, new " + struct_def.name +
-                "(), encryptionCtx); }\n";
-        code += method_signature + "(ByteBuffer _bb, " + struct_def.name +
-                " obj, byte[] encryptionCtx) { ";
-        code += "return (obj.__assign(_bb.GetInt(_bb.Position";
-        code += ") + _bb.Position";
-        code += ", _bb, encryptionCtx)); }\n";
-      }
       if (parser_.root_struct_def_ == &struct_def) {
         if (parser_.file_identifier_.length()) {
           // Check if a buffer has the identifier.
@@ -1168,34 +1294,14 @@ class CSharpGenerator : public BaseGenerator {
     code += "__p = new ";
     code += struct_def.fixed ? "Struct" : "Table";
     code += "(_i, _bb); ";
-    if (has_encrypted) {
-      code += "this.EncryptionCtx = null; ";
-    }
     code += "}\n";
-
-    // Add overloaded __init with encryption context if needed
-    if (has_encrypted) {
-      code += "  public void __init(int _i, ByteBuffer _bb, byte[] encryptionCtx) ";
-      code += "{ ";
-      code += "__p = new ";
-      code += struct_def.fixed ? "Struct" : "Table";
-      code += "(_i, _bb); ";
-      code += "this.EncryptionCtx = encryptionCtx; ";
-      code += "}\n";
-    }
-
     code +=
         "  public " + struct_def.name + " __assign(int _i, ByteBuffer _bb) ";
-    code += "{ __init(_i, _bb); return this; }\n";
-
-    // Add overloaded __assign with encryption context if needed
-    if (has_encrypted) {
-      code += "  public " + struct_def.name +
-              " __assign(int _i, ByteBuffer _bb, byte[] encryptionCtx) ";
-      code += "{ __init(_i, _bb, encryptionCtx); return this; }\n";
+    code += "{ __init(_i, _bb); return this; }\n\n";
+    if (!struct_def.fixed && encryption_plan_.NeedsWalk(struct_def)) {
+      GenEncryptionMethods(struct_def, code_ptr);
+      code += "\n";
     }
-
-    code += "\n";
     for (auto it = struct_def.fields.vec.begin();
          it != struct_def.fields.vec.end(); ++it) {
       auto& field = **it;
@@ -1274,17 +1380,10 @@ class CSharpGenerator : public BaseGenerator {
           code += NumToString(field.value.offset) + ")";
           code += dest_mask;
         } else {
-          if (field.attributes.Lookup("encrypted") != nullptr) {
-            code += " { int o = __p.__offset(" + NumToString(field.value.offset) + "); ";
-            code += "if (o == 0) return " + default_cast + GenDefaultValue(field) + "; ";
-            code += "var rawValue = " + getter + "(o + __p.bb_pos)" + dest_mask + "; ";
-            code += "return FlatbuffersEncryption.DecryptScalar(rawValue, this.EncryptionCtx, " + NumToString(field.value.offset) + ")";
-          } else {
-            code += offset_prefix + getter;
-            code += "(o + __p.bb_pos)" + dest_mask;
-            code += " : " + default_cast;
-            code += GenDefaultValue(field);
-          }
+          code += offset_prefix + getter;
+          code += "(o + __p.bb_pos)" + dest_mask;
+          code += " : " + default_cast;
+          code += GenDefaultValue(field);
         }
       } else {
         switch (field.value.type.base_type) {
@@ -1307,14 +1406,8 @@ class CSharpGenerator : public BaseGenerator {
           case BASE_TYPE_STRING:
             code += " { get";
             member_suffix += "} ";
-            if (field.attributes.Lookup("encrypted") != nullptr) {
-              code += " { int o = __p.__offset(" + NumToString(field.value.offset) + "); ";
-              code += "if (o == 0) return null; ";
-              code += "return FlatbuffersEncryption.DecryptString(__p.bb, o + __p.bb_pos, this.EncryptionCtx, " + NumToString(field.value.offset) + ")";
-            } else {
-              code += offset_prefix + getter + "(o + " + "__p.";
-              code += "bb_pos) : null";
-            }
+            code += offset_prefix + getter + "(o + " + "__p.";
+            code += "bb_pos) : null";
             break;
           case BASE_TYPE_ARRAY:
             FLATBUFFERS_FALLTHROUGH();  // fall thru
@@ -2924,6 +3017,7 @@ class CSharpGenerator : public BaseGenerator {
   // This tracks the current namespace used to determine if a type need to be
   // prefixed by its namespace
   const Namespace* cur_name_space_;
+  const encryption_codegen::Plan encryption_plan_;
 };
 }  // namespace csharp
 
@@ -2939,6 +3033,11 @@ class CSharpCodeGenerator : public CodeGenerator {
  public:
   Status GenerateCode(const Parser& parser, const std::string& path,
                       const std::string& filename) override {
+    const encryption_codegen::Plan plan(parser);
+    if (!plan.ok()) {
+      status_detail = ": " + plan.error();
+      return Status::ERROR;
+    }
     if (!GenerateCSharp(parser, path, filename)) {
       return Status::ERROR;
     }

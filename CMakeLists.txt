@@ -205,11 +205,14 @@ if(FLATBUFFERS_USE_OPENSSL)
   # builds we download OpenSSL source, build for each arch, and lipo together.
   list(LENGTH CMAKE_OSX_ARCHITECTURES _openssl_num_archs)
   if(APPLE AND _openssl_num_archs GREATER 1)
-    set(_openssl_version "3.6.0")
+    # Same OpenSSL line as the single-architecture path below: 3.5, the
+    # current LTS branch (supported until April 2030), not the 4.0.x branch
+    # that openssl-cmake defaults to on its "main" branch.
+    set(_openssl_version "3.5.4")
     FetchContent_Declare(
       openssl-universal-src
       URL https://github.com/openssl/openssl/releases/download/openssl-${_openssl_version}/openssl-${_openssl_version}.tar.gz
-      URL_HASH SHA256=b6a5f44b7eb69e3fa35dbf15524405b44837a481d43d81daddde3ff21fcbb8e9
+      URL_HASH SHA256=967311f84955316969bdb1d8d4b983718ef42338639c621ec4c34fddef355e99
       DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     # Use Populate to download without add_subdirectory (OpenSSL has no CMakeLists.txt)
@@ -315,10 +318,16 @@ if(FLATBUFFERS_USE_OPENSSL)
     if(MSVC)
       set(OPENSSL_MSVC_STATIC_RT ON CACHE BOOL "" FORCE)
     endif()
+    # Pinned to an exact tag, never a branch: "main" is a moving target that
+    # silently changes which OpenSSL release we build (it walked forward to
+    # OpenSSL 4.0.2 and stopped generating here on macOS with CMake 4.x).
+    # openssl-cmake's own tags track the OpenSSL release they wrap; 3.5.4 is
+    # the newest patch of OpenSSL's 3.5 LTS branch (supported until April
+    # 2030), not the newly-cut 4.0.x major line that "main" now points at.
     FetchContent_Declare(
       openssl-cmake
       GIT_REPOSITORY https://github.com/jimmy-park/openssl-cmake.git
-      GIT_TAG        main
+      GIT_TAG        3.5.4
       GIT_SHALLOW    TRUE
     )
     FetchContent_MakeAvailable(openssl-cmake)

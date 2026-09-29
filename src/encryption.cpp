@@ -979,6 +979,43 @@ bool HMACSha256Verify(const uint8_t* key, size_t key_size,
 }
 
 namespace internal {
+
+// Raw AES-256 single-block encrypt (FIPS 197), via EVP AES-256-ECB with
+// padding disabled: equal to Crypto++'s and the fallback's AESEncryptBlock.
+void AESEncryptBlock(const uint8_t* key, const uint8_t* input,
+                     uint8_t* output) {
+  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+  if (!ctx) {
+    memset(output, 0, 16);
+    return;
+  }
+  EVP_CIPHER_CTX_set_padding(ctx, 0);
+  int outlen = 0;
+  if (EVP_EncryptInit_ex(ctx, EVP_aes_256_ecb(), nullptr, key, nullptr) == 1 &&
+      EVP_EncryptUpdate(ctx, output, &outlen, input, 16) == 1) {
+    // outlen == 16; nothing further to finalize with padding disabled.
+  } else {
+    memset(output, 0, 16);
+  }
+  EVP_CIPHER_CTX_free(ctx);
+}
+
+// AES-256-CTR keystream (SP 800-38A): encrypt an all-zero buffer, equal to
+// Crypto++'s and the fallback's AESCTRKeystream.
+void AESCTRKeystream(const uint8_t* key, const uint8_t* nonce,
+                     uint8_t* keystream, size_t length) {
+  if (!keystream || length == 0) return;
+  memset(keystream, 0, length);
+  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+  if (!ctx) return;
+  int outlen = 0;
+  if (EVP_EncryptInit_ex(ctx, EVP_aes_256_ctr(), nullptr, key, nonce) == 1) {
+    EVP_EncryptUpdate(ctx, keystream, &outlen, keystream,
+                      static_cast<int>(length));
+  }
+  EVP_CIPHER_CTX_free(ctx);
+}
+
 void DeriveKey(const uint8_t* master_key, size_t master_key_size,
                const uint8_t* info, size_t info_size,
                uint8_t* out_key, size_t out_key_size) {

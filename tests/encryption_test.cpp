@@ -1076,8 +1076,9 @@ static void TestHkdfVectors() {
 }
 
 // AES-256: FIPS 197 C.3. AES-256-CTR: SP 800-38A F.5.5 / F.5.6, and the
-// counter carrying through all 128 bits (node:crypto). Only the public API:
-// the OpenSSL backend has no internal::AESEncryptBlock.
+// counter carrying through all 128 bits (node:crypto), through the public
+// API (EncryptBytes/DecryptBytes). See TestAesInternalVectors for the same
+// vectors through flatbuffers::internal::AESEncryptBlock/AESCTRKeystream.
 static void TestAesVectors() {
   std::cout << "Testing AES-256 / AES-256-CTR vectors..." << std::endl;
   const std::vector<uint8_t> key =
@@ -1120,6 +1121,45 @@ static void TestAesVectors() {
   flatbuffers::EncryptBytes(zeros.data(), zeros.size(), pattern_key,
                             low_ones.data());
   TEST_EQ(Hex(zeros),
+          std::string("a6fbdb5cfde07d1b58fd362177bcffdf511dd5ef9a682b7d"
+                      "a49f91c86c4f7ac340c53cef92ef2d643f638b8222db1e85"));
+}
+
+// The same FIPS 197 / SP 800-38A vectors as TestAesVectors, but through
+// flatbuffers::internal::AESEncryptBlock and AESCTRKeystream directly. This
+// is the internal namespace's own contract, declared in encryption.h for
+// every backend: linking it here catches a backend that stops defining it
+// (the OpenSSL backend once didn't).
+static void TestAesInternalVectors() {
+  std::cout << "Testing internal::AESEncryptBlock/AESCTRKeystream vectors..."
+            << std::endl;
+  using flatbuffers::internal::AESCTRKeystream;
+  using flatbuffers::internal::AESEncryptBlock;
+
+  // FIPS 197 C.3: a single AES-256 block encryption.
+  const std::vector<uint8_t> key =
+      Unhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+  const std::vector<uint8_t> block = Unhex("00112233445566778899aabbccddeeff");
+  uint8_t out16[16];
+  AESEncryptBlock(key.data(), block.data(), out16);
+  TEST_EQ(Hex(out16, 16), std::string("8ea2b7ca516745bfeafc49904b496089"));
+
+  // SP 800-38A F.5.5/F.5.6: the raw AES-256-CTR keystream (the plaintext is
+  // all zero, so EncryptBytes' ciphertext in TestAesVectors equals the
+  // keystream) and the counter carrying through bits 64 and 128.
+  uint8_t pattern_key[32];
+  for (int i = 0; i < 32; i++) pattern_key[i] = static_cast<uint8_t>(i);
+  const std::vector<uint8_t> all_ones(16, 0xff);
+  uint8_t out48[48];
+  AESCTRKeystream(pattern_key, all_ones.data(), out48, 48);
+  TEST_EQ(Hex(out48, 48),
+          std::string("e999e41d4ca770da5387117b5d8f57eef29000b62a499fd0"
+                      "a9f39a6add2e7780f05d76ae4ab99fe5a6f69b3148c2363d"));
+
+  const std::vector<uint8_t> low_ones =
+      Unhex("0000000000000000ffffffffffffffff");
+  AESCTRKeystream(pattern_key, low_ones.data(), out48, 48);
+  TEST_EQ(Hex(out48, 48),
           std::string("a6fbdb5cfde07d1b58fd362177bcffdf511dd5ef9a682b7d"
                       "a49f91c86c4f7ac340c53cef92ef2d643f638b8222db1e85"));
 }
@@ -1350,6 +1390,7 @@ int main(int argc, char* argv[]) {
   TestHmacSha256Vectors();
   TestHkdfVectors();
   TestAesVectors();
+  TestAesInternalVectors();
   TestBufferMacVector();
   TestCrossBackendDigest();
   TestFallbackRefusals();

@@ -36,6 +36,7 @@
 #include "flatbuffers/encryption.h"
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 static const char* EMSCRIPTEN_CRYPTO_VERSION = "2.0.0";
 
@@ -175,30 +176,88 @@ int32_t wasm_crypto_derive_field_iv(void* ctx, uint16_t field_id,
 // Buffer Encryption (per-field, schema-driven)
 // =============================================================================
 
+// The reason the last buffer cipher call failed ("" after a success).
+static std::string g_buffer_cipher_error;
+
+static int32_t CipherBuffer(uint8_t* buffer, uint32_t buffer_size,
+                            const uint8_t* schema, uint32_t schema_size,
+                            void* ctx, uint32_t record_index, uint32_t version,
+                            bool encrypt) {
+  if (!buffer || !schema || !ctx) {
+    g_buffer_cipher_error = "buffer, schema and context are required";
+    return -1;
+  }
+  if (version > 0xFF) {
+    g_buffer_cipher_error = "unknown field-encryption format";
+    return -1;
+  }
+  auto* enc_ctx = static_cast<flatbuffers::EncryptionContext*>(ctx);
+  const auto format = static_cast<uint8_t>(version);
+  auto result =
+      encrypt ? flatbuffers::EncryptBuffer(buffer, buffer_size, schema,
+                                           schema_size, *enc_ctx, record_index,
+                                           format)
+              : flatbuffers::DecryptBuffer(buffer, buffer_size, schema,
+                                           schema_size, *enc_ctx, record_index,
+                                           format);
+  g_buffer_cipher_error = result.message;
+  return result.ok() ? 0 : -1;
+}
+
+// Format 3 (per-instance key streams), record 0.
 EMSCRIPTEN_KEEPALIVE
 int32_t wasm_crypto_encrypt_buffer(uint8_t* buffer, uint32_t buffer_size,
                                     const uint8_t* schema, uint32_t schema_size,
                                     void* ctx) {
-  if (!buffer || !schema || !ctx) {
-    return -1;
-  }
-  auto* enc_ctx = static_cast<flatbuffers::EncryptionContext*>(ctx);
-  auto result = flatbuffers::EncryptBuffer(buffer, buffer_size, schema,
-                                            schema_size, *enc_ctx);
-  return result.ok() ? 0 : -1;
+  return CipherBuffer(buffer, buffer_size, schema, schema_size, ctx, 0,
+                      flatbuffers::kFieldEncryptionVersion, true);
 }
 
 EMSCRIPTEN_KEEPALIVE
 int32_t wasm_crypto_decrypt_buffer(uint8_t* buffer, uint32_t buffer_size,
                                     const uint8_t* schema, uint32_t schema_size,
                                     void* ctx) {
-  if (!buffer || !schema || !ctx) {
+  return CipherBuffer(buffer, buffer_size, schema, schema_size, ctx, 0,
+                      flatbuffers::kFieldEncryptionVersion, false);
+}
+
+// Any record index and format (EncryptionHeader.version: 3, or 2 to decrypt
+// legacy data).
+EMSCRIPTEN_KEEPALIVE
+int32_t wasm_crypto_encrypt_buffer_ex(uint8_t* buffer, uint32_t buffer_size,
+                                       const uint8_t* schema,
+                                       uint32_t schema_size, void* ctx,
+                                       uint32_t record_index,
+                                       uint32_t version) {
+  return CipherBuffer(buffer, buffer_size, schema, schema_size, ctx,
+                      record_index, version, true);
+}
+
+EMSCRIPTEN_KEEPALIVE
+int32_t wasm_crypto_decrypt_buffer_ex(uint8_t* buffer, uint32_t buffer_size,
+                                       const uint8_t* schema,
+                                       uint32_t schema_size, void* ctx,
+                                       uint32_t record_index,
+                                       uint32_t version) {
+  return CipherBuffer(buffer, buffer_size, schema, schema_size, ctx,
+                      record_index, version, false);
+}
+
+EMSCRIPTEN_KEEPALIVE
+const char* wasm_crypto_buffer_cipher_error() {
+  return g_buffer_cipher_error.c_str();
+}
+
+// Format-3 buffer key of one record (32 bytes).
+EMSCRIPTEN_KEEPALIVE
+int32_t wasm_crypto_derive_buffer_key(void* ctx, uint32_t record_index,
+                                       uint8_t* out_key) {
+  if (!ctx || !out_key) {
     return -1;
   }
   auto* enc_ctx = static_cast<flatbuffers::EncryptionContext*>(ctx);
-  auto result = flatbuffers::DecryptBuffer(buffer, buffer_size, schema,
-                                            schema_size, *enc_ctx);
-  return result.ok() ? 0 : -1;
+  enc_ctx->DeriveBufferKey(record_index, out_key);
+  return 0;
 }
 
 // =============================================================================

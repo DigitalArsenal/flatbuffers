@@ -48,6 +48,30 @@ constexpr size_t kEd25519PrivateKeySize = 64;  // seed + public key
 constexpr size_t kEd25519PublicKeySize = 32;
 constexpr size_t kEd25519SignatureSize = 64;
 
+// Buffer field-encryption formats: the value of EncryptionHeader.version, and
+// the `version` argument of EncryptBuffer/DecryptBuffer.
+//
+// 2 (legacy): every instance of field id F is AES-256-CTR encrypted with
+//   DeriveFieldKey/DeriveFieldIV(F, record 0), whatever table it is in. Two
+//   instances of F in one buffer (nested tables) share a key stream, so the
+//   XOR of their ciphertexts is the XOR of their plaintexts. Only the root
+//   table and its table-typed fields are walked. Use it to decrypt existing
+//   data only.
+// 3: each record gets a buffer key
+//     K = HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(record_index))
+//   and each encrypted instance is AES-256-CTR encrypted with K and the IV
+//     BE32(position) || 12 zero bytes,
+//   where position is the offset of the instance's first encrypted byte from
+//   the start of the buffer. Positions are distinct and a FlatBuffer is
+//   smaller than 2^32 bytes, so no two instances share a counter block: every
+//   instance has its own key stream. Nested tables, vectors of tables and
+//   unions are walked, and an (encrypted) field the format cannot encrypt is
+//   refused with kUnsupportedType. (key, record_index) must be unique per
+//   buffer.
+constexpr uint8_t kFieldEncryptionV2 = 2;
+constexpr uint8_t kFieldEncryptionV3 = 3;
+constexpr uint8_t kFieldEncryptionVersion = kFieldEncryptionV3;
+
 // secp256k1/P-256 key sizes
 constexpr size_t kSecp256k1PrivateKeySize = 32;
 constexpr size_t kSecp256k1PublicKeySize = 33;   // compressed
@@ -198,6 +222,14 @@ class EncryptionContext {
                      uint32_t record_index = 0) const;
 
   /**
+   * Derive the format-3 buffer key of one record:
+   * HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(record_index)).
+   * @param record_index The record's index; unique per buffer under this key
+   * @param out_key Output buffer for the derived key (32 bytes)
+   */
+  void DeriveBufferKey(uint32_t record_index, uint8_t* out_key) const;
+
+  /**
    * Get the raw key (for internal use)
    */
   const uint8_t* GetKey() const { return key_; }
@@ -221,11 +253,17 @@ class EncryptionContext {
  * Fields marked with the (encrypted) attribute in the schema will be
  * encrypted. The buffer structure remains valid after encryption.
  *
- * @param buffer Pointer to the FlatBuffer data (modified in-place)
+ * @param buffer Pointer to the FlatBuffer data (modified in-place), without a
+ *        size prefix
  * @param buffer_size Size of the buffer
  * @param schema Compiled binary schema (.bfbs) with encrypted field markers
+ *        (serialize it with binary_schema_builtins / --bfbs-builtins, or the
+ *        markers are dropped and nothing is encrypted)
  * @param schema_size Size of the schema
  * @param ctx Encryption context with the key
+ * @param record_index The record's index (format 3): unique per buffer under
+ *        this key. Format 2 has no record index and needs 0.
+ * @param version kFieldEncryptionV3 (the default) or kFieldEncryptionV2
  * @return Result indicating success or error
  */
 EncryptionResult EncryptBuffer(
@@ -233,17 +271,28 @@ EncryptionResult EncryptBuffer(
     size_t buffer_size,
     const uint8_t* schema,
     size_t schema_size,
-    const EncryptionContext& ctx);
+    const EncryptionContext& ctx,
+    uint32_t record_index = 0,
+    uint8_t version = kFieldEncryptionVersion);
 
 /**
- * Decrypt a FlatBuffer in-place
+ * Decrypt a FlatBuffer in-place. Pass the record_index and version it was
+ * encrypted with (EncryptionHeader.version).
  */
 EncryptionResult DecryptBuffer(
     uint8_t* buffer,
     size_t buffer_size,
     const uint8_t* schema,
     size_t schema_size,
-    const EncryptionContext& ctx);
+    const EncryptionContext& ctx,
+    uint32_t record_index = 0,
+    uint8_t version = kFieldEncryptionVersion);
+
+/**
+ * Format-3 IV of the encrypted instance whose first byte is at `position` in
+ * the buffer: BE32(position) followed by 12 zero bytes.
+ */
+void FieldInstanceIV(uint32_t position, uint8_t* out_iv);
 
 /**
  * Encrypt specific bytes using AES-CTR
@@ -598,7 +647,7 @@ void AESCTRKeystream(const uint8_t* key, const uint8_t* nonce,
                      uint8_t* keystream, size_t length);
 
 /**
- * Process a table recursively, encrypting marked fields
+ * Format 2 (legacy): process a table recursively, encrypting marked fields
  */
 EncryptionResult ProcessTable(
     uint8_t* buffer,

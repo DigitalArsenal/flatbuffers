@@ -30,6 +30,11 @@ export {
   ED25519_PRIVATE_KEY_SIZE,
   ED25519_PUBLIC_KEY_SIZE,
   ED25519_SIGNATURE_SIZE,
+  // Buffer field-encryption formats
+  FIELD_ENCRYPTION_V2,
+  FIELD_ENCRYPTION_V3,
+  FIELD_ENCRYPTION_VERSION,
+  fieldInstanceIV,
   // Error types
   CryptoError,
   CryptoErrorCode,

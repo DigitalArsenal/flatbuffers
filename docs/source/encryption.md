@@ -46,30 +46,68 @@ table UserRecord {
 | [ubyte] / [byte] | AES-CTR on bytes | Length visible, content encrypted |
 | Vector of scalars | XOR each element | Element count visible |
 | Struct | XOR all bytes | Fixed size preserved |
-| Table (nested) | Recursive field encryption | Structure visible |
-| Union | Not supported | Use encrypted field in union member |
+| Vector of structs | AES-CTR on the element bytes | Element count visible |
+| Vector of strings | AES-CTR on each string's bytes | Count and lengths visible |
+| Table (nested), vector of tables, union | Walked: their own `(encrypted)` fields are encrypted | Structure visible |
 
-### Unsupported
+### Unsupported (refused)
 
-- **Union type field** - Cannot encrypt the union type selector
-- **Vector of tables** - Offsets must remain valid; encrypt fields inside tables instead
-- **Vector of strings** - Each string can be encrypted individually instead
+`EncryptBuffer` refuses these with `kUnsupportedType` before changing any
+byte, instead of leaving them in plaintext:
+
+- **`(encrypted)` on a table, a vector of tables or a union** - Offsets must
+  remain valid; mark the fields inside the tables `(encrypted)` instead
+- **`(encrypted)` on a union type field** - The type selects how the value is read
+- **`(encrypted)` on fields inside a struct** - Mark the struct-typed field
+  `(encrypted)` to encrypt the whole struct
 
 ## Encryption Algorithm
 
-### Key Derivation
+### Key Derivation (format 3)
+
+`EncryptBuffer` and `DecryptBuffer` write and read format 3 by default. The
+format number is `EncryptionHeader.version` and the `version` argument.
 
 ```
 Master Key (256-bit)
     │
-    ├── Field Key = HKDF-SHA256(master_key, "flatbuffers-field" || field_id)
-    │
-    └── IV = HKDF-SHA256(master_key, "flatbuffers-iv" || field_id)
+    └── Buffer Key K = HKDF-SHA256(master_key, no salt,
+                                   "flatbuffers-buffer-v3" || BE32(record_index))
+
+Each encrypted instance (a scalar, a struct, a string's bytes, a vector's
+element bytes, each string of a vector of strings):
+    IV         = BE32(position) || 12 zero bytes
+    ciphertext = plaintext XOR AES-256-CTR(K, IV)
 ```
 
-Each field gets a unique derived key based on its field ID, ensuring:
-- Same field always encrypts the same way (deterministic for caching)
-- Different fields use different keystreams (no key reuse)
+`position` is the offset of the instance's first encrypted byte from the start
+of the buffer. Positions are distinct and a FlatBuffer is smaller than 2^32
+bytes, so no two instances share a counter block: every instance, including
+two fields with the same id in nested tables, vectors of tables or union
+members, has its own key stream. A table or string shared by offset is
+encrypted once. `(key, record_index)` must be unique per buffer: give each
+record encrypted under one key its own `record_index`.
+
+### Format 2 (legacy)
+
+Format 2 (flatc-wasm 26.1.34 and earlier C++ callers) encrypted every
+instance of field id F with
+
+```
+Field Key = HKDF-SHA256(master_key, "flatbuffers-field" || BE16(F) || BE32(record_index))
+IV        = HKDF-SHA256(master_key, "flatbuffers-iv"    || BE16(F) || BE32(record_index))
+```
+
+with record 0, walking only the root table and its table-typed fields. Two
+fields with the same id in a table and its nested table shared a key stream,
+so the XOR of their ciphertexts was the XOR of their plaintexts, and fields in
+vectors of tables and unions stayed plaintext. Pass
+`kFieldEncryptionV2` to `DecryptBuffer` to read existing format-2 data only.
+
+The per-field primitives (`DeriveFieldKey`, `DeriveFieldIV`, `EncryptScalar`,
+`EncryptString`, `EncryptVector`) keep this derivation. They encrypt one
+value under an explicit `(field_id, record_index)`, and the caller keeps that
+pair unique per key.
 
 ### Scalar Encryption (XOR with AES-CTR keystream)
 
@@ -107,23 +145,26 @@ encrypted_struct = plaintext_struct_bytes XOR AES-CTR(field_key, iv, struct_size
 ```cpp
 #include "flatbuffers/encryption.h"
 
-// Encrypt a buffer in-place
+flatbuffers::EncryptionContext ctx(key, 32);
+
+// Encrypt a buffer in-place (format 3). The .bfbs must be serialized with
+// binary_schema_builtins (flatc --bfbs-builtins) to keep the markers.
 flatbuffers::EncryptBuffer(
     buffer_pointer,
     buffer_size,
     schema,           // Compiled schema with encrypted field markers
-    key,              // 32-byte key
-    key_size
+    schema_size,
+    ctx,
+    record_index      // Unique per buffer under this key (default 0)
 );
 
 // Decrypt a buffer in-place
-flatbuffers::DecryptBuffer(
-    buffer_pointer,
-    buffer_size,
-    schema,
-    key,
-    key_size
-);
+flatbuffers::DecryptBuffer(buffer_pointer, buffer_size, schema, schema_size,
+                           ctx, record_index);
+
+// Decrypt format-2 data
+flatbuffers::DecryptBuffer(buffer_pointer, buffer_size, schema, schema_size,
+                           ctx, 0, flatbuffers::kFieldEncryptionV2);
 ```
 
 ### Generated Code API

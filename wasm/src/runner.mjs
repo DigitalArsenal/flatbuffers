@@ -8,6 +8,8 @@
 import createFlatcModule from "../dist/flatc-wasm.js";
 import {
   EncryptionContext,
+  FIELD_ENCRYPTION_V2,
+  FIELD_ENCRYPTION_V3,
   encryptionHeaderFromJSON as deserializeEncryptionHeader,
   withEncryptionModule,
 } from "./encryption.mjs";
@@ -1181,14 +1183,18 @@ export class FlatcRunner {
   /**
    * Generate an encrypted FlatBuffer binary from JSON input.
    *
-   * The package's per-field format: the fields the schema marks `(encrypted)`
-   * are AES-256-CTR encrypted in place, each with a key and IV derived from
-   * an ECIES session key (ephemeral ECDH with `publicKey`, then HKDF with
-   * `context`), the field id and record 0. The result stays a valid
-   * FlatBuffer; a schema without `(encrypted)` fields leaves it unchanged.
-   * `data` is the generateBinary() output without a size prefix.
-   * `header` is the UTF-8 JSON of the EncryptionHeader
-   * (EncryptionContext#getHeaderJSON()); send it with the data.
+   * Field-encryption format 3: every instance of a field the schema marks
+   * `(encrypted)` (in the root table, nested tables, vectors of tables and
+   * union members) is AES-256-CTR encrypted in place with its own key stream:
+   * the buffer key HKDF-SHA256(session key, "flatbuffers-buffer-v3" ||
+   * BE32(0)) and the IV BE32(position of the instance's first byte) || 12
+   * zero bytes. The session key is ECIES (ephemeral ECDH with `publicKey`,
+   * then HKDF with `context`). The result stays a valid FlatBuffer; a schema
+   * without `(encrypted)` fields leaves it unchanged, and an `(encrypted)`
+   * field that cannot be encrypted in place (a table, a vector of tables, a
+   * union) is refused. `data` is the generateBinary() output without a size
+   * prefix. `header` is the UTF-8 JSON of the EncryptionHeader
+   * (EncryptionContext#getHeaderJSON(), version 3); send it with the data.
    *
    * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput
    * @param {string|Uint8Array} jsonInput - JSON data to convert and encrypt
@@ -1218,8 +1224,9 @@ export class FlatcRunner {
         encCtx = EncryptionContext.forEncryption(encryption.publicKey, {
           algorithm: encryption.algorithm || 'x25519',
           context: encryption.context || '',
+          version: FIELD_ENCRYPTION_V3,
         });
-        this._cipherEncryptedFields(data, schema, encCtx.getKey(), true);
+        this._cipherEncryptedFields(data, schema, encCtx.getKey(), true, FIELD_ENCRYPTION_V3);
         const header = new TextEncoder().encode(encCtx.getHeaderJSON());
         return { header, data };
       } catch (err) {
@@ -1232,7 +1239,8 @@ export class FlatcRunner {
 
   /**
    * Generate JSON from an encrypted FlatBuffer binary made by
-   * generateBinaryEncrypted().
+   * generateBinaryEncrypted(). The header's version selects the format:
+   * 3, or 2 for data from flatc-wasm 26.1.34.
    * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput
    * @param {{ path: string, data: Uint8Array }} binaryInput - Encrypted binary
    * @param {{ privateKey: Uint8Array, header: Uint8Array|string|Object, context?: string }} decryption
@@ -1263,7 +1271,7 @@ export class FlatcRunner {
           FlatcRunner._parseEncryptionHeader(decryption.header),
           decryption.context
         );
-        this._cipherEncryptedFields(decrypted, schema, decCtx.getKey(), false);
+        this._cipherEncryptedFields(decrypted, schema, decCtx.getKey(), false, decCtx.getVersion());
       } catch (err) {
         throw new Error(`Decryption failed: ${err.message}`);
       } finally {
@@ -1348,16 +1356,21 @@ export class FlatcRunner {
 
   /**
    * Internal: apply the library's schema-driven field cipher
-   * (wasm_crypto_encrypt_buffer / wasm_crypto_decrypt_buffer: AES-256-CTR on
-   * each `(encrypted)` field with a key and IV derived from `key`, the field
-   * id and record 0) to `buffer` in place, on this runner's module.
+   * (wasm_crypto_encrypt_buffer_ex / wasm_crypto_decrypt_buffer_ex, record 0)
+   * in field-encryption format `version` to `buffer` in place, on this
+   * runner's module.
    * @param {Uint8Array} buffer - Unprefixed FlatBuffer, modified in place
    * @param {Uint8Array} schema - .bfbs from _generateEncryptionSchema()
    * @param {Uint8Array} key - 32-byte session key (zeroed here)
    * @param {boolean} encrypt
+   * @param {number} version - FIELD_ENCRYPTION_V3, or FIELD_ENCRYPTION_V2 to decrypt legacy data
    * @private
    */
-  _cipherEncryptedFields(buffer, schema, key, encrypt) {
+  _cipherEncryptedFields(buffer, schema, key, encrypt, version) {
+    if (version !== FIELD_ENCRYPTION_V3 && !(version === FIELD_ENCRYPTION_V2 && !encrypt)) {
+      key.fill(0);
+      throw new Error(`unsupported field-encryption format ${version}`);
+    }
     const M = this.Module;
     const alloc = (size) => {
       const ptr = M._wasm_crypto_alloc(Math.max(size, 1));
@@ -1377,9 +1390,9 @@ export class FlatcRunner {
       M.HEAPU8.set(buffer, bufPtr);
       schemaPtr = alloc(schema.length);
       M.HEAPU8.set(schema, schemaPtr);
-      const cipher = encrypt ? M._wasm_crypto_encrypt_buffer : M._wasm_crypto_decrypt_buffer;
-      if (cipher(bufPtr, buffer.length, schemaPtr, schema.length, ctx) !== 0) {
-        throw new Error('the binary does not match the schema');
+      const cipher = encrypt ? M._wasm_crypto_encrypt_buffer_ex : M._wasm_crypto_decrypt_buffer_ex;
+      if (cipher(bufPtr, buffer.length, schemaPtr, schema.length, ctx, 0, version) !== 0) {
+        throw new Error(M.UTF8ToString(M._wasm_crypto_buffer_cipher_error()) || 'the binary does not match the schema');
       }
       buffer.set(M.HEAPU8.subarray(bufPtr, bufPtr + buffer.length));
     } finally {

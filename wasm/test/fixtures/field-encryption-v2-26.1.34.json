@@ -1,0 +1,9 @@
+{
+  "note": "Format-2 output of flatc-wasm 26.1.34 generateBinaryEncrypted; the private key is a throwaway test key made for this fixture.",
+  "flatcWasm": "26.1.34",
+  "schema": "\nnamespace Fixture;\ntable Address {\n  city: string;\n  street: string (encrypted);\n}\ntable UserRecord {\n  id: uint64;\n  name: string;\n  ssn: string (encrypted);\n  pin: int (encrypted);\n  address: Address;\n}\nroot_type UserRecord;\n",
+  "json": "{\"id\":7,\"name\":\"Alice\",\"ssn\":\"123-45-6789\",\"pin\":4242,\"address\":{\"city\":\"Springfield\",\"street\":\"742 Evergreen Terrace\"}}",
+  "privateKeyHex": "18d1580cdd6abfa1584a00709eec300cb12d4e67eb784b47385908fa8a8b2e51",
+  "header": "{\"version\":2,\"algorithm\":\"x25519\",\"senderPublicKey\":\"d64b277c17775074fa2c608f3c39b65cff390f70e0808f2dbb1d2f40ec2dbc47\",\"recipientKeyId\":\"f68b713593ba616a\",\"nonceStart\":\"e0a21985cfa4dad61fa2990e\",\"context\":\"fixture-v2\"}",
+  "dataHex": "1400000000000e0020001400040008000c0010000e0000006c00000058000000d1c6ff611800000007000000000000000000000008000c000400080008000000240000000400000015000000d89361152bf6877ae805e5c6dd71d41520d84c527c0000000b000000537072696e676669656c64000b00000067dd59e5aace7ee13da71e0005000000416c696365000000"
+}

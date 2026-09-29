@@ -25,6 +25,45 @@ export const ED25519_PRIVATE_KEY_SIZE = 64;
 export const ED25519_PUBLIC_KEY_SIZE = 32;
 export const ED25519_SIGNATURE_SIZE = 64;
 
+/**
+ * Buffer field-encryption formats (EncryptionHeader.version).
+ * 2 (legacy): each (encrypted) field's key and IV come from its field id and
+ *   record index only, so equal-id fields in nested tables of one buffer share
+ *   a key stream. Decrypt existing data only.
+ * 3: buffer key K = HKDF-SHA256(session key, no salt,
+ *   "flatbuffers-buffer-v3" || BE32(recordIndex)); each encrypted instance is
+ *   AES-256-CTR with K and the IV BE32(position of its first byte) || 12 zero
+ *   bytes, so every instance has its own key stream.
+ */
+export const FIELD_ENCRYPTION_V2 = 2;
+export const FIELD_ENCRYPTION_V3 = 3;
+export const FIELD_ENCRYPTION_VERSION = FIELD_ENCRYPTION_V3;
+
+function checkFormatVersion(version) {
+  if (version !== FIELD_ENCRYPTION_V2 && version !== FIELD_ENCRYPTION_V3) {
+    throw new CryptoError(
+      `Unsupported field-encryption format ${version}: expected ${FIELD_ENCRYPTION_V2} or ${FIELD_ENCRYPTION_V3}`,
+      CryptoErrorCode.INVALID_INPUT
+    );
+  }
+  return version;
+}
+
+/**
+ * Format-3 IV of the encrypted instance whose first byte is at `position` in
+ * the buffer: BE32(position) followed by 12 zero bytes.
+ * @param {number} position
+ * @returns {Uint8Array}
+ */
+export function fieldInstanceIV(position) {
+  if (!Number.isInteger(position) || position < 0 || position > 0xFFFFFFFF) {
+    throw new CryptoError('position must be a 32-bit unsigned integer', CryptoErrorCode.INVALID_INPUT);
+  }
+  const iv = new Uint8Array(IV_SIZE);
+  new DataView(iv.buffer).setUint32(0, position);
+  return iv;
+}
+
 // =============================================================================
 // Error Handling
 // =============================================================================
@@ -765,6 +804,8 @@ export class EncryptionContext {
     this._ephemeralPublicKey = null;
     this._recipientKeyId = null;
     this._recordIndex = 0;
+    // The format getHeader() declares (EncryptionHeader.version).
+    this._version = FIELD_ENCRYPTION_V2;
 
     if (_module) {
       this._wasmCtx = _createWasmCtx(this._key);
@@ -776,10 +817,18 @@ export class EncryptionContext {
     return new EncryptionContext(hexKey);
   }
 
+  /**
+   * @param {Uint8Array} recipientPublicKey
+   * @param {{ algorithm?: 'x25519'|'secp256k1', context?: string, nonceStart?: Uint8Array, version?: 2|3 }} [options]
+   *   version: the format the header declares; 3 for buffers encrypted with
+   *   encryptFieldAt / the format-3 buffer cipher, 2 (the default) for the
+   *   per-field encryptScalar(fieldId, recordIndex) format.
+   */
   static forEncryption(recipientPublicKey, options = {}) {
     const algorithm = options.algorithm || 'x25519';
     const context = options.context || null;
     const nonceStart = options.nonceStart || generateNonceStart();
+    const version = checkFormatVersion(options.version ?? FIELD_ENCRYPTION_V2);
 
     let ephKP, sharedSecret;
 
@@ -804,6 +853,7 @@ export class EncryptionContext {
     ctx._context = context;
     ctx._ephemeralPublicKey = new Uint8Array(ephKP.publicKey);
     ctx._recipientKeyId = computeKeyId(recipientPublicKey);
+    ctx._version = version;
     return ctx;
   }
 
@@ -831,6 +881,8 @@ export class EncryptionContext {
     const enc = new EncryptionContext(symmetricKey, nonceStart);
     enc._algorithm = algorithm;
     enc._context = ctx_str;
+    // Headers before format 3 carry version 2 (or none).
+    enc._version = checkFormatVersion(header.version ?? FIELD_ENCRYPTION_V2);
     return enc;
   }
 
@@ -846,6 +898,62 @@ export class EncryptionContext {
   getEphemeralPublicKey() { return this._ephemeralPublicKey ? new Uint8Array(this._ephemeralPublicKey) : null; }
   getAlgorithm() { return this._algorithm; }
   getContext() { return this._context; }
+  /** The format this context's header declares (EncryptionHeader.version). */
+  getVersion() { return this._version; }
+
+  /**
+   * Format-3 buffer key of one record:
+   * HKDF-SHA256(key, no salt, "flatbuffers-buffer-v3" || BE32(recordIndex)).
+   * @param {number} [recordIndex=0]
+   * @returns {Uint8Array} 32 bytes
+   */
+  deriveBufferKey(recordIndex = 0) {
+    ensureInit();
+    if (!Number.isInteger(recordIndex) || recordIndex < 0 || recordIndex > 0xFFFFFFFF) {
+      throw new CryptoError('recordIndex must be a 32-bit unsigned integer', CryptoErrorCode.INVALID_INPUT);
+    }
+    const keyPtr = walloc(KEY_SIZE);
+    try {
+      if (_module._wasm_crypto_derive_buffer_key(this._wasmCtx, recordIndex, keyPtr) !== 0) {
+        throw new CryptoError('Buffer key derivation failed', CryptoErrorCode.WASM_ERROR);
+      }
+      return wread(keyPtr, KEY_SIZE);
+    } finally {
+      wfreeSecure(keyPtr, KEY_SIZE);
+    }
+  }
+
+  /**
+   * Format 3: encrypt the `length` bytes of one encrypted instance at
+   * `offset` in `buffer` (the FlatBuffer, without a size prefix) in place,
+   * with deriveBufferKey(recordIndex) and fieldInstanceIV(offset).
+   * @param {Uint8Array} buffer
+   * @param {number} offset
+   * @param {number} length
+   * @param {number} [recordIndex=0]
+   */
+  encryptFieldAt(buffer, offset, length, recordIndex = 0) {
+    this._cryptFieldAt(buffer, offset, length, recordIndex, encryptBytes);
+  }
+
+  /** Format 3: decrypt one instance in place. */
+  decryptFieldAt(buffer, offset, length, recordIndex = 0) {
+    this._cryptFieldAt(buffer, offset, length, recordIndex, decryptBytes);
+  }
+
+  _cryptFieldAt(buffer, offset, length, recordIndex, cipher) {
+    if (length === 0) return;
+    const bytes = buffer.subarray(offset, offset + length);
+    if (bytes.length !== length) {
+      throw new CryptoError('Field range is outside the buffer', CryptoErrorCode.INVALID_INPUT);
+    }
+    const key = this.deriveBufferKey(recordIndex);
+    try {
+      cipher(bytes, key, fieldInstanceIV(offset));
+    } finally {
+      key.fill(0);
+    }
+  }
 
   deriveFieldKey(fieldId, recordIndex = 0) {
     ensureInit();
@@ -917,7 +1025,7 @@ export class EncryptionContext {
       throw new CryptoError('No ephemeral key available. Use forEncryption() for ECIES mode.');
     }
     return {
-      version: 2,
+      version: this._version,
       algorithm: this._algorithm,
       senderPublicKey: new Uint8Array(this._ephemeralPublicKey),
       recipientKeyId: this._recipientKeyId ? new Uint8Array(this._recipientKeyId) : new Uint8Array(8),

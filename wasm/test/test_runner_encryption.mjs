@@ -1,22 +1,27 @@
 /**
  * FlatcRunner encryption round trip: generateBinaryEncrypted produces the
  * package's per-field format, and both the package's own decrypt path
- * (generateJSONDecrypted, EncryptionContext#decryptScalar) and an independent
- * decrypt with node:crypto recover the plain generateBinary output.
+ * (generateJSONDecrypted, EncryptionContext#decryptFieldAt) and an
+ * independent decrypt with node:crypto recover the plain generateBinary
+ * output.
  *
- * The format: the fields the schema marks (encrypted) are AES-256-CTR
- * encrypted in place. The session key is HKDF-SHA256(ECDH(ephemeral,
- * recipient), no salt, info = context). Each field's key and IV are
- * HKDF-SHA256(session key, no salt, "flatbuffers-field" / "flatbuffers-iv"
- * + BE16(field id) + BE32(record 0)). The header is the UTF-8 JSON of the
- * EncryptionHeader (version 2, hex senderPublicKey, recipientKeyId,
+ * The format (field-encryption format 3): the fields the schema marks
+ * (encrypted) are AES-256-CTR encrypted in place. The session key is
+ * HKDF-SHA256(ECDH(ephemeral, recipient), no salt, info = context). The
+ * buffer key is HKDF-SHA256(session key, no salt, "flatbuffers-buffer-v3" +
+ * BE32(record 0)), and each encrypted instance's IV is BE32(position of its
+ * first byte) + 12 zero bytes. The header is the UTF-8 JSON of the
+ * EncryptionHeader (version 3, hex senderPublicKey, recipientKeyId,
  * nonceStart, context).
  *
  * Before 26.1.34, generateBinaryEncrypted threw
- * "encCtx.encryptBuffer is not a function" on every call.
+ * "encCtx.encryptBuffer is not a function" on every call. 26.1.34 wrote
+ * format 2 (key and IV per field id, so equal-id fields in nested tables
+ * shared a key stream); its output still decrypts (the fixture below).
  */
 
 import crypto from "node:crypto";
+import fs from "node:fs";
 import { FlatcRunner } from "../src/runner.mjs";
 import {
   EncryptionContext,
@@ -105,22 +110,24 @@ function encryptedRegions(buf) {
 // --- Independent decrypt with node:crypto ---------------------------------
 const hkdf = (ikm, info, length) =>
   new Uint8Array(crypto.hkdfSync("sha256", ikm, new Uint8Array(0), info, length));
-function fieldInfo(label, id) {
-  const info = new Uint8Array(label.length + 6);
+function bufferKeyInfo(recordIndex) {
+  const label = "flatbuffers-buffer-v3";
+  const info = new Uint8Array(label.length + 4);
   info.set(Buffer.from(label), 0);
-  new DataView(info.buffer).setUint16(label.length, id); // big-endian
-  new DataView(info.buffer).setUint32(label.length + 2, 0); // record 0
+  new DataView(info.buffer).setUint32(label.length, recordIndex); // big-endian
   return info;
+}
+function instanceIV(position) {
+  const iv = new Uint8Array(16);
+  new DataView(iv.buffer).setUint32(0, position); // big-endian, then zeros
+  return iv;
 }
 function nodeDecrypt(data, sharedSecret, context) {
   const sessionKey = hkdf(sharedSecret, Buffer.from(context), 32);
+  const bufferKey = hkdf(sessionKey, bufferKeyInfo(0), 32);
   const out = new Uint8Array(data);
-  for (const { id, start, end } of encryptedRegions(out)) {
-    const decipher = crypto.createDecipheriv(
-      "aes-256-ctr",
-      hkdf(sessionKey, fieldInfo("flatbuffers-field", id), 32),
-      hkdf(sessionKey, fieldInfo("flatbuffers-iv", id), 16)
-    );
+  for (const { start, end } of encryptedRegions(out)) {
+    const decipher = crypto.createDecipheriv("aes-256-ctr", bufferKey, instanceIV(start));
     out.set(decipher.update(out.subarray(start, end)), start);
   }
   return out;
@@ -187,8 +194,8 @@ function roundTrip(runner, label, algorithm, recipient, context) {
 
   const parsed = JSON.parse(new TextDecoder().decode(header));
   check(
-    parsed.version === 2 && parsed.algorithm === algorithm && parsed.context === (context || null),
-    "header is EncryptionHeader JSON (version 2, algorithm, context)"
+    parsed.version === 3 && parsed.algorithm === algorithm && parsed.context === (context || null),
+    "header is EncryptionHeader JSON (version 3, algorithm, context)"
   );
   check(
     /^[0-9a-f]{24}$/.test(parsed.nonceStart) &&
@@ -259,23 +266,45 @@ try {
 }
 check(message.includes("header"), "decryption without the header is refused");
 
+// Format 2 from the published flatc-wasm 26.1.34 still decrypts: its header
+// carries version 2.
+console.log("\nFormat 2 (flatc-wasm 26.1.34 output):");
+const fixture = JSON.parse(
+  fs.readFileSync(new URL("./fixtures/field-encryption-v2-26.1.34.json", import.meta.url), "utf8")
+);
+const fixtureSchema = { entry: "/fixture/user.fbs", files: { "/fixture/user.fbs": fixture.schema } };
+check(JSON.parse(fixture.header).version === 2, "the 26.1.34 header carries version 2");
+const fixtureJson = attempt("generateJSONDecrypted of 26.1.34 data returns", () =>
+  runner.generateJSONDecrypted(
+    fixtureSchema,
+    { path: "/fixture/user.bin", data: new Uint8Array(Buffer.from(fixture.dataHex, "hex")) },
+    { privateKey: new Uint8Array(Buffer.from(fixture.privateKeyHex, "hex")), header: fixture.header }
+  )
+);
+const fixturePlainJson = runner.generateJSON(fixtureSchema, {
+  path: "/fixture/plain.bin",
+  data: runner.generateBinary(fixtureSchema, fixture.json, { sizePrefix: false }),
+});
+check(fixtureJson === fixturePlainJson, "26.1.34 data decrypts to the original JSON");
+
 // With the encryption module loaded separately, the documented JS API
 // decrypts each field with the header.
 await loadEncryptionWasm();
 const recipient = x25519Recipient();
 const trip = roundTrip(runner, "x25519 with loadEncryptionWasm()", "x25519", recipient, "");
 if (trip) {
-  console.log("\nEncryptionContext#decryptScalar:");
+  console.log("\nEncryptionContext#decryptFieldAt:");
   const ctx = EncryptionContext.forDecryption(
     recipient.privateKey,
     encryptionHeaderFromJSON(new TextDecoder().decode(trip.header))
   );
+  check(ctx.getVersion() === 3, "forDecryption reads format 3 from the header");
   const fields = new Uint8Array(trip.data);
-  for (const { id, start, end } of encryptedRegions(fields)) {
-    ctx.decryptScalar(fields, start, end - start, id, 0);
+  for (const { start, end } of encryptedRegions(fields)) {
+    ctx.decryptFieldAt(fields, start, end - start, 0);
   }
   ctx.destroy();
-  check(sameBytes(fields, trip.plain), "decryptScalar per field gives the generateBinary bytes");
+  check(sameBytes(fields, trip.plain), "decryptFieldAt per field gives the generateBinary bytes");
 }
 
 console.log(failures === 0 ? "\nAll encryption round-trip checks passed." : `\n${failures} check(s) failed.`);

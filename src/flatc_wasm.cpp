@@ -176,6 +176,18 @@ static bool LooksLikeFlatBuffer(const uint8_t* data, uint32_t len) {
   return root_offset >= 4 && root_offset < len - 4;
 }
 
+// The schema as a .bfbs that keeps builtin attributes such as `encrypted`.
+static std::vector<uint8_t> SerializeSchemaWithBuiltins(
+    flatbuffers::Parser& parser) {
+  const bool builtins = parser.opts.binary_schema_builtins;
+  parser.opts.binary_schema_builtins = true;
+  parser.Serialize();
+  parser.opts.binary_schema_builtins = builtins;
+  return std::vector<uint8_t>(
+      parser.builder_.GetBufferPointer(),
+      parser.builder_.GetBufferPointer() + parser.builder_.GetSize());
+}
+
 }  // namespace wasm
 }  // namespace flatbuffers
 
@@ -837,15 +849,14 @@ const uint8_t* wasm_json_to_binary_encrypted(
     return nullptr;
   }
 
-  // Serialize schema to .bfbs for reflection-based encryption
-  Parser& parser = *it->second.parser;
-  parser.Serialize();
-  const auto& bfbs = parser.builder_.GetBufferPointer();
-  const auto bfbs_size = parser.builder_.GetSize();
+  // The .bfbs must keep builtin attributes: without them it carries no
+  // (encrypted) markers and nothing would be encrypted.
+  const std::vector<uint8_t> bfbs = SerializeSchemaWithBuiltins(*it->second.parser);
 
-  // Encrypt the buffer in-place
+  // Encrypt the buffer in-place: format 3, record 0. The key must be unique
+  // per buffer (the JS layer passes an ECIES session key).
   auto result = EncryptBuffer(binary_copy.data(), binary_copy.size(),
-                               bfbs, bfbs_size, ctx);
+                               bfbs.data(), bfbs.size(), ctx);
   if (!result.ok()) {
     SetError("Encryption failed: " + result.message);
     *out_len = 0;
@@ -896,15 +907,12 @@ const char* wasm_binary_to_json_decrypted(
     return nullptr;
   }
 
-  // Get binary schema
-  Parser& parser = *it->second.parser;
-  parser.Serialize();
-  const auto& bfbs = parser.builder_.GetBufferPointer();
-  const auto bfbs_size = parser.builder_.GetSize();
+  // Binary schema with the (encrypted) markers
+  const std::vector<uint8_t> bfbs = SerializeSchemaWithBuiltins(*it->second.parser);
 
-  // Decrypt in-place
+  // Decrypt in-place (format 3, record 0, as wasm_json_to_binary_encrypted)
   auto result = DecryptBuffer(decrypted.data(), decrypted.size(),
-                               bfbs, bfbs_size, ctx);
+                               bfbs.data(), bfbs.size(), ctx);
   if (!result.ok()) {
     SetError("Decryption failed: " + result.message);
     *out_len = 0;

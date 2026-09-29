@@ -38,6 +38,8 @@ jobs:
       run: make -j
     - name: test
       run: ./flattests
+    - name: test field encryption
+      run: ./flattests_encryption
     - name: make flatc executable
       run: |
         chmod +x flatc

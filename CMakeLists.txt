@@ -949,6 +949,31 @@ if(FLATBUFFERS_BUILD_TESTS)
   if(FLATBUFFERS_CODE_SANITIZE)
     add_fsanitize_to_target(flattests_he ${FLATBUFFERS_CODE_SANITIZE})
   endif()
+
+  # Field-level encryption tests (separate executable with its own main)
+  add_executable(flattests_encryption
+    ${FlatBuffers_Library_SRCS}
+    tests/encryption_test.cpp
+  )
+  target_link_libraries(flattests_encryption PRIVATE $<BUILD_INTERFACE:ProjectConfig>)
+  target_include_directories(flattests_encryption PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
+    src
+    tests
+  )
+  if(FLATBUFFERS_USE_SEAL)
+    target_link_libraries(flattests_encryption PRIVATE seal)
+  endif()
+  if(FLATBUFFERS_USE_CRYPTOPP)
+    target_link_libraries(flattests_encryption PRIVATE cryptopp)
+  endif()
+  if(FLATBUFFERS_USE_OPENSSL)
+    target_link_libraries(flattests_encryption PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+  endif()
+  if(FLATBUFFERS_CODE_SANITIZE)
+    add_fsanitize_to_target(flattests_encryption ${FLATBUFFERS_CODE_SANITIZE})
+  endif()
 endif()
 
 if(FLATBUFFERS_BUILD_GRPCTEST)

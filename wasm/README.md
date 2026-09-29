@@ -2243,12 +2243,15 @@ root_type UserRecord;
 
 When encryption is active, only the `ssn` and `credit_card` fields are encrypted. Other fields remain in plaintext, allowing indexing and queries on non-sensitive data.
 
-**How it works:**
+**How it works (field-encryption format 3, `EncryptionHeader.version` 3):**
 - A shared secret is derived via ECDH (X25519, secp256k1, P-256, or P-384)
-- HKDF derives a unique AES-256 key per session using the context string
-- Each field gets a unique nonce via 96-bit addition: `nonceStart + (recordIndex * 65536 + fieldId)`
-- Each field is encrypted independently with AES-256-CTR
-- An `EncryptionHeader` FlatBuffer stores the ephemeral public key, algorithm metadata, and starting nonce
+- HKDF derives a unique AES-256 session key using the context string
+- Each record gets a buffer key: `HKDF-SHA256(session key, "flatbuffers-buffer-v3" || BE32(recordIndex))`
+- Every encrypted field instance (in the root table, nested tables, vectors of tables and union members) is AES-256-CTR encrypted with the buffer key and the IV `BE32(position of its first byte) || 12 zero bytes`, so no two instances share a key stream, even two fields with the same id in nested tables
+- An `(encrypted)` table, vector of tables or union is refused, never left in plaintext: mark the fields inside it instead
+- An `EncryptionHeader` FlatBuffer stores the ephemeral public key, algorithm metadata, starting nonce and format version
+
+Format 2 (`EncryptionHeader.version` 2, flatc-wasm 26.1.34) keyed each field by its field id and record index only, so equal-id fields in nested tables shared a key stream. `generateJSONDecrypted` still decrypts it; nothing writes it any more.
 
 ### Encryption Sessions & Nonce Management
 
@@ -2289,6 +2292,10 @@ for (let i = 0; i < records.length; i++) {
 ```
 
 #### Nonce Derivation Algorithm
+
+`deriveNonce` and `deriveFieldNonce` are utilities for your own framing. The
+field cipher does not use `nonceStart`: format 3 keys each field instance by
+the record index and its position in the buffer (see "How it works" above).
 
 Each field in each record gets a unique 96-bit nonce derived via big-endian addition:
 
@@ -2452,13 +2459,15 @@ console.log(JSON.parse(decryptedJson));
 ```
 
 The schema's `(encrypted)` attributes select the fields; a `fields` list is
-refused. Each `(encrypted)` field is AES-256-CTR encrypted in place with a key
-and IV derived from the ECIES session key, the field id and record 0, so
-`data` stays a valid FlatBuffer (the `generateBinary` output without a size
-prefix). `header` is the UTF-8 JSON of the EncryptionHeader
-(`EncryptionContext#getHeaderJSON()`), so `EncryptionContext.forDecryption`
-with `encryptionHeaderFromJSON(header)` and `decryptScalar` per field also
-decrypt it.
+refused. Every instance of an `(encrypted)` field is AES-256-CTR encrypted in
+place with its own key stream (format 3: the buffer key of record 0 and an IV
+from the instance's position), so `data` stays a valid FlatBuffer (the
+`generateBinary` output without a size prefix). `header` is the UTF-8 JSON of
+the EncryptionHeader (`EncryptionContext#getHeaderJSON()`, version 3), so
+`EncryptionContext.forDecryption` with `encryptionHeaderFromJSON(header)` and
+`decryptFieldAt(data, offset, length)` per field also decrypt it.
+`generateJSONDecrypted` reads the header's version and also decrypts format-2
+data from flatc-wasm 26.1.34.
 
 ### Streaming Encryption
 
@@ -2510,7 +2519,7 @@ The `EncryptionHeader` stored with encrypted data:
 enum KeyExchangeAlgorithm : byte { X25519, Secp256k1, P256, P384 }
 
 table EncryptionHeader {
-  version: ubyte = 2;                    // Version 2 requires nonce_start
+  version: ubyte = 2;                    // Field-encryption format: 3 (per-instance key streams), 2 (legacy)
   key_exchange: KeyExchangeAlgorithm;
   ephemeral_public_key: [ubyte] (required);
   nonce_start: [ubyte] (required);       // 12-byte starting nonce (CSPRNG)

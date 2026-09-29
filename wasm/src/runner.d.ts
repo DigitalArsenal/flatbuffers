@@ -84,14 +84,16 @@ export interface BinaryEncryptionConfig {
 export interface EncryptedBinary {
   /**
    * UTF-8 JSON of the EncryptionHeader (EncryptionContext#getHeaderJSON()):
-   * version 2, algorithm, hex senderPublicKey (ephemeral), recipientKeyId,
+   * version 3, algorithm, hex senderPublicKey (ephemeral), recipientKeyId,
    * nonceStart, context. Send it with the data.
    */
   header: Uint8Array;
   /**
-   * The generateBinary() output without a size prefix, with each
-   * `(encrypted)` field AES-256-CTR encrypted in place (key and IV per field
-   * id, record 0, from the ECIES session key). Still a valid FlatBuffer.
+   * The generateBinary() output without a size prefix, with every instance
+   * of each `(encrypted)` field AES-256-CTR encrypted in place with its own
+   * key stream (format 3: the buffer key of record 0, derived from the ECIES
+   * session key, and an IV from the instance's position). Still a valid
+   * FlatBuffer.
    */
   data: Uint8Array;
 }
@@ -102,7 +104,11 @@ export interface EncryptedBinary {
 export interface BinaryDecryptionConfig {
   /** Recipient's private key (32 bytes) */
   privateKey: Uint8Array;
-  /** The header generateBinaryEncrypted() returned: bytes, JSON string, or EncryptionHeader object */
+  /**
+   * The header generateBinaryEncrypted() returned: bytes, JSON string, or
+   * EncryptionHeader object. Its version selects the format: 3, or 2 for
+   * data from flatc-wasm 26.1.34.
+   */
   header: Uint8Array | string | Record<string, unknown>;
   /** Overrides the header's context */
   context?: string;
@@ -358,7 +364,9 @@ export declare class FlatcRunner {
   /**
    * Generate a FlatBuffer binary from JSON and encrypt its `(encrypted)`
    * fields for a recipient (ECIES: ephemeral ECDH + HKDF, then AES-256-CTR
-   * per field). A schema without `(encrypted)` fields leaves the data unchanged.
+   * with a key stream per field instance, format 3). A schema without
+   * `(encrypted)` fields leaves the data unchanged; an `(encrypted)` table,
+   * vector of tables or union is refused.
    * @param schemaInput - Schema files with entry point.
    * @param jsonInput - JSON data to convert and encrypt.
    * @param encryption - Recipient public key, algorithm and context.

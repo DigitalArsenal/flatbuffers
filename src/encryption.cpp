@@ -19,6 +19,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <set>
+#include <string>
 
 #ifdef FLATBUFFERS_USE_CRYPTOPP
 // Crypto++ headers
@@ -1974,6 +1976,29 @@ void EncryptionContext::DeriveFieldIV(uint16_t field_id, uint8_t* out_iv,
   internal::DeriveKey(key_, kEncryptionKeySize, info, 20, out_iv, kEncryptionIVSize);
 }
 
+void EncryptionContext::DeriveBufferKey(uint32_t record_index,
+                                        uint8_t* out_key) const {
+  // Binary info: "flatbuffers-buffer-v3" + BE(record_index)
+  static const char kLabel[] = "flatbuffers-buffer-v3";
+  const size_t label_size = sizeof(kLabel) - 1;
+  uint8_t info[sizeof(kLabel) - 1 + 4];
+  memcpy(info, kLabel, label_size);
+  info[label_size + 0] = static_cast<uint8_t>((record_index >> 24) & 0xFF);
+  info[label_size + 1] = static_cast<uint8_t>((record_index >> 16) & 0xFF);
+  info[label_size + 2] = static_cast<uint8_t>((record_index >> 8) & 0xFF);
+  info[label_size + 3] = static_cast<uint8_t>(record_index & 0xFF);
+  internal::DeriveKey(key_, kEncryptionKeySize, info, sizeof(info), out_key,
+                      kEncryptionKeySize);
+}
+
+void FieldInstanceIV(uint32_t position, uint8_t* out_iv) {
+  memset(out_iv, 0, kEncryptionIVSize);
+  out_iv[0] = static_cast<uint8_t>((position >> 24) & 0xFF);
+  out_iv[1] = static_cast<uint8_t>((position >> 16) & 0xFF);
+  out_iv[2] = static_cast<uint8_t>((position >> 8) & 0xFF);
+  out_iv[3] = static_cast<uint8_t>(position & 0xFF);
+}
+
 // =============================================================================
 // Field encryption functions
 // =============================================================================
@@ -2247,44 +2272,605 @@ EncryptionResult ProcessTable(
 
 }  // namespace internal
 
+// =============================================================================
+// Format 3: a key stream per encrypted instance
+// =============================================================================
+//
+// K = DeriveBufferKey(record_index); each encrypted instance (a scalar, a
+// struct, a string's bytes, a vector's elements, each string of a vector of
+// strings) is AES-256-CTR encrypted with K and FieldInstanceIV(position of its
+// first byte). The walk reaches every table: table-typed fields, vectors of
+// tables and union members. A table reached twice (shared by offset) and bytes
+// reached twice (a shared string) are processed once, so decrypting walks the
+// same instances with the same IVs.
+
+namespace {
+
+const int kMaxEncryptionDepth = 64;
+
+EncryptionResult Fail(EncryptionError error, const std::string& message) {
+  return EncryptionResult::Error(error, message);
+}
+
+std::string FieldName(const reflection::Object* object,
+                      const reflection::Field* field) {
+  std::string name = object && object->name() ? object->name()->str() : "?";
+  name += ".";
+  name += field && field->name() ? field->name()->str() : "?";
+  return name;
+}
+
+EncryptionResult Refuse(const reflection::Object* object,
+                        const reflection::Field* field, const char* reason) {
+  return Fail(EncryptionError::kUnsupportedType,
+              "field " + FieldName(object, field) + ": " + reason);
+}
+
+EncryptionResult Malformed(const reflection::Object* object,
+                           const reflection::Field* field) {
+  return Fail(EncryptionError::kInvalidBuffer,
+              "field " + FieldName(object, field) +
+                  " points outside the buffer or is malformed");
+}
+
+size_t ScalarSize(reflection::BaseType type) {
+  switch (type) {
+    case reflection::BaseType::Bool:
+    case reflection::BaseType::Byte:
+    case reflection::BaseType::UByte: return 1;
+    case reflection::BaseType::Short:
+    case reflection::BaseType::UShort: return 2;
+    case reflection::BaseType::Int:
+    case reflection::BaseType::UInt:
+    case reflection::BaseType::Float: return 4;
+    case reflection::BaseType::Long:
+    case reflection::BaseType::ULong:
+    case reflection::BaseType::Double: return 8;
+    default: return 0;
+  }
+}
+
+const reflection::Object* ObjectAt(const reflection::Schema* schema,
+                                   int32_t index) {
+  auto objects = schema->objects();
+  if (!objects || index < 0 || static_cast<uoffset_t>(index) >= objects->size())
+    return nullptr;
+  return objects->Get(static_cast<uoffset_t>(index));
+}
+
+const reflection::Enum* EnumAt(const reflection::Schema* schema,
+                               int32_t index) {
+  auto enums = schema->enums();
+  if (!enums || index < 0 || static_cast<uoffset_t>(index) >= enums->size())
+    return nullptr;
+  return enums->Get(static_cast<uoffset_t>(index));
+}
+
+// True when a struct (or a struct nested in it) marks its own fields
+// (encrypted). Format 3 encrypts a struct only as a whole.
+bool StructHasEncryptedField(const reflection::Schema* schema,
+                             const reflection::Object* object, int depth) {
+  if (!object || !object->fields() || depth > kMaxEncryptionDepth) return false;
+  for (auto field : *object->fields()) {
+    if (!field) continue;
+    if (IsFieldEncrypted(field)) return true;
+    auto type = field->type();
+    if (!type) continue;
+    if (type->base_type() == reflection::BaseType::Obj ||
+        (type->base_type() == reflection::BaseType::Array &&
+         type->element() == reflection::BaseType::Obj)) {
+      auto nested = ObjectAt(schema, type->index());
+      if (nested && nested->is_struct() &&
+          StructHasEncryptedField(schema, nested, depth + 1)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Refuses an (encrypted) field whose type format 3 cannot encrypt in place.
+EncryptionResult CheckEncryptable(const reflection::Schema* schema,
+                                  const reflection::Object* object,
+                                  const reflection::Field* field) {
+  auto type = field->type();
+  const auto base = type->base_type();
+  if (field->offset64()) {
+    return Refuse(object, field,
+                  "(encrypted) on a field with 64-bit offsets is not "
+                  "supported");
+  }
+  if (ScalarSize(base) > 0 || base == reflection::BaseType::String) {
+    return EncryptionResult::Success();
+  }
+  switch (base) {
+    case reflection::BaseType::Obj: {
+      auto nested = ObjectAt(schema, type->index());
+      if (nested && nested->is_struct()) return EncryptionResult::Success();
+      return Refuse(object, field,
+                    "(encrypted) on a table is not supported: its offsets "
+                    "must stay readable; mark the fields inside the table "
+                    "(encrypted)");
+    }
+    case reflection::BaseType::Vector: {
+      const auto element = type->element();
+      if (ScalarSize(element) > 0 || element == reflection::BaseType::String) {
+        return EncryptionResult::Success();
+      }
+      if (element == reflection::BaseType::Obj) {
+        auto nested = ObjectAt(schema, type->index());
+        if (nested && nested->is_struct()) return EncryptionResult::Success();
+        return Refuse(object, field,
+                      "(encrypted) on a vector of tables is not supported: "
+                      "its offsets must stay readable; mark the fields inside "
+                      "the table (encrypted)");
+      }
+      return Refuse(object, field,
+                    "(encrypted) on a vector of unions is not supported; mark "
+                    "the fields inside the member tables (encrypted)");
+    }
+    case reflection::BaseType::UType:
+      return Refuse(object, field,
+                    "(encrypted) on a union type field is not supported: the "
+                    "type selects how the value is read");
+    case reflection::BaseType::Union:
+      return Refuse(object, field,
+                    "(encrypted) on a union is not supported; mark the fields "
+                    "inside the member tables (encrypted)");
+    default:
+      return Refuse(object, field,
+                    "(encrypted) is not supported on this field type");
+  }
+}
+
+// Checks every table reachable from `object` before any byte changes, so an
+// unsupported (encrypted) field is refused instead of left in plaintext.
+EncryptionResult ValidateObject(const reflection::Schema* schema,
+                                const reflection::Object* object,
+                                std::set<const reflection::Object*>* seen) {
+  if (!seen->insert(object).second) return EncryptionResult::Success();
+  auto fields = object->fields();
+  if (!fields) return EncryptionResult::Success();
+  for (auto field : *fields) {
+    if (!field || !field->type()) continue;
+    auto type = field->type();
+    const auto base = type->base_type();
+    if (IsFieldEncrypted(field)) {
+      auto result = CheckEncryptable(schema, object, field);
+      if (!result.ok()) return result;
+      continue;
+    }
+    if (base == reflection::BaseType::Obj ||
+        (base == reflection::BaseType::Vector &&
+         type->element() == reflection::BaseType::Obj)) {
+      auto nested = ObjectAt(schema, type->index());
+      if (!nested) continue;
+      if (nested->is_struct()) {
+        if (StructHasEncryptedField(schema, nested, 0)) {
+          return Refuse(object, field,
+                        "its struct marks fields (encrypted) one by one, "
+                        "which is not supported; mark the struct-typed "
+                        "field (encrypted) to encrypt the whole struct");
+        }
+        continue;
+      }
+      auto result = ValidateObject(schema, nested, seen);
+      if (!result.ok()) return result;
+      continue;
+    }
+    if (base == reflection::BaseType::Union ||
+        (base == reflection::BaseType::Vector &&
+         type->element() == reflection::BaseType::Union)) {
+      auto union_def = EnumAt(schema, type->index());
+      if (!union_def || !union_def->values()) continue;
+      for (auto value : *union_def->values()) {
+        auto member_type = value ? value->union_type() : nullptr;
+        if (!member_type ||
+            member_type->base_type() != reflection::BaseType::Obj) {
+          continue;
+        }
+        auto member = ObjectAt(schema, member_type->index());
+        if (!member) continue;
+        if (member->is_struct()) {
+          if (StructHasEncryptedField(schema, member, 0)) {
+            return Refuse(object, field,
+                          "a union member struct marks fields (encrypted), "
+                          "which is not supported");
+          }
+          continue;
+        }
+        auto result = ValidateObject(schema, member, seen);
+        if (!result.ok()) return result;
+      }
+    }
+  }
+  return EncryptionResult::Success();
+}
+
+struct CipherV3 {
+  uint8_t* buf;
+  size_t size;
+  const reflection::Schema* schema;
+  uint8_t key[kEncryptionKeySize];
+  bool apply;  // false: a dry run that only checks the buffer
+  std::set<uint64_t> tables;
+  std::set<uint64_t> regions;
+};
+
+bool InBounds(const CipherV3& c, uint64_t pos, uint64_t len) {
+  return pos <= c.size && len <= c.size - pos;
+}
+
+const uint8_t* At(const CipherV3& c, uint64_t pos) {
+  return c.buf + static_cast<size_t>(pos);
+}
+
+// Follows the uoffset_t at `pos` to the object it refers to.
+bool Follow(const CipherV3& c, uint64_t pos, uint64_t* out) {
+  if (!InBounds(c, pos, sizeof(uoffset_t))) return false;
+  const uint64_t target = pos + ReadScalar<uoffset_t>(At(c, pos));
+  if (!InBounds(c, target, sizeof(uoffset_t))) return false;
+  *out = target;
+  return true;
+}
+
+// Sets *loc to the position of the field's inline value in the table at
+// `table`, or to 0 when the field is absent. False when the table is
+// malformed.
+bool FieldLoc(const CipherV3& c, uint64_t table,
+              const reflection::Field* field, uint64_t* loc) {
+  *loc = 0;
+  if (!InBounds(c, table, sizeof(soffset_t))) return false;
+  const int64_t vtable_pos = static_cast<int64_t>(table) -
+                             static_cast<int64_t>(ReadScalar<soffset_t>(At(c, table)));
+  if (vtable_pos < 0) return false;
+  const uint64_t vtable = static_cast<uint64_t>(vtable_pos);
+  if (!InBounds(c, vtable, 2 * sizeof(voffset_t))) return false;
+  const voffset_t vtable_size = ReadScalar<voffset_t>(At(c, vtable));
+  const voffset_t table_size =
+      ReadScalar<voffset_t>(At(c, vtable + sizeof(voffset_t)));
+  if (static_cast<size_t>(vtable_size) < 2 * sizeof(voffset_t) ||
+      (vtable_size & 1) != 0 ||
+      !InBounds(c, vtable, vtable_size) || !InBounds(c, table, table_size)) {
+    return false;
+  }
+  const uint64_t slot = field->offset();
+  if (slot + sizeof(voffset_t) > static_cast<uint64_t>(vtable_size)) {
+    return true;  // absent
+  }
+  const voffset_t field_offset = ReadScalar<voffset_t>(At(c, vtable + slot));
+  if (field_offset == 0) return true;  // absent
+  if (field_offset >= table_size) return false;
+  *loc = table + field_offset;
+  return true;
+}
+
+// The [start, start + len) bytes of the string referred to at `ref`.
+bool StringBytes(const CipherV3& c, uint64_t ref, uint64_t* start,
+                 uint64_t* len) {
+  uint64_t str;
+  if (!Follow(c, ref, &str)) return false;
+  const uint64_t length = ReadScalar<uoffset_t>(At(c, str));
+  // The length, the bytes, and the NUL terminator (never encrypted).
+  if (!InBounds(c, str + sizeof(uoffset_t), length + 1)) return false;
+  *start = str + sizeof(uoffset_t);
+  *len = length;
+  return true;
+}
+
+// The element data and count of the vector referred to at `ref`.
+bool VectorElements(const CipherV3& c, uint64_t ref, uint64_t element_size,
+                    uint64_t* data, uint64_t* count) {
+  uint64_t vec;
+  if (!Follow(c, ref, &vec)) return false;
+  const uint64_t n = ReadScalar<uoffset_t>(At(c, vec));
+  if (!InBounds(c, vec + sizeof(uoffset_t), n * element_size)) return false;
+  *data = vec + sizeof(uoffset_t);
+  *count = n;
+  return true;
+}
+
+// Encrypts (or decrypts) one instance in place, once.
+void CryptInstance(CipherV3& c, uint64_t start, uint64_t len) {
+  if (len == 0 || !c.regions.insert(start).second || !c.apply) return;
+  uint8_t iv[kEncryptionIVSize];
+  FieldInstanceIV(static_cast<uint32_t>(start), iv);
+  EncryptBytes(c.buf + static_cast<size_t>(start), static_cast<size_t>(len),
+               c.key, iv);
+}
+
+EncryptionResult CryptField(CipherV3& c, const reflection::Object* object,
+                            const reflection::Field* field, uint64_t loc) {
+  auto type = field->type();
+  const auto base = type->base_type();
+  const uint64_t scalar = ScalarSize(base);
+  if (scalar > 0) {
+    if (!InBounds(c, loc, scalar)) return Malformed(object, field);
+    CryptInstance(c, loc, scalar);
+    return EncryptionResult::Success();
+  }
+  switch (base) {
+    case reflection::BaseType::String: {
+      uint64_t start = 0, len = 0;
+      if (!StringBytes(c, loc, &start, &len)) return Malformed(object, field);
+      CryptInstance(c, start, len);
+      return EncryptionResult::Success();
+    }
+    case reflection::BaseType::Obj: {
+      auto nested = ObjectAt(c.schema, type->index());
+      if (!nested || !nested->is_struct()) {
+        return CheckEncryptable(c.schema, object, field);
+      }
+      const uint64_t size = static_cast<uint64_t>(nested->bytesize());
+      if (!InBounds(c, loc, size)) return Malformed(object, field);
+      CryptInstance(c, loc, size);
+      return EncryptionResult::Success();
+    }
+    case reflection::BaseType::Vector: {
+      const auto element = type->element();
+      uint64_t element_size = ScalarSize(element);
+      if (element == reflection::BaseType::Obj) {
+        auto nested = ObjectAt(c.schema, type->index());
+        if (!nested || !nested->is_struct()) {
+          return CheckEncryptable(c.schema, object, field);
+        }
+        element_size = static_cast<uint64_t>(nested->bytesize());
+      }
+      if (element == reflection::BaseType::String) {
+        uint64_t data = 0, count = 0;
+        if (!VectorElements(c, loc, sizeof(uoffset_t), &data, &count)) {
+          return Malformed(object, field);
+        }
+        for (uint64_t i = 0; i < count; i++) {
+          uint64_t start = 0, len = 0;
+          if (!StringBytes(c, data + i * sizeof(uoffset_t), &start, &len)) {
+            return Malformed(object, field);
+          }
+          CryptInstance(c, start, len);
+        }
+        return EncryptionResult::Success();
+      }
+      if (element_size == 0) return CheckEncryptable(c.schema, object, field);
+      uint64_t data = 0, count = 0;
+      if (!VectorElements(c, loc, element_size, &data, &count)) {
+        return Malformed(object, field);
+      }
+      CryptInstance(c, data, count * element_size);
+      return EncryptionResult::Success();
+    }
+    default: return CheckEncryptable(c.schema, object, field);
+  }
+}
+
+const reflection::Field* UnionTypeField(const reflection::Object* object,
+                                        const reflection::Field* field) {
+  if (field->id() == 0 || !object->fields()) return nullptr;
+  for (auto candidate : *object->fields()) {
+    if (candidate && candidate->id() + 1 == field->id()) return candidate;
+  }
+  return nullptr;
+}
+
+EncryptionResult WalkTable(CipherV3& c, const reflection::Object* object,
+                           uint64_t table, int depth);
+
+// Walks the union member whose type is `member_type` and whose offset is at
+// `ref`.
+EncryptionResult WalkUnionMember(CipherV3& c, const reflection::Object* object,
+                                 const reflection::Field* field,
+                                 uint8_t member_type, uint64_t ref,
+                                 int depth) {
+  if (member_type == 0) return EncryptionResult::Success();  // NONE
+  auto union_def = EnumAt(c.schema, field->type()->index());
+  if (!union_def || !union_def->values()) return Malformed(object, field);
+  const reflection::EnumVal* value = nullptr;
+  for (auto candidate : *union_def->values()) {
+    if (candidate && candidate->value() == member_type) {
+      value = candidate;
+      break;
+    }
+  }
+  // A member type this schema does not know has no (encrypted) fields here.
+  if (!value || !value->union_type() ||
+      value->union_type()->base_type() != reflection::BaseType::Obj) {
+    return EncryptionResult::Success();
+  }
+  auto member = ObjectAt(c.schema, value->union_type()->index());
+  if (!member || member->is_struct()) return EncryptionResult::Success();
+  uint64_t member_table = 0;
+  if (!Follow(c, ref, &member_table)) return Malformed(object, field);
+  return WalkTable(c, member, member_table, depth + 1);
+}
+
+EncryptionResult WalkTable(CipherV3& c, const reflection::Object* object,
+                           uint64_t table, int depth) {
+  if (depth > kMaxEncryptionDepth) {
+    return Fail(EncryptionError::kInvalidBuffer,
+                "tables nested deeper than 64 levels");
+  }
+  if (!c.tables.insert(table).second) return EncryptionResult::Success();
+  auto fields = object->fields();
+  if (!fields) return EncryptionResult::Success();
+  for (auto field : *fields) {
+    if (!field || !field->type()) continue;
+    uint64_t loc = 0;
+    if (!FieldLoc(c, table, field, &loc)) return Malformed(object, field);
+    if (loc == 0) continue;
+    if (IsFieldEncrypted(field)) {
+      auto result = CryptField(c, object, field, loc);
+      if (!result.ok()) return result;
+      continue;
+    }
+    auto type = field->type();
+    switch (type->base_type()) {
+      case reflection::BaseType::Obj: {
+        auto nested = ObjectAt(c.schema, type->index());
+        if (!nested || nested->is_struct()) break;
+        uint64_t nested_table = 0;
+        if (!Follow(c, loc, &nested_table)) return Malformed(object, field);
+        auto result = WalkTable(c, nested, nested_table, depth + 1);
+        if (!result.ok()) return result;
+        break;
+      }
+      case reflection::BaseType::Vector: {
+        if (type->element() == reflection::BaseType::Obj) {
+          auto nested = ObjectAt(c.schema, type->index());
+          if (!nested || nested->is_struct()) break;
+          uint64_t data = 0, count = 0;
+          if (!VectorElements(c, loc, sizeof(uoffset_t), &data, &count)) {
+            return Malformed(object, field);
+          }
+          for (uint64_t i = 0; i < count; i++) {
+            uint64_t element = 0;
+            if (!Follow(c, data + i * sizeof(uoffset_t), &element)) {
+              return Malformed(object, field);
+            }
+            auto result = WalkTable(c, nested, element, depth + 1);
+            if (!result.ok()) return result;
+          }
+        } else if (type->element() == reflection::BaseType::Union) {
+          auto type_field = UnionTypeField(object, field);
+          if (!type_field) return Malformed(object, field);
+          uint64_t types_loc = 0;
+          if (!FieldLoc(c, table, type_field, &types_loc)) {
+            return Malformed(object, field);
+          }
+          if (types_loc == 0) break;
+          uint64_t types = 0, type_count = 0, data = 0, count = 0;
+          if (!VectorElements(c, types_loc, 1, &types, &type_count) ||
+              !VectorElements(c, loc, sizeof(uoffset_t), &data, &count) ||
+              type_count != count) {
+            return Malformed(object, field);
+          }
+          for (uint64_t i = 0; i < count; i++) {
+            auto result =
+                WalkUnionMember(c, object, field, *At(c, types + i),
+                                data + i * sizeof(uoffset_t), depth);
+            if (!result.ok()) return result;
+          }
+        }
+        break;
+      }
+      case reflection::BaseType::Union: {
+        auto type_field = UnionTypeField(object, field);
+        if (!type_field) return Malformed(object, field);
+        uint64_t type_loc = 0;
+        if (!FieldLoc(c, table, type_field, &type_loc) ||
+            (type_loc != 0 && !InBounds(c, type_loc, 1))) {
+          return Malformed(object, field);
+        }
+        if (type_loc == 0) break;
+        auto result =
+            WalkUnionMember(c, object, field, *At(c, type_loc), loc, depth);
+        if (!result.ok()) return result;
+        break;
+      }
+      default: break;
+    }
+  }
+  return EncryptionResult::Success();
+}
+
+EncryptionResult CipherBufferV3(uint8_t* buffer, size_t buffer_size,
+                                const reflection::Schema* schema,
+                                const EncryptionContext& ctx,
+                                uint32_t record_index) {
+  auto root_object = schema->root_table();
+  std::set<const reflection::Object*> seen;
+  auto result = ValidateObject(schema, root_object, &seen);
+  if (!result.ok()) return result;
+
+  CipherV3 c;
+  c.buf = buffer;
+  c.size = buffer_size;
+  c.schema = schema;
+  const uint64_t root = ReadScalar<uoffset_t>(buffer);
+  if (!InBounds(c, root, sizeof(soffset_t))) {
+    return Fail(EncryptionError::kInvalidBuffer, "Root offset out of bounds");
+  }
+
+  // A dry run first: a malformed buffer fails before any byte changes.
+  c.apply = false;
+  result = WalkTable(c, root_object, root, 0);
+  if (!result.ok()) return result;
+
+  c.apply = true;
+  c.tables.clear();
+  c.regions.clear();
+  ctx.DeriveBufferKey(record_index, c.key);
+  result = WalkTable(c, root_object, root, 0);
+  SecureClear(c.key, kEncryptionKeySize);
+  return result;
+}
+
+EncryptionResult CipherBuffer(uint8_t* buffer, size_t buffer_size,
+                              const uint8_t* schema, size_t schema_size,
+                              const EncryptionContext& ctx,
+                              uint32_t record_index, uint8_t version,
+                              bool encrypt) {
+  if (!ctx.IsValid()) {
+    return Fail(EncryptionError::kInvalidKey, "Invalid encryption key");
+  }
+  if (!buffer || buffer_size < sizeof(uoffset_t) ||
+      buffer_size > static_cast<size_t>(FLATBUFFERS_MAX_BUFFER_SIZE)) {
+    return Fail(EncryptionError::kInvalidBuffer, "Invalid buffer");
+  }
+  if (!schema || schema_size == 0) {
+    return Fail(EncryptionError::kInvalidSchema, "Invalid schema");
+  }
+  Verifier verifier(schema, schema_size);
+  if (!reflection::VerifySchemaBuffer(verifier)) {
+    return Fail(EncryptionError::kInvalidSchema,
+                "Schema is not a valid binary schema (.bfbs)");
+  }
+  auto schema_root = reflection::GetSchema(schema);
+  auto root_table = schema_root->root_table();
+  if (!root_table) {
+    return Fail(EncryptionError::kInvalidSchema, "No root table in schema");
+  }
+
+  switch (version) {
+    case kFieldEncryptionV2: {
+      if (record_index != 0) {
+        return Fail(EncryptionError::kUnsupportedType,
+                    "Field-encryption format 2 has no record index");
+      }
+      auto root_offset = ReadScalar<uoffset_t>(buffer);
+      if (root_offset >= buffer_size) {
+        return Fail(EncryptionError::kInvalidBuffer,
+                    "Root offset out of bounds");
+      }
+      return internal::ProcessTable(buffer, buffer_size, root_table,
+                                    schema_root, root_offset, ctx, encrypt);
+    }
+    case kFieldEncryptionV3:
+      return CipherBufferV3(buffer, buffer_size, schema_root, ctx,
+                            record_index);
+    default:
+      return Fail(EncryptionError::kUnsupportedType,
+                  "Unknown field-encryption format " +
+                      std::to_string(static_cast<int>(version)));
+  }
+}
+
+}  // namespace
+
 EncryptionResult EncryptBuffer(
     uint8_t* buffer, size_t buffer_size,
     const uint8_t* schema, size_t schema_size,
-    const EncryptionContext& ctx) {
-  if (!ctx.IsValid()) {
-    return EncryptionResult::Error(EncryptionError::kInvalidKey, "Invalid encryption key");
-  }
-  if (!buffer || buffer_size < sizeof(uoffset_t)) {
-    return EncryptionResult::Error(EncryptionError::kInvalidBuffer, "Invalid buffer");
-  }
-  if (!schema || schema_size == 0) {
-    return EncryptionResult::Error(EncryptionError::kInvalidSchema, "Invalid schema");
-  }
-
-  auto schema_root = reflection::GetSchema(schema);
-  if (!schema_root) {
-    return EncryptionResult::Error(EncryptionError::kInvalidSchema, "Failed to parse schema");
-  }
-
-  auto root_table = schema_root->root_table();
-  if (!root_table) {
-    return EncryptionResult::Error(EncryptionError::kInvalidSchema, "No root table in schema");
-  }
-
-  auto root_offset = ReadScalar<uoffset_t>(buffer);
-  if (root_offset >= buffer_size) {
-    return EncryptionResult::Error(EncryptionError::kInvalidBuffer, "Root offset out of bounds");
-  }
-
-  return internal::ProcessTable(buffer, buffer_size, root_table, schema_root,
-                                root_offset, ctx, true);
+    const EncryptionContext& ctx, uint32_t record_index, uint8_t version) {
+  return CipherBuffer(buffer, buffer_size, schema, schema_size, ctx,
+                      record_index, version, true);
 }
 
 EncryptionResult DecryptBuffer(
     uint8_t* buffer, size_t buffer_size,
     const uint8_t* schema, size_t schema_size,
-    const EncryptionContext& ctx) {
-  return EncryptBuffer(buffer, buffer_size, schema, schema_size, ctx);
+    const EncryptionContext& ctx, uint32_t record_index, uint8_t version) {
+  // AES-CTR is its own inverse, and the walk reads only bytes it never
+  // encrypts (offsets, vtables, lengths, union types).
+  return CipherBuffer(buffer, buffer_size, schema, schema_size, ctx,
+                      record_index, version, false);
 }
 
 }  // namespace flatbuffers

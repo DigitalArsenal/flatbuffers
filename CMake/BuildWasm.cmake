@@ -99,6 +99,7 @@ if(EMSCRIPTEN)
     src/idl_gen_cpp.cpp
     src/idl_gen_csharp.cpp
     src/idl_gen_dart.cpp
+    src/idl_gen_encryption.cpp
     src/idl_gen_kotlin.cpp
     src/idl_gen_kotlin_kmp.cpp
     src/idl_gen_go.cpp

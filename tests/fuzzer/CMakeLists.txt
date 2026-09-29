@@ -128,6 +128,7 @@ set(FlatBuffers_Compiler_SRCS
   ${FLATBUFFERS_DIR}/src/idl_gen_cpp.cpp
   ${FLATBUFFERS_DIR}/src/idl_gen_csharp.cpp
   ${FLATBUFFERS_DIR}/src/idl_gen_dart.cpp
+  ${FLATBUFFERS_DIR}/src/idl_gen_encryption.cpp
   ${FLATBUFFERS_DIR}/src/idl_gen_kotlin.cpp
   ${FLATBUFFERS_DIR}/src/idl_gen_kotlin_kmp.cpp
   ${FLATBUFFERS_DIR}/src/idl_gen_go.cpp

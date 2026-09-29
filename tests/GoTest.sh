@@ -110,10 +110,45 @@ function run_go_encryption_test() {
   fi
 }
 
+# The root table's file-identifier constant against a declaration of the same
+# name in its package (go_identifier_collision).
+function run_go_identifier_collision_test() {
+  local go_path_variant=${go_path_base}_identifier_collision
+  local go_src=${go_path_variant}/src
+
+  echo "Running Go file-identifier collision tests"
+
+  rm -rf "${go_path_variant}"
+  mkdir -p "${go_src}/identifier_collision_test" \
+           "${go_src}/github.com/google/flatbuffers/go"
+  ../flatc -g -I go_identifier_collision -o ${go_src} \
+    go_identifier_collision/table.fbs go_identifier_collision/enum.fbs \
+    go_identifier_collision/twice.fbs go_identifier_collision/other.fbs \
+    go_identifier_collision/plain.fbs
+  cp -a ../go/* ${go_src}/github.com/google/flatbuffers/go
+  cp -a ./go_identifier_collision_test.go \
+    ${go_src}/identifier_collision_test/identifier_collision_test.go
+
+  go env -w GO111MODULE=off
+  GOPATH=${go_path_variant} go vet GoIdentifierCollision/... \
+    identifier_collision_test &&
+    GOPATH=${go_path_variant} go test identifier_collision_test
+
+  local go_test_result=$?
+  rm -rf ${go_path_variant}
+
+  if [[ ${go_test_result} != 0 ]]; then
+    echo "KO: Go file-identifier collision tests failed."
+    go env -w GO111MODULE=on
+    exit 1
+  fi
+}
+
 # Run both default and preserve-case variants.
 run_go_suite "default" "false" "./go_test.go"
 run_go_suite "preserve_case" "true" "./go_test_preserve_case.go"
 run_go_encryption_test
+run_go_identifier_collision_test
 
 echo "OK: Go tests passed for default and preserve-case variants."
 

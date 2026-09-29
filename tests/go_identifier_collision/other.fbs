@@ -1,0 +1,7 @@
+// A table DockIdentifier in another namespace, so another Go package, than
+// plain.fbs's root table Dock.
+namespace GoIdentifierCollision.Other;
+
+table DockIdentifier {
+  name:string;
+}

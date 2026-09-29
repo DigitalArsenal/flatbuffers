@@ -1,0 +1,19 @@
+// Go: <Root>Identifier and <Root>FileIdentifier are both tables in the root
+// table's package, so the file-identifier constant is ProbeFileIdentifier_.
+namespace GoIdentifierCollision.Twice;
+
+table ProbeIdentifier {
+  name:string;
+}
+
+table ProbeFileIdentifier {
+  name:string;
+}
+
+table Probe {
+  id:ProbeIdentifier;
+  file:ProbeFileIdentifier;
+}
+
+root_type Probe;
+file_identifier "PRB1";

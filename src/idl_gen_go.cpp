@@ -648,6 +648,49 @@ func flatbuffersEncryptionCrypt(buf, key []byte, recordIndex uint32, program []i
     code += "}\n\n";
   }
 
+  // Whether two definitions are generated into the same Go package: every
+  // definition shares one package under --go-namespace or --gen-onefile,
+  // otherwise a definition's package is its namespace's directory.
+  bool SameGoPackage(const Definition& a, const Definition& b) const {
+    if (parser_.opts.one_file || !go_namespace_.components.empty()) {
+      return true;
+    }
+    return a.defined_namespace->components == b.defined_namespace->components;
+  }
+
+  // Whether a type or an enum constant named `name` is declared in the Go
+  // package `scope` is generated into.
+  bool GoPackageDeclares(const Definition& scope,
+                         const std::string& name) const {
+    for (const StructDef* struct_def : parser_.structs_.vec) {
+      if (SameGoPackage(scope, *struct_def) &&
+          namer_.Type(*struct_def) == name) {
+        return true;
+      }
+    }
+    for (const EnumDef* enum_def : parser_.enums_.vec) {
+      if (!SameGoPackage(scope, *enum_def)) continue;
+      if (namer_.Type(*enum_def) == name) return true;
+      for (const EnumVal* ev : enum_def->Vals()) {
+        if (namer_.EnumVariant(*enum_def, *ev) == name) return true;
+      }
+    }
+    return false;
+  }
+
+  // The root table's file-identifier constant is <Root>Identifier. When the
+  // package already declares that name (a table TMSIdentifier beside the root
+  // table TMS), it is <Root>FileIdentifier instead, with `_` appended until
+  // the name is free; without a collision the name never changes.
+  std::string FileIdentifierConstant(const StructDef& struct_def) const {
+    const std::string struct_type = namer_.Type(struct_def);
+    std::string name = struct_type + "Identifier";
+    if (!GoPackageDeclares(struct_def, name)) return name;
+    name = struct_type + "FileIdentifier";
+    while (GoPackageDeclares(struct_def, name)) name += "_";
+    return name;
+  }
+
   // Initialize a new struct or table from existing data.
   void NewRootTypeFromBuffer(const StructDef& struct_def,
                              std::string* code_ptr) {
@@ -657,9 +700,11 @@ func flatbuffersEncryptionCrypt(buf, key []byte, recordIndex uint32, program []i
 
     bool has_file_identifier = (parser_.root_struct_def_ == &struct_def) &&
                                parser_.file_identifier_.length();
+    const std::string identifier_constant =
+        has_file_identifier ? FileIdentifierConstant(struct_def) : "";
 
     if (has_file_identifier) {
-      code += "const " + struct_type + "Identifier = \"" +
+      code += "const " + identifier_constant + " = \"" +
               parser_.file_identifier_ + "\"\n\n";
     }
 
@@ -688,7 +733,7 @@ func flatbuffersEncryptionCrypt(buf, key []byte, recordIndex uint32, program []i
               "Buffer(builder *flatbuffers.Builder, offset "
               "flatbuffers.UOffsetT) {\n";
       if (has_file_identifier) {
-        code += "\tidentifierBytes := []byte(" + struct_type + "Identifier)\n";
+        code += "\tidentifierBytes := []byte(" + identifier_constant + ")\n";
         code += "\tbuilder.Finish" + size_prefix[i] +
                 "WithFileIdentifier(offset, identifierBytes)\n";
       } else {
@@ -700,7 +745,7 @@ func flatbuffersEncryptionCrypt(buf, key []byte, recordIndex uint32, program []i
         code += "func " + size_prefix[i] + struct_type +
                 "BufferHasIdentifier(buf []byte) bool {\n";
         code += "\treturn flatbuffers." + size_prefix[i] +
-                "BufferHasIdentifier(buf, " + struct_type + "Identifier)\n";
+                "BufferHasIdentifier(buf, " + identifier_constant + ")\n";
         code += "}\n\n";
       }
     }

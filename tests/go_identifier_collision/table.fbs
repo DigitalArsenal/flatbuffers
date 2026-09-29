@@ -1,0 +1,14 @@
+// Go: a table named <Root>Identifier shares the root table's package, so the
+// file-identifier constant is TrackFileIdentifier instead of TrackIdentifier.
+namespace GoIdentifierCollision.Table;
+
+table TrackIdentifier {
+  model:string;
+}
+
+table Track {
+  id:TrackIdentifier;
+}
+
+root_type Track;
+file_identifier "TRK1";

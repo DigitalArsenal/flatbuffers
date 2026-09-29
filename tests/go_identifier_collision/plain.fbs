@@ -1,0 +1,12 @@
+// Go: no collision, so the file-identifier constant keeps its name,
+// DockIdentifier: the table DockIdentifier is in another package.
+include "other.fbs";
+
+namespace GoIdentifierCollision.Plain;
+
+table Dock {
+  id:GoIdentifierCollision.Other.DockIdentifier;
+}
+
+root_type Dock;
+file_identifier "DCK1";

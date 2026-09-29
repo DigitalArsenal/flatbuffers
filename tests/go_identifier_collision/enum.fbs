@@ -1,0 +1,12 @@
+// Go: the enum constant BeamIdent + ifier is named <Root>Identifier, so the
+// file-identifier constant is BeamFileIdentifier instead of BeamIdentifier.
+namespace GoIdentifierCollision.Enum;
+
+enum BeamIdent : byte { none, ifier }
+
+table Beam {
+  ident:BeamIdent;
+}
+
+root_type Beam;
+file_identifier "BEM1";

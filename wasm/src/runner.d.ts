@@ -226,6 +226,8 @@ export declare class FlatcRunner {
   /**
    * Run flatc with the given command-line arguments.
    * This is the low-level CLI interface - prefer the typed methods below.
+   * The stack pointer is restored after every command, on success and on
+   * failure, when the module exports stackSave and stackRestore.
    * @param args - Arguments to pass to flatc.
    */
   runCommand(args: string[]): CommandResult;
@@ -371,6 +373,10 @@ export declare class FlatcRunner {
  */
 export interface EmscriptenModule {
   callMain(args: string[]): number;
+  /** Current stack pointer. runCommand saves it before each command. */
+  stackSave?(): number;
+  /** Resets the stack pointer. runCommand restores it after each command. */
+  stackRestore?(stackTop: number): void;
   FS: EmscriptenFS;
   [key: string]: unknown;
 }

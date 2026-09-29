@@ -470,6 +470,8 @@ function getIncludeDirs(schemaInput) {
 /**
  * @typedef {Object} EmscriptenModule
  * @property {function(string[]): void} callMain
+ * @property {function(): number} [stackSave]
+ * @property {function(number): void} [stackRestore]
  * @property {EmscriptenFS} FS
  */
 
@@ -523,6 +525,13 @@ export class FlatcRunner {
   runCommand(args) {
     this._stdout = "";
     this._stderr = "";
+    const { stackSave, stackRestore } = this.Module;
+    // callMain pushes argv and every argument string onto flatc's stack and
+    // never pops them, and an exit() inside main unwinds past main's frames
+    // without resetting the stack pointer. The runtime stays alive between
+    // commands (noExitRuntime), so every command must put the stack pointer
+    // back or a long-lived runner runs off its stack and traps.
+    const stackTop = typeof stackSave === "function" ? stackSave() : null;
     let code = 0;
     try {
       // callMain may return an exit code directly or throw it depending on
@@ -540,6 +549,8 @@ export class FlatcRunner {
       } else {
         throw e;
       }
+    } finally {
+      if (stackTop !== null) stackRestore(stackTop);
     }
     return {
       code,

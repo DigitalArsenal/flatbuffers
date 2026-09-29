@@ -330,7 +330,7 @@ if(EMSCRIPTEN)
     -sMAXIMUM_MEMORY=256MB
     -sSTACK_SIZE=1MB
     "-sEXPORTED_FUNCTIONS=[${EXPORTED_FUNCS_STR},_main]"
-    -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8,FS,PATH,callMain,HEAPU8
+    -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8,FS,PATH,callMain,stackSave,stackRestore,HEAPU8
     --bind
     -sENVIRONMENT=web,node
     -sFILESYSTEM=1
@@ -472,7 +472,7 @@ module.exports.default = createModule;
       -sMAXIMUM_MEMORY=512MB
       -sSTACK_SIZE=2MB
       "-sEXPORTED_FUNCTIONS=[${HE_EXPORTED_FUNCS_STR},_main]"
-      -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8,FS,PATH,callMain,HEAPU8
+      -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8,FS,PATH,callMain,stackSave,stackRestore,HEAPU8
       --bind
       -sENVIRONMENT=web,node
       -sFILESYSTEM=1

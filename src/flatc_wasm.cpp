@@ -1026,6 +1026,34 @@ int32_t wasm_he_context_create_client(uint32_t poly_degree) {
 }
 
 EMSCRIPTEN_KEEPALIVE
+int32_t wasm_he_context_create_client_seeded(uint32_t poly_degree,
+                                             const uint8_t* seed,
+                                             uint32_t seed_len) {
+  using namespace flatbuffers::he;
+  if (!seed || seed_len < 32) {
+    flatbuffers::wasm::SetError("Seed must be at least 32 bytes");
+    return -1;
+  }
+  try {
+    auto ctx = std::make_unique<HEContext>(
+        HEContext::CreateClientSeeded(
+            seed, seed_len,
+            poly_degree > 0 ? poly_degree : kDefaultPolyModulusDegree));
+    if (!ctx->IsValid()) {
+      flatbuffers::wasm::SetError("Failed to create seeded HE client context");
+      return -1;
+    }
+    int32_t id = g_next_he_context_id++;
+    g_he_contexts[id] = std::move(ctx);
+    return id;
+  } catch (const std::exception& e) {
+    flatbuffers::wasm::SetError(
+        std::string("Seeded HE context creation failed: ") + e.what());
+    return -1;
+  }
+}
+
+EMSCRIPTEN_KEEPALIVE
 int32_t wasm_he_context_create_server(const uint8_t* public_key, uint32_t pk_len) {
   using namespace flatbuffers::he;
   try {

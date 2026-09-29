@@ -21,6 +21,7 @@
 #include "flatbuffers/he_operations.h"
 #include "flatbuffers/idl.h"
 
+#include <array>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
@@ -339,6 +340,33 @@ static void TestHEKeySerialization() {
   TEST_EQ(client1.DecryptInt64(doubled.data(), doubled.size()), 100);
 }
 
+// Test deterministic key generation from an explicit seed.
+static void TestHESeededDeterminism() {
+  std::cout << "Testing HE seeded determinism..." << std::endl;
+
+  std::array<uint8_t, 32> seed{};
+  for (size_t i = 0; i < seed.size(); ++i) {
+    seed[i] = static_cast<uint8_t>(i + 1);
+  }
+
+  auto client1 = HEContext::CreateClientSeeded(seed.data(), seed.size());
+  auto client2 = HEContext::CreateClientSeeded(seed.data(), seed.size());
+
+  TEST_TRUE(client1.IsValid());
+  TEST_TRUE(client2.IsValid());
+  TEST_TRUE(client1.GetPublicKey() == client2.GetPublicKey());
+  TEST_TRUE(client1.GetRelinKeys() == client2.GetRelinKeys());
+  TEST_TRUE(client1.GetSecretKey() == client2.GetSecretKey());
+
+  auto ciphertext = client1.EncryptInt64(77);
+  TEST_EQ(client2.DecryptInt64(ciphertext.data(), ciphertext.size()), 77);
+
+  seed[0] ^= 0xFF;
+  auto client3 = HEContext::CreateClientSeeded(seed.data(), seed.size());
+  TEST_TRUE(client3.IsValid());
+  TEST_FALSE(client1.GetPublicKey() == client3.GetPublicKey());
+}
+
 // Test: Conjunction assessment between two satellite ephemerides.
 //
 // Scenario: Two organizations each have a satellite in LEO. Neither wants
@@ -473,6 +501,7 @@ int main(int argc, char** argv) {
   TestHEOperationsFunctions();
   TestCiphertextValidation();
   TestHEKeySerialization();
+  TestHESeededDeterminism();
   TestHEConjunctionAssessment();
 #else
   std::cout << std::endl;

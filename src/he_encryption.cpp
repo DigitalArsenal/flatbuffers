@@ -15,7 +15,9 @@
  */
 
 #include "flatbuffers/he_encryption.h"
+#include "flatbuffers/encryption.h"
 
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <stdexcept>
@@ -34,6 +36,44 @@
 
 namespace flatbuffers {
 namespace he {
+
+#ifdef FLATBUFFERS_HE_USE_SEAL
+namespace {
+
+constexpr size_t kMinimumDeterministicSeedSize = 32;
+constexpr char kSeedExpandSalt[] = "flatbuffers-he-seed-expand";
+constexpr char kSeedExpandInfo[] = "seal-prng-seed-v1";
+
+seal::prng_seed_type BuildPrngSeed(const uint8_t* seed, size_t seed_len) {
+  std::array<uint8_t, seal::prng_seed_byte_count> normalized_seed{};
+
+  if (seed_len == normalized_seed.size()) {
+    std::memcpy(normalized_seed.data(), seed, normalized_seed.size());
+  } else {
+    HKDF(seed, seed_len,
+         reinterpret_cast<const uint8_t*>(kSeedExpandSalt),
+         std::strlen(kSeedExpandSalt),
+         reinterpret_cast<const uint8_t*>(kSeedExpandInfo),
+         std::strlen(kSeedExpandInfo),
+         normalized_seed.data(),
+         normalized_seed.size());
+  }
+
+  seal::prng_seed_type prng_seed{};
+  for (size_t i = 0; i < prng_seed.size(); ++i) {
+    uint64_t word = 0;
+    for (size_t j = 0; j < sizeof(uint64_t); ++j) {
+      word |= static_cast<uint64_t>(normalized_seed[i * sizeof(uint64_t) + j])
+              << (j * 8);
+    }
+    prng_seed[i] = word;
+  }
+
+  return prng_seed;
+}
+
+}  // namespace
+#endif
 
 // =============================================================================
 // HEContextImpl - PIMPL implementation
@@ -62,34 +102,13 @@ class HEContextImpl {
   HEContextImpl() = default;
 
 #ifdef FLATBUFFERS_HE_USE_SEAL
-  // Initialize client context with full key generation
-  bool InitClient(uint32_t poly_modulus_degree, HEScheme scheme) {
-    scheme_ = scheme;
-    poly_modulus_degree_ = poly_modulus_degree;
-
+  bool InitClientWithParameters(const seal::EncryptionParameters& parms) {
     try {
-      // Set up encryption parameters
-      seal::EncryptionParameters parms(
-          scheme == HEScheme::BFV ? seal::scheme_type::bfv
-                                   : seal::scheme_type::bgv);
-
-      parms.set_poly_modulus_degree(poly_modulus_degree);
-
-      // Set coefficient modulus (security level depends on this)
-      parms.set_coeff_modulus(
-          seal::CoeffModulus::BFVDefault(poly_modulus_degree));
-
-      // Set plain modulus for batching (for BFV/BGV)
-      parms.set_plain_modulus(
-          seal::PlainModulus::Batching(poly_modulus_degree, 20));
-
-      // Create context
       context_ = std::make_shared<seal::SEALContext>(parms);
       if (!context_->parameters_set()) {
         return false;
       }
 
-      // Generate keys
       keygen_ = std::make_unique<seal::KeyGenerator>(*context_);
 
       secret_key_ = std::make_unique<seal::SecretKey>(keygen_->secret_key());
@@ -101,12 +120,9 @@ class HEContextImpl {
       relin_keys_ = std::make_unique<seal::RelinKeys>();
       keygen_->create_relin_keys(*relin_keys_);
 
-      // Create encryptor, decryptor, evaluator
       encryptor_ = std::make_unique<seal::Encryptor>(*context_, *public_key_);
       decryptor_ = std::make_unique<seal::Decryptor>(*context_, *secret_key_);
       evaluator_ = std::make_unique<seal::Evaluator>(*context_);
-
-      // Create batch encoder for integer operations
       batch_encoder_ = std::make_unique<seal::BatchEncoder>(*context_);
 
       valid_ = true;
@@ -116,16 +132,53 @@ class HEContextImpl {
     }
   }
 
+  // Initialize client context with full key generation
+  bool InitClient(uint32_t poly_modulus_degree, HEScheme scheme) {
+    scheme_ = scheme;
+    poly_modulus_degree_ = poly_modulus_degree;
+
+    // Set up encryption parameters
+    seal::EncryptionParameters parms(
+        scheme == HEScheme::BFV ? seal::scheme_type::bfv
+                                 : seal::scheme_type::bgv);
+
+    parms.set_poly_modulus_degree(poly_modulus_degree);
+
+    // Set coefficient modulus (security level depends on this)
+    parms.set_coeff_modulus(
+        seal::CoeffModulus::BFVDefault(poly_modulus_degree));
+
+    // Set plain modulus for batching (for BFV/BGV)
+    parms.set_plain_modulus(
+        seal::PlainModulus::Batching(poly_modulus_degree, 20));
+
+    return InitClientWithParameters(parms);
+  }
+
   // Initialize client context with deterministic key generation from seed.
-  // TODO: SEAL 4.1 KeyGenerator does not accept a custom PRNG directly.
-  // For now, this falls back to random key generation. Future SEAL versions
-  // may support seeded KeyGenerator construction for deterministic recovery.
   bool InitClientSeeded(const uint8_t* seed, size_t seed_len,
                         uint32_t poly_modulus_degree, HEScheme scheme) {
-    (void)seed;
-    (void)seed_len;
-    // Fall back to random key generation for SEAL 4.1 compatibility
-    return InitClient(poly_modulus_degree, scheme);
+    if (!seed || seed_len < kMinimumDeterministicSeedSize) {
+      return false;
+    }
+
+    scheme_ = scheme;
+    poly_modulus_degree_ = poly_modulus_degree;
+
+    seal::EncryptionParameters parms(
+        scheme == HEScheme::BFV ? seal::scheme_type::bfv
+                                 : seal::scheme_type::bgv);
+    parms.set_poly_modulus_degree(poly_modulus_degree);
+    parms.set_coeff_modulus(
+        seal::CoeffModulus::BFVDefault(poly_modulus_degree));
+    parms.set_plain_modulus(
+        seal::PlainModulus::Batching(poly_modulus_degree, 20));
+
+    auto prng_seed = BuildPrngSeed(seed, seed_len);
+    parms.set_random_generator(
+        std::make_shared<seal::SEAL_DEFAULT_PRNG_FACTORY>(prng_seed));
+
+    return InitClientWithParameters(parms);
   }
 
   // Initialize server context from public key

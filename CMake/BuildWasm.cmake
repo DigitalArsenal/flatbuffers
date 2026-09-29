@@ -221,6 +221,7 @@ if(EMSCRIPTEN)
   # HE (Homomorphic Encryption) exports - only included when SEAL is enabled
   set(WASM_HE_EXPORTED_FUNCTIONS
     "_wasm_he_context_create_client"
+    "_wasm_he_context_create_client_seeded"
     "_wasm_he_context_create_server"
     "_wasm_he_context_destroy"
     "_wasm_he_get_public_key"
@@ -323,6 +324,7 @@ if(EMSCRIPTEN)
   # Common link options
   set(WASM_COMMON_LINK_OPTIONS
     -sWASM=1
+    -sWASM_BIGINT=1
     -sMODULARIZE=1
     -sEXPORT_NAME=FlatcWasm
     -sALLOW_MEMORY_GROWTH=1
@@ -419,21 +421,14 @@ module.exports.default = createModule;
 ")
   file(WRITE "${CMAKE_BINARY_DIR}/flatc-wasm.cjs.in" "${CJS_WRAPPER_CONTENT}")
 
-  add_custom_target(flatc_wasm_npm ALL
-    DEPENDS flatc_wasm_inline
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${WASM_OUTPUT_DIR}/flatc-inline.js" "${WASM_NPM_DIR}/flatc-wasm.js"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_BINARY_DIR}/flatc-wasm.cjs.in" "${WASM_NPM_DIR}/flatc-wasm.cjs"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/ts/flatc-wasm.d.ts" "${WASM_NPM_DIR}/flatc-wasm.d.ts"
-    COMMENT "NPM package created in ${WASM_NPM_DIR}"
-  )
-
   # Target: flatc_wasm_he (with Homomorphic Encryption support via SEAL)
   if(FLATBUFFERS_WASM_ENABLE_HE)
     # Combine base exports with HE exports
     set(WASM_HE_ALL_EXPORTS ${WASM_EXPORTED_FUNCTIONS} ${WASM_HE_EXPORTED_FUNCTIONS})
     string(JOIN "," HE_EXPORTED_FUNCS_STR ${WASM_HE_ALL_EXPORTS})
 
-    # HE-specific source files
+    # HE-specific source files. FlatBuffers_WASM_SRCS leaves he_encryption.cpp
+    # out so the non-HE targets build without SEAL; only this target adds it.
     set(FlatBuffers_WASM_HE_SRCS
       ${FlatBuffers_WASM_SRCS}
       src/he_encryption.cpp
@@ -465,6 +460,7 @@ module.exports.default = createModule;
     # HE-specific link options with larger memory for SEAL
     set(WASM_HE_LINK_OPTIONS
       -sWASM=1
+      -sWASM_BIGINT=1
       -sMODULARIZE=1
       -sEXPORT_NAME=FlatcWasmHE
       -sALLOW_MEMORY_GROWTH=1
@@ -492,6 +488,22 @@ module.exports.default = createModule;
 
     message(STATUS "  flatc_wasm_he     - With Homomorphic Encryption (SEAL) -> ${WASM_OUTPUT_DIR}/")
   endif()
+
+  if(FLATBUFFERS_WASM_ENABLE_HE)
+    set(WASM_NPM_BUILD_TARGET flatc_wasm_he)
+    set(WASM_NPM_SOURCE_JS "${WASM_OUTPUT_DIR}/flatc-he.js")
+  else()
+    set(WASM_NPM_BUILD_TARGET flatc_wasm_inline)
+    set(WASM_NPM_SOURCE_JS "${WASM_OUTPUT_DIR}/flatc-inline.js")
+  endif()
+
+  add_custom_target(flatc_wasm_npm ALL
+    DEPENDS ${WASM_NPM_BUILD_TARGET}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${WASM_NPM_SOURCE_JS}" "${WASM_NPM_DIR}/flatc-wasm.js"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_BINARY_DIR}/flatc-wasm.cjs.in" "${WASM_NPM_DIR}/flatc-wasm.cjs"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/ts/flatc-wasm.d.ts" "${WASM_NPM_DIR}/flatc-wasm.d.ts"
+    COMMENT "NPM package created in ${WASM_NPM_DIR}"
+  )
 
   # Test targets
   find_program(NODE_EXECUTABLE node)
@@ -732,6 +744,7 @@ file(WRITE \"\${OUTPUT}\" \"\${digest}  flatc-wasi.wasm\\n\")
     # WASI HE exported functions
     set(WASI_HE_EXPORTED_FUNCTIONS
       "_wasi_he_context_create_client"
+      "_wasi_he_context_create_client_seeded"
       "_wasi_he_context_create_server"
       "_wasi_he_context_destroy"
       "_wasi_he_get_public_key"

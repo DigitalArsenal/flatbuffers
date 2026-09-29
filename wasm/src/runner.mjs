@@ -8,8 +8,8 @@
 import createFlatcModule from "../dist/flatc-wasm.js";
 import {
   EncryptionContext,
-  encryptionHeaderToJSON as serializeEncryptionHeader,
   encryptionHeaderFromJSON as deserializeEncryptionHeader,
+  withEncryptionModule,
 } from "./encryption.mjs";
 
 // =============================================================================
@@ -1180,111 +1180,65 @@ export class FlatcRunner {
 
   /**
    * Generate an encrypted FlatBuffer binary from JSON input.
+   *
+   * The package's per-field format: the fields the schema marks `(encrypted)`
+   * are AES-256-CTR encrypted in place, each with a key and IV derived from
+   * an ECIES session key (ephemeral ECDH with `publicKey`, then HKDF with
+   * `context`), the field id and record 0. The result stays a valid
+   * FlatBuffer; a schema without `(encrypted)` fields leaves it unchanged.
+   * `data` is the generateBinary() output without a size prefix.
+   * `header` is the UTF-8 JSON of the EncryptionHeader
+   * (EncryptionContext#getHeaderJSON()); send it with the data.
+   *
    * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput
    * @param {string|Uint8Array} jsonInput - JSON data to convert and encrypt
-   * @param {{ publicKey: Uint8Array, algorithm?: string, fields?: string[], context?: string }} encryption
-   * @param {Object} [options={}] - Same options as generateBinary()
+   * @param {{ publicKey: Uint8Array, algorithm?: 'x25519'|'secp256k1', context?: string }} encryption
+   * @param {Object} [options={}] - Same options as generateBinary(); sizePrefix is ignored
    * @returns {{ header: Uint8Array, data: Uint8Array }} Encrypted binary with header
    */
   generateBinaryEncrypted(schemaInput, jsonInput, encryption, options = {}) {
     if (!encryption || !encryption.publicKey) {
       throw new Error('Encryption config must include publicKey');
     }
+    if (Array.isArray(encryption.fields) && encryption.fields.length > 0) {
+      throw new Error(
+        'Encryption config fields is not supported: mark the fields to encrypt (encrypted) in the schema'
+      );
+    }
 
-    // First generate the normal binary
-    const binary = this.generateBinary(schemaInput, jsonInput, {
+    const data = this.generateBinary(schemaInput, jsonInput, {
       ...options,
-      sizePrefix: false, // Don't size-prefix before encryption
+      sizePrefix: false, // Field offsets are relative to the unprefixed buffer
     });
+    const schema = this._generateEncryptionSchema(schemaInput);
 
-    // Use the C API for encryption if available
-    const cwrap = this.Module.cwrap;
-    if (cwrap && this.Module._wasm_crypto_encrypt_buffer) {
-      // Register schema for C API if needed
-      const schemaSource = schemaInput.files[schemaInput.entry];
-      const schemaStr = typeof schemaSource === 'string'
-        ? schemaSource
-        : new TextDecoder().decode(schemaSource);
-
-      const namePtr = this.Module._malloc(schemaInput.entry.length + 1);
-      this.Module.stringToUTF8(schemaInput.entry, namePtr, schemaInput.entry.length + 1);
-      const srcBytes = new TextEncoder().encode(schemaStr);
-      const srcPtr = this.Module._malloc(srcBytes.length);
-      this.Module.HEAPU8.set(srcBytes, srcPtr);
-
-      const schemaId = this.Module._wasm_schema_add(namePtr, schemaInput.entry.length, srcPtr, srcBytes.length);
-      this.Module._free(namePtr);
-      this.Module._free(srcPtr);
-
-      if (schemaId >= 0) {
-        // Allocate and copy key + binary to WASM memory
-        const keyPtr = this.Module._malloc(encryption.publicKey.length);
-        this.Module.HEAPU8.set(encryption.publicKey, keyPtr);
-
-        const binPtr = this.Module._malloc(binary.length);
-        this.Module.HEAPU8.set(binary, binPtr);
-
-        const outLenPtr = this.Module._malloc(4);
-        const headerLenPtr = this.Module._malloc(4);
-
-        const resultPtr = this.Module._wasm_json_to_binary_encrypted(
-          schemaId,
-          0, 0, // json already converted
-          keyPtr, encryption.publicKey.length,
-          outLenPtr, headerLenPtr
-        );
-
-        this.Module._free(keyPtr);
-        this.Module._free(binPtr);
-
-        if (resultPtr) {
-          const outLen = this.Module.getValue(outLenPtr, 'i32');
-          const data = new Uint8Array(this.Module.HEAPU8.buffer, resultPtr, outLen).slice();
-          this.Module._free(outLenPtr);
-          this.Module._free(headerLenPtr);
-          this.Module._wasm_schema_remove(schemaId);
-          return { header: new Uint8Array(0), data };
-        }
-
-        this.Module._free(outLenPtr);
-        this.Module._free(headerLenPtr);
-        this.Module._wasm_schema_remove(schemaId);
+    return withEncryptionModule(this.Module, () => {
+      let encCtx;
+      try {
+        encCtx = EncryptionContext.forEncryption(encryption.publicKey, {
+          algorithm: encryption.algorithm || 'x25519',
+          context: encryption.context || '',
+        });
+        this._cipherEncryptedFields(data, schema, encCtx.getKey(), true);
+        const header = new TextEncoder().encode(encCtx.getHeaderJSON());
+        return { header, data };
+      } catch (err) {
+        throw new Error(`Encryption failed: ${err.message}`);
+      } finally {
+        encCtx?.destroy();
       }
-    }
-
-    // Fall back to JavaScript encryption implementation
-    try {
-      const encCtx = EncryptionContext.forEncryption(encryption.publicKey, {
-        algorithm: encryption.algorithm || 'x25519',
-        context: encryption.context || '',
-      });
-
-      // Encrypt the binary data
-      encCtx.encryptBuffer(binary, 0);
-
-      // Create encryption header - convert Uint8Array to Array for JSON serialization
-      const ephemeralKey = encCtx.getEphemeralPublicKey();
-      const header = {
-        algorithm: encryption.algorithm || 'x25519',
-        ephemeralPublicKey: Array.from(ephemeralKey),
-        context: encryption.context || '',
-        fields: encryption.fields || [],
-      };
-
-      const headerBytes = new TextEncoder().encode(JSON.stringify(header));
-      encCtx.destroy();
-
-      return { header: headerBytes, data: binary };
-    } catch (jsErr) {
-      throw new Error(`Encryption failed: ${jsErr.message}`);
-    }
+    });
   }
 
   /**
-   * Generate JSON from an encrypted FlatBuffer binary.
+   * Generate JSON from an encrypted FlatBuffer binary made by
+   * generateBinaryEncrypted().
    * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput
    * @param {{ path: string, data: Uint8Array }} binaryInput - Encrypted binary
-   * @param {{ privateKey: Uint8Array, header?: Uint8Array }} decryption
+   * @param {{ privateKey: Uint8Array, header: Uint8Array|string|Object, context?: string }} decryption
+   *   header: the header generateBinaryEncrypted() returned (UTF-8 JSON bytes,
+   *   the JSON string, or an EncryptionHeader object). context overrides the
+   *   header's context.
    * @param {Object} [options={}] - Same options as generateJSON()
    * @returns {string|Uint8Array}
    */
@@ -1292,111 +1246,148 @@ export class FlatcRunner {
     if (!decryption || !decryption.privateKey) {
       throw new Error('Decryption config must include privateKey');
     }
-
-    // Use C API for decryption if available
-    if (this.Module._wasm_binary_to_json_decrypted) {
-      const schemaSource = schemaInput.files[schemaInput.entry];
-      const schemaStr = typeof schemaSource === 'string'
-        ? schemaSource
-        : new TextDecoder().decode(schemaSource);
-
-      const namePtr = this.Module._malloc(schemaInput.entry.length + 1);
-      this.Module.stringToUTF8(schemaInput.entry, namePtr, schemaInput.entry.length + 1);
-      const srcBytes = new TextEncoder().encode(schemaStr);
-      const srcPtr = this.Module._malloc(srcBytes.length);
-      this.Module.HEAPU8.set(srcBytes, srcPtr);
-
-      const schemaId = this.Module._wasm_schema_add(namePtr, schemaInput.entry.length, srcPtr, srcBytes.length);
-      this.Module._free(namePtr);
-      this.Module._free(srcPtr);
-
-      if (schemaId >= 0) {
-        const keyPtr = this.Module._malloc(decryption.privateKey.length);
-        this.Module.HEAPU8.set(decryption.privateKey, keyPtr);
-
-        const binPtr = this.Module._malloc(binaryInput.data.length);
-        this.Module.HEAPU8.set(binaryInput.data, binPtr);
-
-        const outLenPtr = this.Module._malloc(4);
-
-        const resultPtr = this.Module._wasm_binary_to_json_decrypted(
-          schemaId,
-          binPtr, binaryInput.data.length,
-          keyPtr, decryption.privateKey.length,
-          outLenPtr
-        );
-
-        this.Module._free(keyPtr);
-        this.Module._free(binPtr);
-
-        if (resultPtr) {
-          const outLen = this.Module.getValue(outLenPtr, 'i32');
-          const json = this.Module.UTF8ToString(resultPtr, outLen);
-          this.Module._free(outLenPtr);
-          this.Module._wasm_schema_remove(schemaId);
-          return json;
-        }
-
-        this.Module._free(outLenPtr);
-        this.Module._wasm_schema_remove(schemaId);
-      }
+    if (!decryption.header) {
+      throw new Error(
+        'Decryption config must include the header returned by generateBinaryEncrypted'
+      );
     }
 
-    // Fall back to JavaScript decryption implementation
+    const schema = this._generateEncryptionSchema(schemaInput);
+    const decrypted = new Uint8Array(binaryInput.data);
+
+    withEncryptionModule(this.Module, () => {
+      let decCtx;
+      try {
+        decCtx = EncryptionContext.forDecryption(
+          decryption.privateKey,
+          FlatcRunner._parseEncryptionHeader(decryption.header),
+          decryption.context
+        );
+        this._cipherEncryptedFields(decrypted, schema, decCtx.getKey(), false);
+      } catch (err) {
+        throw new Error(`Decryption failed: ${err.message}`);
+      } finally {
+        decCtx?.destroy();
+      }
+    });
+
+    return this.generateJSON(schemaInput, {
+      path: binaryInput.path,
+      data: decrypted,
+    }, options);
+  }
+
+  /**
+   * Internal: parse the header generateBinaryEncrypted() returned.
+   * @param {Uint8Array|string|Object} header
+   * @returns {Object} EncryptionHeader with Uint8Array key fields
+   * @private
+   */
+  static _parseEncryptionHeader(header) {
+    if (header instanceof Uint8Array) {
+      header = new TextDecoder().decode(header);
+    }
+    if (typeof header === 'string') {
+      header = JSON.parse(header);
+    }
+    if (header.senderPublicKey instanceof Uint8Array) {
+      return header; // Already an EncryptionHeader (EncryptionContext#getHeader())
+    }
+    if (typeof header.senderPublicKey !== 'string' || header.senderPublicKey.length === 0) {
+      throw new Error('Encryption header has no senderPublicKey');
+    }
+    // The session key needs only algorithm, senderPublicKey and context.
+    return deserializeEncryptionHeader({ recipientKeyId: '', nonceStart: '', ...header });
+  }
+
+  /**
+   * Internal: compile the schema to a binary schema (.bfbs) that keeps
+   * builtin attributes. `encrypted` is a builtin attribute, so without
+   * --bfbs-builtins the .bfbs carries no `(encrypted)` markers and the
+   * field cipher finds nothing to encrypt.
+   * @param {{ entry: string, files: Record<string, string|Uint8Array> }} schemaInput
+   * @returns {Uint8Array}
+   * @private
+   */
+  _generateEncryptionSchema(schemaInput) {
+    const outDir = `/bfbs_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    this.Module.FS.mkdirTree(outDir);
+    this._mountSchemaIfNeeded(schemaInput);
+
     try {
-      // Parse header if provided
-      let parsedHeader = decryption.header;
-      if (parsedHeader && parsedHeader instanceof Uint8Array) {
-        try {
-          parsedHeader = JSON.parse(new TextDecoder().decode(parsedHeader));
-        } catch {
-          // Header might already be parsed or in different format
+      const result = this.runCommand([
+        "--binary",
+        "--schema",
+        "--bfbs-builtins",
+        "-o",
+        outDir,
+        ...this._cachedIncludeDirs.flatMap((d) => ["-I", d]),
+        schemaInput.entry,
+      ]);
+      if (result.code !== 0 || result.stderr.includes("error:")) {
+        throw new Error(
+          `flatc binary schema generation failed (exit ${result.code}):\n${result.stderr || result.stdout}`
+        );
+      }
+      const files = this.Module.FS.readdir(outDir).filter((f) => f.endsWith(".bfbs"));
+      if (files.length !== 1) {
+        throw new Error(`flatc produced ${files.length} binary schemas in ${outDir}, expected 1`);
+      }
+      return new Uint8Array(this.Module.FS.readFile(`${outDir}/${files[0]}`));
+    } finally {
+      try {
+        for (const f of this.Module.FS.readdir(outDir)) {
+          if (f !== "." && f !== "..") this.unlink(`${outDir}/${f}`);
         }
+        this.rmdir(outDir);
+      } catch {
+        // ignore
       }
+    }
+  }
 
-      const algorithm = parsedHeader?.algorithm || 'x25519';
-      const ephemeralPublicKey = parsedHeader?.ephemeralPublicKey || parsedHeader?.senderPublicKey;
-      const contextStr = parsedHeader?.context || '';
-
-      if (!ephemeralPublicKey) {
-        throw new Error('Missing ephemeral/sender public key in header');
+  /**
+   * Internal: apply the library's schema-driven field cipher
+   * (wasm_crypto_encrypt_buffer / wasm_crypto_decrypt_buffer: AES-256-CTR on
+   * each `(encrypted)` field with a key and IV derived from `key`, the field
+   * id and record 0) to `buffer` in place, on this runner's module.
+   * @param {Uint8Array} buffer - Unprefixed FlatBuffer, modified in place
+   * @param {Uint8Array} schema - .bfbs from _generateEncryptionSchema()
+   * @param {Uint8Array} key - 32-byte session key (zeroed here)
+   * @param {boolean} encrypt
+   * @private
+   */
+  _cipherEncryptedFields(buffer, schema, key, encrypt) {
+    const M = this.Module;
+    const alloc = (size) => {
+      const ptr = M._wasm_crypto_alloc(Math.max(size, 1));
+      if (!ptr) throw new Error('WASM allocation failed');
+      return ptr;
+    };
+    let keyPtr = 0;
+    let ctx = 0;
+    let bufPtr = 0;
+    let schemaPtr = 0;
+    try {
+      keyPtr = alloc(key.length);
+      M.HEAPU8.set(key, keyPtr);
+      ctx = M._wasm_crypto_encryption_create(keyPtr, key.length);
+      if (!ctx) throw new Error('invalid session key');
+      bufPtr = alloc(buffer.length);
+      M.HEAPU8.set(buffer, bufPtr);
+      schemaPtr = alloc(schema.length);
+      M.HEAPU8.set(schema, schemaPtr);
+      const cipher = encrypt ? M._wasm_crypto_encrypt_buffer : M._wasm_crypto_decrypt_buffer;
+      if (cipher(bufPtr, buffer.length, schemaPtr, schema.length, ctx) !== 0) {
+        throw new Error('the binary does not match the schema');
       }
-
-      // Convert ephemeral key from array/hex if needed
-      let ephemeralKeyBytes;
-      if (typeof ephemeralPublicKey === 'string') {
-        ephemeralKeyBytes = new Uint8Array(ephemeralPublicKey.match(/.{2}/g).map(b => parseInt(b, 16)));
-      } else if (Array.isArray(ephemeralPublicKey)) {
-        ephemeralKeyBytes = new Uint8Array(ephemeralPublicKey);
-      } else {
-        ephemeralKeyBytes = ephemeralPublicKey;
-      }
-
-      // Build header object for forDecryption
-      const decHeader = {
-        algorithm,
-        senderPublicKey: ephemeralKeyBytes,
-        iv: parsedHeader?.iv,
-      };
-
-      const decCtx = EncryptionContext.forDecryption(
-        decryption.privateKey,
-        decHeader,
-        contextStr
-      );
-
-      // Decrypt the data
-      const decryptedData = new Uint8Array(binaryInput.data);
-      decCtx.decryptBuffer(decryptedData, 0);
-      decCtx.destroy();
-
-      // Convert decrypted binary to JSON
-      return this.generateJSON(schemaInput, {
-        path: binaryInput.path,
-        data: decryptedData,
-      }, options);
-    } catch (jsErr) {
-      throw new Error(`Decryption failed: ${jsErr.message}`);
+      buffer.set(M.HEAPU8.subarray(bufPtr, bufPtr + buffer.length));
+    } finally {
+      key.fill(0);
+      if (ctx) M._wasm_crypto_encryption_destroy(ctx);
+      if (keyPtr) M._wasm_crypto_dealloc_secure(keyPtr, key.length);
+      if (bufPtr) M._wasm_crypto_dealloc_secure(bufPtr, buffer.length);
+      if (schemaPtr) M._wasm_crypto_dealloc(schemaPtr);
     }
   }
 

@@ -65,6 +65,49 @@ export interface GenerateJSONOptions {
   skipValidation?: boolean;
 }
 
+/**
+ * Recipient and key exchange for generateBinaryEncrypted().
+ * The schema's `(encrypted)` attributes select the fields.
+ */
+export interface BinaryEncryptionConfig {
+  /** Recipient's public key: 32 bytes for x25519, 33 (compressed) for secp256k1 */
+  publicKey: Uint8Array;
+  /** Key exchange (default: "x25519") */
+  algorithm?: "x25519" | "secp256k1";
+  /** HKDF info for domain separation; recorded in the header */
+  context?: string;
+}
+
+/**
+ * Output of generateBinaryEncrypted().
+ */
+export interface EncryptedBinary {
+  /**
+   * UTF-8 JSON of the EncryptionHeader (EncryptionContext#getHeaderJSON()):
+   * version 2, algorithm, hex senderPublicKey (ephemeral), recipientKeyId,
+   * nonceStart, context. Send it with the data.
+   */
+  header: Uint8Array;
+  /**
+   * The generateBinary() output without a size prefix, with each
+   * `(encrypted)` field AES-256-CTR encrypted in place (key and IV per field
+   * id, record 0, from the ECIES session key). Still a valid FlatBuffer.
+   */
+  data: Uint8Array;
+}
+
+/**
+ * Private key and header for generateJSONDecrypted().
+ */
+export interface BinaryDecryptionConfig {
+  /** Recipient's private key (32 bytes) */
+  privateKey: Uint8Array;
+  /** The header generateBinaryEncrypted() returned: bytes, JSON string, or EncryptionHeader object */
+  header: Uint8Array | string | Record<string, unknown>;
+  /** Overrides the header's context */
+  context?: string;
+}
+
 // =============================================================================
 // Security Limits
 // =============================================================================
@@ -311,6 +354,47 @@ export declare class FlatcRunner {
     binaryInput: BinaryInput,
     options: GenerateJSONOptions & { encoding: null }
   ): Uint8Array;
+
+  /**
+   * Generate a FlatBuffer binary from JSON and encrypt its `(encrypted)`
+   * fields for a recipient (ECIES: ephemeral ECDH + HKDF, then AES-256-CTR
+   * per field). A schema without `(encrypted)` fields leaves the data unchanged.
+   * @param schemaInput - Schema files with entry point.
+   * @param jsonInput - JSON data to convert and encrypt.
+   * @param encryption - Recipient public key, algorithm and context.
+   * @param options - generateBinary() options; sizePrefix is ignored.
+   */
+  generateBinaryEncrypted(
+    schemaInput: SchemaInput,
+    jsonInput: string | Uint8Array,
+    encryption: BinaryEncryptionConfig,
+    options?: GenerateBinaryOptions
+  ): EncryptedBinary;
+
+  /**
+   * Decrypt a binary from generateBinaryEncrypted() and convert it to JSON
+   * (encoding: null returns Uint8Array).
+   */
+  generateJSONDecrypted(
+    schemaInput: SchemaInput,
+    binaryInput: BinaryInput,
+    decryption: BinaryDecryptionConfig,
+    options: GenerateJSONOptions & { encoding: null }
+  ): Uint8Array;
+
+  /**
+   * Decrypt a binary from generateBinaryEncrypted() and convert it to JSON.
+   * @param schemaInput - Schema files with entry point.
+   * @param binaryInput - Encrypted binary with path.
+   * @param decryption - Recipient private key and the header.
+   * @param options - Generation options.
+   */
+  generateJSONDecrypted(
+    schemaInput: SchemaInput,
+    binaryInput: BinaryInput,
+    decryption: BinaryDecryptionConfig,
+    options?: GenerateJSONOptions
+  ): string;
 
   /**
    * Generate source code from a schema.

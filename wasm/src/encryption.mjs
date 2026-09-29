@@ -75,6 +75,27 @@ export function isInitialized() {
   return _module !== null;
 }
 
+/**
+ * Run fn() with the crypto functions bound to an already-instantiated
+ * flatc-wasm module when loadEncryptionWasm() has not loaded one. The binding
+ * lasts only for the call, so it never changes isInitialized() for callers.
+ * FlatcRunner uses this to run its encryption methods on its own module.
+ * WASM objects created inside fn (EncryptionContext) must be destroyed inside fn.
+ * @param {object} module - A flatc-wasm Emscripten module.
+ * @param {() => T} fn
+ * @returns {T}
+ * @template T
+ */
+export function withEncryptionModule(module, fn) {
+  if (_module) return fn();
+  _module = module;
+  try {
+    return fn();
+  } finally {
+    _module = null;
+  }
+}
+
 export function hasCryptopp() {
   ensureInit();
   return _module._wasm_crypto_has_cryptopp() === 1;
@@ -738,6 +759,7 @@ export class EncryptionContext {
     this._key = new Uint8Array(key);
     this._nonceStart = nonceStart ? new Uint8Array(nonceStart) : null;
     this._wasmCtx = null;
+    this._wasmModule = null;
     this._algorithm = null;
     this._context = null;
     this._ephemeralPublicKey = null;
@@ -746,6 +768,7 @@ export class EncryptionContext {
 
     if (_module) {
       this._wasmCtx = _createWasmCtx(this._key);
+      this._wasmModule = _module;
     }
   }
 
@@ -905,5 +928,21 @@ export class EncryptionContext {
 
   getHeaderJSON() {
     return encryptionHeaderToJSON(this.getHeader());
+  }
+
+  /**
+   * Zero the key and free the WASM-side context (the module that created it
+   * zeroes the key it holds). The context is unusable afterwards.
+   */
+  destroy() {
+    if (this._wasmCtx && this._wasmModule) {
+      this._wasmModule._wasm_crypto_encryption_destroy(this._wasmCtx);
+    }
+    this._wasmCtx = null;
+    this._wasmModule = null;
+    if (this._key) {
+      this._key.fill(0);
+      this._key = null;
+    }
   }
 }

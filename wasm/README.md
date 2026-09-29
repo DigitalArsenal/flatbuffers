@@ -2440,18 +2440,25 @@ console.log(JSON.parse(decryptedJson));
 // GenerateBinaryEncrypted options
 {
   publicKey: Uint8Array,            // Recipient's public key (required)
-  algorithm: 'x25519' | 'secp256k1' | 'p256' | 'p384',  // Default: 'x25519'
-  fields: ['ssn', 'credit_card'],   // Specific fields (default: all (encrypted) fields)
+  algorithm: 'x25519' | 'secp256k1', // Default: 'x25519'
   context: 'my-app',               // HKDF context for domain separation
-  fips: false,                      // Use OpenSSL/FIPS backend
 }
 
 // GenerateJSONDecrypted options
 {
-  privateKey: Uint8Array,           // Decryption private key (required)
-  header: Uint8Array,               // EncryptionHeader from encryption step
+  privateKey: Uint8Array,           // Recipient's private key (required)
+  header: Uint8Array,               // The header generateBinaryEncrypted returned (required)
 }
 ```
+
+The schema's `(encrypted)` attributes select the fields; a `fields` list is
+refused. Each `(encrypted)` field is AES-256-CTR encrypted in place with a key
+and IV derived from the ECIES session key, the field id and record 0, so
+`data` stays a valid FlatBuffer (the `generateBinary` output without a size
+prefix). `header` is the UTF-8 JSON of the EncryptionHeader
+(`EncryptionContext#getHeaderJSON()`), so `EncryptionContext.forDecryption`
+with `encryptionHeaderFromJSON(header)` and `decryptScalar` per field also
+decrypt it.
 
 ### Streaming Encryption
 

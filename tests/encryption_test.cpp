@@ -24,6 +24,7 @@
 #include <cstring>
 #include <algorithm>
 #include <iostream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -337,7 +338,6 @@ static void TestGetEncryptedFieldIds() {
 
 namespace {
 
-#if defined(FLATBUFFERS_USE_OPENSSL) || defined(FLATBUFFERS_USE_CRYPTOPP)
 std::string Hex(const uint8_t* data, size_t size) {
   static const char kDigits[] = "0123456789abcdef";
   std::string out;
@@ -347,7 +347,23 @@ std::string Hex(const uint8_t* data, size_t size) {
   }
   return out;
 }
-#endif
+
+std::string Hex(const std::vector<uint8_t>& data) {
+  return Hex(data.data(), data.size());
+}
+
+std::vector<uint8_t> Unhex(const std::string& hex) {
+  std::vector<uint8_t> out;
+  for (size_t i = 0; i + 1 < hex.size(); i += 2) {
+    out.push_back(
+        static_cast<uint8_t>(std::stoul(hex.substr(i, 2), nullptr, 16)));
+  }
+  return out;
+}
+
+std::vector<uint8_t> Bytes(const std::string& text) {
+  return std::vector<uint8_t>(text.begin(), text.end());
+}
 
 // Parses `schema` (keeping builtin attributes such as `encrypted`) into a
 // .bfbs, and `json` (when given) into a FlatBuffer.
@@ -511,7 +527,6 @@ void MakeKey(uint8_t* key, uint8_t seed) {
 // wasm/test/test_field_encryption_v3.mjs).
 static void TestDerivationVectors() {
   std::cout << "Testing derivation vectors..." << std::endl;
-#if defined(FLATBUFFERS_USE_OPENSSL) || defined(FLATBUFFERS_USE_CRYPTOPP)
   uint8_t key[32];
   for (int i = 0; i < 32; i++) key[i] = static_cast<uint8_t>(i);
   flatbuffers::EncryptionContext ctx(key, 32);
@@ -539,10 +554,6 @@ static void TestDerivationVectors() {
   flatbuffers::EncryptBytes(stream, sizeof(stream), buffer_key, iv);
   TEST_EQ(Hex(stream, 20),
           std::string("6e83aa7422ddbadb1413e5cc5b5f8336866aeb83"));
-#else
-  std::cout << "  (skipped: the fallback backend has no HKDF-SHA256)"
-            << std::endl;
-#endif
 }
 
 // Equal-id encrypted fields in nested tables, vectors of tables, unions and
@@ -886,6 +897,353 @@ static void TestMalformedInput() {
   TEST_TRUE(buf == plain);
 }
 
+// =============================================================================
+// Primitive and cross-backend vectors (every backend)
+// =============================================================================
+//
+// flattests_encryption runs these against the build's backend (Crypto++ or
+// OpenSSL, or the fallback when neither is configured) and
+// flattests_encryption_fallback against the portable fallback, so all
+// backends are checked against the same published and node:crypto values.
+// The fallback used to return zeros for SHA-256 and HMAC and derive every key
+// from an 8-bit hash of the HKDF info (records 2 and 256 shared a key).
+
+#if defined(FLATBUFFERS_ENCRYPTION_TEST_FALLBACK) || \
+    (!defined(FLATBUFFERS_USE_CRYPTOPP) && !defined(FLATBUFFERS_USE_OPENSSL))
+#define ENCRYPTION_TEST_FALLBACK_BACKEND 1
+#define ENCRYPTION_TEST_BACKEND "fallback"
+#elif defined(FLATBUFFERS_USE_CRYPTOPP)
+#define ENCRYPTION_TEST_BACKEND "Crypto++"
+#else
+#define ENCRYPTION_TEST_BACKEND "OpenSSL"
+#endif
+
+// SHA-256: FIPS 180 examples (NIST CSRC) and padding boundaries.
+static void TestSha256Vectors() {
+  std::cout << "Testing SHA-256 vectors..." << std::endl;
+  struct Case {
+    std::string message;
+    const char* digest;
+  };
+  const Case cases[] = {
+      {"", "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+      {"abc",
+       "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"},
+      {"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
+       "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"},
+      {"abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmn"
+       "opjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu",
+       "cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1"},
+      {std::string(1000000, 'a'),
+       "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0"},
+  };
+  uint8_t digest[32];
+  for (const auto& c : cases) {
+    flatbuffers::Sha256Hash(reinterpret_cast<const uint8_t*>(c.message.data()),
+                            c.message.size(), digest);
+    TEST_EQ(Hex(digest, 32), std::string(c.digest));
+  }
+
+  // Bytes 0, 1, 2, ... around the 55/56/64-byte padding boundaries
+  // (node:crypto).
+  struct Boundary {
+    size_t size;
+    const char* digest;
+  };
+  const Boundary boundaries[] = {
+      {55, "463eb28e72f82e0a96c0a4cc53690c571281131f672aa229e0d45ae59b598b59"},
+      {56, "da2ae4d6b36748f2a318f23e7ab1dfdf45acdc9d049bd80e59de82a60895f562"},
+      {63, "29af2686fd53374a36b0846694cc342177e428d1647515f078784d69cdb9e488"},
+      {64, "fdeab9acf3710362bd2658cdc9a29e8f9c757fcf9811603a8c447cd1d9151108"},
+      {65, "4bfd2c8b6f1eec7a2afeb48b934ee4b2694182027e6d0fc075074f2fabb31781"},
+      {127, "92ca0fa6651ee2f97b884b7246a562fa71250fedefe5ebf270d31c546bfea976"},
+      {128, "471fb943aa23c511f6f72f8d1652d9c880cfa392ad80503120547703e56a2be5"},
+      {129, "5099c6a56203f9687f7d33f4bfdf576d31dc91f6b695ecea38b2770c87631135"},
+  };
+  std::vector<uint8_t> pattern(129);
+  for (size_t i = 0; i < pattern.size(); i++) {
+    pattern[i] = static_cast<uint8_t>(i);
+  }
+  for (const auto& b : boundaries) {
+    flatbuffers::Sha256Hash(pattern.data(), b.size, digest);
+    TEST_EQ(Hex(digest, 32), std::string(b.digest));
+  }
+}
+
+// HMAC-SHA256: RFC 4231 test cases 1-7 (case 5 truncated to 128 bits).
+static void TestHmacSha256Vectors() {
+  std::cout << "Testing HMAC-SHA256 vectors (RFC 4231)..." << std::endl;
+  struct Case {
+    std::vector<uint8_t> key;
+    std::vector<uint8_t> data;
+    const char* mac;
+  };
+  const std::vector<Case> rfc4231 = {
+      {Unhex("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b"), Bytes("Hi There"),
+       "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"},
+      {Bytes("Jefe"), Bytes("what do ya want for nothing?"),
+       "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"},
+      {std::vector<uint8_t>(20, 0xaa), std::vector<uint8_t>(50, 0xdd),
+       "773ea91e36800e46854db8ebd09181a72959098b3ef8c122d9635514ced565fe"},
+      {Unhex("0102030405060708090a0b0c0d0e0f10111213141516171819"),
+       std::vector<uint8_t>(50, 0xcd),
+       "82558a389a443c0ea4cc819899f2083a85f0faa3e578f8077a2e3ff46729665b"},
+      {std::vector<uint8_t>(20, 0x0c), Bytes("Test With Truncation"),
+       "a3b6167473100ee06e0c796c2955552b"},
+      {std::vector<uint8_t>(131, 0xaa),
+       Bytes("Test Using Larger Than Block-Size Key - Hash Key First"),
+       "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"},
+      {std::vector<uint8_t>(131, 0xaa),
+       Bytes("This is a test using a larger than block-size key and a larger "
+             "than block-size data. The key needs to be hashed before being "
+             "used by the HMAC algorithm."),
+       "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2"},
+  };
+  uint8_t mac[32];
+  for (const auto& c : rfc4231) {
+    flatbuffers::HMACSha256(c.key.data(), c.key.size(), c.data.data(),
+                            c.data.size(), mac);
+    const size_t size = strlen(c.mac) / 2;
+    TEST_EQ(Hex(mac, size), std::string(c.mac));
+  }
+
+  // Verify accepts the MAC and rejects a flipped bit and the all-zero MAC
+  // (the fallback's HMAC used to be all zeros).
+  const auto& tc2 = rfc4231[1];
+  flatbuffers::HMACSha256(tc2.key.data(), tc2.key.size(), tc2.data.data(),
+                          tc2.data.size(), mac);
+  TEST_TRUE(flatbuffers::HMACSha256Verify(
+      tc2.key.data(), tc2.key.size(), tc2.data.data(), tc2.data.size(), mac));
+  mac[31] = static_cast<uint8_t>(mac[31] ^ 1);
+  TEST_TRUE(!flatbuffers::HMACSha256Verify(
+      tc2.key.data(), tc2.key.size(), tc2.data.data(), tc2.data.size(), mac));
+  const uint8_t zero_mac[32] = {0};
+  TEST_TRUE(!flatbuffers::HMACSha256Verify(tc2.key.data(), tc2.key.size(),
+                                           tc2.data.data(), tc2.data.size(),
+                                           zero_mac));
+}
+
+// HKDF-SHA256: RFC 5869 A.1-A.3; DeriveSymmetricKey honours the salt.
+static void TestHkdfVectors() {
+  std::cout << "Testing HKDF-SHA256 vectors (RFC 5869)..." << std::endl;
+  std::vector<uint8_t> range_ikm, range_salt, range_info;
+  for (int i = 0x00; i <= 0x4f; i++)
+    range_ikm.push_back(static_cast<uint8_t>(i));
+  for (int i = 0x60; i <= 0xaf; i++)
+    range_salt.push_back(static_cast<uint8_t>(i));
+  for (int i = 0xb0; i <= 0xff; i++)
+    range_info.push_back(static_cast<uint8_t>(i));
+  struct Case {
+    std::vector<uint8_t> ikm, salt, info;
+    const char* okm;
+  };
+  const std::vector<Case> cases = {
+      {std::vector<uint8_t>(22, 0x0b), Unhex("000102030405060708090a0b0c"),
+       Unhex("f0f1f2f3f4f5f6f7f8f9"),
+       "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf"
+       "34007208d5b887185865"},
+      {range_ikm, range_salt, range_info,
+       "b11e398dc80327a1c8e7f78c596a49344f012eda2d4efad8a050cc4c19afa97c"
+       "59045a99cac7827271cb41c65e590e09da3275600c2f09b8367793a9aca3db71"
+       "cc30c58179ec3e87c14c01d5c1f3434f1d87"},
+      {std::vector<uint8_t>(22, 0x0b),
+       {},
+       {},
+       "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d"
+       "9d201395faa4b61a96c8"},
+  };
+  for (const auto& c : cases) {
+    std::vector<uint8_t> okm(strlen(c.okm) / 2);
+    flatbuffers::HKDF(c.ikm.data(), c.ikm.size(),
+                      c.salt.empty() ? nullptr : c.salt.data(), c.salt.size(),
+                      c.info.empty() ? nullptr : c.info.data(), c.info.size(),
+                      okm.data(), okm.size());
+    TEST_EQ(Hex(okm), std::string(c.okm));
+  }
+
+  uint8_t key[32];
+  for (int i = 0; i < 32; i++) key[i] = static_cast<uint8_t>(i);
+  const std::vector<uint8_t> context = Bytes("ctx"), salt = Bytes("salt");
+  uint8_t derived[32];
+  flatbuffers::DeriveSymmetricKey(key, 32, context.data(), context.size(),
+                                  derived, salt.data(), salt.size());
+  TEST_EQ(Hex(derived, 32), std::string("f358df189f33c16789c978db73c339be"
+                                        "21cc15ed9ed022ab8758610e25b654b7"));
+  flatbuffers::DeriveSymmetricKey(key, 32, context.data(), context.size(),
+                                  derived);
+  TEST_EQ(Hex(derived, 32), std::string("08f959277c527020901da82beafed559"
+                                        "872e8b0b770de26673f4b41ce55e3885"));
+}
+
+// AES-256: FIPS 197 C.3. AES-256-CTR: SP 800-38A F.5.5 / F.5.6, and the
+// counter carrying through all 128 bits (node:crypto). Only the public API:
+// the OpenSSL backend has no internal::AESEncryptBlock.
+static void TestAesVectors() {
+  std::cout << "Testing AES-256 / AES-256-CTR vectors..." << std::endl;
+  const std::vector<uint8_t> key =
+      Unhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+  // The first CTR key-stream block is AES(key, IV).
+  const std::vector<uint8_t> block = Unhex("00112233445566778899aabbccddeeff");
+  std::vector<uint8_t> out(16, 0);
+  flatbuffers::EncryptBytes(out.data(), out.size(), key.data(), block.data());
+  TEST_EQ(Hex(out), std::string("8ea2b7ca516745bfeafc49904b496089"));
+
+  const std::vector<uint8_t> ctr_key =
+      Unhex("603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4");
+  const std::vector<uint8_t> ctr_iv = Unhex("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff");
+  const std::string plaintext =
+      "6bc1bee22e409f96e93d7e117393172aae2d8a571e03ac9c9eb76fac45af8e51"
+      "30c81c46a35ce411e5fbc1191a0a52eff69f2445df4f9b17ad2b417be66c3710";
+  const std::string ciphertext =
+      "601ec313775789a5b7a7f504bbf3d228f443e3ca4d62b59aca84e990cacaf5c5"
+      "2b0930daa23de94ce87017ba2d84988ddfc9c58db67aada613c2dd08457941a6";
+  std::vector<uint8_t> data = Unhex(plaintext);
+  flatbuffers::EncryptBytes(data.data(), data.size(), ctr_key.data(),
+                            ctr_iv.data());
+  TEST_EQ(Hex(data), ciphertext);
+  flatbuffers::DecryptBytes(data.data(), data.size(), ctr_key.data(),
+                            ctr_iv.data());
+  TEST_EQ(Hex(data), plaintext);
+
+  uint8_t pattern_key[32];
+  for (int i = 0; i < 32; i++) pattern_key[i] = static_cast<uint8_t>(i);
+  const std::vector<uint8_t> all_ones(16, 0xff);
+  out.assign(48, 0);
+  flatbuffers::EncryptBytes(out.data(), out.size(), pattern_key,
+                            all_ones.data());
+  TEST_EQ(Hex(out),
+          std::string("e999e41d4ca770da5387117b5d8f57eef29000b62a499fd0"
+                      "a9f39a6add2e7780f05d76ae4ab99fe5a6f69b3148c2363d"));
+  const std::vector<uint8_t> low_ones =
+      Unhex("0000000000000000ffffffffffffffff");
+  std::vector<uint8_t> zeros(48, 0);
+  flatbuffers::EncryptBytes(zeros.data(), zeros.size(), pattern_key,
+                            low_ones.data());
+  TEST_EQ(Hex(zeros),
+          std::string("a6fbdb5cfde07d1b58fd362177bcffdf511dd5ef9a682b7d"
+                      "a49f91c86c4f7ac340c53cef92ef2d643f638b8222db1e85"));
+}
+
+// ComputeBufferMAC: HMAC-SHA256 under HKDF(key, "flatbuffers-mac-key"). The
+// fallback used to produce an all-zero MAC.
+static void TestBufferMacVector() {
+  std::cout << "Testing the buffer MAC vector..." << std::endl;
+  uint8_t key[32];
+  for (int i = 0; i < 32; i++) key[i] = static_cast<uint8_t>(i);
+  flatbuffers::EncryptionContext ctx(key, 32);
+  std::vector<uint8_t> buffer = Bytes("abc");
+  uint8_t mac[32];
+  flatbuffers::ComputeBufferMAC(buffer.data(), buffer.size(), ctx, mac);
+  TEST_EQ(Hex(mac, 32), std::string("a13f0b4148faee714ea031d2a8612c93"
+                                    "b564289bec00446a8724620471351223"));
+  TEST_TRUE(
+      flatbuffers::VerifyBufferMAC(buffer.data(), buffer.size(), ctx, mac));
+  buffer[0] = static_cast<uint8_t>(buffer[0] ^ 1);
+  TEST_TRUE(
+      !flatbuffers::VerifyBufferMAC(buffer.data(), buffer.size(), ctx, mac));
+}
+
+// One digest over the per-field keys and IVs (8 field ids x 8 record
+// indexes), 1025 format-3 buffer keys, AES-256-CTR key streams (one wrapping
+// the 128-bit counter) and an 8160-byte HKDF output. The expected value is
+// SHA-256 of the same sequence from node:crypto, so every backend that
+// passes derives the same bytes.
+static void TestCrossBackendDigest() {
+  std::cout << "Testing the cross-backend derivation digest ("
+            << ENCRYPTION_TEST_BACKEND << ")..." << std::endl;
+  uint8_t key[32];
+  for (int i = 0; i < 32; i++) key[i] = static_cast<uint8_t>(i);
+  flatbuffers::EncryptionContext ctx(key, 32);
+  std::vector<uint8_t> all;
+  uint8_t out[32];
+
+  const uint16_t field_ids[] = {0, 1, 2, 3, 4, 255, 256, 65535};
+  const uint32_t records[] = {0, 1, 2, 255, 256, 65535, 65536, 0xFFFFFFFFu};
+  for (uint16_t id : field_ids) {
+    for (uint32_t record : records) {
+      ctx.DeriveFieldKey(id, out, record);
+      all.insert(all.end(), out, out + 32);
+      ctx.DeriveFieldIV(id, out, record);
+      all.insert(all.end(), out, out + 16);
+    }
+  }
+  std::set<std::string> distinct;
+  for (uint32_t record = 0; record < 1024; record++) {
+    ctx.DeriveBufferKey(record, out);
+    all.insert(all.end(), out, out + 32);
+    if (record >= 1 && record <= 1000) {
+      distinct.insert(std::string(reinterpret_cast<const char*>(out), 32));
+    }
+  }
+  TEST_EQ(distinct.size(), static_cast<size_t>(1000));
+  ctx.DeriveBufferKey(0xFFFFFFFFu, out);
+  all.insert(all.end(), out, out + 32);
+
+  uint8_t buffer_key[32];
+  ctx.DeriveBufferKey(7, buffer_key);
+  uint8_t iv[16];
+  flatbuffers::FieldInstanceIV(0x1234, iv);
+  std::vector<uint8_t> data(1000);
+  for (size_t i = 0; i < data.size(); i++) data[i] = static_cast<uint8_t>(i);
+  flatbuffers::EncryptBytes(data.data(), data.size(), buffer_key, iv);
+  all.insert(all.end(), data.begin(), data.end());
+  data.resize(100);
+  for (size_t i = 0; i < data.size(); i++) data[i] = static_cast<uint8_t>(i);
+  memset(iv, 0xff, sizeof(iv));
+  flatbuffers::EncryptBytes(data.data(), data.size(), buffer_key, iv);
+  all.insert(all.end(), data.begin(), data.end());
+
+  const std::vector<uint8_t> salt = Unhex("000102030405060708090a0b0c");
+  const std::vector<uint8_t> info = Unhex("f0f1f2f3f4f5f6f7f8f9");
+  std::vector<uint8_t> okm(8160);
+  flatbuffers::HKDF(key, 32, salt.data(), salt.size(), info.data(), info.size(),
+                    okm.data(), okm.size());
+  all.insert(all.end(), okm.begin(), okm.end());
+
+  TEST_EQ(all.size(), static_cast<size_t>(45132));
+  uint8_t digest[32];
+  flatbuffers::Sha256Hash(all.data(), all.size(), digest);
+  TEST_EQ(Hex(digest, 32), std::string("74809b55ac8e7e9cef4d06ae82dfa0a1"
+                                       "1214a95297a4df45522211fc30b32ebb"));
+}
+
+// The fallback has no asymmetric cryptography and no random number
+// generator: every such operation refuses (an empty key pair or signature,
+// or false) instead of returning weak output.
+static void TestFallbackRefusals() {
+#if defined(ENCRYPTION_TEST_FALLBACK_BACKEND)
+  std::cout << "Testing the fallback's refusals..." << std::endl;
+  using flatbuffers::KeyExchangeAlgorithm;
+  using flatbuffers::SignatureAlgorithm;
+  uint8_t key[32] = {1};
+  uint8_t pub[65] = {4};
+  uint8_t secret[48];
+  const uint8_t msg[3] = {'a', 'b', 'c'};
+  uint8_t sig[64] = {0};
+  for (auto algorithm :
+       {KeyExchangeAlgorithm::X25519, KeyExchangeAlgorithm::Secp256k1,
+        KeyExchangeAlgorithm::P256, KeyExchangeAlgorithm::P384}) {
+    TEST_TRUE(!flatbuffers::GenerateKeyPair(algorithm).valid());
+    TEST_TRUE(!flatbuffers::ComputeSharedSecret(algorithm, key, 32, pub,
+                                                sizeof(pub), secret));
+  }
+  for (auto algorithm :
+       {SignatureAlgorithm::Ed25519, SignatureAlgorithm::Secp256k1_ECDSA,
+        SignatureAlgorithm::P256_ECDSA, SignatureAlgorithm::P384_ECDSA}) {
+    TEST_TRUE(!flatbuffers::GenerateSigningKeyPair(algorithm).valid());
+    TEST_TRUE(!flatbuffers::Sign(algorithm, key, 32, msg, 3).valid());
+    TEST_TRUE(!flatbuffers::Verify(algorithm, pub, 32, msg, 3, sig, 64));
+  }
+  TEST_TRUE(!flatbuffers::EnableFIPSMode());
+
+  // More than 255 blocks of HKDF output is refused (zeros, never short).
+  std::vector<uint8_t> okm(8161, 0xee);
+  flatbuffers::HKDF(key, 32, nullptr, 0, nullptr, 0, okm.data(), okm.size());
+  TEST_TRUE(
+      std::all_of(okm.begin(), okm.end(), [](uint8_t b) { return b == 0; }));
+#endif
+}
+
 // tests/encryption_v3 holds the buffers every generated FlatbuffersEncryption
 // helper (Python, Go, Java, Kotlin, C#, PHP, Dart, Rust, Swift) must
 // reproduce: the C++ walker must encrypt the plaintext fixtures to exactly
@@ -893,7 +1251,6 @@ static void TestMalformedInput() {
 static void TestGeneratedHelperFixtures(const std::string& dir, bool write) {
   std::cout << "Testing the generated-helper fixtures in " << dir << "..."
             << std::endl;
-#if defined(FLATBUFFERS_USE_OPENSSL) || defined(FLATBUFFERS_USE_CRYPTOPP)
   struct Cipher {
     uint32_t record;
     const char* file;
@@ -953,12 +1310,6 @@ static void TestGeneratedHelperFixtures(const std::string& dir, bool write) {
       TEST_TRUE(buf == plain);
     }
   }
-#else
-  (void)dir;
-  (void)write;
-  std::cout << "  (skipped: the fallback backend has no HKDF-SHA256)"
-            << std::endl;
-#endif
 }
 
 int main(int argc, char* argv[]) {
@@ -976,7 +1327,8 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  std::cout << "=== FlatBuffers Encryption Tests ===" << std::endl;
+  std::cout << "=== FlatBuffers Encryption Tests (" << ENCRYPTION_TEST_BACKEND
+            << " backend) ===" << std::endl;
 
   TestEncryptionContext();
   TestEncryptBytes();
@@ -994,6 +1346,13 @@ int main(int argc, char* argv[]) {
   TestUnsupportedFieldsRefused();
   TestMalformedInput();
   TestGeneratedHelperFixtures(fixtures_dir, write_fixtures);
+  TestSha256Vectors();
+  TestHmacSha256Vectors();
+  TestHkdfVectors();
+  TestAesVectors();
+  TestBufferMacVector();
+  TestCrossBackendDigest();
+  TestFallbackRefusals();
 
   std::cout << std::endl;
   std::cout << "=== Results ===" << std::endl;

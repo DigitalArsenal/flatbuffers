@@ -976,6 +976,33 @@ if(FLATBUFFERS_BUILD_TESTS)
   if(FLATBUFFERS_CODE_SANITIZE)
     add_fsanitize_to_target(flattests_encryption ${FLATBUFFERS_CODE_SANITIZE})
   endif()
+
+  # The same tests against the portable fallback backend (neither Crypto++ nor
+  # OpenSSL), whatever this build's backend is: tests/encryption_fallback.cpp
+  # compiles src/encryption.cpp with both backend macros undefined. Both
+  # executables check the same published and cross-backend vectors.
+  set(FlatBuffers_Fallback_Test_SRCS ${FlatBuffers_Library_SRCS})
+  list(REMOVE_ITEM FlatBuffers_Fallback_Test_SRCS src/encryption.cpp)
+  add_executable(flattests_encryption_fallback
+    ${FlatBuffers_Fallback_Test_SRCS}
+    tests/encryption_fallback.cpp
+    tests/encryption_test.cpp
+  )
+  target_compile_definitions(flattests_encryption_fallback PRIVATE
+    FLATBUFFERS_ENCRYPTION_TEST_FALLBACK=1)
+  target_link_libraries(flattests_encryption_fallback PRIVATE $<BUILD_INTERFACE:ProjectConfig>)
+  target_include_directories(flattests_encryption_fallback PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
+    src
+    tests
+  )
+  if(FLATBUFFERS_USE_SEAL)
+    target_link_libraries(flattests_encryption_fallback PRIVATE seal)
+  endif()
+  if(FLATBUFFERS_CODE_SANITIZE)
+    add_fsanitize_to_target(flattests_encryption_fallback ${FLATBUFFERS_CODE_SANITIZE})
+  endif()
 endif()
 
 if(FLATBUFFERS_BUILD_GRPCTEST)

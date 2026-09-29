@@ -1449,29 +1449,216 @@ bool Verify(SignatureAlgorithm algorithm,
 #else  // !FLATBUFFERS_USE_CRYPTOPP && !FLATBUFFERS_USE_OPENSSL
 
 // =============================================================================
-// Fallback Implementation - SECURITY HARDENED
+// Portable fallback (neither Crypto++ nor OpenSSL)
 // =============================================================================
-// When Crypto++ is not available, most operations will THROW rather than
-// silently provide weak crypto. Only AES-256-CTR is available as fallback
-// since it can be implemented securely without external dependencies.
-// All asymmetric operations (ECDH, signatures) require Crypto++.
+// The symmetric primitives are implemented here and produce the same bytes as
+// the Crypto++ and OpenSSL backends:
+//   SHA-256      FIPS 180-4
+//   HMAC-SHA256  RFC 2104 (checked against RFC 4231)
+//   HKDF-SHA256  RFC 5869
+//   AES-256, AES-256-CTR  FIPS 197, SP 800-38A (128-bit big-endian counter)
+// so field keys, IVs, format-3 buffer keys and ciphertext are interchangeable
+// between backends (tests/encryption_test.cpp checks the published vectors
+// and a cross-backend digest in every backend).
+//
+// Asymmetric operations (X25519, secp256k1, P-256, P-384, Ed25519) are not
+// implemented. They refuse with an error: an empty key pair or signature, or
+// false. This backend has no random number generator.
+//
+// The AES here uses table lookups and is not constant-time against an
+// attacker who shares the data cache; use a Crypto++ or OpenSSL build where
+// that matters.
 
-// Runtime flag to track if fallback warning has been shown
-static bool fallback_warning_shown = false;
+static void RefuseFallback(const char* operation) {
+  fprintf(stderr,
+          "[flatbuffers] ERROR: %s requires the Crypto++ or OpenSSL backend "
+          "(FLATBUFFERS_USE_CRYPTOPP or FLATBUFFERS_USE_OPENSSL); this build "
+          "has neither\n",
+          operation);
+}
 
-static void WarnFallbackCrypto() {
-  if (!fallback_warning_shown) {
-    fallback_warning_shown = true;
-    fprintf(stderr, "[flatbuffers] WARNING: Using fallback AES implementation. "
-                    "Asymmetric crypto operations are NOT available. "
-                    "Build with FLATBUFFERS_USE_CRYPTOPP=ON for full functionality.\n");
+namespace {
+
+// --- SHA-256 (FIPS 180-4) ---------------------------------------------------
+
+const uint32_t kSha256K[64] = {
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
+    0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+    0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
+    0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
+    0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+    0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+    0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a,
+    0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
+
+const size_t kSha256BlockSize = 64;
+const size_t kSha256DigestSize = 32;
+
+struct Sha256Ctx {
+  uint32_t h[8];
+  uint64_t total;  // bytes hashed so far
+  uint8_t block[kSha256BlockSize];
+  size_t used;  // bytes in `block`
+};
+
+inline uint32_t Rotr32(uint32_t x, unsigned n) {
+  return (x >> n) | (x << (32 - n));
+}
+
+inline uint32_t LoadBE32(const uint8_t* p) {
+  return (static_cast<uint32_t>(p[0]) << 24) |
+         (static_cast<uint32_t>(p[1]) << 16) |
+         (static_cast<uint32_t>(p[2]) << 8) | static_cast<uint32_t>(p[3]);
+}
+
+inline void StoreBE32(uint8_t* p, uint32_t v) {
+  p[0] = static_cast<uint8_t>(v >> 24);
+  p[1] = static_cast<uint8_t>(v >> 16);
+  p[2] = static_cast<uint8_t>(v >> 8);
+  p[3] = static_cast<uint8_t>(v);
+}
+
+void Sha256Compress(uint32_t* h, const uint8_t* block) {
+  uint32_t w[64];
+  for (int i = 0; i < 16; i++) w[i] = LoadBE32(block + 4 * i);
+  for (int i = 16; i < 64; i++) {
+    const uint32_t s0 =
+        Rotr32(w[i - 15], 7) ^ Rotr32(w[i - 15], 18) ^ (w[i - 15] >> 3);
+    const uint32_t s1 =
+        Rotr32(w[i - 2], 17) ^ Rotr32(w[i - 2], 19) ^ (w[i - 2] >> 10);
+    w[i] = w[i - 16] + s0 + w[i - 7] + s1;
+  }
+  uint32_t a = h[0], b = h[1], c = h[2], d = h[3];
+  uint32_t e = h[4], f = h[5], g = h[6], hh = h[7];
+  for (int i = 0; i < 64; i++) {
+    const uint32_t S1 = Rotr32(e, 6) ^ Rotr32(e, 11) ^ Rotr32(e, 25);
+    const uint32_t ch = (e & f) ^ (~e & g);
+    const uint32_t t1 = hh + S1 + ch + kSha256K[i] + w[i];
+    const uint32_t S0 = Rotr32(a, 2) ^ Rotr32(a, 13) ^ Rotr32(a, 22);
+    const uint32_t maj = (a & b) ^ (a & c) ^ (b & c);
+    const uint32_t t2 = S0 + maj;
+    hh = g;
+    g = f;
+    f = e;
+    e = d + t1;
+    d = c;
+    c = b;
+    b = a;
+    a = t1 + t2;
+  }
+  h[0] += a;
+  h[1] += b;
+  h[2] += c;
+  h[3] += d;
+  h[4] += e;
+  h[5] += f;
+  h[6] += g;
+  h[7] += hh;
+  SecureClear(w, sizeof(w));
+}
+
+void Sha256Init(Sha256Ctx* ctx) {
+  static const uint32_t kInit[8] = {0x6a09e667, 0xbb67ae85, 0x3c6ef372,
+                                    0xa54ff53a, 0x510e527f, 0x9b05688c,
+                                    0x1f83d9ab, 0x5be0cd19};
+  memcpy(ctx->h, kInit, sizeof(kInit));
+  ctx->total = 0;
+  ctx->used = 0;
+}
+
+void Sha256Update(Sha256Ctx* ctx, const uint8_t* data, size_t size) {
+  if (size == 0) return;
+  ctx->total += size;
+  if (ctx->used > 0) {
+    const size_t take = std::min(kSha256BlockSize - ctx->used, size);
+    memcpy(ctx->block + ctx->used, data, take);
+    ctx->used += take;
+    data += take;
+    size -= take;
+    if (ctx->used < kSha256BlockSize) return;
+    Sha256Compress(ctx->h, ctx->block);
+    ctx->used = 0;
+  }
+  while (size >= kSha256BlockSize) {
+    Sha256Compress(ctx->h, data);
+    data += kSha256BlockSize;
+    size -= kSha256BlockSize;
+  }
+  if (size > 0) {
+    memcpy(ctx->block, data, size);
+    ctx->used = size;
   }
 }
 
-namespace internal {
+// Writes the digest and clears the context.
+void Sha256Final(Sha256Ctx* ctx, uint8_t* digest) {
+  const uint64_t bits = ctx->total * 8;
+  ctx->block[ctx->used++] = 0x80;
+  if (ctx->used > kSha256BlockSize - 8) {
+    memset(ctx->block + ctx->used, 0, kSha256BlockSize - ctx->used);
+    Sha256Compress(ctx->h, ctx->block);
+    ctx->used = 0;
+  }
+  memset(ctx->block + ctx->used, 0, kSha256BlockSize - 8 - ctx->used);
+  StoreBE32(ctx->block + 56, static_cast<uint32_t>(bits >> 32));
+  StoreBE32(ctx->block + 60, static_cast<uint32_t>(bits));
+  Sha256Compress(ctx->h, ctx->block);
+  for (int i = 0; i < 8; i++) StoreBE32(digest + 4 * i, ctx->h[i]);
+  SecureClear(ctx, sizeof(*ctx));
+}
 
-// AES S-box
-static const uint8_t sbox[256] = {
+// --- HMAC-SHA256 (RFC 2104) -------------------------------------------------
+
+struct HmacSha256Ctx {
+  Sha256Ctx inner;
+  Sha256Ctx outer;
+};
+
+void HmacSha256Init(HmacSha256Ctx* ctx, const uint8_t* key, size_t key_size) {
+  uint8_t k0[kSha256BlockSize];
+  memset(k0, 0, sizeof(k0));
+  if (key_size > kSha256BlockSize) {
+    Sha256Ctx hash;
+    Sha256Init(&hash);
+    Sha256Update(&hash, key, key_size);
+    Sha256Final(&hash, k0);
+  } else if (key_size > 0) {
+    memcpy(k0, key, key_size);
+  }
+  uint8_t pad[kSha256BlockSize];
+  for (size_t i = 0; i < kSha256BlockSize; i++) {
+    pad[i] = static_cast<uint8_t>(k0[i] ^ 0x36);
+  }
+  Sha256Init(&ctx->inner);
+  Sha256Update(&ctx->inner, pad, sizeof(pad));
+  for (size_t i = 0; i < kSha256BlockSize; i++) {
+    pad[i] = static_cast<uint8_t>(k0[i] ^ 0x5c);
+  }
+  Sha256Init(&ctx->outer);
+  Sha256Update(&ctx->outer, pad, sizeof(pad));
+  SecureClear(k0, sizeof(k0));
+  SecureClear(pad, sizeof(pad));
+}
+
+void HmacSha256Update(HmacSha256Ctx* ctx, const uint8_t* data, size_t size) {
+  Sha256Update(&ctx->inner, data, size);
+}
+
+// Writes the MAC and clears the context.
+void HmacSha256Final(HmacSha256Ctx* ctx, uint8_t* mac) {
+  uint8_t inner_digest[kSha256DigestSize];
+  Sha256Final(&ctx->inner, inner_digest);
+  Sha256Update(&ctx->outer, inner_digest, sizeof(inner_digest));
+  Sha256Final(&ctx->outer, mac);
+  SecureClear(inner_digest, sizeof(inner_digest));
+}
+
+// --- AES-256 (FIPS 197) -----------------------------------------------------
+
+const uint8_t kAesSbox[256] = {
     0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b,
     0xfe, 0xd7, 0xab, 0x76, 0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0,
     0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0, 0xb7, 0xfd, 0x93, 0x26,
@@ -1495,172 +1682,188 @@ static const uint8_t sbox[256] = {
     0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f,
     0xb0, 0x54, 0xbb, 0x16};
 
-static const uint8_t rcon[11] = {0x00, 0x01, 0x02, 0x04, 0x08, 0x10,
-                                  0x20, 0x40, 0x80, 0x1b, 0x36};
+const uint8_t kAesRcon[8] = {0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40};
 
-static uint8_t gf_mul(uint8_t a, uint8_t b) {
-  uint8_t p = 0;
-  for (int i = 0; i < 8; i++) {
-    if (b & 1) p ^= a;
-    bool hi_bit = a & 0x80;
-    a <<= 1;
-    if (hi_bit) a ^= 0x1b;
-    b >>= 1;
-  }
-  return p;
+const size_t kAes256RoundKeysSize = 240;  // 15 round keys of 16 bytes
+
+// Multiplication by 2 in GF(2^8) modulo x^8 + x^4 + x^3 + x + 1.
+inline uint8_t XTime(uint8_t a) {
+  return static_cast<uint8_t>((a << 1) ^ ((a >> 7) * 0x1b));
 }
 
-static void aes256_key_expansion(const uint8_t* key, uint8_t* round_keys) {
+inline uint8_t MixByte(uint8_t a, uint8_t next, uint8_t all) {
+  return static_cast<uint8_t>(a ^ all ^ XTime(static_cast<uint8_t>(a ^ next)));
+}
+
+void Aes256ExpandKey(const uint8_t* key, uint8_t* round_keys) {
   memcpy(round_keys, key, 32);
   uint8_t temp[4];
-  int i = 8;
-  while (i < 60) {
+  for (int i = 8; i < 60; i++) {
     memcpy(temp, round_keys + (i - 1) * 4, 4);
     if (i % 8 == 0) {
-      uint8_t t = temp[0];
-      temp[0] = sbox[temp[1]] ^ rcon[i / 8];
-      temp[1] = sbox[temp[2]];
-      temp[2] = sbox[temp[3]];
-      temp[3] = sbox[t];
+      const uint8_t t = temp[0];
+      temp[0] = static_cast<uint8_t>(kAesSbox[temp[1]] ^ kAesRcon[i / 8]);
+      temp[1] = kAesSbox[temp[2]];
+      temp[2] = kAesSbox[temp[3]];
+      temp[3] = kAesSbox[t];
     } else if (i % 8 == 4) {
-      temp[0] = sbox[temp[0]];
-      temp[1] = sbox[temp[1]];
-      temp[2] = sbox[temp[2]];
-      temp[3] = sbox[temp[3]];
+      for (int j = 0; j < 4; j++) temp[j] = kAesSbox[temp[j]];
     }
     for (int j = 0; j < 4; j++) {
-      round_keys[i * 4 + j] = round_keys[(i - 8) * 4 + j] ^ temp[j];
+      round_keys[i * 4 + j] =
+          static_cast<uint8_t>(round_keys[(i - 8) * 4 + j] ^ temp[j]);
     }
-    i++;
   }
+  SecureClear(temp, sizeof(temp));
 }
 
-static void sub_bytes(uint8_t* state) {
-  for (int i = 0; i < 16; i++) state[i] = sbox[state[i]];
-}
-
-static void shift_rows(uint8_t* state) {
-  uint8_t temp;
-  temp = state[1]; state[1] = state[5]; state[5] = state[9];
-  state[9] = state[13]; state[13] = temp;
-  temp = state[2]; state[2] = state[10]; state[10] = temp;
-  temp = state[6]; state[6] = state[14]; state[14] = temp;
-  temp = state[15]; state[15] = state[11]; state[11] = state[7];
-  state[7] = state[3]; state[3] = temp;
-}
-
-static void mix_columns(uint8_t* state) {
-  for (int i = 0; i < 4; i++) {
-    uint8_t a[4];
-    for (int j = 0; j < 4; j++) a[j] = state[i * 4 + j];
-    state[i * 4 + 0] = gf_mul(a[0], 2) ^ gf_mul(a[1], 3) ^ a[2] ^ a[3];
-    state[i * 4 + 1] = a[0] ^ gf_mul(a[1], 2) ^ gf_mul(a[2], 3) ^ a[3];
-    state[i * 4 + 2] = a[0] ^ a[1] ^ gf_mul(a[2], 2) ^ gf_mul(a[3], 3);
-    state[i * 4 + 3] = gf_mul(a[0], 3) ^ a[1] ^ a[2] ^ gf_mul(a[3], 2);
+// The state is column-major: state[4 * c + r] is row r of column c.
+void Aes256EncryptBlock(const uint8_t* round_keys, const uint8_t* input,
+                        uint8_t* output) {
+  uint8_t s[16];
+  for (int i = 0; i < 16; i++) {
+    s[i] = static_cast<uint8_t>(input[i] ^ round_keys[i]);
   }
-}
-
-static void add_round_key(uint8_t* state, const uint8_t* round_key) {
-  for (int i = 0; i < 16; i++) state[i] ^= round_key[i];
-}
-
-void AESEncryptBlock(const uint8_t* key, const uint8_t* input, uint8_t* output) {
-  uint8_t round_keys[240];
-  aes256_key_expansion(key, round_keys);
-  uint8_t state[16];
-  memcpy(state, input, 16);
-  add_round_key(state, round_keys);
-  for (int round = 1; round < 14; round++) {
-    sub_bytes(state);
-    shift_rows(state);
-    mix_columns(state);
-    add_round_key(state, round_keys + round * 16);
+  for (int round = 1; round <= 14; round++) {
+    uint8_t t[16];
+    // SubBytes and ShiftRows: row r rotates left by r columns.
+    for (int c = 0; c < 4; c++) {
+      for (int r = 0; r < 4; r++) {
+        t[4 * c + r] = kAesSbox[s[4 * ((c + r) % 4) + r]];
+      }
+    }
+    if (round < 14) {
+      for (int c = 0; c < 4; c++) {
+        const uint8_t a0 = t[4 * c], a1 = t[4 * c + 1], a2 = t[4 * c + 2],
+                      a3 = t[4 * c + 3];
+        // MixColumns: b_r = a_r ^ (a0 ^ a1 ^ a2 ^ a3) ^ 2 * (a_r ^ a_{r+1}).
+        const uint8_t all = static_cast<uint8_t>(a0 ^ a1 ^ a2 ^ a3);
+        s[4 * c] = MixByte(a0, a1, all);
+        s[4 * c + 1] = MixByte(a1, a2, all);
+        s[4 * c + 2] = MixByte(a2, a3, all);
+        s[4 * c + 3] = MixByte(a3, a0, all);
+      }
+    } else {
+      memcpy(s, t, sizeof(s));
+    }
+    for (int i = 0; i < 16; i++) {
+      s[i] = static_cast<uint8_t>(s[i] ^ round_keys[round * 16 + i]);
+    }
+    SecureClear(t, sizeof(t));
   }
-  sub_bytes(state);
-  shift_rows(state);
-  add_round_key(state, round_keys + 14 * 16);
-  memcpy(output, state, 16);
+  memcpy(output, s, 16);
+  SecureClear(s, sizeof(s));
 }
 
-void AESCTRKeystream(const uint8_t* key, const uint8_t* nonce,
-                     uint8_t* keystream, size_t length) {
+// out = in XOR the AES-256-CTR key stream (the key stream itself when `in` is
+// null); `in` may equal `out`. The counter block starts at `iv` and increments
+// as one 128-bit big-endian integer, as in Crypto++'s CTR_Mode and OpenSSL's
+// EVP_aes_256_ctr.
+void Aes256CtrXor(const uint8_t* key, const uint8_t* iv, const uint8_t* in,
+                  uint8_t* out, size_t size) {
+  uint8_t round_keys[kAes256RoundKeysSize];
+  Aes256ExpandKey(key, round_keys);
   uint8_t counter[16];
   uint8_t block[16];
-  memcpy(counter, nonce, 16);
+  memcpy(counter, iv, 16);
   size_t offset = 0;
-  while (offset < length) {
-    AESEncryptBlock(key, counter, block);
-    size_t to_copy = std::min(static_cast<size_t>(16), length - offset);
-    memcpy(keystream + offset, block, to_copy);
-    offset += to_copy;
+  while (offset < size) {
+    Aes256EncryptBlock(round_keys, counter, block);
+    const size_t n = std::min(static_cast<size_t>(16), size - offset);
+    for (size_t i = 0; i < n; i++) {
+      const uint8_t plain = in ? in[offset + i] : 0;
+      out[offset + i] = static_cast<uint8_t>(plain ^ block[i]);
+    }
+    offset += n;
     for (int i = 15; i >= 0; i--) {
       if (++counter[i] != 0) break;
     }
   }
+  SecureClear(round_keys, sizeof(round_keys));
+  SecureClear(counter, sizeof(counter));
+  SecureClear(block, sizeof(block));
 }
 
+}  // namespace
+
+namespace internal {
+
+void AESEncryptBlock(const uint8_t* key, const uint8_t* input,
+                     uint8_t* output) {
+  uint8_t round_keys[kAes256RoundKeysSize];
+  Aes256ExpandKey(key, round_keys);
+  Aes256EncryptBlock(round_keys, input, output);
+  SecureClear(round_keys, sizeof(round_keys));
+}
+
+void AESCTRKeystream(const uint8_t* key, const uint8_t* nonce,
+                     uint8_t* keystream, size_t length) {
+  Aes256CtrXor(key, nonce, nullptr, keystream, length);
+}
+
+// HKDF-SHA256 with no salt, as in the Crypto++ and OpenSSL backends.
 void DeriveKey(const uint8_t* master_key, size_t master_key_size,
                const uint8_t* info, size_t info_size,
                uint8_t* out_key, size_t out_key_size) {
-  memset(out_key, 0, out_key_size);
-  for (size_t i = 0; i < out_key_size && i < master_key_size; i++) {
-    out_key[i] = master_key[i];
-  }
-  uint8_t hash = 0;
-  for (size_t i = 0; i < info_size; i++) {
-    hash ^= info[i];
-    hash = (hash << 1) | (hash >> 7);
-  }
-  for (size_t i = 0; i < out_key_size; i++) {
-    out_key[i] ^= hash;
-    hash = (hash * 31 + static_cast<uint8_t>(i)) & 0xFF;
-  }
-  if (out_key_size >= 16) {
-    uint8_t temp[16];
-    AESEncryptBlock(master_key, out_key, temp);
-    memcpy(out_key, temp, std::min(out_key_size, static_cast<size_t>(16)));
-    if (out_key_size > 16) {
-      AESEncryptBlock(master_key, out_key + 16 > out_key ? out_key : temp, temp);
-      memcpy(out_key + 16, temp, std::min(out_key_size - 16, static_cast<size_t>(16)));
-    }
-  }
+  HKDF(master_key, master_key_size, nullptr, 0, info, info_size, out_key,
+       out_key_size);
 }
 
 }  // namespace internal
 
-void Sha256Hash(const uint8_t*, size_t, uint8_t* hash) {
-  // SECURITY FIX: Instead of silently returning garbage, we zero the output
-  // and emit a warning. This makes failures detectable rather than silent.
-  // Callers should check hasCryptopp() before using hash functions.
-  WarnFallbackCrypto();
-  if (hash) {
-    // Zero output to prevent use of uninitialized memory
-    memset(hash, 0, 32);
+void Sha256Hash(const uint8_t* data, size_t size, uint8_t* hash) {
+  if (!hash) return;
+  if (!data && size > 0) {
+    memset(hash, 0, kSha256DigestSize);
+    fprintf(stderr, "[flatbuffers] ERROR: SHA-256 of a null pointer\n");
+    return;
   }
-  // Note: HMAC verification will fail-safe (reject all) with zeroed hash
+  Sha256Ctx ctx;
+  Sha256Init(&ctx);
+  Sha256Update(&ctx, data, size);
+  Sha256Final(&ctx, hash);
 }
 
 void HKDF(const uint8_t* ikm, size_t ikm_size,
           const uint8_t* salt, size_t salt_size,
           const uint8_t* info, size_t info_size,
           uint8_t* okm, size_t okm_size) {
-  // SECURITY FIX: Improved fallback that uses AES for key derivation
-  // This is NOT as secure as real HKDF-SHA256, but is significantly better
-  // than the previous XOR-based approach. Emit warning.
-  WarnFallbackCrypto();
-
-  // Use AES-based key derivation with salt and info mixed in
-  // Still use internal::DeriveKey but with salt incorporated
-  if (salt && salt_size > 0) {
-    // XOR salt into first part of IKM (if shorter, wrap around)
-    std::vector<uint8_t> salted_ikm(ikm, ikm + ikm_size);
-    for (size_t i = 0; i < salt_size && i < salted_ikm.size(); i++) {
-      salted_ikm[i] ^= salt[i];
-    }
-    internal::DeriveKey(salted_ikm.data(), salted_ikm.size(), info, info_size, okm, okm_size);
-  } else {
-    internal::DeriveKey(ikm, ikm_size, info, info_size, okm, okm_size);
+  if (!okm || okm_size == 0) return;
+  // RFC 5869: at most 255 blocks of output.
+  if ((!ikm && ikm_size > 0) || (!salt && salt_size > 0) ||
+      (!info && info_size > 0) || okm_size > 255 * kSha256DigestSize) {
+    memset(okm, 0, okm_size);
+    fprintf(stderr,
+            "[flatbuffers] ERROR: HKDF-SHA256 refused: null input or more "
+            "than 8160 output bytes\n");
+    return;
   }
+  // Extract. No salt is HashLen zero bytes (RFC 5869 2.2), which HMAC pads
+  // to the same key as an empty one.
+  uint8_t prk[kSha256DigestSize];
+  HmacSha256Ctx hmac;
+  HmacSha256Init(&hmac, salt, salt_size);
+  HmacSha256Update(&hmac, ikm, ikm_size);
+  HmacSha256Final(&hmac, prk);
+  // Expand: T(i) = HMAC(PRK, T(i-1) || info || i).
+  uint8_t t[kSha256DigestSize] = {0};
+  size_t t_size = 0;
+  uint8_t counter = 1;
+  size_t done = 0;
+  while (done < okm_size) {
+    HmacSha256Init(&hmac, prk, sizeof(prk));
+    HmacSha256Update(&hmac, t, t_size);
+    HmacSha256Update(&hmac, info, info_size);
+    HmacSha256Update(&hmac, &counter, 1);
+    HmacSha256Final(&hmac, t);
+    t_size = sizeof(t);
+    const size_t n = std::min(sizeof(t), okm_size - done);
+    memcpy(okm + done, t, n);
+    done += n;
+    counter++;
+  }
+  SecureClear(prk, sizeof(prk));
+  SecureClear(t, sizeof(t));
 }
 
 void DeriveSymmetricKey(
@@ -1668,149 +1871,140 @@ void DeriveSymmetricKey(
     const uint8_t* context, size_t context_size,
     uint8_t* key,
     const uint8_t* salt, size_t salt_size) {
-  // Fallback HKDF ignores salt (no salt support in basic HKDF)
-  (void)salt;
-  (void)salt_size;
-  internal::DeriveKey(shared_secret, shared_secret_size,
-                      context, context_size,
-                      key, kEncryptionKeySize);
+  HKDF(shared_secret, shared_secret_size, salt, salt_size, context,
+       context_size, key, kEncryptionKeySize);
 }
 
-// Fallback HMAC-SHA256 not available without crypto library
 void HMACSha256(const uint8_t* key, size_t key_size,
                 const uint8_t* data, size_t data_size,
                 uint8_t* mac) {
-  (void)key; (void)key_size; (void)data; (void)data_size;
-  fprintf(stderr, "[flatbuffers] ERROR: HMAC-SHA256 requires Crypto++ or OpenSSL\n");
-  memset(mac, 0, 32);
+  if (!mac) return;
+  if ((!key && key_size > 0) || (!data && data_size > 0)) {
+    memset(mac, 0, kSha256DigestSize);
+    fprintf(stderr, "[flatbuffers] ERROR: HMAC-SHA256 of a null pointer\n");
+    return;
+  }
+  HmacSha256Ctx ctx;
+  HmacSha256Init(&ctx, key, key_size);
+  HmacSha256Update(&ctx, data, data_size);
+  HmacSha256Final(&ctx, mac);
 }
 
-bool HMACSha256Verify(const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*) {
-  fprintf(stderr, "[flatbuffers] ERROR: HMAC-SHA256 requires Crypto++ or OpenSSL\n");
-  return false;
+bool HMACSha256Verify(const uint8_t* key, size_t key_size, const uint8_t* data,
+                      size_t data_size, const uint8_t* mac) {
+  if (!mac || (!key && key_size > 0) || (!data && data_size > 0)) return false;
+  uint8_t computed[kSha256DigestSize];
+  HMACSha256(key, key_size, data, data_size, computed);
+  // Constant-time comparison.
+  uint8_t diff = 0;
+  for (size_t i = 0; i < kSha256DigestSize; i++) {
+    diff = static_cast<uint8_t>(diff | (computed[i] ^ mac[i]));
+  }
+  SecureClear(computed, sizeof(computed));
+  return diff == 0;
 }
 
 void EncryptBytes(uint8_t* data, size_t size,
                   const uint8_t* key, const uint8_t* iv) {
   if (!data || size == 0 || !key || !iv) return;
-  std::vector<uint8_t> keystream(size);
-  internal::AESCTRKeystream(key, iv, keystream.data(), size);
-  for (size_t i = 0; i < size; i++) data[i] ^= keystream[i];
+  Aes256CtrXor(key, iv, data, data, size);
 }
 
-// SECURITY FIX: Stub implementations for ECDH/signatures without Crypto++
-// These operations REQUIRE Crypto++ for secure implementation.
-// Instead of silently returning empty/false (which could be mistaken for success
-// in some code paths), we emit warnings and return clearly invalid results.
+// No random number generator in this backend: nothing to seed.
+void InjectEntropy(const uint8_t*, size_t) {}
 
-void InjectEntropy(const uint8_t*, size_t) {
-  // No-op without Crypto++ - entropy would go nowhere
-}
+// Asymmetric operations refuse: an empty key pair or signature (valid() is
+// false), or false.
 
 KeyPair X25519GenerateKeyPair() {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: X25519 key generation requires Crypto++\n");
-  return KeyPair{};  // Empty keypair - valid() returns false
+  RefuseFallback("X25519 key generation");
+  return KeyPair{};
 }
 
 bool X25519SharedSecret(const uint8_t*, const uint8_t*, uint8_t*) {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: X25519 ECDH requires Crypto++\n");
+  RefuseFallback("X25519 ECDH");
   return false;
 }
 
 KeyPair Secp256k1GenerateKeyPair() {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: secp256k1 key generation requires Crypto++\n");
+  RefuseFallback("secp256k1 key generation");
   return KeyPair{};
 }
 
 bool Secp256k1SharedSecret(const uint8_t*, const uint8_t*, size_t, uint8_t*) {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: secp256k1 ECDH requires Crypto++\n");
+  RefuseFallback("secp256k1 ECDH");
   return false;
 }
 
 Signature Secp256k1Sign(const uint8_t*, const uint8_t*, size_t) {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: secp256k1 signing requires Crypto++\n");
-  return Signature{};  // Empty signature - valid() returns false
+  RefuseFallback("secp256k1 signing");
+  return Signature{};
 }
 
-bool Secp256k1Verify(const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*, size_t) {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: secp256k1 verification requires Crypto++\n");
-  return false;  // Fail-safe: reject all signatures
+bool Secp256k1Verify(const uint8_t*, size_t, const uint8_t*, size_t,
+                     const uint8_t*, size_t) {
+  RefuseFallback("secp256k1 verification");
+  return false;
 }
 
 KeyPair P256GenerateKeyPair() {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: P-256 key generation requires Crypto++\n");
+  RefuseFallback("P-256 key generation");
   return KeyPair{};
 }
 
 bool P256SharedSecret(const uint8_t*, const uint8_t*, size_t, uint8_t*) {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: P-256 ECDH requires Crypto++\n");
+  RefuseFallback("P-256 ECDH");
   return false;
 }
 
 Signature P256Sign(const uint8_t*, const uint8_t*, size_t) {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: P-256 signing requires Crypto++\n");
+  RefuseFallback("P-256 signing");
   return Signature{};
 }
 
-bool P256Verify(const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*, size_t) {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: P-256 verification requires Crypto++\n");
+bool P256Verify(const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*,
+                size_t) {
+  RefuseFallback("P-256 verification");
   return false;
 }
 
 KeyPair P384GenerateKeyPair() {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: P-384 key generation requires Crypto++\n");
+  RefuseFallback("P-384 key generation");
   return KeyPair{};
 }
 
 bool P384SharedSecret(const uint8_t*, const uint8_t*, size_t, uint8_t*) {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: P-384 ECDH requires Crypto++\n");
+  RefuseFallback("P-384 ECDH");
   return false;
 }
 
 Signature P384Sign(const uint8_t*, const uint8_t*, size_t) {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: P-384 signing requires Crypto++\n");
+  RefuseFallback("P-384 signing");
   return Signature{};
 }
 
-bool P384Verify(const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*, size_t) {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: P-384 verification requires Crypto++\n");
+bool P384Verify(const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*,
+                size_t) {
+  RefuseFallback("P-384 verification");
   return false;
 }
 
-KeyPair GenerateSigningKeyPair(SignatureAlgorithm algo) {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: Signing key generation requires Crypto++ (algorithm: %d)\n",
-          static_cast<int>(algo));
+KeyPair GenerateSigningKeyPair(SignatureAlgorithm) {
+  RefuseFallback("Signing key generation");
   return KeyPair{};
 }
 
 Signature Ed25519Sign(const uint8_t*, const uint8_t*, size_t) {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: Ed25519 signing requires Crypto++\n");
+  RefuseFallback("Ed25519 signing");
   return Signature{};
 }
 
 bool Ed25519Verify(const uint8_t*, const uint8_t*, size_t, const uint8_t*) {
-  WarnFallbackCrypto();
-  fprintf(stderr, "[flatbuffers] ERROR: Ed25519 verification requires Crypto++\n");
+  RefuseFallback("Ed25519 verification");
   return false;
 }
 
-// FIPS mode not available without crypto library
+// FIPS mode is an OpenSSL provider.
 bool EnableFIPSMode() { return false; }
 bool IsFIPSMode() { return false; }
 

@@ -40,6 +40,8 @@ jobs:
       run: ./flattests
     - name: test field encryption
       run: ./flattests_encryption
+    - name: test field encryption (fallback backend)
+      run: ./flattests_encryption_fallback
     - name: make flatc executable
       run: |
         chmod +x flatc

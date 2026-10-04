@@ -35,6 +35,7 @@
       <a class="sdn-header-brand" href="./"><span>FlatBuffers</span></a>
       <nav class="sdn-header-links" id="demo-nav-links" aria-label="Site">
         <a href="#overview" class="nav-link active" data-tab="overview">Overview</a>
+        <a href="#fork" class="nav-link" data-tab="fork">Fork</a>
         <a href="#security" class="nav-link" data-tab="security">Security</a>
         <a href="#encryption" class="nav-link" data-tab="encryption">Encryption</a>
         <a href="#schema" class="nav-link" data-tab="schema">Schema</a>
@@ -59,6 +60,7 @@
       <p class="hero-eyebrow">Edgesource</p>
       <h1 class="hero-title">FlatBuffers</h1>
       <p class="hero-subtitle">Fast data transmission with field-level encryption.</p>
+      <p class="hero-lineage">A fork of <a href="https://github.com/google/flatbuffers" target="_blank" rel="noopener">Google FlatBuffers</a> v25.12.19, kept merged with upstream. <a href="#fork" class="nav-link" data-tab="fork">What the fork adds</a></p>
       <figure class="reel-frame hero-reel">
         <div class="reel-stage">
           <video muted playsinline preload="auto" data-poster="media/flatbuffers-reel-poster.webp" aria-label="Edgesource FlatBuffers in 34 seconds, with music">
@@ -220,6 +222,83 @@
     </section>
 
     <!-- PKI Section (Alice/Bob Public Key Encryption) -->
+    <section id="fork-tab" class="content-section">
+      <div class="section-header">
+        <h2 class="section-title">A Fork of Google FlatBuffers</h2>
+        <p class="section-desc">Edgesource FlatBuffers is Google FlatBuffers plus encryption, WebAssembly tooling and streaming, with upstream merged in as it changes.</p>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">Lineage</h3>
+        <dl class="lineage-list">
+          <div><dt>Upstream</dt><dd><a href="https://github.com/google/flatbuffers" target="_blank" rel="noopener">github.com/google/flatbuffers</a></dd></div>
+          <div><dt>Based on</dt><dd>FlatBuffers v25.12.19</dd></div>
+          <div><dt>Kept current</dt><dd>All of upstream master is merged in, through b8431fbc (14 September 2026)</dd></div>
+          <div><dt>This fork</dt><dd><a href="https://github.com/DigitalArsenal/flatbuffers" target="_blank" rel="noopener">github.com/DigitalArsenal/flatbuffers</a>: 303 commits on top of upstream, released as <a href="https://www.npmjs.com/package/flatc-wasm" target="_blank" rel="noopener">flatc-wasm</a> on npm</dd></div>
+        </dl>
+      </div>
+
+      <div class="glass-card">
+        <h3 class="card-subtitle">What the Fork Adds</h3>
+        <div class="overview-grid">
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>
+            </div>
+            <div class="overview-content">
+              <h4>The compiler in WebAssembly</h4>
+              <p>flatc runs in a browser or Node with nothing to install: the <a href="https://www.npmjs.com/package/flatc-wasm" target="_blank" rel="noopener">flatc-wasm</a> package and its FlatcRunner API, size-prefixed binaries, and every language runtime embedded and Brotli-compressed.</p>
+            </div>
+          </div>
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/><path d="M17 14l3 3-3 3"/></svg>
+            </div>
+            <div class="overview-content">
+              <h4>JSON and binary, both ways</h4>
+              <p>A standalone WASI converter turns JSON into FlatBuffer binaries and back, in any WebAssembly runtime.</p>
+            </div>
+          </div>
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <div class="overview-content">
+              <h4>Field-level encryption</h4>
+              <p>Mark a field <code>(encrypted)</code> in the schema and the generated code encrypts and decrypts it: C++, C#, Dart, Go, Java, Kotlin, Lobster, PHP, Python, Rust and Swift, plus JavaScript and TypeScript through flatc-wasm. Every field instance gets its own key stream (HKDF-SHA256), and Crypto++, OpenSSL and the built-in fallback derive the same keys.</p>
+            </div>
+          </div>
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </div>
+            <div class="overview-content">
+              <h4>Aligned fixed layouts</h4>
+              <p>A fixed-layout mode whose records read straight from memory, with bindings for each language and tests that hold them byte-for-byte equal.</p>
+            </div>
+          </div>
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            </div>
+            <div class="overview-content">
+              <h4>Pipelines and streams</h4>
+              <p>The FlatBufferPipeline API detects formats, pairs records with companion schemas and supports homomorphic encryption; the streaming dispatcher routes size-prefixed record streams by type.</p>
+            </div>
+          </div>
+          <div class="overview-item">
+            <div class="overview-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            </div>
+            <div class="overview-content">
+              <h4>Upstream kept merged</h4>
+              <p>Every upstream change is merged in as it lands, with continuous integration green, so the fork stays a superset of Google FlatBuffers.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="security-tab" class="content-section">
       <div class="section-header">
         <h2 class="section-title">Public Key Infrastructure</h2>

@@ -273,6 +273,61 @@ body:has(.modal.active) .sdn-header {
   margin-bottom: 18px;
 }
 
+.hero-lineage {
+  margin: -12px 0 22px;
+  font-size: 14px;
+  color: var(--white-60);
+}
+
+.hero-lineage a {
+  color: var(--white);
+}
+
+/* The fork's lineage: label and value per row. */
+.lineage-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.lineage-list > div {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--glass-border);
+}
+
+.lineage-list > div:first-child {
+  border-top: 0;
+}
+
+.lineage-list dt {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lineage-list dd {
+  margin: 0;
+  color: var(--white-90);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.lineage-list a {
+  color: var(--white);
+}
+
+@media (max-width: 600px) {
+  .lineage-list > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+
 .hero-license a {
   color: var(--white);
 }
@@ -3871,6 +3926,15 @@ details[open] .collapse-icon {
   font-size: 14px;
   color: var(--muted);
   line-height: 1.5;
+}
+
+.overview-content a {
+  color: var(--white);
+}
+
+.overview-content code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
 }
 
 .crypto-specs {

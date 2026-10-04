@@ -3099,6 +3099,7 @@ function setupMainAppHandlers() {
       'aligned': 'aligned',
       'runtimes': 'runtimes',
       'overview': 'overview',
+      'fork': 'fork',
       'schema': 'schema',
       'studio': 'studio',
       'stack': 'stack'

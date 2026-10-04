@@ -10,7 +10,8 @@ const css = existsSync(cssPath) ? readFileSync(cssPath, 'utf8') : html;
 const app = existsSync(appPath) ? readFileSync(appPath, 'utf8') : html;
 
 const docsLinks = [...html.matchAll(/<a\b[^>]*class=(["'])[^"']*\bnav-link\b[^"']*\1[^>]*>\s*Docs\s*<\/a>/g)];
-assert(docsLinks.length === 2, `expected 2 header Docs links, found ${docsLinks.length}`);
+// One Docs link in the bar; the narrow-screen menu repeats the bar's links at runtime.
+assert(docsLinks.length === 1, `expected 1 header Docs link, found ${docsLinks.length}`);
 
 for (const [, , linkHtml] of docsLinks.map((match) => [match.index, match[0].length, match[0]])) {
   assert(attr(linkHtml, 'href') === '#docs', `header Docs href should be #docs: ${linkHtml}`);

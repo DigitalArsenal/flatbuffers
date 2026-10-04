@@ -229,30 +229,6 @@ function $(id) {
   return document.getElementById(id);
 }
 
-const MOBILE_MENU_CLOSED_ICON = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
-const MOBILE_MENU_OPEN_ICON = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-
-function setMobileMenuButtonState(button, isOpen) {
-  if (!button) return;
-  button.innerHTML = isOpen ? MOBILE_MENU_OPEN_ICON : MOBILE_MENU_CLOSED_ICON;
-  button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-}
-
-function setMobileMenuOpen(isOpen) {
-  const button = $('nav-menu-btn');
-  const menu = $('nav-mobile-menu');
-  if (!button || !menu) return false;
-  menu.classList.toggle('open', isOpen);
-  setMobileMenuButtonState(button, isOpen);
-  return true;
-}
-
-function toggleMobileMenu() {
-  const menu = $('nav-mobile-menu');
-  if (!menu) return false;
-  return setMobileMenuOpen(!menu.classList.contains('open'));
-}
-
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -3093,43 +3069,6 @@ function setupMainAppHandlers() {
     }
   });
 
-  // Mobile menu toggle
-  const mobileMenu = $('nav-mobile-menu');
-  let lastMobileMenuTouchAt = 0;
-
-  setMobileMenuButtonState($('nav-menu-btn'), mobileMenu?.classList.contains('open') ?? false);
-
-  const handleMobileMenuToggle = (event) => {
-    const target = event.target instanceof Element ? event.target : null;
-    const button = target?.closest('#nav-menu-btn');
-    if (!button) return false;
-
-    const now = Date.now();
-    const isDuplicateClick = event.type === 'click' && now - lastMobileMenuTouchAt < 500;
-
-    if (event.type === 'touchend') {
-      lastMobileMenuTouchAt = now;
-    }
-
-    // Capture touch and synthetic click as one mobile-menu gesture.
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (isDuplicateClick) {
-      return true;
-    }
-
-    toggleMobileMenu();
-    return true;
-  };
-
-  document.addEventListener('touchend', handleMobileMenuToggle, {
-    passive: false,
-    capture: true,
-  });
-
-  document.addEventListener('click', handleMobileMenuToggle, { capture: true });
-
   // Navigation tabs (now links) - scroll to sections instead of hide/show
   document.querySelectorAll('.nav-link[data-tab]').forEach(link => {
     link.addEventListener('click', (e) => {
@@ -3141,10 +3080,6 @@ function setupMainAppHandlers() {
       if (tabEl) {
         // Scroll the section into view within the main-app container
         tabEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-      // Close mobile menu if open
-      if (mobileMenu) {
-        setMobileMenuOpen(false);
       }
     });
   });

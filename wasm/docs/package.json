@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && cp streaming-dispatcher.js streaming-dispatcher.wasm dist/ && cp -R videos dist/",
-    "check:links": "node scripts/check-doc-links.mjs index.html . && node scripts/check-landing-docs.mjs . && node scripts/check-landing-docs.mjs dist && node scripts/check-sdn-stack-nav.mjs flatbuffers index.html styles.css dist/index.html && node --test scripts/materialize-pages.test.mjs",
+    "check:links": "node scripts/check-doc-links.mjs index.html . && node scripts/check-landing-docs.mjs . && node scripts/check-landing-docs.mjs dist && node scripts/check-sdn-stack-nav.mjs flatbuffers index.html styles.css public/assets/sdn-chrome/sdn-chrome.css dist/index.html && node --test scripts/materialize-pages.test.mjs",
     "materialize:pages": "node scripts/materialize-pages.mjs --source dist --destination ../../docs",
     "check:materialized-pages": "node scripts/materialize-pages.mjs --source dist --destination ../../docs --check",
     "preview": "vite preview"

@@ -1,11 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-sdn-light="invert">
 <head>
   <meta charset="UTF-8">
+  <link rel="stylesheet" href="assets/sdn-chrome/sdn-chrome.css">
+  <script src="assets/sdn-chrome/sdn-chrome.js"></script>
   <meta name="description" content="Edgesource FlatBuffers - Binary serialization with field-level encryption">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Edgesource FlatBuffers</title>
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none'><defs><linearGradient id='t' gradientUnits='userSpaceOnUse' x1='16' y1='29' x2='16' y2='3'><stop offset='0' stop-color='%23f5a524' stop-opacity='0'/><stop offset='.55' stop-color='%23f5a524' stop-opacity='.55'/><stop offset='1' stop-color='%23f5a524'/></linearGradient></defs><circle cx='16' cy='16' r='13' stroke='%23f5f5f7' stroke-width='1.6' opacity='.3'/><path d='M16 29A13 13 0 0 1 16 3' stroke='url(%23t)' stroke-width='2.2' stroke-linecap='round'/><path d='M16 10.2L10.4 20.1H21.6Z' stroke='%23f5f5f7' stroke-width='1.6' stroke-linejoin='round'/><circle cx='16' cy='10.2' r='2.6' fill='%23f5f5f7'/><circle cx='10.4' cy='20.1' r='2.6' fill='%23f5f5f7'/><circle cx='21.6' cy='20.1' r='2.6' fill='%23f5f5f7'/><circle cx='16' cy='3' r='2.5' fill='%23f5a524'/></svg>">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="media/reel/reel.css">
   <!-- SDN_CONSUMER_ASSETS_START -->
@@ -17,7 +19,7 @@
 <body>
   <sdn-stack-nav active="flatbuffers"></sdn-stack-nav>
   <!-- Video Background -->
-  <div class="video-background">
+  <div class="video-background" data-sdn-dark-only>
     <video autoplay loop muted playsinline id="bg-video">
       <source src="./videos/bg-1.mp4" type="video/mp4">
     </video>
@@ -25,18 +27,13 @@
   </div>
 
   <!-- Grid Animation Background -->
-  <canvas id="grid-canvas" class="grid-background"></canvas>
+  <canvas id="grid-canvas" class="grid-background" data-sdn-dark-only></canvas>
 
   <!-- Navigation -->
-  <nav class="nav-bar">
-    <div class="nav-content">
-      <a href="https://github.com/DigitalArsenal/flatbuffers" target="_blank" class="nav-logo">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
-        </svg>
-        <span>Edgesource FlatBuffers</span>
-      </a>
-      <div class="nav-links" id="demo-nav-links">
+  <header class="sdn-header">
+    <div class="sdn-header-inner">
+      <a class="sdn-header-brand" href="./"><span>FlatBuffers</span></a>
+      <nav class="sdn-header-links" id="demo-nav-links" aria-label="Site">
         <a href="#overview" class="nav-link active" data-tab="overview">Overview</a>
         <a href="#security" class="nav-link" data-tab="security">Security</a>
         <a href="#encryption" class="nav-link" data-tab="encryption">Encryption</a>
@@ -44,42 +41,17 @@
         <a href="#studio" class="nav-link" data-tab="studio">Studio</a>
         <a href="#aligned" class="nav-link" data-tab="aligned">Aligned</a>
         <a href="#runtimes" class="nav-link" data-tab="runtimes">Runtimes</a>
-        <span class="nav-divider"></span>
+        <span class="sdn-header-divider"></span>
         <a href="#docs" class="nav-link" data-tab="runtimes" data-scroll-target="docs">Docs</a>
         <a href="#stack" class="nav-link" data-tab="stack" data-scroll-target="stack">Stack</a>
         <span id="nav-status" class="nav-status"></span>
-      </div>
-      <div class="nav-actions">
-        <button
-          id="nav-menu-btn"
-          class="nav-menu-btn"
-          aria-label="Toggle menu"
-          aria-controls="nav-mobile-menu"
-          aria-expanded="false"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="3" y1="6" x2="21" y2="6"/>
-            <line x1="3" y1="12" x2="21" y2="12"/>
-            <line x1="3" y1="18" x2="21" y2="18"/>
-          </svg>
-        </button>
+      </nav>
+      <div class="sdn-header-actions">
+        <button data-sdn-theme-toggle aria-label="Switch between light and dark theme"></button>
+        <button data-sdn-menu-toggle aria-label="Menu"></button>
       </div>
     </div>
-  </nav>
-
-  <!-- Mobile Menu -->
-  <div id="nav-mobile-menu" class="nav-mobile-menu">
-    <a href="#overview" class="nav-link" data-tab="overview">Overview</a>
-    <a href="#security" class="nav-link" data-tab="security">Security</a>
-    <a href="#encryption" class="nav-link" data-tab="encryption">Encryption</a>
-    <a href="#schema" class="nav-link" data-tab="schema">Schema</a>
-    <a href="#studio" class="nav-link" data-tab="studio">Studio</a>
-    <a href="#aligned" class="nav-link" data-tab="aligned">Aligned</a>
-    <a href="#runtimes" class="nav-link" data-tab="runtimes">Runtimes</a>
-    <span class="nav-divider"></span>
-    <a href="#docs" class="nav-link" data-tab="runtimes" data-scroll-target="docs">Docs</a>
-    <a href="#stack" class="nav-link" data-tab="stack" data-scroll-target="stack">Stack</a>
-  </div>
+  </header>
 
   <!-- Hero Section -->
   <section id="hero-section" class="hero-section">
@@ -3058,34 +3030,21 @@ class EphemerisReader {
       </div>
     </section>
 
-    <section id="stack" class="content-section">
-      <div class="glass-card">
-        <h3 class="card-subtitle">SDN Stack</h3>
-        <div class="docs-grid stack-grid">
-          <a href="https://spacedatastandards.org/" class="doc-link-card">
-            <h4>Standards</h4>
-            <p>Canonical space data schemas and generated bindings</p>
-          </a>
-          <a href="https://digitalarsenal.github.io/flatbuffers/" class="doc-link-card active-stack-card">
-            <h4>FlatBuffers</h4>
-            <p>Binary encoding, schema tooling, and runtimes</p>
-          </a>
-          <a href="https://digitalarsenal.github.io/flatsql/" class="doc-link-card">
-            <h4>FlatSQL</h4>
-            <p>SQL-style queries over FlatBuffer-backed stores</p>
-          </a>
-          <a href="https://spacedatanetwork.org/" class="doc-link-card">
-            <h4>SDN</h4>
-            <p>Distributed publication, discovery, and delivery</p>
-          </a>
-          <a href="https://digitalarsenal.github.io/space-data-module-sdk/" class="doc-link-card">
-            <h4>Module SDK</h4>
-            <p>WASM module packaging and SDN host compatibility</p>
-          </a>
-        </div>
-      </div>
-    </section>
+    <section id="stack" class="content-section" data-sdn-stack="flatbuffers"></section>
   </main>
+
+  <footer class="sdn-footer">
+    <div class="sdn-footer-inner">
+      <a class="sdn-footer-brand" href="https://spacedatanetwork.org/">Space Data Network</a>
+      <nav class="sdn-footer-links" aria-label="Footer">
+        <a href="#overview">Overview</a>
+        <a href="#docs">Docs</a>
+        <a href="https://www.npmjs.com/package/flatc-wasm">npm</a>
+        <a href="https://github.com/DigitalArsenal/flatbuffers">GitHub</a>
+      </nav>
+      <p class="sdn-footer-legal">Apache-2.0 License &middot; &copy; Edgesource Corporation; FlatBuffers &copy; Google &middot; <a href="mailto:tj@edgesource.com">tj@edgesource.com</a></p>
+    </div>
+  </footer>
 
 
   <!-- Help Modal -->
@@ -3100,11 +3059,6 @@ class EphemerisReader {
   </div>
 
 
-  <!-- Floating Contact Footer -->
-  <footer class="floating-footer" id="floating-footer">
-    <a href="javascript:void(0)" data-u="tj" data-d="edgesource.com"></a>
-  </footer>
-
   <script type="module" src="app.mjs"></script>
   <script>
     // Obfuscated email protection - assembled at runtime to prevent scraping
@@ -3116,21 +3070,6 @@ class EphemerisReader {
         window.location.href = 'mailto:' + e;
       });
     });
-
-    // Show/hide floating footer based on hero contact visibility
-    const heroContact = document.querySelector('.contact-info');
-    const floatingFooter = document.getElementById('floating-footer');
-
-    if (heroContact && floatingFooter) {
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          // Hide footer when hero contact is visible, show when not visible
-          floatingFooter.classList.toggle('visible', !entry.isIntersecting);
-        });
-      }, { threshold: 0 });
-
-      observer.observe(heroContact);
-    }
   </script>
   <script src="media/reel/reel.js" defer></script>
   <script src="assets/ai-credits/ai-credits.js" defer></script>

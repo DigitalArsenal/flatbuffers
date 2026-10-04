@@ -512,11 +512,12 @@ jobs:
       matrix:
         swift: ["6.0", "6.1", "6.2"]
     runs-on: ubuntu-24.04
+    # The official image carries each minor's newest patch. setup-swift@v2
+    # stops at 6.2.1, which cannot compile SE-0487 @nonexhaustive (6.2.3+),
+    # and swift-crypto 5 (reached through the gRPC test dependencies) uses it.
+    container: swift:${{ matrix.swift }}-noble
     steps:
     - uses: actions/checkout@v6
-    - uses: swift-actions/setup-swift@v2
-      with:
-        swift-version: ${{ matrix.swift }}
     - name: Get swift version
       run: swift --version
     - name: test

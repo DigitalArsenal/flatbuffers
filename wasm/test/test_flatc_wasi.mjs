@@ -4,7 +4,8 @@
  *
  * Every scenario runs on both runtimes through the same call surface, then
  * the two transcripts must match byte for byte. A trap on either runtime is a
- * failure: every error path must come back as a status code.
+ * failure: every error path must come back as a status code. One scenario
+ * verifies FlatcRunner output (dist/flatc-wasm.js) with this module.
  *
  * WasmEdge is found at $WASMEDGE_DIR, ~/.wasmedge or /usr/local. Without it
  * the WasmEdge half is skipped, unless FLATC_WASI_REQUIRE_WASMEDGE=1.
@@ -423,6 +424,36 @@ function unionWithoutType() {
   return b;
 }
 
+// PPE position records: scalar doubles and [double] vectors. The verifier
+// checks a double field for 8-byte alignment from the start of the buffer.
+const PPE_RECORD = {
+  CENTER_NAME: 'EARTH',
+  START_TIME: '2026-10-01T00:00:00Z',
+  STOP_TIME: '2026-10-01T02:00:00Z',
+  POSITION_RECORDS: [
+    { EPOCH_MID: '2026-10-01T00:30:00Z', EPOCH_HALF_SPAN: 1800, NUM_COEFFICIENTS: 3,
+      POS_COEFF_X: [6778.137, -0.5, 0.001], POS_COEFF_Y: [12.5, 7.25, -0.0002],
+      POS_COEFF_Z: [-3.75, 0.125, 0.00005], MAX_POSITION_RESIDUAL: 0.0015 },
+    { EPOCH_MID: '2026-10-01T01:30:00Z', EPOCH_HALF_SPAN: 1800, NUM_COEFFICIENTS: 3,
+      POS_COEFF_X: [6778.2, -0.25, 0.002], POS_COEFF_Y: [25, 14.5, -0.0004],
+      POS_COEFF_Z: [-7.5, 0.25, 0.0001], MAX_POSITION_RESIDUAL: 0.003 },
+  ],
+  NOMINAL_SEGMENT_SPAN: 3600,
+};
+
+// FlatcRunner (the Emscripten flatc) output for PPE_RECORD, default options.
+let runnerPpe;
+async function runnerPpeBinary(files) {
+  if (!runnerPpe) {
+    const { FlatcRunner } = await import('../src/runner.mjs');
+    const runner = await FlatcRunner.init();
+    const schema = { entry: '/sds/PPE/main.fbs', files: {} };
+    for (const [p, src] of Object.entries(files)) schema.files[`/sds/${p}`] = src;
+    runnerPpe = runner.generateBinary(schema, JSON.stringify(PPE_RECORD));
+  }
+  return runnerPpe;
+}
+
 // Deterministic PRNG (mulberry32).
 function rng(seed) {
   let t = seed >>> 0;
@@ -512,6 +543,17 @@ async function scenarios(rt) {
     const json = await f.toJson(ocm, bin, 0, 'ocm-json');
     assert.deepEqual(JSON.parse(json), record);
     assert.deepEqual(await f.toBinary(ocm, json), bin);
+  });
+
+  await t('FlatcRunner size-prefixed PPE passes the aligned size-prefixed verifier', async () => {
+    const r = await f.schemaAdd('PPE/main.fbs', null);
+    assert.ok(r.id > 0, `schema_add: ${r.id} ${r.error}`);
+    const bin = await runnerPpeBinary(files);
+    assert.equal(u32(bin, 0), bin.length - 4, 'size prefix');
+    assert.equal(ascii(bin, 8, 4), '$PPE', 'file identifier');
+    // flatc_binary_to_json runs flatbuffers::VerifySizePrefixed (alignment checks on).
+    const json = await f.toJson(r.id, bin, OPT.SIZE_PREFIXED, 'ppe-runner-json');
+    assert.deepEqual(JSON.parse(json), PPE_RECORD);
   });
 
   await t('out-length contract: binary larger than 2x the JSON', async () => {

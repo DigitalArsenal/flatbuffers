@@ -43,7 +43,10 @@ export interface GenerateBinaryOptions {
   unknownJson?: boolean;
   /** Require strict JSON conformance (default: false) */
   strictJson?: boolean;
-  /** Include 4-byte size prefix before the buffer (default: true) */
+  /**
+   * Size-prefixed FlatBuffer, as flatc --size-prefixed writes it: a 4-byte
+   * length, then the buffer, aligned for VerifySizePrefixedBuffer (default: true)
+   */
   sizePrefix?: boolean;
   /** Include file identifier in the buffer (default: true, uses schema's file_identifier) */
   fileIdentifier?: boolean;

@@ -683,7 +683,8 @@ export class FlatcRunner {
    * @param {Object} [options={}]
    * @param {boolean} [options.unknownJson=true] - Allow unknown fields in JSON.
    * @param {boolean} [options.strictJson=false] - Require strict JSON conformance.
-   * @param {boolean} [options.sizePrefix=true] - Include 4-byte size prefix before the buffer.
+   * @param {boolean} [options.sizePrefix=true] - Size-prefixed FlatBuffer (flatc --size-prefixed):
+   *   a 4-byte length, then the buffer, aligned for VerifySizePrefixedBuffer.
    * @param {boolean} [options.fileIdentifier=true] - Include file identifier (from schema).
    * @returns {Uint8Array}
    */
@@ -701,8 +702,10 @@ export class FlatcRunner {
         : jsonInput
     );
 
+    const sizePrefixed = options.sizePrefix !== false;
     const args = [
       "--binary",
+      ...(sizePrefixed ? ["--size-prefixed"] : []),
       ...(options.unknownJson !== false ? ["--unknown-json"] : []),
       ...(options.strictJson ? ["--strict-json"] : []),
       "-o",
@@ -753,29 +756,11 @@ export class FlatcRunner {
     let output = new Uint8Array(this.Module.FS.readFile(`${outDir}/${binFile}`));
     cleanup();
 
-    // Handle fileIdentifier option (default: true)
-    // File identifier is at bytes 4-7 (after the root table offset)
-    // If fileIdentifier is false and we have one, we need to zero it out
-    if (options.fileIdentifier === false && output.length >= 8) {
-      // Zero out the file identifier bytes (4-7)
-      output[4] = 0;
-      output[5] = 0;
-      output[6] = 0;
-      output[7] = 0;
-    }
-
-    // Handle sizePrefix option (default: true for streaming use cases)
-    // Prepend 4-byte little-endian size prefix
-    if (options.sizePrefix !== false) {
-      const size = output.length;
-      const prefixed = new Uint8Array(4 + size);
-      // Write size as little-endian uint32
-      prefixed[0] = size & 0xFF;
-      prefixed[1] = (size >> 8) & 0xFF;
-      prefixed[2] = (size >> 16) & 0xFF;
-      prefixed[3] = (size >> 24) & 0xFF;
-      prefixed.set(output, 4);
-      return prefixed;
+    // fileIdentifier: false zeroes the file identifier, which follows the
+    // root table offset (and the size prefix, when there is one).
+    const fileIdAt = sizePrefixed ? 8 : 4;
+    if (options.fileIdentifier === false && output.length >= fileIdAt + 4) {
+      output.fill(0, fileIdAt, fileIdAt + 4);
     }
 
     return output;

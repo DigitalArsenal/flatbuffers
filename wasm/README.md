@@ -246,6 +246,7 @@ Convert JSON data to FlatBuffer binary format:
 const binary = flatc.generateBinary(schemaInput, jsonData, {
   unknownJson: true,   // Allow unknown fields in JSON (default: true)
   strictJson: false,   // Require strict JSON conformance (default: false)
+  sizePrefix: true,    // Size-prefixed FlatBuffer, as flatc --size-prefixed (default: true)
 });
 
 // Example with actual data

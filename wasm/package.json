@@ -112,7 +112,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "hd-wallet-wasm": "2.0.28"
+    "hd-wallet-wasm": "2.1.0"
   },
   "devDependencies": {
     "husky": "^9.1.7"

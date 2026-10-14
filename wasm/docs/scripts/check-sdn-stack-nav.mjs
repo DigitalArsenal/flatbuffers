@@ -20,16 +20,16 @@ const headerTokens = [
 const START_MARKER = "<!-- SDN_CONSUMER_ASSETS_START -->";
 const END_MARKER = "<!-- SDN_CONSUMER_ASSETS_END -->";
 const approvedRelease = Object.freeze({
-  publicStyleUrl: "https://static.spacedatanetwork.org/assets/hd-wallet-ui/2.0.28/sdn-wallet-public-client.c3f68d1cfd88478f10d836a5e829d1dfc6a10157972cf0f7d4d319d0636f2cc4.css",
+  publicStyleUrl: "https://static.spacedatanetwork.org/assets/hd-wallet-ui/2.1.0/sdn-wallet-public-client.c3f68d1cfd88478f10d836a5e829d1dfc6a10157972cf0f7d4d319d0636f2cc4.css",
   publicStyleIntegrity: "sha384-fICuhN4I9xqOK1F5vGGzl26opuO+xQIvTZXMSV76lWTBiQ6AfzztMGLLDw8yRT8i",
-  publicScriptUrl: "https://static.spacedatanetwork.org/assets/hd-wallet-ui/2.0.28/sdn-wallet-public-client.f611e7e151a3b5c38384272f8894a4c6634f0a29bf925b0e02e0e27f8db0bfff.js",
+  publicScriptUrl: "https://static.spacedatanetwork.org/assets/hd-wallet-ui/2.1.0/sdn-wallet-public-client.f611e7e151a3b5c38384272f8894a4c6634f0a29bf925b0e02e0e27f8db0bfff.js",
   publicScriptIntegrity: "sha384-R+QqsKoWJIS7iWrtPmgJ49DVnb1hSGjZokupbLInJd1PLp8RwQhtF/hnaerc33ci",
   navScriptUrl: "https://static.spacedatanetwork.org/assets/sdn-stack-nav/1.0.0/sdn-stack-nav.52fde607eee38ffa116188201f50258ed50bd18c9f06c1af9678f763147a8fe5.js",
   navScriptIntegrity: "sha384-dgeojhJ8vTszHXIbv7O7nZcEzqD10oUYYJjBmPrV7+kLQEUlXLQD4ek5Q7HOFiO5",
   navStyleUrl: "https://static.spacedatanetwork.org/assets/sdn-stack-nav/1.0.0/sdn-stack-nav.36a36359ce18322185e9ff179f88175bab67d5ad84a14d9c08a54f2ff27267e7.css",
   navStyleIntegrity: "sha384-c4M8Fg+kYaeOYYtJVr7jJsde24IhSWkWaRyAOHEZU9jozhRck089aw+mnHwxymds",
   registrySha256: "e1ce6fe903c9700484a8a87d96581c8cad97063dabf63030b4518a31a3bdaa93",
-  callbackHelperUrl: "https://static.spacedatanetwork.org/assets/hd-wallet-ui/2.0.28/sdn-wallet-callback.0f2dee485c8f0d7afe5f70b4b42093a382c92d32af551bd71b41733336091c7a.js",
+  callbackHelperUrl: "https://static.spacedatanetwork.org/assets/hd-wallet-ui/2.1.0/sdn-wallet-callback.0f2dee485c8f0d7afe5f70b4b42093a382c92d32af551bd71b41733336091c7a.js",
   callbackHelperIntegrity: "sha384-UZG2zFMk46nuXFtMDyh5Rgfsai9CJXgmqvWILzXVbKJfdbSvg+7GRavCRgLXL5xy",
 });
 

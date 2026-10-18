@@ -16,7 +16,9 @@
  *   value    = AES-256-CTR(fieldKey, fieldIV) XOR plaintext
  *
  * and its header is an SDS `$ENC` record. One wallet key, then a key per site,
- * schema, field and key version through HKDF's info.
+ * schema, field and key version through HKDF's info. Opening is the wallet's:
+ * openFields sends the sealed fields to it, and it decrypts after the user
+ * approves, only for this site.
  */
 
 import { Builder } from 'flatbuffers';
@@ -46,9 +48,12 @@ export function bytesToHex(bytes) {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** The signed-in wallet's encryption key, or null when signed out. */
+/**
+ * The signed-in wallet's encryption key, or null when signed out. The client
+ * reports 'opening' while a wallet request is in flight; the identity stays.
+ */
 export function walletEncryptionKey(snapshot) {
-  if (snapshot?.status !== 'connected' || !snapshot.identity) return null;
+  if (!['connected', 'opening'].includes(snapshot?.status) || !snapshot.identity) return null;
   const key = snapshot.identity.keys?.find((k) => k.purpose === 'contact-encryption' && k.curve === 'x25519');
   if (!key || !HEX32.test(key.publicKeyHex)) return null;
   return Object.freeze({
@@ -90,6 +95,54 @@ export async function signIn() {
   if (!record) return false;
   await record.client.connect();
   return true;
+}
+
+/**
+ * The site's own origin. The wallet binds a site's client to its origin, and
+ * every site on digitalarsenal.github.io shares that one origin, so the page
+ * asks the wallet to open fields only when it is served from its own.
+ */
+export const SITE_ORIGIN = 'https://flatbuffers.spacedatanetwork.org';
+
+export function walletOpensHere() {
+  return globalThis.location?.origin === SITE_ORIGIN;
+}
+
+// openFields limits (hd-wallet-ui 2.2.1): 1..16 fields, 4096 bytes each, 12288 in all.
+const OPEN_BATCH_FIELDS = 16;
+const OPEN_FIELD_BYTES = 4096;
+const OPEN_BATCH_BYTES = 12288;
+
+/**
+ * Ask the signed-in wallet to open sealed fields ({ enc, context, fieldId,
+ * ciphertext }); it asks the user first. Resolves to one entry per field:
+ * { plaintext } or { refused }. Fields too large for the wallet are refused
+ * here as 'TOO_LARGE'.
+ */
+export async function openFields(fields) {
+  const record = walletRecord();
+  if (!walletOpensHere() || typeof record?.client?.openFields !== 'function') throw new Error('The wallet does not open fields on this origin');
+  const out = new Array(fields.length);
+  let batch = [];
+  let bytes = 0;
+  const flush = async () => {
+    if (!batch.length) return;
+    const opened = await record.client.openFields({ fields: batch.map(({ field }) => field) });
+    batch.forEach(({ index }, i) => { out[index] = opened[i]; });
+    batch = [];
+    bytes = 0;
+  };
+  for (const [index, field] of fields.entries()) {
+    if (field.ciphertext.length > OPEN_FIELD_BYTES) {
+      out[index] = { refused: 'TOO_LARGE' };
+      continue;
+    }
+    if (batch.length === OPEN_BATCH_FIELDS || bytes + field.ciphertext.length > OPEN_BATCH_BYTES) await flush();
+    batch.push({ index, field });
+    bytes += field.ciphertext.length;
+  }
+  await flush();
+  return out;
 }
 
 /** A recipient's contact-encryption public key: 64 hex characters. */

@@ -10,7 +10,7 @@ import QRCode from 'qrcode';
 import { createV3 } from 'vcard-cryptoperson';
 
 import { EncryptionContext, withEncryptionModule } from '../src/encryption.mjs';
-import { watchWallet, signIn, sealField, parseRecipientKey, bytesToHex } from './wallet-field-keys.mjs';
+import { watchWallet, signIn, sealField, parseRecipientKey, bytesToHex, openFields, walletOpensHere, SITE_ORIGIN } from './wallet-field-keys.mjs';
 
 const FIELD_SITE = 'flatbuffers';
 
@@ -39,6 +39,7 @@ const state = {
   currentFieldData: null,
   fieldWalletKey: null, // the signed-in wallet's encryption key (public)
   fieldRecipientLabel: null,
+  sentMessage: null, // the last sealed message: { enc, context, fieldId, ciphertext }
   // Virtual table / Paginated table
   virtualTable: null,
   paginatedTable: null,
@@ -181,6 +182,83 @@ function renderFieldWalletStatus() {
   }
   $('field-sign-in')?.toggleAttribute('hidden', Boolean(key));
   $('send-sign-in')?.toggleAttribute('hidden', Boolean(key));
+  renderOpenControls();
+}
+
+const OFF_ORIGIN_NOTE = `Decrypting through your wallet is off at this address. The wallet opens this site's fields only on the site's own origin, ${SITE_ORIGIN}, because every site on ${globalThis.location?.origin ?? 'this host'} shares one origin.`;
+
+/** "Decrypt with wallet": on only on the site's own origin, signed in, with something sealed. */
+function renderOpenControls() {
+  const here = walletOpensHere();
+  const signedIn = Boolean(state.fieldWalletKey);
+  const controls = [
+    ['field-decrypt', 'field-open-note', Boolean(state.currentFieldData?.fields.some((f) => f.isEncrypted))],
+    ['send-decrypt', 'send-open-note', Boolean(state.sentMessage)],
+  ];
+  for (const [button, note, sealed] of controls) {
+    if ($(button)) $(button).disabled = !(here && signedIn && sealed);
+    if ($(note)) {
+      $(note).textContent = here
+        ? 'Your wallet asks before it opens anything, and opens only fields sealed to your account for this site.'
+        : OFF_ORIGIN_NOTE;
+    }
+  }
+}
+
+function describeRefusal(refused) {
+  return refused === 'NOT_ADDRESSED_TO_ACCOUNT' ? 'not sealed to your account' : `refused (${refused})`;
+}
+
+/** The wallet opens every encrypted field of the record, after the user approves. */
+async function decryptFieldsWithWallet() {
+  const data = state.currentFieldData;
+  const sealed = data.fields.filter((f) => f.isEncrypted);
+  // The button stays on: a request the user cancels in the wallet never
+  // settles here, and asking again is a fresh request.
+  $('field-open-note').textContent = 'Waiting for your wallet…';
+  try {
+    const opened = await openFields(sealed.map((f) => ({ enc: f.enc, context: f.context, fieldId: f.fieldId, ciphertext: f.encryptedBytes })));
+    sealed.forEach((field, i) => {
+      const row = document.querySelector(`#field-body tr[data-field-id="${field.fieldId}"]`);
+      const cell = row?.querySelector('.field-opened');
+      if (!cell) return;
+      if (opened[i].plaintext) {
+        const plain = opened[i].plaintext;
+        row.dataset.openedHex = bytesToHex(plain);
+        const value = new FlatBufferParser(plain).interpretValue(plain, field.type);
+        cell.textContent = typeof value === 'string' && !value.startsWith('[') ? formatFieldValue(value, field.type) : toHex(plain);
+      } else {
+        row.dataset.openedRefused = opened[i].refused;
+        cell.textContent = describeRefusal(opened[i].refused);
+      }
+    });
+  } catch (err) {
+    $('field-open-note').textContent = err.message;
+  } finally {
+    renderOpenControls();
+  }
+}
+
+/** The wallet opens the message, after the user approves. */
+async function decryptMessageWithWallet() {
+  const message = state.sentMessage;
+  const output = $('send-opened');
+  $('send-open-note').textContent = 'Waiting for your wallet…';
+  try {
+    const [opened] = await openFields([message]);
+    if (opened.plaintext) {
+      output.dataset.openedHex = bytesToHex(opened.plaintext);
+      output.textContent = new TextDecoder().decode(opened.plaintext);
+    } else {
+      output.dataset.openedRefused = opened.refused;
+      output.textContent = `Your wallet did not open it: ${describeRefusal(opened.refused)}.`;
+    }
+    output.hidden = false;
+  } catch (err) {
+    $('send-open-note').textContent = err.message;
+  } finally {
+    renderOpenControls();
+  }
 }
 
 /** Encrypt the message to the recipient: one sealed field with its $ENC header. */
@@ -215,6 +293,12 @@ function sealMessage() {
   output.dataset.encHex = bytesToHex(sealed.enc);
   output.hidden = false;
   status.textContent = `Encrypted to ${recipient.label}.`;
+  state.sentMessage = { enc: sealed.enc, context: sealed.context, fieldId: 0, ciphertext: sealed.ciphertext };
+  const opened = $('send-opened');
+  opened.hidden = true;
+  delete opened.dataset.openedHex;
+  delete opened.dataset.openedRefused;
+  renderOpenControls();
 }
 
 // =============================================================================
@@ -314,7 +398,7 @@ async function generateSingleRecord() {
           EncryptionContext, recipient.publicKey, field.bytes,
           { site: FIELD_SITE, schema: schemaType, field: field.name, fieldId },
         ));
-        return { ...field, fieldId, encryptedBytes: sealed.ciphertext, enc: sealed.enc, isEncrypted: true };
+        return { ...field, fieldId, encryptedBytes: sealed.ciphertext, enc: sealed.enc, context: sealed.context, isEncrypted: true };
       }
       return { ...field, fieldId, isEncrypted: false };
     });
@@ -331,6 +415,7 @@ async function generateSingleRecord() {
     state.fieldRecipientLabel = recipient.label;
 
     renderFieldDisplay();
+    renderOpenControls();
 
   } catch (err) {
     console.error('Failed to generate record:', err);
@@ -428,6 +513,12 @@ function renderFieldDisplay() {
     encHeaderTd.className = 'hex';
     encHeaderTd.textContent = field.enc ? bytesToHex(field.enc) : '--';
     tr.appendChild(encHeaderTd);
+
+    // What the wallet opened, after "Decrypt with wallet"
+    const openedTd = document.createElement('td');
+    openedTd.className = 'field-opened';
+    openedTd.textContent = field.isEncrypted ? '' : '--';
+    tr.appendChild(openedTd);
     if (field.isEncrypted) {
       tr.dataset.fieldId = String(field.fieldId);
       tr.dataset.plaintextHex = bytesToHex(field.bytes);
@@ -1908,6 +1999,8 @@ function setupMainAppHandlers() {
   $('field-sign-in')?.addEventListener('click', () => { signIn().catch(() => renderFieldWalletStatus()); });
   $('send-sign-in')?.addEventListener('click', () => { signIn().catch(() => renderFieldWalletStatus()); });
   $('send-seal')?.addEventListener('click', sealMessage);
+  $('send-decrypt')?.addEventListener('click', decryptMessageWithWallet);
+  $('field-decrypt')?.addEventListener('click', decryptFieldsWithWallet);
   watchWallet((key) => {
     state.fieldWalletKey = key;
     renderFieldWalletStatus();

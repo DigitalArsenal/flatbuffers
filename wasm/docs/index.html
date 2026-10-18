@@ -416,7 +416,9 @@
             <label>$ENC header (the recipient's wallet opens the message with it)</label>
             <code id="send-enc" class="hex-display">--</code>
           </div>
-          <p class="field-selection-desc">Only the recipient's wallet can open the message. Opening it on this page needs the next wallet release, in which the wallet decrypts after you approve.</p>
+          <button id="send-decrypt" class="glass-btn" type="button" disabled>Decrypt with wallet</button>
+          <p class="field-selection-desc" id="send-opened" role="status" hidden></p>
+          <p class="field-selection-desc" id="send-open-note">Only the recipient's wallet can open the message, after they approve.</p>
         </div>
       </div>
     </section>
@@ -634,12 +636,16 @@
                 <th>Offset</th>
                 <th>Hex</th>
                 <th>$ENC Header</th>
+                <th>Opened by Wallet</th>
               </tr>
             </thead>
             <tbody id="field-body"></tbody>
           </table>
         </div>
-        <p class="field-selection-desc">Each encrypted field opens only in the recipient's wallet, from its $ENC header. Opening fields on this page needs the next wallet release, in which the wallet decrypts after you approve.</p>
+        <div class="field-open">
+          <button id="field-decrypt" class="glass-btn" type="button" disabled>Decrypt with wallet</button>
+          <p class="field-selection-desc" id="field-open-note">Each encrypted field opens only in the recipient's wallet, from its $ENC header, after they approve.</p>
+        </div>
       </div>
     </section>
 

@@ -8007,3 +8007,20 @@ details[open] .collapse-icon {
 #send-status.attention {
   color: var(--accent-warning, #f59e0b);
 }
+
+.field-open {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.field-open .glass-btn,
+.send-demo #send-decrypt {
+  align-self: flex-start;
+}
+
+.field-opened {
+  font-family: var(--font-mono, monospace);
+  word-break: break-all;
+}

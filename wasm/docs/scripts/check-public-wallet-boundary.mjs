@@ -91,7 +91,9 @@ assert.doesNotMatch(app, /\bprivate key\b/iu, "executable docs must not retain a
 // Encryption boundary: the page holds only public keys and ciphertext.
 // Recipients are the signed-in wallet's contact-encryption key or a pasted
 // wallet key; the only ephemeral secret lives inside flatc-wasm's
-// EncryptionContext for one seal. Opening ciphertext is the wallet's job.
+// EncryptionContext for one seal. Opening ciphertext is the wallet's job:
+// the page's one decrypt path is the wallet client's openFields, and only on
+// the site's own origin (a shared github.io origin cannot bind a site).
 const walletKeys = readFileSync(resolve(root, "wallet-field-keys.mjs"), "utf8");
 const encryptionCode = `${app}\n${walletKeys}`;
 assert.equal(existsSync(resolve(root, "encryption-stub.mjs")), false, "the session-key encryption stub must stay deleted");
@@ -106,12 +108,16 @@ for (const pattern of [
 ]) {
   assert.doesNotMatch(encryptionCode, pattern, `public docs hold key or decrypt material: ${pattern}`);
 }
-assert.doesNotMatch(html, /id="[^"]*decrypt[^"]*"/iu, "no in-page decrypt surface until the wallet opens fields");
+assert.match(walletKeys, /export const SITE_ORIGIN = 'https:\/\/flatbuffers\.spacedatanetwork\.org';/u, "the wallet opens fields only on the site's own origin");
+assert.doesNotMatch(walletKeys, /SITE_ORIGIN = 'https:\/\/[^']*github\.io/u, "a shared github.io origin is not the site's own");
+assert.match(walletKeys, /if \(!walletOpensHere\(\) \|\|/u, "openFields refuses off the site's own origin");
+assert.equal((encryptionCode.match(/\.openFields\(/gu) ?? []).length, 1, "the wallet client's openFields is the page's one decrypt path");
+assert.match(app, /disabled = !\(here && signedIn && sealed\)/u, "decrypt controls stay off unless on the site's own origin and signed in");
 assert.doesNotMatch(html, /\b(?:Alice|Bob)\b/u, "demos encrypt to real wallet keys, not fictional session parties");
 for (const id of ["field-recipient-key", "send-recipient-key", "send-seal"]) {
   assert.match(html, new RegExp(`id="${id}"`, "u"), `wallet-keyed encryption control is missing: ${id}`);
 }
-assert.match(html, /next wallet release/u, "the page must say that decrypting needs the next wallet release");
+assert.match(app, /Decrypting through your wallet is off at this address/u, "the page must say why decrypting is off on a shared origin");
 
 const vcfStart = app.indexOf("function parseAndDisplayVCF");
 const vcfEnd = app.indexOf("// Help Content", vcfStart);

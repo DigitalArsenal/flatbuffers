@@ -24,16 +24,16 @@ const SITE_PREFIX = "/flatbuffers/";
 const START_MARKER = "<!-- SDN_CONSUMER_ASSETS_START -->";
 const END_MARKER = "<!-- SDN_CONSUMER_ASSETS_END -->";
 const approvedRelease = Object.freeze({
-  publicStyleUrl: "/flatbuffers/assets/vendor/hd-wallet-ui/2.1.0/sdn-wallet-public-client.c3f68d1cfd88478f10d836a5e829d1dfc6a10157972cf0f7d4d319d0636f2cc4.css",
+  publicStyleUrl: "/flatbuffers/assets/vendor/hd-wallet-ui/2.2.1/sdn-wallet-public-client.c3f68d1cfd88478f10d836a5e829d1dfc6a10157972cf0f7d4d319d0636f2cc4.css",
   publicStyleIntegrity: "sha384-fICuhN4I9xqOK1F5vGGzl26opuO+xQIvTZXMSV76lWTBiQ6AfzztMGLLDw8yRT8i",
-  publicScriptUrl: "/flatbuffers/assets/vendor/hd-wallet-ui/2.1.0/sdn-wallet-public-client.f611e7e151a3b5c38384272f8894a4c6634f0a29bf925b0e02e0e27f8db0bfff.js",
-  publicScriptIntegrity: "sha384-R+QqsKoWJIS7iWrtPmgJ49DVnb1hSGjZokupbLInJd1PLp8RwQhtF/hnaerc33ci",
+  publicScriptUrl: "/flatbuffers/assets/vendor/hd-wallet-ui/2.2.1/sdn-wallet-public-client.9ab041131df957fcb6ef7e3d87bf9d19fe313bc5d7f1e53337752faf0ba354da.js",
+  publicScriptIntegrity: "sha384-FNcHq8FI7eBz2YUhfO3jNfmdObbCXmfg4ugmBEHzXW/KBpbUdJXqIzpn30OWJBuB",
   navScriptUrl: "/flatbuffers/assets/vendor/sdn-stack-nav/1.0.1/sdn-stack-nav.24eb3001afc5448a90cef87e53bb4e599c0ae4dc9e14bafb6d1236e0233c6008.js",
   navScriptIntegrity: "sha384-g8NCFtcgbsW5bHeGiPtPb2Q+NJVlJLfwbaAZ7/Ium1YAVtxE/SqawvG/Ny0iMl56",
   navStyleUrl: "/flatbuffers/assets/vendor/sdn-stack-nav/1.0.1/sdn-stack-nav.36a36359ce18322185e9ff179f88175bab67d5ad84a14d9c08a54f2ff27267e7.css",
   navStyleIntegrity: "sha384-c4M8Fg+kYaeOYYtJVr7jJsde24IhSWkWaRyAOHEZU9jozhRck089aw+mnHwxymds",
-  registrySha256: "e1ce6fe903c9700484a8a87d96581c8cad97063dabf63030b4518a31a3bdaa93",
-  callbackHelperUrl: "/flatbuffers/assets/vendor/hd-wallet-ui/2.1.0/sdn-wallet-callback.0f2dee485c8f0d7afe5f70b4b42093a382c92d32af551bd71b41733336091c7a.js",
+  registrySha256: "63784143e2ad8e2542d22148ff4a0a4da7a10f4b3f9909ae91a20dc0f60db06b",
+  callbackHelperUrl: "/flatbuffers/assets/vendor/hd-wallet-ui/2.2.1/sdn-wallet-callback.0f2dee485c8f0d7afe5f70b4b42093a382c92d32af551bd71b41733336091c7a.js",
   callbackHelperIntegrity: "sha384-UZG2zFMk46nuXFtMDyh5Rgfsai9CJXgmqvWILzXVbKJfdbSvg+7GRavCRgLXL5xy",
 });
 

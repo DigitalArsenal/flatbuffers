@@ -17,13 +17,10 @@ import { base58 } from '@scure/base';
 import QRCode from 'qrcode';
 import { createV3 } from 'vcard-cryptoperson';
 
-import {
-  loadEncryptionWasm,
-  EncryptionContext,
-  encryptionHeaderFromJSON,
-  encryptBuffer,
-  decryptBuffer,
-} from './encryption-stub.mjs';
+import { EncryptionContext, withEncryptionModule } from '../src/encryption.mjs';
+import { watchWallet, signIn, sealField, parseRecipientKey, bytesToHex } from './wallet-field-keys.mjs';
+
+const FIELD_SITE = 'flatbuffers';
 
 // Session-only key generation for the public encryption demonstrations.
 function generateKeyPair(curveType) {
@@ -57,7 +54,6 @@ import monsterSchema from './schemas/monster.fbs?raw';
 import basicSchema from './schemas/basic.fbs?raw';
 
 // Paths - use relative path for GitHub Pages compatibility
-const ENCRYPTION_WASM_PATH = './flatc-encryption.wasm';
 
 // =============================================================================
 // State
@@ -78,7 +74,8 @@ const state = {
   vcardPhoto: null,
   // Field display state
   currentFieldData: null,
-  showFieldDecrypted: false,
+  fieldWalletKey: null, // the signed-in wallet's encryption key (public)
+  fieldRecipientLabel: null,
   // Virtual table / Paginated table
   virtualTable: null,
   paginatedTable: null,
@@ -425,31 +422,24 @@ async function generateFlatBuffer(schemaType, data) {
 }
 
 /**
- * Encrypt field bytes using Bob's public key (ECIES)
- * Returns { encrypted, header } for later decryption
+ * The key fields are sealed to: a pasted recipient key, else the signed-in
+ * wallet's own encryption key. Null when signed out with no recipient.
  */
-function encryptFieldBytesWithPKI(bytes, fieldId = 0) {
-  if (!state.pki.bob || !state.pki.bob.publicKey) {
-    throw new Error('PKI keys not available');
-  }
+function fieldRecipient() {
+  const pasted = $('field-recipient-key')?.value.trim();
+  if (pasted) return { publicKey: parseRecipientKey(pasted), label: 'the recipient key' };
+  if (state.fieldWalletKey) return { publicKey: state.fieldWalletKey.publicKey, label: 'your wallet' };
+  return null;
+}
 
-  // Ensure publicKey is a Uint8Array
-  const publicKey = ensureUint8Array(state.pki.bob.publicKey);
-
-  const encryptCtx = EncryptionContext.forEncryption(publicKey, {
-    algorithm: state.pki.algorithm,
-    context: 'flatbuffers-field-encryption-v1',
-  });
-
-  // Create a buffer copy and encrypt in-place using the context's method
-  const encrypted = new Uint8Array(bytes);
-  // Use encryptScalar which properly derives per-field keys from the context
-  encryptCtx.encryptScalar(encrypted, 0, encrypted.length, fieldId);
-
-  return {
-    encrypted,
-    header: encryptCtx.getHeaderJSON(),
-  };
+function renderFieldWalletStatus() {
+  const status = $('field-wallet-status');
+  if (!status) return;
+  const key = state.fieldWalletKey;
+  status.textContent = key
+    ? `Fields are encrypted to your wallet's encryption key ${key.publicKeyHex.slice(0, 16)}… (${key.path}). Only your wallet can open them.`
+    : 'Sign in with your wallet to encrypt fields to your own key, or paste another user\'s wallet encryption key.';
+  $('field-sign-in')?.toggleAttribute('hidden', Boolean(key));
 }
 
 /**
@@ -464,29 +454,6 @@ function ensureUint8Array(value) {
     return new Uint8Array(Object.values(value));
   }
   return new Uint8Array(value);
-}
-
-/**
- * Decrypt field bytes using Bob's session secret
- */
-function decryptFieldBytesWithPKI(encrypted, headerJSON, fieldId = 0) {
-  if (!state.pki.bob || !state.pki.bob.privateKey) {
-    throw new Error('PKI keys not available');
-  }
-
-  const privateKey = ensureUint8Array(state.pki.bob.privateKey);
-
-  const header = encryptionHeaderFromJSON(headerJSON);
-  const decryptCtx = EncryptionContext.forDecryption(
-    privateKey,
-    header,
-    'flatbuffers-field-encryption-v1'
-  );
-
-  // Create a buffer copy and decrypt in-place using the context's method
-  const decrypted = new Uint8Array(encrypted);
-  decryptCtx.decryptScalar(decrypted, 0, decrypted.length, fieldId);
-  return decrypted;
 }
 
 // =============================================================================
@@ -548,14 +515,17 @@ async function generateSingleRecord() {
   const schemaType = $('schema-select').value;
   const config = schemaConfig[schemaType];
 
-  // Auto-generate PKI keys if not available
-  if (!state.pki.bob || !state.pki.bob.publicKey) {
-    await generatePKIKeyPairs();
-    // If still no keys after generation attempt, show error
-    if (!state.pki.bob || !state.pki.bob.publicKey) {
-      alert('Failed to generate PKI key pairs. Please try again.');
-      return;
-    }
+  let recipient;
+  try {
+    recipient = fieldRecipient();
+  } catch (err) {
+    $('field-wallet-status').textContent = err.message;
+    return;
+  }
+  if (!recipient) {
+    renderFieldWalletStatus();
+    $('field-wallet-status').classList.add('attention');
+    return;
   }
 
   try {
@@ -574,19 +544,18 @@ async function generateSingleRecord() {
     // Get the list of fields to encrypt
     const fieldsToEncrypt = getSelectedFieldsToEncrypt();
 
-    // Encrypt only selected fields using Bob's public key (ECIES)
-    const encryptedFields = parsed.fields.map(field => {
+    // Seal each selected field on its own: its own ephemeral key and a key
+    // for this site, schema and field (wallet-field-keys.mjs).
+    const encryptedFields = parsed.fields.map((field, fieldId) => {
       const shouldEncrypt = fieldsToEncrypt.includes(field.name);
       if (shouldEncrypt && field.bytes && field.bytes.length > 0) {
-        const { encrypted, header } = encryptFieldBytesWithPKI(field.bytes);
-        return {
-          ...field,
-          encryptedBytes: encrypted,
-          encryptionHeader: header,
-          isEncrypted: true,
-        };
+        const sealed = withEncryptionModule(state.flatcRunner.Module, () => sealField(
+          EncryptionContext, recipient.publicKey, field.bytes,
+          { site: FIELD_SITE, schema: schemaType, field: field.name, fieldId },
+        ));
+        return { ...field, fieldId, encryptedBytes: sealed.ciphertext, enc: sealed.enc, isEncrypted: true };
       }
-      return { ...field, isEncrypted: false };
+      return { ...field, fieldId, isEncrypted: false };
     });
 
     state.currentFieldData = {
@@ -598,11 +567,9 @@ async function generateSingleRecord() {
       fields: encryptedFields,
       originalData: data,
     };
-    state.showFieldDecrypted = false;
+    state.fieldRecipientLabel = recipient.label;
 
     renderFieldDisplay();
-    $('toggle-field-decrypt').disabled = false;
-    $('toggle-field-decrypt').textContent = 'Bob Decrypts';
 
   } catch (err) {
     console.error('Failed to generate record:', err);
@@ -641,14 +608,6 @@ function renderFieldDisplay() {
   $('field-table-container').style.display = 'block';
   const tbody = $('field-body');
   tbody.innerHTML = '';
-
-  // Toggle decrypt columns visibility
-  const table = $('field-table');
-  if (state.showFieldDecrypted) {
-    table.classList.add('show-decrypted');
-  } else {
-    table.classList.remove('show-decrypted');
-  }
 
   for (const field of data.fields) {
     const tr = document.createElement('tr');
@@ -703,34 +662,17 @@ function renderFieldDisplay() {
     }
     tr.appendChild(encTd);
 
-    // Decrypted hex (decrypt-col) - decrypt using Bob's session secret
-    const decHexTd = document.createElement('td');
-    decHexTd.className = 'hex decrypt-col';
-    if (field.encryptedBytes && field.encryptionHeader && state.showFieldDecrypted) {
-      try {
-        const decrypted = decryptFieldBytesWithPKI(field.encryptedBytes, field.encryptionHeader);
-        decHexTd.textContent = toHex(decrypted);
-      } catch (e) {
-        decHexTd.textContent = '(decrypt failed)';
-        decHexTd.title = e.message;
-      }
-    } else {
-      decHexTd.textContent = '--';
+    // The field's $ENC header: what the recipient's wallet opens it with
+    const encHeaderTd = document.createElement('td');
+    encHeaderTd.className = 'hex';
+    encHeaderTd.textContent = field.enc ? bytesToHex(field.enc) : '--';
+    tr.appendChild(encHeaderTd);
+    if (field.isEncrypted) {
+      tr.dataset.fieldId = String(field.fieldId);
+      tr.dataset.plaintextHex = bytesToHex(field.bytes);
+      tr.dataset.ciphertextHex = bytesToHex(field.encryptedBytes);
+      tr.dataset.encHex = bytesToHex(field.enc);
     }
-    tr.appendChild(decHexTd);
-
-    // Decrypted Value (decrypt-col) - shows value after decryption
-    const decValueTd = document.createElement('td');
-    decValueTd.className = 'decrypt-col';
-    if (state.showFieldDecrypted && field.present && field.isEncrypted) {
-      // Show the original value (which we preserved during encryption)
-      decValueTd.textContent = formatFieldValue(field.value, field.type);
-    } else if (state.showFieldDecrypted && field.present) {
-      decValueTd.textContent = formatFieldValue(field.value, field.type);
-    } else {
-      decValueTd.textContent = '--';
-    }
-    tr.appendChild(decValueTd);
 
     tbody.appendChild(tr);
   }
@@ -767,18 +709,10 @@ function formatFieldValue(value, type) {
   return String(value);
 }
 
-function toggleFieldDecrypt() {
-  state.showFieldDecrypted = !state.showFieldDecrypted;
-  $('toggle-field-decrypt').textContent = state.showFieldDecrypted ? 'Show Encrypted' : 'Bob Decrypts';
-  renderFieldDisplay();
-}
-
 function clearFieldDisplay() {
   state.currentFieldData = null;
-  state.showFieldDecrypted = false;
   $('fb-header').style.display = 'none';
   $('field-table-container').style.display = 'none';
-  $('toggle-field-decrypt').disabled = true;
 }
 
 // =============================================================================
@@ -3165,7 +3099,11 @@ function setupMainAppHandlers() {
 
   // Field Encryption Tab
   $('generate-single')?.addEventListener('click', generateSingleRecord);
-  $('toggle-field-decrypt')?.addEventListener('click', toggleFieldDecrypt);
+  $('field-sign-in')?.addEventListener('click', () => { signIn().catch(() => renderFieldWalletStatus()); });
+  watchWallet((key) => {
+    state.fieldWalletKey = key;
+    renderFieldWalletStatus();
+  });
 
   // Field selection checkboxes
   $('schema-select')?.addEventListener('change', populateFieldCheckboxes);
@@ -3465,10 +3403,6 @@ async function init() {
 
   try {
     const status = $('status');
-
-    // Load encryption WASM
-    if (status) status.textContent = 'Loading encryption module...';
-    await loadEncryptionWasm(ENCRYPTION_WASM_PATH);
 
     // Initialize FlatcRunner
     if (status) status.textContent = 'Loading FlatBuffers compiler...';

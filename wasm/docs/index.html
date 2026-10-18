@@ -656,7 +656,7 @@
       <!-- Interactive Demo -->
       <div class="glass-card">
         <h3 class="card-subtitle">Interactive Demo</h3>
-        <p class="card-desc">Select which fields to encrypt, generate a record, and visualize the encryption:</p>
+        <p class="card-desc">Select fields, generate a record, and each selected field is encrypted to your wallet: its own ephemeral key, and a key for this site, schema and field derived with HKDF. The header of each field is an SDS $ENC record.</p>
 
       <div class="glass-card">
         <div class="card-controls">
@@ -666,7 +666,13 @@
             <option value="galaxy">Galaxy Schema</option>
           </select>
           <button id="generate-single" class="glass-btn primary">Generate Record</button>
-          <button id="toggle-field-decrypt" class="glass-btn" disabled>Decrypt</button>
+        </div>
+
+        <!-- Recipient: the signed-in wallet, or another user's wallet key -->
+        <div class="field-recipient" id="field-recipient">
+          <p class="field-selection-desc" id="field-wallet-status" role="status">Sign in with your wallet to encrypt fields to your own key, or paste another user's wallet encryption key.</p>
+          <button id="field-sign-in" class="glass-btn small" type="button">Sign in</button>
+          <input id="field-recipient-key" class="glass-input" type="text" spellcheck="false" autocomplete="off" placeholder="Another user's wallet encryption key (64 hex), optional" aria-label="Recipient wallet encryption key">
         </div>
 
         <!-- Field Selection -->
@@ -724,8 +730,7 @@
                 <th>Value</th>
                 <th>Offset</th>
                 <th>Hex</th>
-                <th class="decrypt-col">Decrypted Hex</th>
-                <th class="decrypt-col">Decrypted Value</th>
+                <th>$ENC Header</th>
               </tr>
             </thead>
             <tbody id="field-body"></tbody>

@@ -221,7 +221,6 @@
       </div>
     </section>
 
-    <!-- PKI Section (Alice/Bob Public Key Encryption) -->
     <section id="fork-tab" class="content-section">
       <div class="section-header">
         <h2 class="section-title">A Fork of Google FlatBuffers</h2>
@@ -302,57 +301,10 @@
     <section id="security-tab" class="content-section">
       <div class="section-header">
         <h2 class="section-title">Public Key Infrastructure</h2>
-        <p class="section-desc">Alice encrypts data with Bob's ephemeral public key. The matching secret stays session-only and is never displayed or persisted.</p>
+        <p class="section-desc">Encrypt a message to yourself or to another user. The recipient is a wallet encryption key; this page holds only public keys and ciphertext.</p>
       </div>
 
       <div class="glass-card">
-        <div class="card-controls" id="pki-controls">
-          <div class="algorithm-selector">
-            <label for="pki-algorithm" class="algorithm-label">Curve:</label>
-            <select id="pki-algorithm" class="glass-select">
-              <option value="x25519">X25519 (Curve25519)</option>
-              <option value="secp256k1">secp256k1 (Bitcoin/Ethereum)</option>
-              <option value="p256">P-256 / secp256r1 (NIST)</option>
-            </select>
-          </div>
-          <div class="algorithm-display">
-            <span class="algorithm-label">Active:</span>
-            <span id="pki-algorithm-display" class="algorithm-value">X25519</span>
-          </div>
-        </div>
-
-        <!-- Ephemeral public-key display. Secret material remains in memory. -->
-        <div class="pki-parties" id="pki-parties">
-          <div class="pki-party alice">
-            <div class="party-header">
-              <span class="party-icon">A</span>
-              <span class="party-name">Alice (Sender)</span>
-            </div>
-            <div class="key-item">
-              <label>Ephemeral Public Key</label>
-              <code id="alice-public-key">--</code>
-            </div>
-          </div>
-
-          <div class="pki-arrow">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M5 12h14M12 5l7 7-7 7"/>
-            </svg>
-            <span>Encrypted with Bob's Public Key</span>
-          </div>
-
-          <div class="pki-party bob">
-            <div class="party-header">
-              <span class="party-icon">B</span>
-              <span class="party-name">Bob (Recipient)</span>
-            </div>
-            <div class="key-item">
-              <label>Ephemeral Public Key</label>
-              <code id="bob-public-key">--</code>
-            </div>
-          </div>
-        </div>
-
         <!-- How It Works Explanation -->
         <div class="encryption-explainer" id="encryption-explainer">
           <h3 class="card-subtitle">How ECIES Encryption Works</h3>
@@ -361,21 +313,21 @@
               <div class="explainer-icon">1</div>
               <div class="explainer-content">
                 <h4>Ephemeral Key Generation</h4>
-                <p>Alice generates a one-time ephemeral key pair for each encryption. This provides <strong>forward secrecy</strong> - if Alice's main key is compromised, past messages remain secure.</p>
+                <p>The page generates a one-time ephemeral key pair for each message and discards its secret after sealing. Nothing the page keeps can open the message later.</p>
               </div>
             </div>
             <div class="explainer-card">
               <div class="explainer-icon">2</div>
               <div class="explainer-content">
                 <h4>ECDH Key Exchange</h4>
-                <p>Alice uses her ephemeral private key and Bob's public key to compute a <strong>shared secret</strong> via Elliptic Curve Diffie-Hellman. Only Alice and Bob can derive this shared secret.</p>
+                <p>The ephemeral private key and the recipient's wallet encryption key give a <strong>shared secret</strong> via X25519 Diffie-Hellman. Only the recipient's wallet can compute it again.</p>
               </div>
             </div>
             <div class="explainer-card">
               <div class="explainer-icon">3</div>
               <div class="explainer-content">
                 <h4>HKDF Key Derivation</h4>
-                <p>The shared secret is passed through <strong>HKDF-SHA256</strong> to derive a symmetric AES-256 key and nonce. This stretches the shared secret into cryptographically strong key material.</p>
+                <p><strong>HKDF-SHA256</strong> turns the shared secret into an AES-256 key and IV. The HKDF info names the site, schema, field and key version (<code>sdn-field-encryption/v1|site|schema|field|k1</code>), so each field gets its own key.</p>
               </div>
             </div>
             <div class="explainer-card">
@@ -389,7 +341,7 @@
               <div class="explainer-icon">5</div>
               <div class="explainer-content">
                 <h4>Header Transmission</h4>
-                <p>The ephemeral public key and nonce are sent as a <strong>header</strong> alongside the ciphertext. Bob uses this header plus his private key to derive the same symmetric key and decrypt.</p>
+                <p>The ephemeral public key, nonce, recipient key ID and context travel in an SDS <strong>$ENC header</strong> beside the ciphertext. The recipient's wallet uses it with its own key to derive the same AES key.</p>
               </div>
             </div>
           </div>
@@ -448,72 +400,23 @@
           </div>
         </div>
 
-        <!-- Encryption Demo -->
-        <div class="pki-demo" id="pki-demo">
-          <h3 class="card-subtitle">Encryption Flow</h3>
-
-          <div class="pki-step">
-            <div class="step-number">1</div>
-            <div class="step-content">
-              <label>Alice's Message (Plaintext)</label>
-              <textarea id="pki-plaintext" class="glass-input glass-textarea" rows="2" placeholder="Enter a secret message for Bob..."></textarea>
-            </div>
+        <!-- Send to a recipient -->
+        <div class="send-demo" id="send-demo">
+          <h3 class="card-subtitle">Encrypt to a Recipient</h3>
+          <p class="field-selection-desc" id="send-status" role="status">Sign in with your wallet to encrypt to your own key, or paste the recipient's wallet encryption key.</p>
+          <button id="send-sign-in" class="glass-btn small" type="button">Sign in</button>
+          <label for="send-recipient-key">Recipient wallet encryption key</label>
+          <input id="send-recipient-key" class="glass-input" type="text" spellcheck="false" autocomplete="off" placeholder="64 hex characters; leave empty to encrypt to your own wallet">
+          <label for="send-plaintext">Message</label>
+          <textarea id="send-plaintext" class="glass-input glass-textarea" rows="2" placeholder="Enter a message for the recipient"></textarea>
+          <button id="send-seal" class="glass-btn primary" type="button">Encrypt</button>
+          <div id="send-output" hidden>
+            <label>Ciphertext</label>
+            <code id="send-ciphertext" class="hex-display">--</code>
+            <label>$ENC header (the recipient's wallet opens the message with it)</label>
+            <code id="send-enc" class="hex-display">--</code>
           </div>
-
-          <div class="pki-step">
-            <div class="step-number">2</div>
-            <div class="step-content">
-              <button id="pki-encrypt" class="glass-btn primary">Encrypt for Bob</button>
-              <p class="step-desc">Alice encrypts using Bob's public key. An ephemeral key pair is generated for forward secrecy.</p>
-            </div>
-          </div>
-
-          <div class="pki-step" id="pki-ciphertext-step" style="display: none;">
-            <div class="step-number">3</div>
-            <div class="step-content">
-              <label>Ciphertext (Sent to Bob)</label>
-              <code id="pki-ciphertext" class="hex-display">--</code>
-              <label style="margin-top: 0.5rem;">Encryption Header (ECIES Metadata)</label>
-              <pre id="pki-header" class="header-json">--</pre>
-            </div>
-          </div>
-
-          <div class="pki-step" id="pki-decrypt-step" style="display: none;">
-            <div class="step-number">4</div>
-            <div class="step-content">
-              <button id="pki-decrypt" class="glass-btn">Bob Decrypts</button>
-              <p class="step-desc">Bob uses his private key to decrypt the message.</p>
-            </div>
-          </div>
-
-          <div class="pki-step" id="pki-result-step" style="display: none;">
-            <div class="step-number">5</div>
-            <div class="step-content">
-              <label>Decrypted Message (Bob sees)</label>
-              <div id="pki-decrypted" class="decrypted-result">--</div>
-              <div class="verification-badge" id="pki-verification">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                  <polyline points="22 4 12 14.01 9 11.01"/>
-                </svg>
-                <span>Decryption successful - Messages match!</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Wrong Key Demo -->
-        <div class="pki-security" id="pki-security">
-          <h3 class="card-subtitle">Security Demonstration</h3>
-          <button id="pki-wrong-key" class="glass-btn">Try Decrypting with Alice's Key</button>
-          <div id="pki-wrong-result" class="wrong-key-result" style="display: none;">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="15" y1="9" x2="9" y2="15"/>
-              <line x1="9" y1="9" x2="15" y2="15"/>
-            </svg>
-            <span>Decryption failed - only the matching recipient key can decrypt.</span>
-          </div>
+          <p class="field-selection-desc">Only the recipient's wallet can open the message. Opening it on this page needs the next wallet release, in which the wallet decrypts after you approve.</p>
         </div>
       </div>
     </section>
@@ -736,6 +639,7 @@
             <tbody id="field-body"></tbody>
           </table>
         </div>
+        <p class="field-selection-desc">Each encrypted field opens only in the recipient's wallet, from its $ENC header. Opening fields on this page needs the next wallet release, in which the wallet decrypts after you approve.</p>
       </div>
     </section>
 
@@ -1106,87 +1010,6 @@
                     <label>Record Count</label>
                     <input type="number" id="bulk-record-count" class="glass-input" value="100" min="1" max="10000" step="10">
                   </div>
-                  <div class="bulk-encryption-section">
-                    <div class="section-header">
-                      <h5>Encryption Settings</h5>
-                      <label class="checkbox-label">
-                        <input type="checkbox" id="bulk-encrypt-enabled" checked>
-                        <span>Enable</span>
-                      </label>
-                    </div>
-
-                    <!-- Recipient Key Selector -->
-                    <div class="bulk-input-group">
-                      <label>Encrypt For</label>
-                      <select id="bulk-key-selector" class="glass-select">
-                        <option value="bob">Bob (session key)</option>
-                        <option value="alice">Alice (session key)</option>
-                        <option value="custom">Custom Public Key</option>
-                      </select>
-                    </div>
-
-                    <!-- Custom Public Key Input (shown when "custom" selected) -->
-                    <div class="bulk-input-group" id="bulk-custom-key-group" style="display: none;">
-                      <label>Recipient Public Key (hex)</label>
-                      <textarea id="bulk-public-key" class="glass-input key-input" rows="2" placeholder="Paste hex-encoded X25519 public key..."></textarea>
-                      <span class="key-status" id="bulk-pubkey-status"></span>
-                    </div>
-
-                    <!-- Key Verification / Adversarial Security Info -->
-                    <div class="bulk-key-verification" id="bulk-key-verification">
-                      <div class="verification-header">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                        </svg>
-                        <span>Recipient Key Verification</span>
-                      </div>
-                      <div class="verification-addresses">
-                        <div class="verification-row">
-                          <span class="chain-label">BTC</span>
-                          <code id="bulk-verify-btc-addr" class="addr-code">--</code>
-                          <span class="balance-badge" id="bulk-verify-btc-bal">--</span>
-                        </div>
-                        <div class="verification-row">
-                          <span class="chain-label">ETH</span>
-                          <code id="bulk-verify-eth-addr" class="addr-code">--</code>
-                          <span class="balance-badge" id="bulk-verify-eth-bal">--</span>
-                        </div>
-                        <div class="verification-row">
-                          <span class="chain-label">SOL</span>
-                          <code id="bulk-verify-sol-addr" class="addr-code">--</code>
-                          <span class="balance-badge" id="bulk-verify-sol-bal">--</span>
-                        </div>
-                        <div class="verification-row">
-                          <span class="chain-label">SUI</span>
-                          <code id="bulk-verify-sui-addr" class="addr-code">--</code>
-                          <span class="balance-badge" id="bulk-verify-sui-bal">--</span>
-                        </div>
-                        <div class="verification-row">
-                          <span class="chain-label">Monad</span>
-                          <code id="bulk-verify-monad-addr" class="addr-code">--</code>
-                          <span class="balance-badge" id="bulk-verify-monad-bal">--</span>
-                        </div>
-                        <div class="verification-row">
-                          <span class="chain-label">ADA</span>
-                          <code id="bulk-verify-ada-addr" class="addr-code">--</code>
-                          <span class="balance-badge" id="bulk-verify-ada-bal">--</span>
-                        </div>
-                      </div>
-                      <p class="verification-note" id="bulk-verify-note">Select a recipient to verify their key's on-chain presence.</p>
-                    </div>
-
-                    <!-- Session-only decryption key (for testing) -->
-                    <details class="decryption-details">
-                      <summary>Decryption Settings (for testing)</summary>
-                      <div class="bulk-input-group">
-                        <label>Session Decryption Key</label>
-                        <select id="bulk-decrypt-selector" class="glass-select">
-                          <option value="bob">Bob's Session Key</option>
-                          <option value="alice">Alice's Session Key</option>
-                        </select>
-                      </div>
-                    </details>
-                  </div>
                 </div>
               </div>
               <!-- Single Mode Footer -->
@@ -1208,10 +1031,6 @@
                   <span id="bulk-hex-index">0 / 0</span>
                   <button id="bulk-hex-next" class="glass-btn small icon-btn">&gt;</button>
                 </div>
-                <label class="checkbox-label" id="single-encrypt-label">
-                  <input type="checkbox" id="studio-encrypt-buffer">
-                  <span>Encrypt</span>
-                </label>
               </div>
               <div class="pane-body">
                 <div id="studio-hex-view" class="hex-view">
@@ -1247,7 +1066,6 @@
                 </div>
               </div>
               <div class="pane-footer">
-                <button id="bulk-toggle-decrypt" class="glass-btn small" disabled>Decrypt All</button>
                 <button id="bulk-download-all" class="glass-btn small" disabled>Download All</button>
               </div>
             </div>

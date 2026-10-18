@@ -88,12 +88,30 @@ for (const retiredSurface of [
 }
 
 assert.doesNotMatch(app, /\bprivate key\b/iu, "executable docs must not retain a private-key prompt or status message");
-assert.match(app, /async function generatePKIKeyPairs\b/u, "session-only encryption keys must remain available");
-assert.match(app, /curveType === 'p256'[\s\S]{0,300}p256\.utils\.randomPrivateKey\(\)/u, "P-256 session keys must use the encryption engine's raw scalar format");
-assert.doesNotMatch(app, /p(?:256|384)GenerateKeyPairAsync/u, "session encryption must not pass PKCS#8 keys to the raw-scalar engine");
-assert.match(html, /id="pki-encrypt"/u, "session-only encryption demonstration is missing");
-assert.match(html, /id="pki-decrypt"/u, "session-only decryption demonstration is missing");
-assert.doesNotMatch(html, /<option\s+value="p384"/u, "the public demo must not offer an unsupported encryption curve");
+// Encryption boundary: the page holds only public keys and ciphertext.
+// Recipients are the signed-in wallet's contact-encryption key or a pasted
+// wallet key; the only ephemeral secret lives inside flatc-wasm's
+// EncryptionContext for one seal. Opening ciphertext is the wallet's job.
+const walletKeys = readFileSync(resolve(root, "wallet-field-keys.mjs"), "utf8");
+const encryptionCode = `${app}\n${walletKeys}`;
+assert.equal(existsSync(resolve(root, "encryption-stub.mjs")), false, "the session-key encryption stub must stay deleted");
+assert.match(app, /from '\.\/wallet-field-keys\.mjs'/u, "encryption must be keyed from the signed-in wallet");
+assert.match(app, /sealField\(/u, "encryption must use the wallet-keyed sealField path");
+assert.match(walletKeys, /purpose === 'contact-encryption'/u, "the recipient must be the wallet's contact-encryption key");
+assert.doesNotMatch(app, /@noble\/|@scure\//u, "the page must not carry its own key-generation library");
+for (const pattern of [
+  /randomPrivateKey|generateKeyPair|GenerateKeyPair|getRandomValues/u,
+  /forDecryption|decryptScalar|decryptBuffer|decryptBytes|decryptFieldAt|SharedSecret\(/u,
+  /privateKey|secretKey|seedHex/u,
+]) {
+  assert.doesNotMatch(encryptionCode, pattern, `public docs hold key or decrypt material: ${pattern}`);
+}
+assert.doesNotMatch(html, /id="[^"]*decrypt[^"]*"/iu, "no in-page decrypt surface until the wallet opens fields");
+assert.doesNotMatch(html, /\b(?:Alice|Bob)\b/u, "demos encrypt to real wallet keys, not fictional session parties");
+for (const id of ["field-recipient-key", "send-recipient-key", "send-seal"]) {
+  assert.match(html, new RegExp(`id="${id}"`, "u"), `wallet-keyed encryption control is missing: ${id}`);
+}
+assert.match(html, /next wallet release/u, "the page must say that decrypting needs the next wallet release");
 
 const vcfStart = app.indexOf("function parseAndDisplayVCF");
 const vcfEnd = app.indexOf("// Help Content", vcfStart);

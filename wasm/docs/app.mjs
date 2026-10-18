@@ -1,19 +1,11 @@
 /**
  * FlatBuffers WASM documentation and explorer
  *
- * Public examples use session-only cryptographic material. The page has no
+ * Encryption on this page is keyed from the signed-in wallet: the page holds
+ * only public keys and ciphertext (wallet-field-keys.mjs). It has no
  * credential, recovery, derivation, export, or secret-persistence surface.
  */
 
-import { x25519, ed25519 } from '@noble/curves/ed25519';
-import { secp256k1 } from '@noble/curves/secp256k1';
-import { p256 } from '@noble/curves/p256';
-import { blake2b } from '@noble/hashes/blake2b';
-import { keccak_256 } from '@noble/hashes/sha3';
-import { ripemd160 } from '@noble/hashes/ripemd160';
-import { sha256 as sha256Noble } from '@noble/hashes/sha256';
-import { base58check } from '@scure/base';
-import { base58 } from '@scure/base';
 import QRCode from 'qrcode';
 import { createV3 } from 'vcard-cryptoperson';
 
@@ -22,32 +14,10 @@ import { watchWallet, signIn, sealField, parseRecipientKey, bytesToHex } from '.
 
 const FIELD_SITE = 'flatbuffers';
 
-// Session-only key generation for the public encryption demonstrations.
-function generateKeyPair(curveType) {
-  if (curveType === 'secp256k1') {
-    const privateKey = secp256k1.utils.randomPrivateKey();
-    const publicKey = secp256k1.getPublicKey(privateKey, true);
-    return { privateKey, publicKey };
-  }
-  if (curveType === 'x25519') {
-    const privateKey = x25519.utils.randomPrivateKey();
-    const publicKey = x25519.getPublicKey(privateKey);
-    return { privateKey, publicKey };
-  }
-  if (curveType === 'p256') {
-    const privateKey = p256.utils.randomPrivateKey();
-    const publicKey = p256.getPublicKey(privateKey, true);
-    return { privateKey, publicKey };
-  }
-  throw new Error(`Unsupported curve type: ${curveType}`);
-}
-
 import { FlatcRunner } from '../src/runner.mjs';
 import { generateAlignedCode, parseSchema } from '../src/aligned-codegen.mjs';
-import { FlatBufferParser, parseWithSchema, Schemas, toHex, toHexCompact } from './flatbuffer-parser.mjs';
-import { PaginatedTable } from './virtual-scroller.mjs';
+import { FlatBufferParser, parseWithSchema, Schemas, toHex } from './flatbuffer-parser.mjs';
 import { StreamingDemo, MessageTypes, formatBytes, formatThroughput } from './streaming-demo.mjs';
-import { Builder } from 'flatbuffers';
 
 // Import schemas as raw text
 import monsterSchema from './schemas/monster.fbs?raw';
@@ -63,13 +33,6 @@ const state = {
   initialized: false,
   // FlatBuffer state
   flatcRunner: null,
-  buffers: [],
-  encryptedBuffers: [],
-  encryptionHeaders: [], // ECIES headers for each encrypted buffer
-  showEncrypted: true,
-  encryptionKey: null,
-  encryptionIV: null,
-  encryptionEnabled: true, // Toggle for encrypted vs plain FlatBuffers
   // vCard photo (base64 data URI)
   vcardPhoto: null,
   // Field display state
@@ -79,7 +42,6 @@ const state = {
   // Virtual table / Paginated table
   virtualTable: null,
   paginatedTable: null,
-  selectedRecord: null, // Currently selected record for detail view
   // Streaming demo
   streamingDemo: null,
   // Hex explorer state
@@ -87,16 +49,6 @@ const state = {
     selectedType: 'MONS',
     currentIndex: 0,
     messages: {}, // { MONS: [...], WEAP: [...], GALX: [...] }
-  },
-  // PKI Demo state
-  pki: {
-    alice: null,  // { privateKey, publicKey }
-    bob: null,    // { privateKey, publicKey }
-    algorithm: 'x25519',
-    plaintext: null,
-    ciphertext: null,
-    header: null,
-    decrypted: null,
   },
 };
 
@@ -169,234 +121,11 @@ file_identifier "GALX";
 };
 
 // =============================================================================
-// Public address formatting helpers used by the schema data tools
-// =============================================================================
-
-// Create Base58Check encoder for Bitcoin (uses sha256 for checksum)
-const base58checkBtc = base58check(sha256Noble);
-
-/**
- * Generate a Bitcoin P2PKH address from a compressed secp256k1 public key
- * Uses @scure/base for proper Base58Check encoding
- * @param {Uint8Array} publicKey - Compressed secp256k1 public key (33 bytes)
- * @returns {string} Bitcoin address starting with '1'
- */
-function generateBtcAddress(publicKey) {
-  // Hash160 = RIPEMD160(SHA256(publicKey))
-  const hash160 = ripemd160(sha256Noble(publicKey));
-  // Base58Check encode with version byte 0x00 (mainnet P2PKH)
-  return base58checkBtc.encode(new Uint8Array([0x00, ...hash160]));
-}
-
-/**
- * Generate an Ethereum address from a secp256k1 public key
- * Uses @noble/hashes keccak_256 for proper Ethereum address derivation
- * @param {Uint8Array} publicKey - Compressed secp256k1 public key (33 bytes)
- * @returns {string} Ethereum address with 0x prefix
- */
-function generateEthAddress(publicKey) {
-  // Decompress the public key to get uncompressed form
-  const point = secp256k1.ProjectivePoint.fromHex(publicKey);
-  const uncompressed = point.toRawBytes(false); // 65 bytes: 04 || x || y
-  // Keccak256 of the public key without the 04 prefix, take last 20 bytes
-  const hash = keccak_256(uncompressed.slice(1));
-  return '0x' + toHexCompact(hash.slice(-20));
-}
-
-/**
- * Generate a Solana address from an Ed25519 public key
- * Uses @scure/base for proper Base58 encoding
- * @param {Uint8Array} publicKey - Ed25519 public key (32 bytes)
- * @returns {string} Solana address
- */
-function generateSolAddress(publicKey) {
-  return base58.encode(publicKey);
-}
-
-function truncateAddress(address) {
-  if (address.length <= 16) return address;
-  return address.slice(0, 8) + '...' + address.slice(-6);
-}
-
-// =============================================================================
 // Utilities
 // =============================================================================
 
 function $(id) {
   return document.getElementById(id);
-}
-
-function formatSize(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-
-
-
-
-
-
-// =============================================================================
-// FlatBuffer Builder Functions (Direct API - bypasses CLI for performance)
-// =============================================================================
-
-/**
- * Build a Monster FlatBuffer using the Builder API directly.
- * This is ~100x faster than the CLI-based approach.
- */
-function buildMonster(data) {
-  const builder = new Builder(512);
-
-  // Create strings/vectors BEFORE starting table (FlatBuffers requirement)
-  const nameOffset = builder.createString(data.name);
-
-  let inventoryOffset = 0;
-  if (data.inventory?.length > 0) {
-    builder.startVector(1, data.inventory.length, 1);
-    for (let i = data.inventory.length - 1; i >= 0; i--) {
-      builder.addInt8(data.inventory[i]);
-    }
-    inventoryOffset = builder.endVector();
-  }
-
-  // Create weapon tables and collect their offsets
-  let weaponsOffset = 0;
-  if (data.weapons?.length > 0) {
-    const weaponOffsets = [];
-    for (const weapon of data.weapons) {
-      const weaponNameOffset = builder.createString(weapon.name);
-      builder.startObject(2);
-      builder.addFieldOffset(0, weaponNameOffset, 0);
-      builder.addFieldInt16(1, weapon.damage, 0);
-      weaponOffsets.push(builder.endObject());
-    }
-    // Create vector of weapon offsets (in reverse order)
-    builder.startVector(4, weaponOffsets.length, 4);
-    for (let i = weaponOffsets.length - 1; i >= 0; i--) {
-      builder.addOffset(weaponOffsets[i]);
-    }
-    weaponsOffset = builder.endVector();
-  }
-
-  // Create path vector (Vec3 structs)
-  let pathOffset = 0;
-  if (data.path?.length > 0) {
-    builder.startVector(12, data.path.length, 4);
-    for (let i = data.path.length - 1; i >= 0; i--) {
-      builder.writeFloat32(data.path[i].z);
-      builder.writeFloat32(data.path[i].y);
-      builder.writeFloat32(data.path[i].x);
-    }
-    pathOffset = builder.endVector();
-  }
-
-  // Monster table: 10 fields (pos, mana, hp, name, friendly, inventory, color, weapons, equipped, path)
-  builder.startObject(10);
-
-  // Field 0: pos (Vec3 struct - 12 bytes inline: x, y, z floats)
-  if (data.pos) {
-    builder.prep(4, 12);
-    builder.writeFloat32(data.pos.z);
-    builder.writeFloat32(data.pos.y);
-    builder.writeFloat32(data.pos.x);
-    builder.addFieldStruct(0, builder.offset(), 0);
-  }
-
-  // Field 1: mana (short, default 150)
-  builder.addFieldInt16(1, data.mana, 150);
-
-  // Field 2: hp (short, default 100)
-  builder.addFieldInt16(2, data.hp, 100);
-
-  // Field 3: name (string offset)
-  builder.addFieldOffset(3, nameOffset, 0);
-
-  // Field 4: friendly (bool)
-  if (data.friendly !== undefined) {
-    builder.addFieldInt8(4, data.friendly ? 1 : 0, 0);
-  }
-
-  // Field 5: inventory (vector offset)
-  if (inventoryOffset) builder.addFieldOffset(5, inventoryOffset, 0);
-
-  // Field 6: color (byte enum, default 2=Blue)
-  builder.addFieldInt8(6, data.color, 2);
-
-  // Field 7: weapons (vector of table offsets)
-  if (weaponsOffset) builder.addFieldOffset(7, weaponsOffset, 0);
-
-  // Field 8: equipped (union) - skip for now, requires union type handling
-
-  // Field 9: path (vector of Vec3 structs)
-  if (pathOffset) builder.addFieldOffset(9, pathOffset, 0);
-
-  const monster = builder.endObject();
-  builder.finishSizePrefixed(monster, 'MONS');
-  return builder.asUint8Array();
-}
-
-/**
- * Build a Weapon FlatBuffer using the Builder API directly.
- */
-function buildWeapon(data) {
-  const builder = new Builder(64);
-  const nameOffset = builder.createString(data.name);
-
-  // Weapon table: 2 fields (name, damage)
-  builder.startObject(2);
-  builder.addFieldOffset(0, nameOffset, 0);
-  builder.addFieldInt16(1, data.damage, 0);
-
-  const weapon = builder.endObject();
-  builder.finishSizePrefixed(weapon, 'WEAP');
-  return builder.asUint8Array();
-}
-
-/**
- * Build a Galaxy FlatBuffer using the Builder API directly.
- */
-function buildGalaxy(data) {
-  const builder = new Builder(32);
-
-  // Galaxy table: 1 field (num_stars as int64)
-  builder.startObject(1);
-  builder.addFieldInt64(0, data.num_stars, BigInt(0));
-
-  const galaxy = builder.endObject();
-  builder.finishSizePrefixed(galaxy, 'GALX');
-  return builder.asUint8Array();
-}
-
-/**
- * Build a FlatBuffer using the direct Builder API (fast path).
- * Use this instead of generateFlatBuffer for bulk operations.
- *
- * Returns a size-prefixed buffer with file identifier by default:
- * [size:4][file_id:4][root_offset:4][...data...]
- *
- * @param {string} schemaType - The schema type ('monster', 'weapon', 'galaxy')
- * @param {Object} data - The data to serialize
- * @param {Object} [options] - Build options
- * @param {boolean} [options.sizePrefix=true] - Include 4-byte size prefix
- * @returns {Uint8Array} The serialized FlatBuffer
- */
-function buildFlatBuffer(schemaType, data, options = {}) {
-  let buffer;
-  switch (schemaType) {
-    case 'monster': buffer = buildMonster(data); break;
-    case 'weapon': buffer = buildWeapon(data); break;
-    case 'galaxy': buffer = buildGalaxy(data); break;
-    default: throw new Error(`Unknown schema for builder: ${schemaType}`);
-  }
-
-  // If sizePrefix is explicitly false, strip the 4-byte size prefix
-  if (options.sizePrefix === false && buffer.length > 4) {
-    return buffer.slice(4);
-  }
-
-  return buffer;
 }
 
 // =============================================================================
@@ -422,38 +151,70 @@ async function generateFlatBuffer(schemaType, data) {
 }
 
 /**
- * The key fields are sealed to: a pasted recipient key, else the signed-in
- * wallet's own encryption key. Null when signed out with no recipient.
+ * Who a demo encrypts to: the key pasted into `inputId`, else the signed-in
+ * wallet's own encryption key. Null when signed out with nothing pasted.
  */
-function fieldRecipient() {
-  const pasted = $('field-recipient-key')?.value.trim();
+function recipientFrom(inputId) {
+  const pasted = $(inputId)?.value.trim();
   if (pasted) return { publicKey: parseRecipientKey(pasted), label: 'the recipient key' };
   if (state.fieldWalletKey) return { publicKey: state.fieldWalletKey.publicKey, label: 'your wallet' };
   return null;
 }
 
-function renderFieldWalletStatus() {
-  const status = $('field-wallet-status');
-  if (!status) return;
-  const key = state.fieldWalletKey;
-  status.textContent = key
-    ? `Fields are encrypted to your wallet's encryption key ${key.publicKeyHex.slice(0, 16)}… (${key.path}). Only your wallet can open them.`
-    : 'Sign in with your wallet to encrypt fields to your own key, or paste another user\'s wallet encryption key.';
-  $('field-sign-in')?.toggleAttribute('hidden', Boolean(key));
+function fieldRecipient() {
+  return recipientFrom('field-recipient-key');
 }
 
-/**
- * Helper to ensure a value is a Uint8Array
- * Handles array-like values supplied by the in-memory demos.
- */
-function ensureUint8Array(value) {
-  if (value instanceof Uint8Array) {
-    return value;
+function renderFieldWalletStatus() {
+  const key = state.fieldWalletKey;
+  const field = $('field-wallet-status');
+  if (field) {
+    field.textContent = key
+      ? `Fields are encrypted to your wallet's encryption key ${key.publicKeyHex.slice(0, 16)}… (${key.path}). Only your wallet can open them.`
+      : 'Sign in with your wallet to encrypt fields to your own key, or paste another user\'s wallet encryption key.';
   }
-  if (typeof value === 'object' && value !== null) {
-    return new Uint8Array(Object.values(value));
+  const send = $('send-status');
+  if (send) {
+    send.textContent = key
+      ? `Your wallet encryption key is ${key.publicKeyHex}. Share it so others can encrypt to you; leave the recipient empty to encrypt to yourself.`
+      : 'Sign in with your wallet to encrypt to your own key, or paste the recipient\'s wallet encryption key.';
   }
-  return new Uint8Array(value);
+  $('field-sign-in')?.toggleAttribute('hidden', Boolean(key));
+  $('send-sign-in')?.toggleAttribute('hidden', Boolean(key));
+}
+
+/** Encrypt the message to the recipient: one sealed field with its $ENC header. */
+function sealMessage() {
+  const status = $('send-status');
+  let recipient;
+  try {
+    recipient = recipientFrom('send-recipient-key');
+  } catch (err) {
+    status.textContent = err.message;
+    return;
+  }
+  if (!recipient) {
+    renderFieldWalletStatus();
+    status.classList.add('attention');
+    return;
+  }
+  const plaintext = new TextEncoder().encode($('send-plaintext').value);
+  if (plaintext.length === 0) {
+    status.textContent = 'Enter a message first.';
+    return;
+  }
+  const sealed = withEncryptionModule(state.flatcRunner.Module, () => sealField(
+    EncryptionContext, recipient.publicKey, plaintext,
+    { site: FIELD_SITE, schema: 'message', field: 'text', fieldId: 0 },
+  ));
+  const output = $('send-output');
+  $('send-ciphertext').textContent = bytesToHex(sealed.ciphertext);
+  $('send-enc').textContent = bytesToHex(sealed.enc);
+  output.dataset.plaintextHex = bytesToHex(plaintext);
+  output.dataset.ciphertextHex = bytesToHex(sealed.ciphertext);
+  output.dataset.encHex = bytesToHex(sealed.enc);
+  output.hidden = false;
+  status.textContent = `Encrypted to ${recipient.label}.`;
 }
 
 // =============================================================================
@@ -709,753 +470,6 @@ function formatFieldValue(value, type) {
   return String(value);
 }
 
-function clearFieldDisplay() {
-  state.currentFieldData = null;
-  $('fb-header').style.display = 'none';
-  $('field-table-container').style.display = 'none';
-}
-
-// =============================================================================
-// Bulk Buffer Generation
-// =============================================================================
-
-// Reinitialize FlatcRunner periodically to prevent WASM memory fragmentation
-const RUNNER_RESET_INTERVAL = 500;
-
-/**
- * Reset the FlatcRunner to free WASM memory.
- * This creates a fresh WASM instance which releases memory from the old one.
- */
-async function resetFlatcRunner() {
-  state.flatcRunner = await FlatcRunner.init();
-}
-
-async function generateBulkBuffers() {
-  const schemaType = $('bulk-schema').value;
-  const count = parseInt($('buffer-count').value);
-  const config = schemaConfig[schemaType];
-  const encrypt = state.encryptionEnabled;
-
-  // Auto-generate PKI keys if not available when encryption is enabled
-  if (encrypt && (!state.pki.bob || !state.pki.bob.publicKey)) {
-    await generatePKIKeyPairs();
-    if (!state.pki.bob || !state.pki.bob.publicKey) {
-      alert('Failed to generate PKI key pairs. Please try again.');
-      return;
-    }
-  }
-
-  const btn = $('generate-buffers');
-  const plainBtn = $('generate-plain');
-  btn.disabled = true;
-  if (plainBtn) plainBtn.disabled = true;
-  btn.textContent = encrypt ? 'Encrypting...' : 'Generating...';
-
-  const startTime = performance.now();
-
-  try {
-    // Clear previous data to free memory
-    state.buffers = [];
-    state.encryptedBuffers = [];
-    state.encryptionHeaders = [];
-
-    // === WARM ENCRYPTION CONTEXT: Create ONCE before the loop ===
-    // This avoids 1000+ ECDH operations (~500ms overhead) by reusing one context
-    let encryptCtx = null;
-    let encryptionHeader = null;
-
-    if (encrypt) {
-      let publicKey = state.pki.bob.publicKey;
-      if (!(publicKey instanceof Uint8Array)) {
-        publicKey = new Uint8Array(
-          typeof publicKey === 'object' && publicKey !== null
-            ? Object.values(publicKey)
-            : publicKey
-        );
-      }
-
-      encryptCtx = EncryptionContext.forEncryption(publicKey, {
-        algorithm: state.pki.algorithm,
-        context: 'flatbuffers-bulk-encryption-v1',
-      });
-      encryptionHeader = encryptCtx.getHeaderJSON();
-    }
-
-    const batchSize = Math.min(100, count);
-    let totalSize = 0;
-
-    for (let i = 0; i < count; i += batchSize) {
-      const batchEnd = Math.min(i + batchSize, count);
-
-      for (let j = i; j < batchEnd; j++) {
-        const data = config.sampleData(j);
-
-        // Use Builder API directly (fast) instead of CLI-based generateFlatBuffer
-        const binary = buildFlatBuffer(schemaType, data);
-
-        if (encrypt) {
-          // Use high-performance streaming encryption:
-          // - Field keys are cached (HKDF only on first access)
-          // - IVs computed via fast XOR (no HKDF per record)
-          // This is ~100x faster than encryptScalar() for bulk operations
-          const encrypted = new Uint8Array(binary);
-          encryptCtx.encryptBuffer(encrypted, j);  // j is the record counter
-
-          state.encryptedBuffers.push(encrypted);
-          state.encryptionHeaders.push(encryptionHeader); // Same header for all records
-        }
-
-        state.buffers.push({
-          index: j,
-          data,
-          binary: new Uint8Array(binary),
-          size: binary.length,
-        });
-        totalSize += binary.length;
-      }
-
-      // Update progress and yield to UI
-      const progress = Math.round((batchEnd / count) * 100);
-      btn.textContent = encrypt ? `Encrypting... ${progress}%` : `Generating... ${progress}%`;
-      await new Promise(r => setTimeout(r, 0));
-    }
-
-    const elapsed = performance.now() - startTime;
-
-    // Update stats
-    $('stat-count').textContent = count.toLocaleString();
-    $('stat-size').textContent = formatSize(totalSize);
-    $('stat-time').textContent = `${Math.round(elapsed)} ms`;
-    $('stat-memory').textContent = formatSize(performance.memory?.usedJSHeapSize || 0);
-    $('stats-bar').style.display = 'flex';
-
-    // Enable/disable buttons based on encryption mode
-    if (encrypt) {
-      $('toggle-encryption').disabled = false;
-      $('toggle-encryption').textContent = 'Bob Decrypts';
-    } else {
-      $('toggle-encryption').disabled = true;
-      $('toggle-encryption').textContent = 'N/A (Plain)';
-    }
-    $('clear-buffers').disabled = false;
-    state.showEncrypted = true;
-
-    // Render paginated table
-    renderBulkTable(schemaType);
-    $('data-card').style.display = 'block';
-
-  } catch (err) {
-    console.error('Failed to generate buffers:', err);
-    alert('Error generating buffers: ' + err.message);
-  } finally {
-    btn.disabled = false;
-    if (plainBtn) plainBtn.disabled = false;
-    btn.textContent = 'Encrypt for Bob';
-  }
-}
-
-// =============================================================================
-// Streaming Export/Import - Memory-efficient large dataset handling
-// =============================================================================
-
-/**
- * File format for encrypted FlatBuffers stream:
- * [4 bytes: magic "EFBS" (Encrypted FlatBuffers Stream)]
- * [4 bytes: version (1)]
- * [4 bytes: record count]
- * [4 bytes: schema type string length]
- * [N bytes: schema type string (e.g., "monster")]
- * [4 bytes: encryption header JSON length (0 if unencrypted)]
- * [N bytes: encryption header JSON]
- * [records...]
- *   [4 bytes: record length]
- *   [N bytes: FlatBuffer data (encrypted or plain)]
- */
-
-const EFBS_MAGIC = 0x53424645; // "EFBS" in little-endian
-
-/**
- * Generate FlatBuffers and download as a streaming file.
- * This avoids storing all records in memory - records are chunked and exported.
- */
-async function generateAndDownload(encrypt) {
-  const schemaType = $('bulk-schema').value;
-  const count = parseInt($('buffer-count').value);
-  const config = schemaConfig[schemaType];
-
-  // Auto-generate PKI keys if not available when encryption is enabled
-  if (encrypt && (!state.pki.bob || !state.pki.bob.publicKey)) {
-    await generatePKIKeyPairs();
-    if (!state.pki.bob || !state.pki.bob.publicKey) {
-      alert('Failed to generate PKI key pairs. Please try again.');
-      return;
-    }
-  }
-
-  const btn = encrypt ? $('download-encrypted') : $('download-plain');
-  const originalText = btn.textContent;
-  btn.disabled = true;
-
-  // Show progress bar
-  const progressContainer = $('download-progress');
-  const progressFill = $('download-progress-fill');
-  const progressText = $('download-progress-text');
-  progressContainer.style.display = 'block';
-  progressFill.style.width = '0%';
-  progressText.textContent = 'Preparing...';
-
-  const startTime = performance.now();
-
-  try {
-    // Create encryption context once if needed
-    let encryptCtx = null;
-    let encryptionHeaderJson = '';
-
-    if (encrypt) {
-      let publicKey = state.pki.bob.publicKey;
-      if (!(publicKey instanceof Uint8Array)) {
-        publicKey = new Uint8Array(
-          typeof publicKey === 'object' && publicKey !== null
-            ? Object.values(publicKey)
-            : publicKey
-        );
-      }
-
-      encryptCtx = EncryptionContext.forEncryption(publicKey, {
-        algorithm: state.pki.algorithm,
-        context: 'flatbuffers-stream-v1',
-      });
-      encryptionHeaderJson = encryptCtx.getHeaderJSON();
-    }
-
-    // Build file header
-    const schemaBytes = new TextEncoder().encode(schemaType);
-    const headerJsonBytes = new TextEncoder().encode(encryptionHeaderJson);
-
-    const fileHeaderSize = 4 + 4 + 4 + 4 + schemaBytes.length + 4 + headerJsonBytes.length;
-    const fileHeader = new ArrayBuffer(fileHeaderSize);
-    const headerView = new DataView(fileHeader);
-    let offset = 0;
-
-    // Magic
-    headerView.setUint32(offset, EFBS_MAGIC, true);
-    offset += 4;
-    // Version
-    headerView.setUint32(offset, 1, true);
-    offset += 4;
-    // Record count
-    headerView.setUint32(offset, count, true);
-    offset += 4;
-    // Schema type length + data
-    headerView.setUint32(offset, schemaBytes.length, true);
-    offset += 4;
-    new Uint8Array(fileHeader, offset, schemaBytes.length).set(schemaBytes);
-    offset += schemaBytes.length;
-    // Encryption header length + data
-    headerView.setUint32(offset, headerJsonBytes.length, true);
-    offset += 4;
-    new Uint8Array(fileHeader, offset, headerJsonBytes.length).set(headerJsonBytes);
-
-    // Collect chunks for final blob
-    const chunks = [new Uint8Array(fileHeader)];
-    let totalDataSize = fileHeaderSize;
-
-    // Generate records in batches to avoid memory buildup
-    const CHUNK_SIZE = 10000;
-
-    for (let i = 0; i < count; i += CHUNK_SIZE) {
-      const chunkEnd = Math.min(i + CHUNK_SIZE, count);
-      const chunkRecords = [];
-
-      for (let j = i; j < chunkEnd; j++) {
-        const data = config.sampleData(j);
-        let binary = buildFlatBuffer(schemaType, data);
-
-        if (encrypt) {
-          binary = new Uint8Array(binary);
-          encryptCtx.encryptBuffer(binary, j);
-        }
-
-        // Length-prefix the record
-        const recordWithLength = new Uint8Array(4 + binary.length);
-        new DataView(recordWithLength.buffer).setUint32(0, binary.length, true);
-        recordWithLength.set(binary, 4);
-
-        chunkRecords.push(recordWithLength);
-        totalDataSize += recordWithLength.length;
-      }
-
-      // Concatenate chunk records and add to chunks array
-      const chunkData = concatUint8Arrays(chunkRecords);
-      chunks.push(chunkData);
-
-      // Update progress
-      const progress = Math.round((chunkEnd / count) * 100);
-      progressFill.style.width = `${progress}%`;
-      progressText.textContent = `${encrypt ? 'Encrypting' : 'Generating'} ${chunkEnd.toLocaleString()} / ${count.toLocaleString()} records...`;
-      btn.textContent = `${progress}%`;
-
-      // Yield to UI
-      await new Promise(r => setTimeout(r, 0));
-    }
-
-    const elapsed = performance.now() - startTime;
-    const throughput = (totalDataSize / 1024 / 1024) / (elapsed / 1000);
-
-    // Create and download blob
-    const blob = new Blob(chunks, { type: 'application/octet-stream' });
-    const filename = `flatbuffers-${schemaType}-${count}${encrypt ? '-encrypted' : ''}.efbs`;
-
-    downloadBlob(blob, filename);
-
-    // Update stats
-    progressText.textContent = `Complete! ${count.toLocaleString()} records, ${formatSize(totalDataSize)}, ${Math.round(elapsed)}ms (${throughput.toFixed(1)} MB/s)`;
-
-    // Show completion stats in the stats bar
-    $('stat-count').textContent = count.toLocaleString();
-    $('stat-size').textContent = formatSize(totalDataSize);
-    $('stat-time').textContent = `${Math.round(elapsed)} ms`;
-    $('stat-memory').textContent = `${throughput.toFixed(1)} MB/s`;
-    $('stats-bar').style.display = 'flex';
-
-  } catch (err) {
-    console.error('Failed to generate/download:', err);
-    progressText.textContent = `Error: ${err.message}`;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = originalText;
-  }
-}
-
-/**
- * Upload and decrypt an .efbs file, showing stats.
- */
-async function uploadAndDecrypt(file) {
-  const progressContainer = $('upload-progress');
-  const progressFill = $('upload-progress-fill');
-  const progressText = $('upload-progress-text');
-  progressContainer.style.display = 'block';
-  progressFill.style.width = '0%';
-  progressText.textContent = 'Reading file...';
-
-  const startTime = performance.now();
-
-  try {
-    const buffer = await file.arrayBuffer();
-    const view = new DataView(buffer);
-    let offset = 0;
-
-    // Validate magic
-    const magic = view.getUint32(offset, true);
-    offset += 4;
-    if (magic !== EFBS_MAGIC) {
-      throw new Error('Invalid file format (expected EFBS)');
-    }
-
-    // Read version
-    const version = view.getUint32(offset, true);
-    offset += 4;
-    if (version !== 1) {
-      throw new Error(`Unsupported file version: ${version}`);
-    }
-
-    // Read record count
-    const recordCount = view.getUint32(offset, true);
-    offset += 4;
-
-    // Read schema type
-    const schemaTypeLen = view.getUint32(offset, true);
-    offset += 4;
-    const schemaType = new TextDecoder().decode(new Uint8Array(buffer, offset, schemaTypeLen));
-    offset += schemaTypeLen;
-
-    // Read encryption header
-    const encHeaderLen = view.getUint32(offset, true);
-    offset += 4;
-    const encHeaderJson = new TextDecoder().decode(new Uint8Array(buffer, offset, encHeaderLen));
-    offset += encHeaderLen;
-
-    const isEncrypted = encHeaderLen > 0;
-    let decryptCtx = null;
-
-    if (isEncrypted) {
-      // Create decryption context
-      if (!state.pki.bob || !state.pki.bob.privateKey) {
-        throw new Error('Bob\'s session secret is not available for decryption');
-      }
-
-      let privateKey = state.pki.bob.privateKey;
-      if (!(privateKey instanceof Uint8Array)) {
-        privateKey = new Uint8Array(
-          typeof privateKey === 'object' && privateKey !== null
-            ? Object.values(privateKey)
-            : privateKey
-        );
-      }
-
-      const header = encryptionHeaderFromJSON(encHeaderJson);
-      decryptCtx = EncryptionContext.forDecryption(privateKey, header, {
-        context: 'flatbuffers-stream-v1',
-      });
-    }
-
-    progressText.textContent = `Processing ${recordCount.toLocaleString()} ${schemaType} records...`;
-
-    // Process records
-    let decryptTime = 0;
-    let recordsProcessed = 0;
-    let sampleRecords = []; // Keep first 10 for display
-
-    while (offset < buffer.byteLength && recordsProcessed < recordCount) {
-      const recordLen = view.getUint32(offset, true);
-      offset += 4;
-
-      const recordData = new Uint8Array(buffer, offset, recordLen);
-      offset += recordLen;
-
-      if (isEncrypted && decryptCtx) {
-        const decrypted = new Uint8Array(recordData);
-        const t0 = performance.now();
-        decryptCtx.decryptBuffer(decrypted, recordsProcessed);
-        decryptTime += performance.now() - t0;
-
-        // Store sample for display
-        if (recordsProcessed < 10) {
-          sampleRecords.push({
-            index: recordsProcessed,
-            binary: decrypted,
-            size: recordLen,
-          });
-        }
-      } else {
-        if (recordsProcessed < 10) {
-          sampleRecords.push({
-            index: recordsProcessed,
-            binary: new Uint8Array(recordData),
-            size: recordLen,
-          });
-        }
-      }
-
-      recordsProcessed++;
-
-      // Update progress periodically
-      if (recordsProcessed % 10000 === 0) {
-        const progress = Math.round((offset / buffer.byteLength) * 100);
-        progressFill.style.width = `${progress}%`;
-        progressText.textContent = `${isEncrypted ? 'Decrypting' : 'Processing'} ${recordsProcessed.toLocaleString()} / ${recordCount.toLocaleString()} records...`;
-        await new Promise(r => setTimeout(r, 0));
-      }
-    }
-
-    const elapsed = performance.now() - startTime;
-    const throughput = (buffer.byteLength / 1024 / 1024) / (elapsed / 1000);
-
-    // Display results
-    progressFill.style.width = '100%';
-    progressText.textContent = `Complete! ${recordsProcessed.toLocaleString()} records verified`;
-
-    // Update stats bar
-    $('stat-count').textContent = recordsProcessed.toLocaleString();
-    $('stat-size').textContent = formatSize(buffer.byteLength);
-    $('stat-time').textContent = `${Math.round(elapsed)} ms`;
-    $('stat-memory').textContent = `${throughput.toFixed(1)} MB/s`;
-    $('stats-bar').style.display = 'flex';
-
-    // Show upload results
-    const resultsContainer = $('upload-results');
-    if (resultsContainer) {
-      resultsContainer.innerHTML = `
-        <div class="upload-stats">
-          <div class="stat-item">
-            <span class="stat-label">File</span>
-            <span class="stat-value">${file.name}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Schema</span>
-            <span class="stat-value">${schemaType}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Records</span>
-            <span class="stat-value">${recordsProcessed.toLocaleString()}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Encrypted</span>
-            <span class="stat-value">${isEncrypted ? 'Yes' : 'No'}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Total Time</span>
-            <span class="stat-value">${Math.round(elapsed)} ms</span>
-          </div>
-          ${isEncrypted ? `
-          <div class="stat-item">
-            <span class="stat-label">Decrypt Time</span>
-            <span class="stat-value">${Math.round(decryptTime)} ms</span>
-          </div>
-          ` : ''}
-          <div class="stat-item">
-            <span class="stat-label">Throughput</span>
-            <span class="stat-value">${throughput.toFixed(1)} MB/s</span>
-          </div>
-        </div>
-      `;
-      resultsContainer.style.display = 'block';
-    }
-
-    // Parse and show sample records
-    if (sampleRecords.length > 0) {
-      state.buffers = sampleRecords.map((r, i) => {
-        const config = schemaConfig[schemaType];
-        let data = {};
-        try {
-          const parsed = parseWithSchema(r.binary, config.parserSchema);
-          data = parsed;
-        } catch (e) {
-          data = { _parseError: e.message };
-        }
-        return { index: r.index, data, binary: r.binary, size: r.size };
-      });
-      state.encryptedBuffers = [];
-      state.encryptionHeaders = [];
-      state.encryptionEnabled = false;
-      renderBulkTable(schemaType);
-      $('data-card').style.display = 'block';
-      $('visible-range').textContent = `(showing first ${sampleRecords.length} of ${recordsProcessed.toLocaleString()})`;
-    }
-
-  } catch (err) {
-    console.error('Failed to upload/decrypt:', err);
-    progressText.textContent = `Error: ${err.message}`;
-  }
-}
-
-/**
- * Helper to concatenate Uint8Arrays efficiently.
- */
-function concatUint8Arrays(arrays) {
-  const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const arr of arrays) {
-    result.set(arr, offset);
-    offset += arr.length;
-  }
-  return result;
-}
-
-/**
- * Trigger file download in browser.
- */
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function renderBulkTable(schemaType) {
-  const container = $('virtual-table-wrapper');
-
-  // Helper to wrap value in span for styling
-  const wrapSpan = (text) => {
-    const span = document.createElement('span');
-    span.textContent = text;
-    return span;
-  };
-
-  // Define columns based on schema
-  let columns;
-  if (schemaType === 'monster') {
-    columns = [
-      { key: 'name', label: 'Name', className: 'col-name' },
-      { key: 'hp', label: 'HP', className: 'col-numeric' },
-      { key: 'mana', label: 'Mana', className: 'col-numeric' },
-      { key: 'pos', label: 'Position', className: 'col-position', format: (v) => v ? wrapSpan(`${v.x.toFixed(1)}, ${v.y.toFixed(1)}, ${v.z.toFixed(1)}`) : '--' },
-    ];
-  } else if (schemaType === 'weapon') {
-    columns = [
-      { key: 'name', label: 'Name', className: 'col-name' },
-      { key: 'damage', label: 'Damage', className: 'col-numeric' },
-    ];
-  } else if (schemaType === 'galaxy') {
-    columns = [
-      { key: 'num_stars', label: 'Stars', className: 'col-numeric', format: (v) => typeof v === 'bigint' ? v.toLocaleString() : String(v) },
-    ];
-  }
-
-  // Add bytes column based on encryption state
-  if (state.encryptionEnabled) {
-    columns.push({
-      key: 'bytes',
-      label: 'Encrypted Bytes',
-      className: 'col-hex',
-      format: (_, record) => {
-        const enc = state.encryptedBuffers[record.index];
-        if (!enc) return wrapSpan('--');
-        return wrapSpan(toHex(enc.slice(0, 20)) + (enc.length > 20 ? '...' : ''));
-      },
-    });
-  } else {
-    columns.push({
-      key: 'bytes',
-      label: 'FlatBuffer Bytes',
-      className: 'col-hex',
-      format: (_, record) => {
-        const buf = state.buffers[record.index]?.binary;
-        if (!buf) return wrapSpan('--');
-        return wrapSpan(toHex(buf.slice(0, 20)) + (buf.length > 20 ? '...' : ''));
-      },
-    });
-  }
-
-  // Destroy old paginated table
-  if (state.paginatedTable) {
-    state.paginatedTable.destroy();
-  }
-
-  // Create new paginated table with page size of 10
-  state.paginatedTable = new PaginatedTable(container, {
-    columns,
-    pageSize: 10,
-    onRowClick: (record, index) => {
-      showRecordDetail(record, index);
-    },
-    onPageChange: (page, totalPages) => {
-      const info = state.paginatedTable.getPageInfo();
-      $('visible-range').textContent = `(showing ${info.start + 1}-${info.end} of ${info.total})`;
-    },
-  });
-
-  // Prepare records
-  const records = state.buffers.map(b => ({ ...b.data, index: b.index }));
-  state.paginatedTable.setData(records);
-
-  // Update range display
-  const info = state.paginatedTable.getPageInfo();
-  $('visible-range').textContent = `(showing ${info.start + 1}-${info.end} of ${info.total})`;
-}
-
-function toggleEncryption() {
-  state.showEncrypted = !state.showEncrypted;
-  $('toggle-encryption').textContent = state.showEncrypted ? 'Bob Decrypts' : 'Show Encrypted';
-
-  // Helper to wrap value in span
-  const wrapSpan = (text) => {
-    const span = document.createElement('span');
-    span.textContent = text;
-    return span;
-  };
-
-  // Update paginated table columns if needed
-  if (state.paginatedTable && state.paginatedTable.columns && state.paginatedTable.columns.length > 0) {
-    const columns = state.paginatedTable.columns;
-    const lastCol = columns[columns.length - 1];
-
-    if (state.showEncrypted) {
-      lastCol.label = 'Encrypted (for Bob)';
-      lastCol.format = (_, record) => {
-        const enc = state.encryptedBuffers[record.index];
-        if (!enc) return wrapSpan('--');
-        return wrapSpan(toHex(enc.slice(0, 20)) + (enc.length > 20 ? '...' : ''));
-      };
-    } else {
-      lastCol.label = 'Decrypted (by Bob)';
-      lastCol.format = (_, record) => {
-        const dec = decryptBulkRecord(record.index);
-        if (!dec) return wrapSpan('--');
-        return wrapSpan(toHex(dec.slice(0, 20)) + (dec.length > 20 ? '...' : ''));
-      };
-    }
-
-    state.paginatedTable.setColumns(columns);
-    state.paginatedTable.render();
-  }
-}
-
-/**
- * Show detailed view of a record with FlatBuffer <-> JSON conversion
- */
-function showRecordDetail(record, index) {
-  const binary = state.buffers[index]?.binary;
-  if (!binary) return;
-
-  // Store selected record for conversion tools
-  state.selectedRecord = { record, index, binary };
-
-  // Show the detail panel
-  const detailPanel = $('record-detail-panel');
-  if (detailPanel) {
-    detailPanel.style.display = 'block';
-    $('detail-record-index').textContent = `Record #${index + 1}`;
-    $('detail-json').textContent = JSON.stringify(record, (key, value) =>
-      typeof value === 'bigint' ? value.toString() : value, 2);
-    $('detail-hex').textContent = toHex(binary);
-    $('detail-size').textContent = `${binary.length} bytes`;
-  }
-}
-
-/**
- * Decrypt a bulk record using Bob's session secret.
- * Uses high-performance decryptBuffer() method with cached field keys.
- */
-function decryptBulkRecord(index) {
-  if (!state.pki.bob || !state.pki.bob.privateKey) {
-    console.error('Bob\'s session secret is not available');
-    return new Uint8Array(0);
-  }
-
-  try {
-    const privateKey = ensureUint8Array(state.pki.bob.privateKey);
-
-    const header = encryptionHeaderFromJSON(state.encryptionHeaders[index]);
-    const decryptCtx = EncryptionContext.forDecryption(
-      privateKey,
-      header,
-      'flatbuffers-bulk-encryption-v1'
-    );
-
-    // Use high-performance decryptBuffer() - uses cached keys and XOR-based IVs
-    const decrypted = new Uint8Array(state.encryptedBuffers[index]);
-    decryptCtx.decryptBuffer(decrypted, index);  // index is the record counter
-    return decrypted;
-  } catch (error) {
-    console.error('Decryption failed for record', index, error);
-    return new Uint8Array(0);
-  }
-}
-
-function clearBufferDisplay() {
-  state.buffers = [];
-  state.encryptedBuffers = [];
-  state.encryptionHeaders = [];
-  state.showEncrypted = true;
-  state.selectedRecord = null;
-
-  if (state.paginatedTable) {
-    state.paginatedTable.destroy();
-    state.paginatedTable = null;
-  }
-
-  const dataCard = $('data-card');
-  if (dataCard) dataCard.style.display = 'none';
-  const statsBar = $('stats-bar');
-  if (statsBar) statsBar.style.display = 'none';
-  const toggleEncEl = $('toggle-encryption');
-  if (toggleEncEl) toggleEncEl.disabled = true;
-  const clearBuffersEl = $('clear-buffers');
-  if (clearBuffersEl) clearBuffersEl.disabled = true;
-  const visibleRange = $('visible-range');
-  if (visibleRange) visibleRange.textContent = '';
-
-  // Hide detail panel if open
-  const detailPanel = $('record-detail-panel');
-  if (detailPanel) detailPanel.style.display = 'none';
-}
-
 // =============================================================================
 // Schema Viewer & JSON Conversion
 // =============================================================================
@@ -1592,214 +606,6 @@ function convertFlatBufferToJson() {
     $('conversion-result').style.display = 'block';
   } catch (err) {
     alert('Conversion error: ' + err.message);
-  }
-}
-
-// =============================================================================
-// PKI Demo (Alice/Bob Public Key Encryption)
-// =============================================================================
-
-const PKI_ALGORITHM_NAMES = Object.freeze({
-  x25519: 'X25519 (Curve25519)',
-  secp256k1: 'secp256k1 (Bitcoin/Ethereum)',
-  p256: 'P-256 / secp256r1 (NIST)',
-});
-
-async function generatePKIKeyPairs() {
-  const algorithm = $('pki-algorithm')?.value || 'x25519';
-  state.pki.algorithm = algorithm;
-
-  try {
-    state.pki.alice = generateKeyPair(algorithm);
-    state.pki.bob = generateKeyPair(algorithm);
-  } catch (error) {
-    state.pki.alice = null;
-    state.pki.bob = null;
-    console.error('Failed to generate session keys:', error);
-    alert('Failed to generate session keys: ' + error.message);
-    return false;
-  }
-
-  const alicePublicKey = $('alice-public-key');
-  const bobPublicKey = $('bob-public-key');
-  const algorithmDisplay = $('pki-algorithm-display');
-  if (alicePublicKey) alicePublicKey.textContent = toHexCompact(state.pki.alice.publicKey);
-  if (bobPublicKey) bobPublicKey.textContent = toHexCompact(state.pki.bob.publicKey);
-  if (algorithmDisplay) algorithmDisplay.textContent = PKI_ALGORITHM_NAMES[algorithm] || algorithm;
-
-  resetPKIDemo();
-  return true;
-}
-
-
-function resetPKIDemo() {
-  state.pki.plaintext = null;
-  state.pki.ciphertext = null;
-  state.pki.header = null;
-  state.pki.decrypted = null;
-
-  $('pki-plaintext').value = '';
-  $('pki-ciphertext-step').style.display = 'none';
-  $('pki-decrypt-step').style.display = 'none';
-  $('pki-result-step').style.display = 'none';
-  $('pki-wrong-result').style.display = 'none';
-}
-
-function pkiEncrypt() {
-  const plaintext = $('pki-plaintext').value;
-  if (!plaintext.trim()) {
-    alert('Please enter a message to encrypt');
-    return;
-  }
-
-  if (!state.pki.bob) {
-    alert('Please generate key pairs first');
-    return;
-  }
-
-  // Convert plaintext to bytes
-  const encoder = new TextEncoder();
-  state.pki.plaintext = encoder.encode(plaintext);
-
-  // Create encryption context using Bob's public key (Alice encrypts FOR Bob)
-  // Normalize the in-memory public key.
-  let publicKey = state.pki.bob.publicKey;
-  if (!(publicKey instanceof Uint8Array)) {
-    if (typeof publicKey === 'object' && publicKey !== null) {
-      publicKey = new Uint8Array(Object.values(publicKey));
-    } else {
-      publicKey = new Uint8Array(publicKey);
-    }
-  }
-
-  const encryptCtx = EncryptionContext.forEncryption(publicKey, {
-    algorithm: state.pki.algorithm,
-    context: 'flatbuffers-pki-demo-v1',
-  });
-
-  // Encrypt the data using high-performance method (key caching + XOR IV)
-  const ciphertext = new Uint8Array(state.pki.plaintext);
-  encryptCtx.encryptBuffer(ciphertext, 0);  // recordCounter=0 for single message
-  state.pki.ciphertext = ciphertext;
-
-  // Get the header (contains ephemeral public key, etc.)
-  state.pki.header = encryptCtx.getHeaderJSON();
-
-  // Display results
-  $('pki-ciphertext').textContent = toHexCompact(ciphertext);
-  $('pki-header').textContent = JSON.stringify(state.pki.header, null, 2);
-
-  // Show next steps
-  $('pki-ciphertext-step').style.display = 'flex';
-  $('pki-decrypt-step').style.display = 'flex';
-  $('pki-result-step').style.display = 'none';
-  $('pki-wrong-result').style.display = 'none';
-}
-
-function pkiDecrypt() {
-  if (!state.pki.ciphertext || !state.pki.header) {
-    alert('Please encrypt a message first');
-    return;
-  }
-
-  if (!state.pki.bob) {
-    alert('Key pairs not available');
-    return;
-  }
-
-  try {
-    // Parse the header
-    const header = encryptionHeaderFromJSON(state.pki.header);
-
-    // Create decryption context using Bob's session secret
-    // Normalize the in-memory session secret.
-    let privateKey = state.pki.bob.privateKey;
-    if (!(privateKey instanceof Uint8Array)) {
-      if (typeof privateKey === 'object' && privateKey !== null) {
-        privateKey = new Uint8Array(Object.values(privateKey));
-      } else {
-        privateKey = new Uint8Array(privateKey);
-      }
-    }
-
-    const decryptCtx = EncryptionContext.forDecryption(
-      privateKey,
-      header,
-      'flatbuffers-pki-demo-v1'
-    );
-
-    // Decrypt using high-performance method (AES-CTR is symmetric)
-    const decrypted = new Uint8Array(state.pki.ciphertext);
-    decryptCtx.decryptBuffer(decrypted, 0);  // recordCounter=0 for single message
-    state.pki.decrypted = decrypted;
-
-    // Convert back to string
-    const decoder = new TextDecoder();
-    const decryptedText = decoder.decode(decrypted);
-
-    // Display result
-    $('pki-decrypted').textContent = decryptedText;
-    $('pki-result-step').style.display = 'flex';
-    $('pki-verification').style.display = 'flex';
-
-  } catch (error) {
-    console.error('Decryption failed:', error);
-    alert('Decryption failed: ' + error.message);
-  }
-}
-
-function pkiTryWrongKey() {
-  if (!state.pki.ciphertext || !state.pki.header) {
-    alert('Please encrypt a message first');
-    return;
-  }
-
-  if (!state.pki.alice) {
-    alert('Key pairs not available');
-    return;
-  }
-
-  try {
-    // Parse the header
-    const header = encryptionHeaderFromJSON(state.pki.header);
-
-    // Ensure Alice's session secret is a Uint8Array.
-    let privateKey = state.pki.alice.privateKey;
-    if (!(privateKey instanceof Uint8Array)) {
-      if (typeof privateKey === 'object' && privateKey !== null) {
-        privateKey = new Uint8Array(Object.values(privateKey));
-      } else {
-        privateKey = new Uint8Array(privateKey);
-      }
-    }
-
-    // Try to decrypt with Alice's session secret (WRONG - should fail)
-    const decryptCtx = EncryptionContext.forDecryption(
-      privateKey,
-      header,
-      'flatbuffers-pki-demo-v1'
-    );
-
-    // Attempt decryption (will produce garbage since wrong key was used)
-    const attemptedDecrypt = new Uint8Array(state.pki.ciphertext);
-    decryptCtx.decryptBuffer(attemptedDecrypt, 0);  // recordCounter=0
-
-    // Check if it matches original (it shouldn't)
-    const decoder = new TextDecoder();
-    const result = decoder.decode(attemptedDecrypt);
-    const original = decoder.decode(state.pki.plaintext);
-
-    if (result === original) {
-      // This should never happen!
-      alert('WARNING: Decryption succeeded with wrong key - this is a bug!');
-    } else {
-      // Expected: decryption produces garbage
-      $('pki-wrong-result').style.display = 'flex';
-    }
-
-  } catch (error) {
-    // Expected: decryption might throw an error
-    $('pki-wrong-result').style.display = 'flex';
   }
 }
 
@@ -3100,6 +1906,8 @@ function setupMainAppHandlers() {
   // Field Encryption Tab
   $('generate-single')?.addEventListener('click', generateSingleRecord);
   $('field-sign-in')?.addEventListener('click', () => { signIn().catch(() => renderFieldWalletStatus()); });
+  $('send-sign-in')?.addEventListener('click', () => { signIn().catch(() => renderFieldWalletStatus()); });
+  $('send-seal')?.addEventListener('click', sealMessage);
   watchWallet((key) => {
     state.fieldWalletKey = key;
     renderFieldWalletStatus();
@@ -3110,32 +1918,6 @@ function setupMainAppHandlers() {
   $('select-all-fields')?.addEventListener('click', () => selectAllFields(true));
   $('select-none-fields')?.addEventListener('click', () => selectAllFields(false));
   populateFieldCheckboxes(); // Initialize on page load
-
-  // Bulk Generation Tab - Download buttons (memory efficient)
-  $('download-encrypted')?.addEventListener('click', () => generateAndDownload(true));
-  $('download-plain')?.addEventListener('click', () => generateAndDownload(false));
-
-  // File upload
-  $('upload-file')?.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const filenameEl = $('upload-filename');
-      if (filenameEl) filenameEl.textContent = file.name;
-      uploadAndDecrypt(file);
-    }
-  });
-
-  // In-memory generation (for smaller datasets)
-  $('generate-buffers')?.addEventListener('click', () => {
-    state.encryptionEnabled = true;
-    generateBulkBuffers();
-  });
-  $('generate-plain')?.addEventListener('click', () => {
-    state.encryptionEnabled = false;
-    generateBulkBuffers();
-  });
-  $('toggle-encryption')?.addEventListener('click', toggleEncryption);
-  $('clear-buffers')?.addEventListener('click', clearBufferDisplay);
 
   // Schema Viewer Tab
   $('schema-type-select')?.addEventListener('change', updateSchemaViewer);
@@ -3150,12 +1932,6 @@ function setupMainAppHandlers() {
     const panel = $('record-detail-panel');
     if (panel) panel.style.display = 'none';
   });
-
-  // PKI demo keys are fresh for this page session and never persisted.
-  $('pki-encrypt')?.addEventListener('click', pkiEncrypt);
-  $('pki-decrypt')?.addEventListener('click', pkiDecrypt);
-  $('pki-wrong-key')?.addEventListener('click', pkiTryWrongKey);
-  $('pki-algorithm')?.addEventListener('change', generatePKIKeyPairs);
 
 
   // Streaming Tab
@@ -3421,7 +2197,6 @@ async function init() {
 
     setupStreamingApiDocs();
     setupHexExplorerListeners();
-    await generatePKIKeyPairs();
 
     state.initialized = true;
 
@@ -3481,13 +2256,9 @@ const studioState = {
   bulkMode: false,
   bulkConfig: {
     count: 100,
-    encryptEnabled: true,
-    publicKey: null,
-    privateKey: null,
   },
-  bulkBuffers: [],       // Array of { index, data, binary, encrypted?, header? }
+  bulkBuffers: [],       // Array of { index, data, binary }
   bulkSelectedIndex: 0,
-  bulkDecrypted: false,
 };
 
 // Schema Editor File System State
@@ -4405,42 +3176,8 @@ function initStudio() {
     studioState.bulkConfig.count = parseInt(e.target.value) || 100;
   });
 
-  $('bulk-encrypt-enabled')?.addEventListener('change', (e) => {
-    studioState.bulkConfig.encryptEnabled = e.target.checked;
-    const verificationSection = $('bulk-key-verification');
-    if (verificationSection) verificationSection.style.opacity = e.target.checked ? '1' : '0.5';
-  });
-
-  // Key selector change handler
-  $('bulk-key-selector')?.addEventListener('change', (e) => {
-    const value = e.target.value;
-    const customGroup = $('bulk-custom-key-group');
-
-    // Show/hide custom key input
-    if (customGroup) {
-      customGroup.style.display = value === 'custom' ? 'block' : 'none';
-    }
-
-    // Update the encryption key based on selection
-    updateBulkEncryptionKey(value);
-  });
-
-  // Custom public key input
-  $('bulk-public-key')?.addEventListener('input', () => {
-    const selector = $('bulk-key-selector');
-    if (selector?.value === 'custom') {
-      onBulkPublicKeyChange();
-    }
-  });
-
-  // Decrypt key selector
-  $('bulk-decrypt-selector')?.addEventListener('change', (e) => {
-    updateBulkDecryptionKey(e.target.value);
-  });
-
   // Bulk Builder Actions
   $('bulk-generate-btn')?.addEventListener('click', generateBulkStudioBuffers);
-  $('bulk-toggle-decrypt')?.addEventListener('click', toggleBulkDecryption);
   $('bulk-download-all')?.addEventListener('click', downloadBulkBuffers);
   $('bulk-clear-btn')?.addEventListener('click', clearBulkResults);
 
@@ -5460,7 +4197,6 @@ function toggleStudioBuilderMode(mode) {
   const decodedPane = $('studio-decoded-pane');
   const bulkResults = $('studio-bulk-results');
   const bulkHexNav = $('bulk-hex-nav');
-  const singleEncryptLabel = $('single-encrypt-label');
 
   if (studioState.bulkMode) {
     if (singleForm) singleForm.style.display = 'none';
@@ -5470,10 +4206,6 @@ function toggleStudioBuilderMode(mode) {
     if (decodedPane) decodedPane.style.display = 'none';
     if (bulkResults) bulkResults.style.display = 'flex';
     if (bulkHexNav) bulkHexNav.style.display = 'flex';
-    if (singleEncryptLabel) singleEncryptLabel.style.display = 'none';
-
-    // Initialize keys to Bob's if available
-    initBulkKeys();
   } else {
     if (singleForm) singleForm.style.display = 'block';
     if (bulkConfig) bulkConfig.style.display = 'none';
@@ -5482,270 +4214,6 @@ function toggleStudioBuilderMode(mode) {
     if (decodedPane) decodedPane.style.display = 'flex';
     if (bulkResults) bulkResults.style.display = 'none';
     if (bulkHexNav) bulkHexNav.style.display = 'none';
-    if (singleEncryptLabel) singleEncryptLabel.style.display = 'flex';
-  }
-}
-
-function initBulkKeys() {
-  const keySelector = $('bulk-key-selector');
-  const decryptSelector = $('bulk-decrypt-selector');
-
-  // Reset selectors to default (Bob)
-  if (keySelector) keySelector.value = 'bob';
-  if (decryptSelector) decryptSelector.value = 'bob';
-
-  // Hide the custom recipient public-key input.
-  const customKeyGroup = $('bulk-custom-key-group');
-  if (customKeyGroup) customKeyGroup.style.display = 'none';
-
-  // Initialize with Bob's keys if available
-  if (state.pki.bob) {
-    studioState.bulkConfig.publicKey = ensureUint8Array(state.pki.bob.publicKey);
-    studioState.bulkConfig.privateKey = ensureUint8Array(state.pki.bob.privateKey);
-    // Trigger verification display update
-    updateBulkEncryptionKey('bob');
-  } else {
-    studioState.bulkConfig.publicKey = null;
-    studioState.bulkConfig.privateKey = null;
-    updateKeyVerification(null, '');
-  }
-}
-
-function updateBulkKeyStatus(elementId, valid, message) {
-  const el = $(elementId);
-  if (!el) return;
-  el.textContent = message;
-  el.className = 'key-status ' + (valid ? 'valid' : 'invalid');
-}
-
-function parseHexKey(hexString) {
-  const cleaned = hexString.replace(/^0x/, '').replace(/\s/g, '');
-  if (!/^[0-9a-fA-F]*$/.test(cleaned)) {
-    return { valid: false, error: 'Invalid hex characters' };
-  }
-  if (cleaned.length % 2 !== 0) {
-    return { valid: false, error: 'Odd number of hex digits' };
-  }
-  if (cleaned.length === 0) {
-    return { valid: false, error: 'Empty key' };
-  }
-  const bytes = new Uint8Array(cleaned.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(cleaned.substr(i * 2, 2), 16);
-  }
-  return { valid: true, bytes };
-}
-
-function onBulkPublicKeyChange() {
-  const input = $('bulk-public-key');
-  const value = input?.value.trim() || '';
-
-  if (!value) {
-    // Empty = use Bob's if available
-    if (state.pki.bob) {
-      studioState.bulkConfig.publicKey = ensureUint8Array(state.pki.bob.publicKey);
-      updateBulkKeyStatus('bulk-pubkey-status', true, "Using Bob's key");
-    } else {
-      studioState.bulkConfig.publicKey = null;
-      updateBulkKeyStatus('bulk-pubkey-status', false, 'No key provided');
-    }
-    return;
-  }
-
-  const result = parseHexKey(value);
-  if (result.valid) {
-    studioState.bulkConfig.publicKey = result.bytes;
-    updateBulkKeyStatus('bulk-pubkey-status', true, `Valid key (${result.bytes.length} bytes)`);
-  } else {
-    studioState.bulkConfig.publicKey = null;
-    updateBulkKeyStatus('bulk-pubkey-status', false, result.error);
-  }
-}
-
-/**
- * Update bulk encryption key based on selector value
- */
-async function updateBulkEncryptionKey(selectorValue) {
-  let publicKey = null;
-  let keyLabel = '';
-
-  if (selectorValue === 'bob' && state.pki.bob) {
-    publicKey = ensureUint8Array(state.pki.bob.publicKey);
-    keyLabel = "Bob's key";
-  } else if (selectorValue === 'alice' && state.pki.alice) {
-    publicKey = ensureUint8Array(state.pki.alice.publicKey);
-    keyLabel = "Alice's key";
-  } else if (selectorValue === 'custom') {
-    const input = $('bulk-public-key');
-    const value = input?.value.trim() || '';
-    if (value) {
-      const result = parseHexKey(value);
-      if (result.valid) {
-        publicKey = result.bytes;
-        keyLabel = 'Custom key';
-        updateBulkKeyStatus('bulk-pubkey-status', true, `Valid (${result.bytes.length} bytes)`);
-      } else {
-        updateBulkKeyStatus('bulk-pubkey-status', false, result.error);
-      }
-    }
-  }
-
-  studioState.bulkConfig.publicKey = publicKey;
-
-  // Update key verification display
-  await updateKeyVerification(publicKey, keyLabel);
-}
-
-/**
- * Update bulk decryption key based on selector value
- */
-function updateBulkDecryptionKey(selectorValue) {
-  let privateKey = null;
-
-  if (selectorValue === 'bob' && state.pki.bob) {
-    privateKey = ensureUint8Array(state.pki.bob.privateKey);
-  } else if (selectorValue === 'alice' && state.pki.alice) {
-    privateKey = ensureUint8Array(state.pki.alice.privateKey);
-  }
-
-  studioState.bulkConfig.privateKey = privateKey;
-}
-
-/**
- * Update key verification display with derived addresses and balances
- */
-async function updateKeyVerification(publicKey, keyLabel) {
-  // Get all address/balance elements
-  const elements = {
-    btc: { addr: $('bulk-verify-btc-addr'), bal: $('bulk-verify-btc-bal') },
-    eth: { addr: $('bulk-verify-eth-addr'), bal: $('bulk-verify-eth-bal') },
-    sol: { addr: $('bulk-verify-sol-addr'), bal: $('bulk-verify-sol-bal') },
-    sui: { addr: $('bulk-verify-sui-addr'), bal: $('bulk-verify-sui-bal') },
-    monad: { addr: $('bulk-verify-monad-addr'), bal: $('bulk-verify-monad-bal') },
-    ada: { addr: $('bulk-verify-ada-addr'), bal: $('bulk-verify-ada-bal') },
-  };
-  const noteEl = $('bulk-verify-note');
-
-  // Reset all to default state
-  const resetAll = () => {
-    for (const chain of Object.values(elements)) {
-      if (chain.addr) chain.addr.textContent = '--';
-      if (chain.bal) {
-        chain.bal.textContent = '--';
-        chain.bal.className = 'balance-badge';
-      }
-    }
-  };
-
-  if (!publicKey) {
-    resetAll();
-    if (noteEl) {
-      noteEl.textContent = 'Select a recipient to verify their key.';
-      noteEl.className = 'verification-note';
-    }
-    return;
-  }
-
-  // Show loading state for all
-  for (const chain of Object.values(elements)) {
-    if (chain.bal) chain.bal.textContent = '...';
-  }
-
-  try {
-    // Derive addresses from the public key
-    // Note: Different chains use different key types, so we derive what we can
-    // secp256k1 keys (33 bytes compressed) -> BTC, ETH, Monad
-    // ed25519 keys (32 bytes) -> SOL, SUI, ADA
-    const btcAddress = publicKey.length === 33 ? generateBtcAddress(publicKey) : null;
-    const ethAddress = deriveEthAddress(publicKey);
-    const solAddress = publicKey.length === 32 ? generateSolAddress(publicKey) : null;
-    const suiAddress = publicKey.length === 32 ? deriveSuiAddress(publicKey, 'ed25519') : null;
-    const monadAddress = ethAddress; // Monad uses same address format as Ethereum
-    const adaAddress = publicKey.length === 32 ? deriveCardanoAddress(publicKey) : null;
-
-    // Update address displays
-    if (elements.btc.addr) elements.btc.addr.textContent = truncateAddress(btcAddress || 'N/A');
-    if (elements.eth.addr) elements.eth.addr.textContent = truncateAddress(ethAddress || 'N/A');
-    if (elements.sol.addr) elements.sol.addr.textContent = truncateAddress(solAddress || 'N/A');
-    if (elements.sui.addr) elements.sui.addr.textContent = truncateAddress(suiAddress || 'N/A');
-    if (elements.monad.addr) elements.monad.addr.textContent = truncateAddress(monadAddress || 'N/A');
-    if (elements.ada.addr) elements.ada.addr.textContent = truncateAddress(adaAddress || 'N/A');
-
-    // Fetch all balances in parallel
-    const balancePromises = [
-      btcAddress ? fetchBtcBalance(btcAddress).catch(() => ({ balance: '0' })) : Promise.resolve({ balance: '0' }),
-      ethAddress ? fetchEthBalance(ethAddress).catch(() => ({ balance: '0' })) : Promise.resolve({ balance: '0' }),
-      solAddress ? fetchSolBalance(solAddress).catch(() => ({ balance: '0' })) : Promise.resolve({ balance: '0' }),
-      suiAddress ? fetchSuiBalance(suiAddress).catch(() => ({ balance: '0' })) : Promise.resolve({ balance: '0' }),
-      monadAddress ? fetchMonadBalance(monadAddress).catch(() => ({ balance: '0' })) : Promise.resolve({ balance: '0' }),
-      adaAddress ? fetchAdaBalance(adaAddress).catch(() => ({ balance: '0' })) : Promise.resolve({ balance: '0' }),
-    ];
-
-    const results = await Promise.all(balancePromises);
-    const [btcResult, ethResult, solResult, suiResult, monadResult, adaResult] = results;
-
-    // Helper to update balance display
-    const updateBal = (el, balance, unit) => {
-      if (!el) return 0;
-      const val = parseFloat(balance) || 0;
-      el.textContent = val > 0 ? `${val.toFixed(val < 0.0001 ? 8 : 4)} ${unit}` : `0 ${unit}`;
-      el.className = val > 0 ? 'balance-badge has-value' : 'balance-badge';
-      return val;
-    };
-
-    // Update all balance displays and calculate total
-    let totalValue = 0;
-    totalValue += updateBal(elements.btc.bal, btcResult.balance, 'BTC');
-    totalValue += updateBal(elements.eth.bal, ethResult.balance, 'ETH');
-    totalValue += updateBal(elements.sol.bal, solResult.balance, 'SOL');
-    totalValue += updateBal(elements.sui.bal, suiResult.balance, 'SUI');
-    totalValue += updateBal(elements.monad.bal, monadResult.balance, 'MON');
-    totalValue += updateBal(elements.ada.bal, adaResult.balance, 'ADA');
-
-    // Update trust note
-    if (noteEl) {
-      if (totalValue > 0) {
-        noteEl.textContent = `${keyLabel} has value on-chain - key appears trustworthy.`;
-        noteEl.className = 'verification-note trusted';
-      } else {
-        noteEl.textContent = `${keyLabel} has no on-chain value. Consider verifying this key through other means.`;
-        noteEl.className = 'verification-note untrusted';
-      }
-    }
-  } catch (e) {
-    console.error('Key verification error:', e);
-    if (noteEl) {
-      noteEl.textContent = 'Could not verify key addresses.';
-      noteEl.className = 'verification-note';
-    }
-  }
-}
-
-/**
- * Derive Ethereum address from a public key (secp256k1)
- */
-function deriveEthAddress(publicKey) {
-  try {
-    // For secp256k1 compressed public keys (33 bytes)
-    if (publicKey.length === 33) {
-      // Decompress the public key to get uncompressed form
-      const point = secp256k1.ProjectivePoint.fromHex(publicKey);
-      const uncompressed = point.toRawBytes(false).slice(1); // Remove 04 prefix
-      const hash = keccak_256(uncompressed);
-      return '0x' + toHex(hash.slice(-20));
-    }
-    // For uncompressed public keys (65 bytes with 04 prefix or 64 bytes without)
-    if (publicKey.length === 65) {
-      const hash = keccak_256(publicKey.slice(1));
-      return '0x' + toHex(hash.slice(-20));
-    }
-    if (publicKey.length === 64) {
-      const hash = keccak_256(publicKey);
-      return '0x' + toHex(hash.slice(-20));
-    }
-    return null;
-  } catch (e) {
-    return null;
   }
 }
 
@@ -5802,13 +4270,6 @@ async function generateBulkStudioBuffers() {
   }
 
   const count = parseInt($('bulk-record-count')?.value) || 100;
-  const encryptEnabled = $('bulk-encrypt-enabled')?.checked;
-  const encrypt = encryptEnabled && studioState.bulkConfig.publicKey;
-
-  if (encryptEnabled && !studioState.bulkConfig.publicKey) {
-    alert('Please provide a valid public key for encryption');
-    return;
-  }
 
   const btn = $('bulk-generate-btn');
   if (btn) {
@@ -5818,7 +4279,6 @@ async function generateBulkStudioBuffers() {
 
   try {
     studioState.bulkBuffers = [];
-    studioState.bulkDecrypted = false;
     studioState.bulkSelectedIndex = 0;
 
     // Get sample data generator for the selected table
@@ -5841,16 +4301,6 @@ async function generateBulkStudioBuffers() {
         size: binary.length,
       };
 
-      if (encrypt) {
-        // Simple XOR encryption with derived key for demo purposes
-        const encrypted = new Uint8Array(binary);
-        const key = studioState.bulkConfig.publicKey;
-        for (let j = 0; j < encrypted.length; j++) {
-          encrypted[j] ^= key[j % key.length];
-        }
-        record.encrypted = encrypted;
-      }
-
       studioState.bulkBuffers.push(record);
 
       // Update progress every 100 records
@@ -5866,11 +4316,9 @@ async function generateBulkStudioBuffers() {
     const statsEl = $('bulk-stats');
     if (statsEl) statsEl.textContent = `${count} records, ${formatBulkSize(totalSize)}`;
 
-    // Enable action buttons
+    // Enable the download
     const downloadBtn = $('bulk-download-all');
-    const decryptBtn = $('bulk-toggle-decrypt');
     if (downloadBtn) downloadBtn.disabled = false;
-    if (decryptBtn) decryptBtn.disabled = !encrypt;
 
     // Render results table
     renderBulkStudioResults();
@@ -5905,8 +4353,6 @@ function renderBulkStudioResults() {
     return;
   }
 
-  const hasEncrypted = records[0].encrypted != null;
-
   // Build table header based on first record's fields
   const firstData = records[0].data;
   const fieldKeys = Object.keys(firstData).slice(0, 3); // First 3 fields
@@ -5916,7 +4362,7 @@ function renderBulkStudioResults() {
   for (const key of fieldKeys) {
     html += `<th>${key}</th>`;
   }
-  html += `<th class="col-hex">${hasEncrypted && !studioState.bulkDecrypted ? 'Encrypted' : 'Bytes'}</th>`;
+  html += '<th class="col-hex">Bytes</th>';
   html += '</tr></thead><tbody>';
 
   // Render rows (limit to first 100 for performance)
@@ -5933,9 +4379,7 @@ function renderBulkStudioResults() {
       html += `<td>${displayVal}</td>`;
     }
 
-    // Show encrypted or plain bytes
-    const buf = (hasEncrypted && !studioState.bulkDecrypted) ? record.encrypted : record.binary;
-    const hexPreview = toHex(buf.slice(0, 8)) + '...';
+    const hexPreview = toHex(record.binary.slice(0, 8)) + '...';
     html += `<td class="col-hex">${hexPreview}</td>`;
     html += '</tr>';
   }
@@ -5964,47 +4408,25 @@ function displayBulkHexView(index) {
   const record = studioState.bulkBuffers[index];
   if (!record) return;
 
-  const hasEncrypted = record.encrypted != null;
-  const buffer = (hasEncrypted && !studioState.bulkDecrypted) ? record.encrypted : record.binary;
-
-  displayStudioHexView(buffer);
+  displayStudioHexView(record.binary);
 
   // Update navigation
   const indexEl = $('bulk-hex-index');
   if (indexEl) indexEl.textContent = `${index + 1} / ${studioState.bulkBuffers.length}`;
 }
 
-function toggleBulkDecryption() {
-  if (!studioState.bulkConfig.privateKey) {
-    alert('No session decryption key is available');
-    return;
-  }
-
-  studioState.bulkDecrypted = !studioState.bulkDecrypted;
-
-  const btn = $('bulk-toggle-decrypt');
-  if (btn) btn.textContent = studioState.bulkDecrypted ? 'Show Encrypted' : 'Decrypt All';
-
-  // Re-render table and hex view
-  renderBulkStudioResults();
-  displayBulkHexView(studioState.bulkSelectedIndex);
-}
-
 function downloadBulkBuffers() {
   if (studioState.bulkBuffers.length === 0) return;
-
-  const hasEncrypted = studioState.bulkBuffers[0].encrypted != null;
 
   // Create a simple concatenated format with length prefixes
   const chunks = [];
   const header = new TextEncoder().encode(JSON.stringify({
     count: studioState.bulkBuffers.length,
-    encrypted: hasEncrypted && !studioState.bulkDecrypted,
   }) + '\n');
   chunks.push(header);
 
   for (const record of studioState.bulkBuffers) {
-    const buf = (hasEncrypted && !studioState.bulkDecrypted) ? record.encrypted : record.binary;
+    const buf = record.binary;
     // 4-byte length prefix
     const lenBuf = new ArrayBuffer(4);
     new DataView(lenBuf).setUint32(0, buf.length, true);
@@ -6016,7 +4438,7 @@ function downloadBulkBuffers() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = hasEncrypted && !studioState.bulkDecrypted ? 'bulk_encrypted.efbs' : 'bulk_data.fbs';
+  a.download = 'bulk_data.fbs';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -6026,7 +4448,6 @@ function downloadBulkBuffers() {
 function clearBulkResults() {
   studioState.bulkBuffers = [];
   studioState.bulkSelectedIndex = 0;
-  studioState.bulkDecrypted = false;
 
   const container = $('bulk-results-table');
   if (container) container.innerHTML = '<div class="empty-state">Generate bulk records to see results</div>';
@@ -6038,9 +4459,7 @@ function clearBulkResults() {
   if (statsEl) statsEl.textContent = '';
 
   const downloadBtn = $('bulk-download-all');
-  const decryptBtn = $('bulk-toggle-decrypt');
   if (downloadBtn) downloadBtn.disabled = true;
-  if (decryptBtn) decryptBtn.disabled = true;
 
   const indexEl = $('bulk-hex-index');
   if (indexEl) indexEl.textContent = '0 / 0';
@@ -7448,352 +5867,6 @@ function exportToSchemaEditor() {
 // =============================================================================
 // Adversarial Security - Blockchain Address Derivation & Balance Checking
 // =============================================================================
-
-/**
- * Derive a SUI address from a public key
- * SUI uses BLAKE2b(flag || public_key) to derive addresses
- * @param {Uint8Array} publicKey - The public key (32 bytes for Ed25519, 33 for secp256k1)
- * @param {string} scheme - 'ed25519' (0x00), 'secp256k1' (0x01), or 'secp256r1' (0x02)
- * @returns {string} The SUI address with 0x prefix
- */
-function deriveSuiAddress(publicKey, scheme = 'ed25519') {
-  const schemeFlags = {
-    'ed25519': 0x00,
-    'secp256k1': 0x01,
-    'secp256r1': 0x02,
-  };
-  const flag = schemeFlags[scheme] ?? 0x00;
-
-  // Concatenate flag byte with public key
-  const data = new Uint8Array(1 + publicKey.length);
-  data[0] = flag;
-  data.set(publicKey, 1);
-
-  // BLAKE2b hash with 32-byte output
-  const hash = blake2b(data, { dkLen: 32 });
-
-  // Convert to hex with 0x prefix
-  return '0x' + Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-/**
- * Derive an Ethereum/Monad address from a secp256k1 public key
- * Uses Keccak-256 hash of the uncompressed public key (minus prefix)
- * @param {Uint8Array} publicKey - The secp256k1 public key (33 bytes compressed or 65 uncompressed)
- * @returns {string} The Ethereum address with 0x prefix
- */
-function deriveMonadAddress(publicKey) {
-  // If compressed (33 bytes), decompress it
-  let uncompressedPubKey;
-  if (publicKey.length === 33) {
-    // Use secp256k1 to decompress
-    const point = secp256k1.ProjectivePoint.fromHex(publicKey);
-    uncompressedPubKey = point.toRawBytes(false); // 65 bytes: 0x04 || x || y
-  } else if (publicKey.length === 65) {
-    uncompressedPubKey = publicKey;
-  } else {
-    throw new Error('Invalid public key length for Monad address derivation');
-  }
-
-  // Keccak-256 of the public key without the 0x04 prefix
-  const hash = keccak_256(uncompressedPubKey.slice(1));
-
-  // Take last 20 bytes
-  const address = hash.slice(-20);
-
-  // Convert to hex with 0x prefix and checksum
-  return '0x' + Array.from(address).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-/**
- * Fetch SUI balance for an address
- * @param {string} address - SUI address with 0x prefix
- * @returns {Promise<{balance: string, error?: string}>}
- */
-async function fetchSuiBalance(address) {
-  try {
-    // SUI fullnode supports CORS
-    const response = await fetch('https://fullnode.mainnet.sui.io:443', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'suix_getBalance',
-        params: [address]
-      })
-    });
-    const data = await response.json();
-    if (data.error) {
-      return { balance: '0', error: data.error.message };
-    }
-    // Balance is in MIST (1 SUI = 10^9 MIST)
-    const balanceMist = BigInt(data.result?.totalBalance || '0');
-    const balanceSui = Number(balanceMist) / 1e9;
-    return { balance: balanceSui.toFixed(4) };
-  } catch (e) {
-    console.debug('SUI balance fetch unavailable:', e.message);
-    return { balance: '--', error: e.message };
-  }
-}
-
-/**
- * Fetch Monad balance for an address
- * @param {string} address - Ethereum address with 0x prefix
- * @returns {Promise<{balance: string, error?: string}>}
- */
-async function fetchMonadBalance(address) {
-  try {
-    // Monad testnet RPC
-    const response = await fetch('https://testnet-rpc.monad.xyz', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'eth_getBalance',
-        params: [address, 'latest']
-      })
-    });
-    const data = await response.json();
-    if (data.error) {
-      return { balance: '0', error: data.error.message };
-    }
-    // Balance is in wei (1 MON = 10^18 wei)
-    const balanceWei = BigInt(data.result || '0x0');
-    const balanceMon = Number(balanceWei) / 1e18;
-    return { balance: balanceMon.toFixed(4) };
-  } catch (e) {
-    console.debug('Monad balance fetch unavailable:', e.message);
-    return { balance: '--', error: e.message };
-  }
-}
-
-/**
- * Fetch Bitcoin balance for an address using public API
- * @param {string} address - Bitcoin address
- * @returns {Promise<{balance: string, error?: string}>}
- */
-async function fetchBtcBalance(address) {
-  try {
-    // Using blockchain.info API with CORS enabled
-    const response = await fetch(`https://blockchain.info/q/addressbalance/${address}?cors=true`);
-    if (!response.ok) {
-      return { balance: '0', error: 'API error' };
-    }
-    const satoshis = await response.text();
-    const btc = parseInt(satoshis, 10) / 1e8;
-    return { balance: btc.toFixed(8) };
-  } catch (e) {
-    console.debug('BTC balance fetch unavailable:', e.message);
-    return { balance: '--', error: e.message };
-  }
-}
-
-/**
- * Fetch Ethereum balance for an address using public API
- * @param {string} address - Ethereum address with 0x prefix
- * @returns {Promise<{balance: string, error?: string}>}
- */
-async function fetchEthBalance(address) {
-  try {
-    // Using Cloudflare's Ethereum gateway (CORS enabled)
-    const response = await fetch('https://cloudflare-eth.com', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'eth_getBalance',
-        params: [address, 'latest']
-      })
-    });
-    const data = await response.json();
-    if (data.error) {
-      return { balance: '0', error: data.error.message };
-    }
-    const balanceWei = BigInt(data.result || '0x0');
-    const balanceEth = Number(balanceWei) / 1e18;
-    return { balance: balanceEth.toFixed(6) };
-  } catch (e) {
-    console.debug('ETH balance fetch unavailable:', e.message);
-    return { balance: '--', error: e.message };
-  }
-}
-
-/**
- * Fetch Solana balance for an address using public RPC
- * @param {string} address - Solana address (base58)
- * @returns {Promise<{balance: string, error?: string}>}
- */
-async function fetchSolBalance(address) {
-  // Try multiple Solana RPC endpoints (some have better CORS support)
-  const endpoints = [
-    'https://solana-mainnet.g.alchemy.com/v2/demo', // Alchemy demo endpoint
-    'https://rpc.ankr.com/solana', // Ankr public endpoint (CORS enabled)
-    'https://api.mainnet-beta.solana.com', // Official (may block CORS)
-  ];
-
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'getBalance',
-          params: [address]
-        })
-      });
-      if (!response.ok) continue;
-      const data = await response.json();
-      if (data.error) continue;
-      // Balance is in lamports (1 SOL = 10^9 lamports)
-      const lamports = data.result?.value || 0;
-      const sol = lamports / 1e9;
-      return { balance: sol.toFixed(6) };
-    } catch (e) {
-      // Try next endpoint
-      continue;
-    }
-  }
-  console.debug('SOL balance fetch unavailable: all endpoints failed');
-  return { balance: '--', error: 'No available endpoint' };
-}
-
-/**
- * Fetch Cardano balance for an address using Blockfrost public API
- * @param {string} address - Cardano address (bech32)
- * @returns {Promise<{balance: string, error?: string}>}
- */
-async function fetchAdaBalance(address) {
-  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-  if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return {
-      balance: '--',
-      error: 'Cardano balance lookup disabled on static docs hosts due public API CORS',
-    };
-  }
-
-  try {
-    // Using Koios free API v1 for local docs/dev only.
-    const response = await fetch('https://api.koios.rest/api/v1/address_info', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ _addresses: [address] })
-    });
-    if (!response.ok) {
-      return { balance: '0', error: 'API error' };
-    }
-    const data = await response.json();
-    if (data && data[0] && data[0].balance) {
-      // Balance is in lovelace (1 ADA = 10^6 lovelace)
-      const lovelace = BigInt(data[0].balance);
-      const ada = Number(lovelace) / 1e6;
-      return { balance: ada.toFixed(6) };
-    }
-    return { balance: '0' };
-  } catch (e) {
-    console.debug('ADA balance fetch unavailable:', e.message);
-    return { balance: '--', error: e.message };
-  }
-}
-
-/**
- * Derive a Cardano address from an Ed25519 public key
- * Uses Bech32 encoding with "addr" prefix for mainnet
- * This is a simplified address (enterprise address without staking key)
- * @param {Uint8Array} publicKey - Ed25519 public key (32 bytes)
- * @returns {string} The Cardano address in Bech32 format
- */
-function deriveCardanoAddress(publicKey) {
-  // Cardano enterprise address (type 6): header byte 0x61 for mainnet
-  // Format: header || blake2b_224(public_key)
-  const keyHash = blake2b(publicKey, { dkLen: 28 }); // 224-bit hash
-  const addressBytes = new Uint8Array(29);
-  addressBytes[0] = 0x61; // Enterprise address, mainnet
-  addressBytes.set(keyHash, 1);
-
-  // Bech32 encode with "addr" prefix
-  return bech32Encode('addr', addressBytes);
-}
-
-/**
- * Bech32 encoding for Cardano addresses
- * @param {string} prefix - Human-readable part (e.g., "addr")
- * @param {Uint8Array} data - Data bytes to encode
- * @returns {string} Bech32-encoded string
- */
-function bech32Encode(prefix, data) {
-  const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-
-  // Convert 8-bit data to 5-bit groups
-  const data5bit = convertBits(data, 8, 5, true);
-
-  // Create checksum
-  const checksumData = expandHrp(prefix).concat(data5bit).concat([0, 0, 0, 0, 0, 0]);
-  const polymod = bech32Polymod(checksumData) ^ 1;
-  const checksum = [];
-  for (let i = 0; i < 6; i++) {
-    checksum.push((polymod >> (5 * (5 - i))) & 31);
-  }
-
-  // Encode
-  let result = prefix + '1';
-  for (const d of data5bit.concat(checksum)) {
-    result += CHARSET[d];
-  }
-  return result;
-}
-
-function convertBits(data, fromBits, toBits, pad) {
-  let acc = 0;
-  let bits = 0;
-  const ret = [];
-  const maxv = (1 << toBits) - 1;
-  for (const value of data) {
-    acc = (acc << fromBits) | value;
-    bits += fromBits;
-    while (bits >= toBits) {
-      bits -= toBits;
-      ret.push((acc >> bits) & maxv);
-    }
-  }
-  if (pad) {
-    if (bits > 0) {
-      ret.push((acc << (toBits - bits)) & maxv);
-    }
-  }
-  return ret;
-}
-
-function expandHrp(hrp) {
-  const ret = [];
-  for (const c of hrp) {
-    ret.push(c.charCodeAt(0) >> 5);
-  }
-  ret.push(0);
-  for (const c of hrp) {
-    ret.push(c.charCodeAt(0) & 31);
-  }
-  return ret;
-}
-
-function bech32Polymod(values) {
-  const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
-  let chk = 1;
-  for (const v of values) {
-    const b = chk >> 25;
-    chk = ((chk & 0x1ffffff) << 5) ^ v;
-    for (let i = 0; i < 5; i++) {
-      if ((b >> i) & 1) {
-        chk ^= GEN[i];
-      }
-    }
-  }
-  return chk;
-}
 
 // =============================================================================
 // Aligned Binary Format Section

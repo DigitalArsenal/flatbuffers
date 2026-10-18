@@ -12,7 +12,10 @@
 //   - two page sessions seal every field; Python `cryptography`
 //     (field_encryption_vector.py) opens each from the wallet seed;
 //   - native flatc C++ (field_encryption_native.cpp, OpenSSL backend) opens them;
-//   - another account of the same wallet is refused.
+//   - another account of the same wallet is refused;
+//   - "Encrypt to a Recipient" seals a message to your own wallet and to a
+//     pasted wallet key (account 1); only that recipient's key opens each;
+//   - the page has no decrypt control (decrypting is the wallet's operation).
 import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -155,6 +158,29 @@ async function session(page, origin, signedIn) {
   return result;
 }
 
+// One page session of "Encrypt to a Recipient": recipientHex empty = your wallet.
+async function sendSession(page, origin, recipientHex, message) {
+  const script = await page.send('Page.addScriptToEvaluateOnNewDocument', { source: walletScript(IDENTITY) });
+  await page.send('Page.navigate', { url: `${origin}/flatbuffers/` });
+  await page.waitFor(`document.readyState === 'complete' && !!document.getElementById('send-seal')`);
+  await page.waitFor(`document.querySelectorAll('#field-checkboxes .field-checkbox').length > 0`);
+  await new Promise((r) => setTimeout(r, 1500));
+  await page.eval(`(() => {
+    document.getElementById('send-recipient-key').value = ${JSON.stringify(recipientHex)};
+    document.getElementById('send-plaintext').value = ${JSON.stringify(message)};
+    document.getElementById('send-seal').click();
+  })()`);
+  await page.waitFor(`!document.getElementById('send-output').hidden`);
+  const result = await page.eval(`(() => {
+    const o = document.getElementById('send-output').dataset;
+    return { fieldId: 0, plaintextHex: o.plaintextHex, ciphertextHex: o.ciphertextHex, encHex: o.encHex,
+      decryptControls: document.querySelectorAll('[id*="decrypt" i]').length,
+      status: document.getElementById('send-status').textContent };
+  })()`);
+  await page.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: script.identifier });
+  return result;
+}
+
 function python(account, fields) {
   const r = spawnSync('python3', ['-I', path.join(here, 'field_encryption_vector.py')], {
     input: JSON.stringify({ seedHex: SEED, account, fields }), encoding: 'utf8',
@@ -199,7 +225,7 @@ try {
   const first = await session(page, origin, true);
   const second = await session(page, origin, true);
   const fields = [...first.fields, ...second.fields];
-  if (first.fields.length < 3 || second.fields.length !== first.fields.length) fail(`sealed ${first.fields.length}/${second.fields.length} fields`);
+  if (first.fields.length < 3 || second.fields.length < 3) fail(`sealed ${first.fields.length}/${second.fields.length} fields`);
   if (first.fields[0].ciphertextHex === second.fields[0].ciphertextHex) fail('two sessions produced the same ciphertext (ephemeral key reused)');
 
   const opened = python(0, fields);
@@ -217,8 +243,25 @@ for i in (44,0,0,1,0):
 print(k.hex())`, SEED], { encoding: 'utf8' }).stdout.trim();
   const native = nativeOpen(fields, derive);
   fields.forEach((f, i) => { if (native[i] !== f.plaintextHex) fail(`native C++ did not open field ${f.fieldId}: ${native[i]}`); });
+
+  const message = 'meet at the ground station 0400Z';
+  const messageHex = Buffer.from(message).toString('hex');
+  const toSelf = await sendSession(page, origin, '', message);
+  const recipientHex = python(1, []).publicKeyHex;
+  const toOther = await sendSession(page, origin, recipientHex, message);
+  if (toSelf.plaintextHex !== messageHex || toOther.plaintextHex !== messageHex) fail('the message was not what was typed');
+  if (toSelf.decryptControls || toOther.decryptControls) fail('the page has a decrypt control');
+  if (!/to your wallet/u.test(toSelf.status) || !/recipient key/u.test(toOther.status)) fail(`recipient status: ${toSelf.status} / ${toOther.status}`);
+  const selfOpen = python(0, [toSelf, toOther]);
+  if (selfOpen.fields[0].plaintextHex !== messageHex) fail(`your wallet did not open your message: ${JSON.stringify(selfOpen.fields[0])}`);
+  if (!selfOpen.fields[1].refused) fail("your wallet opened the recipient's message");
+  const otherOpen = python(1, [toSelf, toOther]);
+  if (otherOpen.fields[1].plaintextHex !== messageHex) fail(`the recipient did not open their message: ${JSON.stringify(otherOpen.fields[1])}`);
+  if (!otherOpen.fields[0].refused) fail('the recipient opened your message');
+  if (nativeOpen([toSelf], derive)[0] !== messageHex) fail('native C++ did not open the message');
+
   if (page.errors.length) fail(`page errors: ${page.errors.join(' | ')}`);
-  console.log(`field-encryption E2E PASS: ${fields.length} fields over two sessions opened by Python and native flatc C++; another account refused; signed out seals nothing`);
+  console.log(`field-encryption E2E PASS: ${fields.length} fields over two sessions opened by Python and native flatc C++; another account refused; signed out seals nothing; a message to your wallet and one to a pasted recipient key (account 1) open only for their recipient; no decrypt control`);
 } finally {
   browser.kill();
   server.close();

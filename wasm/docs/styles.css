@@ -7979,3 +7979,31 @@ details[open] .collapse-icon {
 /* Space Data Network style guide (spacedatanetwork.org/style-guide.html):
    the header is not selectable. */
 
+
+/* Wallet-keyed encryption: recipient row and the encrypt-to-a-recipient demo */
+.field-recipient,
+.send-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.send-demo {
+  margin-top: 24px;
+}
+
+.field-recipient .glass-btn,
+.send-demo .glass-btn {
+  align-self: flex-start;
+}
+
+.send-demo .hex-display {
+  display: block;
+  word-break: break-all;
+}
+
+#field-wallet-status.attention,
+#send-status.attention {
+  color: var(--accent-warning, #f59e0b);
+}

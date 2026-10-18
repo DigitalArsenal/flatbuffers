@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -17,19 +18,22 @@ const headerTokens = [
   ["--sdn-stack-header-mobile-link-size", "16px"],
 ];
 
+// The site is served from https://digitalarsenal.github.io/flatbuffers/, so its vendored assets are root-absolute under it;
+// the sources are in public/, which the build copies into dist/.
+const SITE_PREFIX = "/flatbuffers/";
 const START_MARKER = "<!-- SDN_CONSUMER_ASSETS_START -->";
 const END_MARKER = "<!-- SDN_CONSUMER_ASSETS_END -->";
 const approvedRelease = Object.freeze({
-  publicStyleUrl: "https://static.spacedatanetwork.org/assets/hd-wallet-ui/2.1.0/sdn-wallet-public-client.c3f68d1cfd88478f10d836a5e829d1dfc6a10157972cf0f7d4d319d0636f2cc4.css",
+  publicStyleUrl: "/flatbuffers/assets/vendor/hd-wallet-ui/2.1.0/sdn-wallet-public-client.c3f68d1cfd88478f10d836a5e829d1dfc6a10157972cf0f7d4d319d0636f2cc4.css",
   publicStyleIntegrity: "sha384-fICuhN4I9xqOK1F5vGGzl26opuO+xQIvTZXMSV76lWTBiQ6AfzztMGLLDw8yRT8i",
-  publicScriptUrl: "https://static.spacedatanetwork.org/assets/hd-wallet-ui/2.1.0/sdn-wallet-public-client.f611e7e151a3b5c38384272f8894a4c6634f0a29bf925b0e02e0e27f8db0bfff.js",
+  publicScriptUrl: "/flatbuffers/assets/vendor/hd-wallet-ui/2.1.0/sdn-wallet-public-client.f611e7e151a3b5c38384272f8894a4c6634f0a29bf925b0e02e0e27f8db0bfff.js",
   publicScriptIntegrity: "sha384-R+QqsKoWJIS7iWrtPmgJ49DVnb1hSGjZokupbLInJd1PLp8RwQhtF/hnaerc33ci",
-  navScriptUrl: "https://static.spacedatanetwork.org/assets/sdn-stack-nav/1.0.0/sdn-stack-nav.52fde607eee38ffa116188201f50258ed50bd18c9f06c1af9678f763147a8fe5.js",
-  navScriptIntegrity: "sha384-dgeojhJ8vTszHXIbv7O7nZcEzqD10oUYYJjBmPrV7+kLQEUlXLQD4ek5Q7HOFiO5",
-  navStyleUrl: "https://static.spacedatanetwork.org/assets/sdn-stack-nav/1.0.0/sdn-stack-nav.36a36359ce18322185e9ff179f88175bab67d5ad84a14d9c08a54f2ff27267e7.css",
+  navScriptUrl: "/flatbuffers/assets/vendor/sdn-stack-nav/1.0.1/sdn-stack-nav.24eb3001afc5448a90cef87e53bb4e599c0ae4dc9e14bafb6d1236e0233c6008.js",
+  navScriptIntegrity: "sha384-g8NCFtcgbsW5bHeGiPtPb2Q+NJVlJLfwbaAZ7/Ium1YAVtxE/SqawvG/Ny0iMl56",
+  navStyleUrl: "/flatbuffers/assets/vendor/sdn-stack-nav/1.0.1/sdn-stack-nav.36a36359ce18322185e9ff179f88175bab67d5ad84a14d9c08a54f2ff27267e7.css",
   navStyleIntegrity: "sha384-c4M8Fg+kYaeOYYtJVr7jJsde24IhSWkWaRyAOHEZU9jozhRck089aw+mnHwxymds",
   registrySha256: "e1ce6fe903c9700484a8a87d96581c8cad97063dabf63030b4518a31a3bdaa93",
-  callbackHelperUrl: "https://static.spacedatanetwork.org/assets/hd-wallet-ui/2.1.0/sdn-wallet-callback.0f2dee485c8f0d7afe5f70b4b42093a382c92d32af551bd71b41733336091c7a.js",
+  callbackHelperUrl: "/flatbuffers/assets/vendor/hd-wallet-ui/2.1.0/sdn-wallet-callback.0f2dee485c8f0d7afe5f70b4b42093a382c92d32af551bd71b41733336091c7a.js",
   callbackHelperIntegrity: "sha384-UZG2zFMk46nuXFtMDyh5Rgfsai9CJXgmqvWILzXVbKJfdbSvg+7GRavCRgLXL5xy",
 });
 
@@ -64,7 +68,7 @@ function renderApprovedRegion(clientId, callbackUri) {
 }
 
 function renderApprovedCallback() {
-  return `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://static.spacedatanetwork.org; style-src 'none'; connect-src 'none'; img-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><title>Completing wallet connection</title></head><body><p>Completing wallet connection</p><script src="${approvedRelease.callbackHelperUrl}" integrity="${approvedRelease.callbackHelperIntegrity}" crossorigin="anonymous" data-callback-identity="sdn.wallet.callback.v1"></script></body></html>\n`;
+  return `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'none'; connect-src 'none'; img-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><title>Completing wallet connection</title></head><body><p>Completing wallet connection</p><script src="${approvedRelease.callbackHelperUrl}" integrity="${approvedRelease.callbackHelperIntegrity}" crossorigin="anonymous" data-callback-identity="sdn.wallet.callback.v1"></script></body></html>\n`;
 }
 
 function assertApprovedRegion(content, path, clientId, callbackUri) {
@@ -202,6 +206,33 @@ assertContains(workflow, "--destination docs", workflowPath);
 assertContains(workflow, "--check", workflowPath);
 if (materializerInvocations.length < 1) {
   throw new Error(`${workflowPath} must materialize the complete reviewed dist tree through the reviewed script`);
+}
+
+// The vendored bytes: every pinned asset must be in public/ and in dist/ under its URL, its sha256 the one in its name
+// and its sha384 the pinned integrity; and no page may name the asset host the owner ruled out.
+for (const [url, integrity] of [
+  [approvedRelease.publicStyleUrl, approvedRelease.publicStyleIntegrity],
+  [approvedRelease.publicScriptUrl, approvedRelease.publicScriptIntegrity],
+  [approvedRelease.navScriptUrl, approvedRelease.navScriptIntegrity],
+  [approvedRelease.navStyleUrl, approvedRelease.navStyleIntegrity],
+  [approvedRelease.callbackHelperUrl, approvedRelease.callbackHelperIntegrity],
+]) {
+  if (!url.startsWith(SITE_PREFIX)) throw new Error(`${url} is not vendored under ${SITE_PREFIX}`);
+  for (const root of ["public", "dist"]) {
+    const file = resolve(root, url.slice(SITE_PREFIX.length));
+    let bytes;
+    try {
+      bytes = readFileSync(file);
+    } catch {
+      throw new Error(`Missing vendored asset ${file}`);
+    }
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    if (!url.includes(`.${sha256}.`)) throw new Error(`${file} sha256 ${sha256} differs from its name`);
+    if (`sha384-${createHash("sha384").update(bytes).digest("base64")}` !== integrity) throw new Error(`${file} differs from its pinned integrity`);
+  }
+}
+for (const [path, content] of [["index.html", sourceHtml], ["dist/index.html", builtHtml], [callbackPath, callback]]) {
+  if (content.includes("static.spacedatanetwork.org")) throw new Error(`${path} names static.spacedatanetwork.org`);
 }
 
 const packageDocument = JSON.parse(read("package.json"));

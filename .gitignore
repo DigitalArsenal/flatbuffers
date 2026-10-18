@@ -149,6 +149,9 @@ yarn-error.log
 **/dist
 !wasm/dist/
 **/vendor
+# The site's vendored SDN stack nav and wallet client (content-addressed, SRI-pinned): sources and the materialized site.
+!wasm/docs/public/assets/vendor/
+!docs/assets/vendor/
 **/go.sum
 flatbuffers.pc
 **/FlatBuffers.Test.Swift.xcodeproj

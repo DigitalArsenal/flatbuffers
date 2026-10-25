@@ -9,7 +9,6 @@ const links = [
   ["sdn", "SDN", "https://spacedatanetwork.org/"],
   ["module-sdk", "Module SDK", "https://digitalarsenal.github.io/space-data-module-sdk/"],
   ["hd-wallet", "HD Wallet", "https://digitalarsenal.github.io/hd-wallet-wasm/"],
-  ["sdn-ap", "SDN-AP", "https://digitalarsenal.github.io/sdn-ap/"],
 ];
 
 const headerTokens = [
@@ -30,9 +29,9 @@ const approvedRelease = Object.freeze({
   publicStyleIntegrity: "sha384-fICuhN4I9xqOK1F5vGGzl26opuO+xQIvTZXMSV76lWTBiQ6AfzztMGLLDw8yRT8i",
   publicScriptUrl: "/flatbuffers/assets/vendor/hd-wallet-ui/2.2.1/sdn-wallet-public-client.9ab041131df957fcb6ef7e3d87bf9d19fe313bc5d7f1e53337752faf0ba354da.js",
   publicScriptIntegrity: "sha384-FNcHq8FI7eBz2YUhfO3jNfmdObbCXmfg4ugmBEHzXW/KBpbUdJXqIzpn30OWJBuB",
-  navScriptUrl: "/flatbuffers/assets/vendor/sdn-stack-nav/1.1.0/sdn-stack-nav.2e5d4efc654388c85b79e53b1b148268e4083d9252f2a367ea257ccb50d270cd.js",
-  navScriptIntegrity: "sha384-XohIVyQyKflz7lf3TTrmIrihUTLtUhJaj/tTBlloTUjOItTmdQGLLFOmXWQwuwFg",
-  navStyleUrl: "/flatbuffers/assets/vendor/sdn-stack-nav/1.1.0/sdn-stack-nav.36a36359ce18322185e9ff179f88175bab67d5ad84a14d9c08a54f2ff27267e7.css",
+  navScriptUrl: "/flatbuffers/assets/vendor/sdn-stack-nav/1.2.0/sdn-stack-nav.ba268c55a1551bcacc390ac01347c319335a1660787b55b4b239df00fc3c1a4c.js",
+  navScriptIntegrity: "sha384-4BDI84CnpZ83otmTHK/KzA5+4pw8q5l+3LInURbEVJY96/iLGzCZUZsCyxjZ1Kpb",
+  navStyleUrl: "/flatbuffers/assets/vendor/sdn-stack-nav/1.2.0/sdn-stack-nav.36a36359ce18322185e9ff179f88175bab67d5ad84a14d9c08a54f2ff27267e7.css",
   navStyleIntegrity: "sha384-c4M8Fg+kYaeOYYtJVr7jJsde24IhSWkWaRyAOHEZU9jozhRck089aw+mnHwxymds",
   registrySha256: "63784143e2ad8e2542d22148ff4a0a4da7a10f4b3f9909ae91a20dc0f60db06b",
   callbackHelperUrl: "/flatbuffers/assets/vendor/hd-wallet-ui/2.2.1/sdn-wallet-callback.0f2dee485c8f0d7afe5f70b4b42093a382c92d32af551bd71b41733336091c7a.js",

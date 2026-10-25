@@ -8,6 +8,8 @@ const links = [
   ["flatsql", "FlatSQL", "https://digitalarsenal.github.io/flatsql/"],
   ["sdn", "SDN", "https://spacedatanetwork.org/"],
   ["module-sdk", "Module SDK", "https://digitalarsenal.github.io/space-data-module-sdk/"],
+  ["hd-wallet", "HD Wallet", "https://digitalarsenal.github.io/hd-wallet-wasm/"],
+  ["sdn-ap", "SDN-AP", "https://digitalarsenal.github.io/sdn-ap/"],
 ];
 
 const headerTokens = [
@@ -28,9 +30,9 @@ const approvedRelease = Object.freeze({
   publicStyleIntegrity: "sha384-fICuhN4I9xqOK1F5vGGzl26opuO+xQIvTZXMSV76lWTBiQ6AfzztMGLLDw8yRT8i",
   publicScriptUrl: "/flatbuffers/assets/vendor/hd-wallet-ui/2.2.1/sdn-wallet-public-client.9ab041131df957fcb6ef7e3d87bf9d19fe313bc5d7f1e53337752faf0ba354da.js",
   publicScriptIntegrity: "sha384-FNcHq8FI7eBz2YUhfO3jNfmdObbCXmfg4ugmBEHzXW/KBpbUdJXqIzpn30OWJBuB",
-  navScriptUrl: "/flatbuffers/assets/vendor/sdn-stack-nav/1.0.1/sdn-stack-nav.24eb3001afc5448a90cef87e53bb4e599c0ae4dc9e14bafb6d1236e0233c6008.js",
-  navScriptIntegrity: "sha384-g8NCFtcgbsW5bHeGiPtPb2Q+NJVlJLfwbaAZ7/Ium1YAVtxE/SqawvG/Ny0iMl56",
-  navStyleUrl: "/flatbuffers/assets/vendor/sdn-stack-nav/1.0.1/sdn-stack-nav.36a36359ce18322185e9ff179f88175bab67d5ad84a14d9c08a54f2ff27267e7.css",
+  navScriptUrl: "/flatbuffers/assets/vendor/sdn-stack-nav/1.1.0/sdn-stack-nav.2e5d4efc654388c85b79e53b1b148268e4083d9252f2a367ea257ccb50d270cd.js",
+  navScriptIntegrity: "sha384-XohIVyQyKflz7lf3TTrmIrihUTLtUhJaj/tTBlloTUjOItTmdQGLLFOmXWQwuwFg",
+  navStyleUrl: "/flatbuffers/assets/vendor/sdn-stack-nav/1.1.0/sdn-stack-nav.36a36359ce18322185e9ff179f88175bab67d5ad84a14d9c08a54f2ff27267e7.css",
   navStyleIntegrity: "sha384-c4M8Fg+kYaeOYYtJVr7jJsde24IhSWkWaRyAOHEZU9jozhRck089aw+mnHwxymds",
   registrySha256: "63784143e2ad8e2542d22148ff4a0a4da7a10f4b3f9909ae91a20dc0f60db06b",
   callbackHelperUrl: "/flatbuffers/assets/vendor/hd-wallet-ui/2.2.1/sdn-wallet-callback.0f2dee485c8f0d7afe5f70b4b42093a382c92d32af551bd71b41733336091c7a.js",
@@ -233,6 +235,16 @@ for (const [url, integrity] of [
 }
 for (const [path, content] of [["index.html", sourceHtml], ["dist/index.html", builtHtml], [callbackPath, callback]]) {
   if (content.includes("static.spacedatanetwork.org")) throw new Error(`${path} names static.spacedatanetwork.org`);
+}
+
+// Zero backward compatibility: the pinned nav release is the only one vendored, in public/ and in dist/.
+const navVersion = approvedRelease.navScriptUrl.split("/").at(-2);
+for (const root of ["public", "dist"]) {
+  const navVendorRoot = resolve(root, "assets/vendor/sdn-stack-nav");
+  const vendoredVersions = readdirSync(navVendorRoot);
+  if (vendoredVersions.length !== 1 || vendoredVersions[0] !== navVersion) {
+    throw new Error(`${navVendorRoot} must hold only ${navVersion} (found ${vendoredVersions.join(", ") || "nothing"})`);
+  }
 }
 
 const packageDocument = JSON.parse(read("package.json"));

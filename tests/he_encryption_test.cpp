@@ -203,6 +203,31 @@ static void TestHEContextCreation() {
   TEST_TRUE(result.ok());
 }
 
+// Test the accepted degrees and their coefficient modulus chains
+static void TestHEDegrees() {
+  std::cout << "Testing HE degrees..." << std::endl;
+
+  auto client8192 = HEContext::CreateClient(8192);
+  TEST_TRUE(client8192.IsValid());
+  TEST_EQ(client8192.SlotCount(), 8192u);
+  TEST_TRUE(client8192.GetCoeffModulusBits() ==
+            (std::vector<int>{43, 43, 44, 44, 44}));
+
+  auto client16384 = HEContext::CreateClient(16384);
+  TEST_TRUE(client16384.IsValid());
+  TEST_EQ(client16384.GetPolyModulusDegree(), 16384u);
+  TEST_EQ(client16384.SlotCount(), 16384u);
+  TEST_TRUE(client16384.GetCoeffModulusBits() ==
+            (std::vector<int>{48, 48, 48, 49, 49, 49, 49, 49, 49}));
+  TEST_EQ(client16384.GetPlainModuli().size(), size_t{kPlainModulusCount});
+  auto ct = client16384.EncryptInt64(-123456789012345LL);
+  TEST_TRUE(!ct.empty());
+  TEST_EQ(client16384.DecryptInt64(ct.data(), ct.size()), -123456789012345LL);
+
+  TEST_FALSE(HEContext::CreateClient(4096).IsValid());
+  TEST_FALSE(HEContext::CreateClient(32768).IsValid());
+}
+
 // Test encrypt/decrypt round-trip
 static void TestHEEncryptDecrypt() {
   std::cout << "Testing HE encrypt/decrypt..." << std::endl;
@@ -496,6 +521,7 @@ int main(int argc, char** argv) {
   std::cout << std::endl;
 
   TestHEContextCreation();
+  TestHEDegrees();
   TestHEEncryptDecrypt();
   TestHEOperations();
   TestHEOperationsFunctions();

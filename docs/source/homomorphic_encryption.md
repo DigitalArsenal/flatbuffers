@@ -196,12 +196,42 @@ if (!result.ok()) {
 
 ## Security Parameters
 
-| Poly Modulus Degree | Coefficient Modulus | Security Level | Slots | Ciphertext Size |
-|---------------------|---------------------|----------------|-------|-----------------|
-| 8192 (default) | 218 bits | 128-bit | 8192 | 1,573,227 bytes (three moduli) |
-| 16384 | 438 bits | 128-bit | 16384 | larger |
+| Poly Modulus Degree | Coefficient Modulus Chain | Security Level | Slots | Ciphertext Size |
+|---------------------|---------------------------|----------------|-------|-----------------|
+| 8192 (default) | 5 primes: 43, 43, 44, 44, 44 bits (218 bits) | 128-bit | 8192 | 1,573,227 bytes (three moduli) |
+| 16384 | 9 primes: 48, 48, 48, 49, 49, 49, 49, 49, 49 bits (438 bits) | 128-bit | 16384 | 6,291,819 bytes (three moduli) |
 
-Other degrees give an invalid context.
+Other degrees give an invalid context. The chains are SEAL 4.1.1
+`CoeffModulus::BFVDefault(n, sec_level_type::tc128)`: the
+HomomorphicEncryption.org security standard table for 128-bit classical
+security with a ternary secret. The last prime of each chain is the
+key-switching prime; the others carry ciphertexts. `GetCoeffModulusBits()`
+returns a context's chain.
+
+### Noise Budget by Multiplicative Depth
+
+Remaining noise budget in bits, measured 2026-11-06 by
+`tests/he_encryption/he-batching-range.e2e.mjs` on the batching above (every
+slot filled; a squaring chain of 11-bit slots, bound 176 at depth 4, and a
+chain of fresh 35-bit factors, bound 175 at depth 4). A ciphertext whose
+budget reaches 0 is refused at decryption (`kNoiseBudgetExhausted`); every
+level with budget left decrypts exactly.
+
+| n | Fresh | After 1 multiply | 2 | 3 | 4 |
+|---|---|---|---|---|---|
+| 8192, squaring | 106 | 34 | 0 (refused) | refused | refused |
+| 8192, fresh factors | 106 | 34 | 0 (refused) | refused | refused |
+| 16384, squaring | 320 | 247 | 173 | 99 | 25 |
+| 16384, fresh factors | 320 | 248 | 175 | 102 | 29 |
+
+n = 8192 carries one multiplication; depths 2 to 4 need n = 16384. The
+default stays 8192: it serves depth-1 work at a quarter of the ciphertext
+size and a fifth of the multiply time (24 ms against 110 ms per three-modulus
+ciphertext on the measuring machine); a caller needing depth 2 to 4 passes
+16384 to `CreateClient`. Encryption noise is random, so a figure moves by
+about one bit between runs; the E2E holds every level to a registered minimum
+(8192: fresh 100, 30 after one multiply, refused after two; 16384: fresh 310,
+then 240, 165, 90, 18).
 
 ### Float Precision
 
@@ -226,16 +256,19 @@ This section is the contract the implementation and its test
 | --- | --- |
 | Scheme | BFV or BGV |
 | Poly modulus degree n | 8192 (default) or 16384; any other degree gives an invalid context |
-| Coefficient modulus | SEAL `CoeffModulus::BFVDefault(n)`, 128-bit security (218 bits at 8192, 438 at 16384) |
+| Coefficient modulus | SEAL `CoeffModulus::BFVDefault(n, tc128)`, 128-bit security: 5 primes of 43, 43, 44, 44, 44 bits (218) at 8192; 9 primes of 48, 48, 48, 49, 49, 49, 49, 49, 49 bits (438) at 16384 |
 | Plaintext moduli | three 60-bit batching primes, SEAL `PlainModulus::Batching(n, {60, 60, 60})` |
 | Primes at n = 8192 | t1 = 1152921504606683137, t2 = 1152921504606748673, t3 = 1152921504606830593 |
 | T = t1 t2 t3 at n = 8192 | 1532495540865518635130821056977027158796330141975560193 (2^179.9999999999997) |
+| Primes at n = 16384 | t1 = 1152921504606584833, t2 = 1152921504606683137, t3 = 1152921504606748673 |
+| T = t1 t2 t3 at n = 16384 | 1532495540865191964058577030327937992314109603578642433 (2^179.9999999999993) |
 | Slots per ciphertext | n |
 
 One value is held as one SEAL ciphertext per prime; the value is the CRT
 combination of the three residues, decoded to the centered interval
 (-(T-1)/2, (T-1)/2]. At n = 8192, (T-1)/2 =
-766247770432759317565410528488513579398165070987780096.
+766247770432759317565410528488513579398165070987780096; at n = 16384,
+766247770432595982029288515163968996157054801789321216.
 
 ### Range
 
@@ -318,9 +351,15 @@ keys use the same three-record layout behind a one-byte record count.
 - Refusals: +/-2^178 (one step outside); a value above its declared bound;
   `Multiply` of two 100-bit-bound ciphertexts; `DecryptInt64` of 2^63;
   NaN and infinity in fixed point; scale 3; a vector of n + 1 values; poly
-  modulus degree 4096 (refused); a value of bound 1 squared twice, decrypted
-  after its noise budget runs out (added 2026-11-06 with the restated
+  modulus degrees 4096 and 32768 (refused); a value of bound 1 squared until
+  its noise budget is 0, then decrypted (added 2026-11-06 with the restated
   acceptance).
+- At n = 16384: the coefficient modulus chain and the three primes above; one
+  vector of 16384 distinct values including +/-(2^178 - 1), round trip slot by
+  slot; products of two 89-bit values and sums at the bound; the whole
+  refusal set, code for code.
+- Depth: the noise budget after 1 to 4 multiplications at both degrees
+  ("Noise Budget by Multiplicative Depth"), every decryptable level exact.
 
 ## Ciphertext Binary Format
 

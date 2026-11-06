@@ -223,7 +223,7 @@ void Refusals(const HEContext& client, const HEContext& server, size_t n,
 // slot or the refusal code.
 void ChainLevel(const HEContext& client, const std::vector<uint8_t>& ct,
                 int depth, size_t n, double multiply_ms) {
-  Raw(std::string(depth ? "," : "") + "{\"depth\":" + std::to_string(depth));
+  Raw(std::string(depth > 1 ? "," : "") + "{\"depth\":" + std::to_string(depth));
   if (ct.empty()) {
     Raw(",\"refused\":" + Str(HEErrorName(client.LastError().error)) + "}");
     return;

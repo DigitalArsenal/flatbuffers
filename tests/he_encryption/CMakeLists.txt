@@ -37,4 +37,15 @@ add_executable(he_batching_range_test
   "${FB_ROOT}/src/encryption.cpp")
 target_include_directories(he_batching_range_test PRIVATE "${FB_ROOT}/include")
 target_compile_definitions(he_batching_range_test PRIVATE FLATBUFFERS_HE_USE_SEAL=1)
+# The top-level strict-mode warnings (CMakeLists.txt, ProjectConfig).
+if(NOT MSVC)
+  target_compile_options(he_batching_range_test PRIVATE
+    -Wall -Werror -pedantic -Wextra -Wno-unused-parameter -Wold-style-cast
+    -fsigned-char -Wnon-virtual-dtor)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(he_batching_range_test PRIVATE
+      -Wnewline-eof -Wmissing-declarations -Wzero-as-null-pointer-constant
+      -Wimplicit-fallthrough -Wextra-semi -Werror=unused-private-field)
+  endif()
+endif()
 target_link_libraries(he_batching_range_test PRIVATE seal)

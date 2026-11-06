@@ -30,6 +30,7 @@
 #pragma GCC diagnostic ignored "-Wextra-semi"
 #endif
 #include <seal/seal.h>
+#include <seal/util/uintarithsmallmod.h>
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
@@ -69,9 +70,21 @@ const char* HEErrorName(HEError error) {
 
 namespace {
 
-using u128 = unsigned __int128;
+// Portable 192-bit arithmetic on little-endian 64-bit limbs (no 128-bit
+// integer type).
 using Limbs = std::array<uint64_t, 3>;
 
+// a * b = hi * 2^64 + lo.
+void Mul64(uint64_t a, uint64_t b, uint64_t* lo, uint64_t* hi) {
+  const uint64_t a0 = a & 0xffffffffu, a1 = a >> 32;
+  const uint64_t b0 = b & 0xffffffffu, b1 = b >> 32;
+  const uint64_t p00 = a0 * b0, p01 = a0 * b1, p10 = a1 * b0, p11 = a1 * b1;
+  const uint64_t mid = (p00 >> 32) + (p01 & 0xffffffffu) + (p10 & 0xffffffffu);
+  *lo = (mid << 32) | (p00 & 0xffffffffu);
+  *hi = p11 + (p01 >> 32) + (p10 >> 32) + (mid >> 32);
+}
+
+#ifdef FLATBUFFERS_HE_USE_SEAL
 int CompareLimbs(const Limbs& a, const Limbs& b) {
   for (int i = 2; i >= 0; --i) {
     if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
@@ -81,11 +94,12 @@ int CompareLimbs(const Limbs& a, const Limbs& b) {
 
 Limbs AddLimbs(const Limbs& a, const Limbs& b) {
   Limbs r{};
-  u128 carry = 0;
+  uint64_t carry = 0;
   for (int i = 0; i < 3; ++i) {
-    const u128 s = static_cast<u128>(a[i]) + b[i] + carry;
-    r[i] = static_cast<uint64_t>(s);
-    carry = s >> 64;
+    const uint64_t s = a[i] + carry;
+    const uint64_t c1 = s < carry ? 1 : 0;
+    r[i] = s + b[i];
+    carry = c1 + (r[i] < s ? 1 : 0);
   }
   return r;
 }
@@ -95,47 +109,54 @@ Limbs SubLimbs(const Limbs& a, const Limbs& b) {
   Limbs r{};
   uint64_t borrow = 0;
   for (int i = 0; i < 3; ++i) {
-    const u128 sub = static_cast<u128>(b[i]) + borrow;
-    r[i] = static_cast<uint64_t>(static_cast<u128>(a[i]) - sub);
-    borrow = static_cast<u128>(a[i]) < sub ? 1 : 0;
+    const uint64_t d = a[i] - b[i];
+    const uint64_t b1 = a[i] < b[i] ? 1 : 0;
+    r[i] = d - borrow;
+    borrow = b1 + (d < borrow ? 1 : 0);
   }
   return r;
 }
 
-// a * b for a < 2^128, b < 2^64 (result < 2^192).
-Limbs MulLimbs(u128 a, uint64_t b) {
-  const u128 p0 = static_cast<u128>(static_cast<uint64_t>(a)) * b;
-  const u128 p1 = static_cast<u128>(static_cast<uint64_t>(a >> 64)) * b;
-  const u128 mid = (p0 >> 64) + static_cast<uint64_t>(p1);
+// a * b, requires the product to fit in 192 bits.
+Limbs MulLimbs(const Limbs& a, uint64_t b) {
   Limbs r{};
-  r[0] = static_cast<uint64_t>(p0);
-  r[1] = static_cast<uint64_t>(mid);
-  r[2] = static_cast<uint64_t>(mid >> 64) + static_cast<uint64_t>(p1 >> 64);
+  uint64_t carry = 0;
+  for (int i = 0; i < 3; ++i) {
+    uint64_t lo = 0, hi = 0;
+    Mul64(a[i], b, &lo, &hi);
+    r[i] = lo + carry;
+    carry = hi + (r[i] < lo ? 1 : 0);
+  }
   return r;
 }
-
-uint32_t LimbsBitLength(const Limbs& a) {
-  for (int i = 2; i >= 0; --i) {
-    if (a[i]) {
-      uint32_t bits = 0;
-      for (uint64_t v = a[i]; v; v >>= 1) ++bits;
-      return static_cast<uint32_t>(64 * i) + bits;
-    }
-  }
-  return 0;
-}
-
-uint64_t LimbsMod(const Limbs& a, uint64_t m) {
-  u128 r = a[2] % m;
-  r = ((r << 64) | a[1]) % m;
-  r = ((r << 64) | a[0]) % m;
-  return static_cast<uint64_t>(r);
-}
+#endif
 
 uint32_t BitLength64(uint64_t v) {
   uint32_t bits = 0;
   for (; v; v >>= 1) ++bits;
   return bits;
+}
+
+uint32_t LimbsBitLength(const Limbs& a) {
+  for (int i = 2; i >= 0; --i) {
+    if (a[i]) return static_cast<uint32_t>(64 * i) + BitLength64(a[i]);
+  }
+  return 0;
+}
+
+// a / d in place for 0 < d < 2^32; returns the remainder.
+uint64_t DivSmall(Limbs* a, uint64_t d) {
+  uint64_t rem = 0;
+  for (int i = 2; i >= 0; --i) {
+    const uint64_t hi = (rem << 32) | ((*a)[i] >> 32);
+    const uint64_t qh = hi / d;
+    rem = hi % d;
+    const uint64_t lo = (rem << 32) | ((*a)[i] & 0xffffffffu);
+    const uint64_t ql = lo / d;
+    rem = lo % d;
+    (*a)[i] = (qh << 32) | ql;
+  }
+  return rem;
 }
 
 bool IsPowerOfTwo(uint64_t v) { return v != 0 && (v & (v - 1)) == 0; }
@@ -206,11 +227,12 @@ bool WideInt::Parse(const std::string& text, WideInt* out) {
   for (; i < text.size(); ++i) {
     const char c = text[i];
     if (c < '0' || c > '9') return false;
-    u128 carry = static_cast<uint64_t>(c - '0');
+    uint64_t carry = static_cast<uint64_t>(c - '0');
     for (int k = 0; k < 3; ++k) {
-      const u128 v = static_cast<u128>(m[k]) * 10 + carry;
-      m[k] = static_cast<uint64_t>(v);
-      carry = v >> 64;
+      uint64_t lo = 0, hi = 0;
+      Mul64(m[k], 10, &lo, &hi);
+      m[k] = lo + carry;
+      carry = hi + (m[k] < lo ? 1 : 0);
     }
     if (carry) return false;
   }
@@ -245,23 +267,15 @@ double WideInt::ToDouble() const {
 
 std::string WideInt::ToString() const {
   if (IsZero()) return "0";
-  constexpr uint64_t kChunk = 10000000000000000000ULL;  // 10^19
+  constexpr uint64_t kChunk = 1000000000;  // 10^9
   Limbs m = magnitude;
   std::vector<uint64_t> chunks;
-  while (m[0] || m[1] || m[2]) {
-    u128 rem = 0;
-    for (int k = 2; k >= 0; --k) {
-      const u128 cur = (rem << 64) | m[k];
-      m[k] = static_cast<uint64_t>(cur / kChunk);
-      rem = cur % kChunk;
-    }
-    chunks.push_back(static_cast<uint64_t>(rem));
-  }
+  while (m[0] || m[1] || m[2]) chunks.push_back(DivSmall(&m, kChunk));
   std::string s = negative ? "-" : "";
   s += std::to_string(chunks.back());
   for (size_t k = chunks.size() - 1; k-- > 0;) {
     std::string part = std::to_string(chunks[k]);
-    s += std::string(19 - part.size(), '0') + part;
+    s += std::string(9 - part.size(), '0') + part;
   }
   return s;
 }
@@ -296,14 +310,33 @@ seal::prng_seed_type BuildPrngSeed(const uint8_t* seed, size_t seed_len,
   return prng_seed;
 }
 
-uint64_t MulMod(uint64_t a, uint64_t b, uint64_t m) {
-  return static_cast<uint64_t>(static_cast<u128>(a) * b % m);
+uint64_t MulMod(uint64_t a, uint64_t b, const seal::Modulus& m) {
+  return seal::util::multiply_uint_mod(a, b, m);
 }
 
-uint64_t PowMod(uint64_t a, uint64_t e, uint64_t m) {
-  uint64_t r = 1;
-  for (a %= m; e; e >>= 1, a = MulMod(a, a, m)) {
-    if (e & 1) r = MulMod(r, a, m);
+uint64_t AddMod(uint64_t a, uint64_t b, const seal::Modulus& m) {
+  return seal::util::add_uint_mod(a, b, m);
+}
+
+uint64_t SubMod(uint64_t a, uint64_t b, const seal::Modulus& m) {
+  return seal::util::sub_uint_mod(a, b, m);
+}
+
+uint64_t InvMod(uint64_t a, const seal::Modulus& m) {
+  uint64_t r = 0;
+  if (!seal::util::try_invert_uint_mod(a, m, r)) {
+    throw std::logic_error("plaintext moduli are not coprime");
+  }
+  return r;
+}
+
+// a mod m for a 192-bit a.
+uint64_t LimbsMod(const Limbs& a, const seal::Modulus& m) {
+  const uint64_t base = seal::util::barrett_reduce_64(
+      MulMod(uint64_t{1} << 32, uint64_t{1} << 32, m), m);  // 2^64 mod m
+  uint64_t r = 0;
+  for (int i = 2; i >= 0; --i) {
+    r = AddMod(MulMod(r, base, m), seal::util::barrett_reduce_64(a[i], m), m);
   }
   return r;
 }
@@ -418,9 +451,9 @@ class HEContextImpl {
   };
   std::array<Lane, kPlainModulusCount> lanes_;
   std::array<uint64_t, kPlainModulusCount> t_{};
+  std::array<seal::Modulus, kPlainModulusCount> mod_;
   uint64_t inv01_ = 0, inv012_ = 0;
-  u128 t01_ = 0;
-  Limbs T_{}, half_{};
+  Limbs t01_{}, T_{}, half_{};
 
   seal::EncryptionParameters BaseParameters(uint32_t degree,
                                             HEScheme scheme) const {
@@ -435,11 +468,13 @@ class HEContextImpl {
   // Moduli, CRT constants, and the range check T > 2^179.
   bool SetupModuli() {
     for (uint32_t i = 0; i < kPlainModulusCount; ++i) {
-      t_[i] = lanes_[i].context->first_context_data()
-                  ->parms().plain_modulus().value();
+      mod_[i] = lanes_[i].context->first_context_data()->parms().plain_modulus();
+      t_[i] = mod_[i].value();
     }
     if (t_[0] == t_[1] || t_[0] == t_[2] || t_[1] == t_[2]) return false;
-    t01_ = static_cast<u128>(t_[0]) * t_[1];
+    Limbs t0{};
+    t0[0] = t_[0];
+    t01_ = MulLimbs(t0, t_[1]);
     T_ = MulLimbs(t01_, t_[2]);
     Limbs two179{};
     two179[2] = uint64_t{1} << (179 - 128);
@@ -451,8 +486,8 @@ class HEContextImpl {
     half_[0] = (half_[0] >> 1) | (half_[1] << 63);
     half_[1] = (half_[1] >> 1) | (half_[2] << 63);
     half_[2] >>= 1;
-    inv01_ = PowMod(t_[0] % t_[1], t_[1] - 2, t_[1]);
-    inv012_ = PowMod(static_cast<uint64_t>(t01_ % t_[2]), t_[2] - 2, t_[2]);
+    inv01_ = InvMod(t_[0] % t_[1], mod_[1]);
+    inv012_ = InvMod(LimbsMod(t01_, mod_[2]), mod_[2]);
     return true;
   }
 
@@ -653,7 +688,7 @@ class HEContextImpl {
       auto& r = (*out)[i];
       r.assign(poly_modulus_degree_, 0);
       for (size_t j = 0; j < values.size(); ++j) {
-        const uint64_t m = LimbsMod(values[j].magnitude, t_[i]);
+        const uint64_t m = LimbsMod(values[j].magnitude, mod_[i]);
         r[j] = values[j].negative && m ? t_[i] - m : m;
       }
     }
@@ -711,12 +746,14 @@ class HEContextImpl {
       // Garner: m = d0 + d1 t0 + d2 t0 t1, 0 <= m < T.
       const uint64_t d0 = x[0][j];
       const uint64_t d1 =
-          MulMod((x[1][j] + t_[1] - d0 % t_[1]) % t_[1], inv01_, t_[1]);
-      const uint64_t s = (d0 % t_[2] + MulMod(t_[0] % t_[2], d1, t_[2])) % t_[2];
-      const uint64_t d2 = MulMod((x[2][j] + t_[2] - s) % t_[2], inv012_, t_[2]);
-      Limbs m = AddLimbs(MulLimbs(t01_, d2), MulLimbs(t_[0], d1));
-      Limbs low{};
+          MulMod(SubMod(x[1][j], d0 % t_[1], mod_[1]), inv01_, mod_[1]);
+      const uint64_t s =
+          AddMod(d0 % t_[2], MulMod(t_[0] % t_[2], d1, mod_[2]), mod_[2]);
+      const uint64_t d2 = MulMod(SubMod(x[2][j], s, mod_[2]), inv012_, mod_[2]);
+      Limbs t0{}, low{};
+      t0[0] = t_[0];
       low[0] = d0;
+      Limbs m = AddLimbs(MulLimbs(t01_, d2), MulLimbs(t0, d1));
       m = AddLimbs(m, low);
       WideInt& w = out[j];
       if (CompareLimbs(m, half_) > 0) {
@@ -825,7 +862,7 @@ class HEContextImpl {
     }
     try {
       for (uint32_t i = 0; i < kPlainModulusCount; ++i) {
-        const uint64_t m = LimbsMod(p.magnitude, t_[i]);
+        const uint64_t m = LimbsMod(p.magnitude, mod_[i]);
         const uint64_t residue = p.negative && m ? t_[i] - m : m;
         seal::Plaintext plain;
         lanes_[i].batch_encoder->encode(

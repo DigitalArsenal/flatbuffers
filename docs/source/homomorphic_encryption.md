@@ -193,6 +193,108 @@ double val = client.DecryptDouble(ct.data(), ct.size(), 1 << 20);
 // val ≈ 3.14159
 ```
 
+## Batching and Range (registered 2026-11-06)
+
+This section is the contract the implementation and its test
+(`tests/he_encryption/he-batching-range.e2e.mjs`) are held to.
+
+### Parameters
+
+| Item | Value |
+| --- | --- |
+| Scheme | BFV or BGV |
+| Poly modulus degree n | 8192 (default) or 16384; any other degree gives an invalid context |
+| Coefficient modulus | SEAL `CoeffModulus::BFVDefault(n)`, 128-bit security (218 bits at 8192, 438 at 16384) |
+| Plaintext moduli | three 60-bit batching primes, SEAL `PlainModulus::Batching(n, {60, 60, 60})` |
+| Primes at n = 8192 | t1 = 1152921504606683137, t2 = 1152921504606748673, t3 = 1152921504606830593 |
+| T = t1 t2 t3 at n = 8192 | 1532495540865518635130821056977027158796330141975560193 (2^179.9999999999997) |
+| Slots per ciphertext | n |
+
+One value is held as one SEAL ciphertext per prime; the value is the CRT
+combination of the three residues, decoded to the centered interval
+(-(T-1)/2, (T-1)/2]. At n = 8192, (T-1)/2 =
+766247770432759317565410528488513579398165070987780096.
+
+### Range
+
+Every slot holds a signed integer v with |v| <= 2^178 - 1
+(2^178 = 383123885216472214589586756787577295904684780545900544).
+2^178 <= (T-1)/2, so every value in range decodes exactly. A context whose T
+is below 2^179 + 1 is refused at creation.
+
+The previous single 20-bit plaintext modulus held about +/-524,288 and wrapped
+any larger value or result silently. That behavior is removed.
+
+### Slot layout
+
+- Slot i is index i of SEAL's `BatchEncoder` matrix: row i / (n/2), column
+  i mod (n/2).
+- A vector of k <= n values fills slots 0 to k-1; the other slots hold 0.
+- A scalar is a vector of one value (slot 0).
+- Slot-wise operations: `Add`, `Sub`, `Multiply`, `Negate`. A scalar plain
+  operand (`AddPlain`, `SubPlain`, `MultiplyPlain`) applies to every slot.
+
+### Bound tracking
+
+Every ciphertext carries a public bound b in its header: every slot satisfies
+|v| < 2^b, with b <= 178.
+
+| Source | b |
+| --- | --- |
+| `EncryptInt8/16/32/64`, `EncryptUInt8/16/32/64` | 8, 16, 32, 64 |
+| integer vectors | declared by the caller (default 64) |
+| wide integers (192-bit `WideInt`) | declared by the caller (default 178) |
+| fixed point (`EncryptDouble`, `EncryptFloat`, vectors) | declared by the caller (default 64), applied to the scaled integer |
+| `Add`, `Sub` | max(b1, b2) + 1 |
+| `Negate` | b |
+| `Multiply` | b1 + b2 |
+| `AddPlain`, `SubPlain` with p | max(b, bitlen(abs(p))) + 1 |
+| `MultiplyPlain` with p | b + bitlen(abs(p)) |
+
+### Refusal rule
+
+Nothing wraps. A refusal throws `HEException` with a named `HEError` code
+before any encryption or homomorphic operation runs:
+
+| Code | When |
+| --- | --- |
+| `kOutOfRange` | an input with abs(v) >= 2^b; a declared b above 178; an operation whose result bound exceeds 178; a non-finite fixed-point input; at decryption, a slot outside the requested type or outside the ciphertext's bound |
+| `kTooManyValues` | a vector longer than n |
+| `kInvalidScale` | a fixed-point scale that is not a power of two |
+| `kNoiseBudgetExhausted` | a ciphertext whose noise budget is 0 at decryption |
+
+The WASI interface returns a null result and reports the same code through
+`wasi_he_last_error()`.
+
+### Fixed point
+
+A double x with power-of-two scale s encodes as the integer k = round(x s),
+held exactly in the slot; decryption returns k / s. For every x with
+abs(k) < 2^b the round trip returns exactly round(x s) / s.
+
+### Ciphertext format
+
+A 12-byte header (`length`, `scheme`, `bound_bits`, `poly_degree_log2`,
+`coeff_count`) followed by three records, one per prime: a 4-byte little-endian
+size and the SEAL ciphertext. Public keys, relinearization keys and secret
+keys use the same three-record layout behind a one-byte record count.
+
+### Known-answer set
+
+- Integers: 0, +/-1, +/-(2^63 - 1), -2^63, 2^64 - 1 (unsigned), and the wide
+  values +/-(2^k - 1) and +/-2^(k-1) for every k from 1 to 178.
+- Slots: one vector of n distinct values including +/-(2^178 - 1), round trip
+  slot by slot.
+- Fixed point: scales 2^0, 2^16 and 2^40, values whose scaled integers reach
+  +/-(2^178 - 2^125) (the largest doubles below 2^178), and fractions at each
+  scale's quantum.
+- Arithmetic: products of two 89-bit values (178-bit results) and sums at the
+  bound, compared exactly with the plaintext results.
+- Refusals: +/-2^178 (one step outside); a value above its declared bound;
+  `Multiply` of two 100-bit-bound ciphertexts; `DecryptInt64` of 2^63;
+  NaN and infinity in fixed point; scale 3; a vector of n + 1 values; poly
+  modulus degree 4096.
+
 ## Ciphertext Binary Format
 
 Serialized ciphertexts include a 12-byte header:

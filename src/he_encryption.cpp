@@ -884,6 +884,16 @@ class HEContextImpl {
     return std::vector<uint64_t>(t_.begin(), t_.end());
   }
 
+  std::vector<int> CoeffModulusBits() const {
+    if (!valid_) return {};
+    std::vector<int> bits;
+    for (const auto& q :
+         lanes_[0].context->key_context_data()->parms().coeff_modulus()) {
+      bits.push_back(q.bit_count());
+    }
+    return bits;
+  }
+
 #else
   // Stub implementations when SEAL is not available
   bool InitClient(uint32_t poly_modulus_degree, HEScheme scheme,
@@ -918,6 +928,7 @@ class HEContextImpl {
     return Refuse(HEError::kInvalidContext, "SEAL not available");
   }
   std::vector<uint64_t> PlainModuli() const { return {}; }
+  std::vector<int> CoeffModulusBits() const { return {}; }
 #endif
 
   // Slot 0 as a WideInt.
@@ -1022,6 +1033,10 @@ uint32_t HEContext::SlotCount() const { return impl_->poly_modulus_degree_; }
 
 std::vector<uint64_t> HEContext::GetPlainModuli() const {
   return impl_->PlainModuli();
+}
+
+std::vector<int> HEContext::GetCoeffModulusBits() const {
+  return impl_->CoeffModulusBits();
 }
 
 HEResult HEContext::LastError() const { return impl_->last_; }

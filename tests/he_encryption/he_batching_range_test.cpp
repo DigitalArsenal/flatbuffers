@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
-// Batching and range driver for he-batching-range.e2e.mjs. It encrypts and
-// decrypts the registered known-answer set (docs/source/
-// homomorphic_encryption.md, "Batching and Range") and prints every input and
-// output as JSON; the E2E checks them exactly with BigInt.
+// Batching, range and depth driver for he-batching-range.e2e.mjs. It
+// encrypts and decrypts the registered known-answer set (docs/source/
+// homomorphic_encryption.md, "Batching and Range") at n = 8192, repeats the
+// slot round trip, the arithmetic at the bound and every refusal at
+// n = 16384, measures the noise budget after 1 to 4 multiplications at both
+// degrees, and prints every input and output as JSON; the E2E checks them
+// exactly with BigInt.
 
 #include <chrono>
 #include <cmath>
@@ -97,6 +100,22 @@ void DoubleArray(const char* key, const std::vector<double>& v) {
   Raw("]");
 }
 
+void IntArray(const char* key, const std::vector<int>& v) {
+  Raw(Str(key) + ":[");
+  for (size_t i = 0; i < v.size(); ++i) Raw((i ? "," : "") + std::to_string(v[i]));
+  Raw("]");
+}
+
+void Moduli(const HEContext& ctx) {
+  Raw("\"plainModuli\":[");
+  const auto moduli = ctx.GetPlainModuli();
+  for (size_t i = 0; i < moduli.size(); ++i) {
+    Raw((i ? "," : "") + Str(std::to_string(moduli[i])));
+  }
+  Raw("],");
+  IntArray("coeffModulusBits", ctx.GetCoeffModulusBits());
+}
+
 // Runs fn; returns the refusal code name, or "none".
 template <typename Fn>
 std::string Code(const HEContext& ctx, Fn fn) {
@@ -109,15 +128,271 @@ std::string Code(const HEContext& ctx, Fn fn) {
   }
 }
 
-bool first_refusal = true;
-void Refusal(const std::string& name, const std::string& code) {
-  Raw(std::string(first_refusal ? "" : ",") + "{\"name\":" + Str(name) +
-      ",\"code\":" + Str(code) + "}");
-  first_refusal = false;
-}
-
 double Ms(Clock::time_point a, Clock::time_point b) {
   return std::chrono::duration<double, std::milli>(b - a).count();
+}
+
+// The refusal set, identical at every degree (the E2E holds both degrees to
+// the same table).
+void Refusals(const HEContext& client, const HEContext& server, size_t n,
+              uint32_t degree) {
+  bool first = true;
+  auto refusal = [&](const std::string& name, const std::string& code) {
+    Raw(std::string(first ? "" : ",") + "{\"name\":" + Str(name) +
+        ",\"code\":" + Str(code) + "}");
+    first = false;
+  };
+  Raw("\"refusals\":[");
+  refusal("wide +2^178", Code(client, [&] { return client.EncryptWide(Pow2(178)); }));
+  refusal("wide -2^178",
+          Code(client, [&] { return client.EncryptWide(Neg(Pow2(178))); }));
+  refusal("vector slot above its declared bound", Code(client, [&] {
+            return client.EncryptInt64Vector({1, int64_t{1} << 40}, 32);
+          }));
+  refusal("declared bound 179",
+          Code(client, [&] { return client.EncryptWideVector({WideInt()}, 179); }));
+  {
+    const auto x = client.EncryptWideVector({Pow2Minus1(100)}, 100);
+    refusal("multiply of two 100-bit bounds",
+            Code(server, [&] { return server.Multiply(x, x); }));
+    const auto y = client.EncryptWide(Pow2Minus1(178), 178);
+    refusal("add at the 178-bit bound", Code(server, [&] { return server.Add(y, y); }));
+    const auto z = client.EncryptWideVector({WideInt::FromInt64(1)}, 170);
+    refusal("multiply plain past the bound", Code(server, [&] {
+              return server.MultiplyPlain(z.data(), z.size(), int64_t{1} << 20);
+            }));
+    const auto w = client.EncryptWide(Pow2(63), 64);
+    refusal("DecryptInt64 of 2^63", Code(client, [&] {
+              client.DecryptInt64(w.data(), w.size());
+              return std::vector<uint8_t>{1};
+            }));
+    const auto e128 = client.EncryptInt64(128);
+    refusal("DecryptInt8 of 128", Code(client, [&] {
+              client.DecryptInt8(e128.data(), e128.size());
+              return std::vector<uint8_t>{1};
+            }));
+  }
+  {
+    // Small values, so the bound stays in range while the noise runs out:
+    // a bound-1 value squared until its noise budget is 0, then decrypted.
+    auto ct = client.EncryptWideVector({WideInt::FromInt64(1)}, 1);
+    int squares = 0;
+    while (!ct.empty() && client.NoiseBudget(ct.data(), ct.size()) > 0 &&
+           squares < 8) {
+      ct = server.Multiply(ct, ct);
+      ++squares;
+    }
+    refusal("decrypt after the noise budget is exhausted", Code(client, [&] {
+              if (ct.empty()) return std::vector<uint8_t>{};
+              client.DecryptWideVector(ct.data(), ct.size());
+              return std::vector<uint8_t>{1};
+            }));
+  }
+  refusal("fixed point NaN", Code(client, [&] {
+            return client.EncryptDouble(std::numeric_limits<double>::quiet_NaN());
+          }));
+  refusal("fixed point infinity", Code(client, [&] {
+            return client.EncryptDouble(std::numeric_limits<double>::infinity());
+          }));
+  refusal("fixed point 2^178", Code(client, [&] {
+            return client.EncryptDouble(std::ldexp(1.0, 178), 1, kMaxBoundBits);
+          }));
+  refusal("fixed point scale 3",
+          Code(client, [&] { return client.EncryptDouble(1.0, 3); }));
+  refusal("n + 1 values", Code(client, [&] {
+            return client.EncryptInt64Vector(std::vector<int64_t>(n + 1, 0));
+          }));
+  refusal("poly modulus degree 4096",
+          HEContext::CreateClient(4096).IsValid() ? "none" : "kInvalidContext");
+  refusal("poly modulus degree 32768",
+          HEContext::CreateClient(32768).IsValid() ? "none" : "kInvalidContext");
+  {
+    const int32_t id = wasi_he_context_create_client(degree);
+    const int64_t values[] = {300};
+    uint32_t len = 0;
+    const uint8_t* p = wasi_he_encrypt_int64_vector(id, values, 1, 8, &len);
+    refusal("wasi value above its declared bound",
+            p ? "none" : HEErrorName(static_cast<HEError>(wasi_he_last_error())));
+    wasi_he_context_destroy(id);
+  }
+  Raw("]");
+}
+
+// One multiplication chain: level k is the product after k multiplications.
+// Every level reports its bound, its noise budget and either every decrypted
+// slot or the refusal code.
+void ChainLevel(const HEContext& client, const std::vector<uint8_t>& ct,
+                int depth, size_t n, double multiply_ms) {
+  Raw(std::string(depth ? "," : "") + "{\"depth\":" + std::to_string(depth));
+  if (ct.empty()) {
+    Raw(",\"refused\":" + Str(HEErrorName(client.LastError().error)) + "}");
+    return;
+  }
+  Raw(",\"boundBits\":" +
+      std::to_string(HEContext::CiphertextBoundBits(ct.data(), ct.size())));
+  Raw(",\"noiseBudgetBits\":" +
+      std::to_string(client.NoiseBudget(ct.data(), ct.size())));
+  Raw(",\"multiplyMs\":" + Num(multiply_ms));
+  try {
+    const auto dec = client.DecryptWideVector(ct.data(), ct.size());
+    Raw(",");
+    WideArray("out", dec, n);
+  } catch (const HEException& e) {
+    Raw(",\"refused\":" + Str(HEErrorName(e.code())));
+  }
+  Raw("}");
+}
+
+// Noise budget after 1 to 4 multiplications on n slots: a squaring chain
+// (bound 11, doubling to 176 bits) and a chain of fresh factors (bound 35
+// each, 175 bits at depth 4).
+void Depth(const HEContext& client, const HEContext& server, std::mt19937_64& rng) {
+  const size_t n = client.SlotCount();
+  Raw("{\"polyModulusDegree\":" + std::to_string(client.GetPolyModulusDegree()));
+  Raw(",");
+  Moduli(client);
+  {
+    std::vector<WideInt> a(n);
+    for (size_t i = 0; i < n; ++i) a[i] = RandomWide(rng, 11, rng() & 1);
+    a[0] = Pow2Minus1(11);
+    a[1] = Neg(Pow2Minus1(11));
+    auto ct = client.EncryptWideVector(a, 11);
+    Raw(",\"squaring\":{\"freshNoiseBudgetBits\":" +
+        std::to_string(client.NoiseBudget(ct.data(), ct.size())) + ",");
+    WideArray("a", a, n);
+    Raw(",\"levels\":[");
+    for (int depth = 1; depth <= 4; ++depth) {
+      const auto t0 = Clock::now();
+      ct = server.Multiply(ct, ct);
+      ChainLevel(client, ct, depth, n, Ms(t0, Clock::now()));
+      if (ct.empty()) break;
+    }
+    Raw("]}");
+  }
+  {
+    std::vector<std::vector<WideInt>> f(5, std::vector<WideInt>(n));
+    for (auto& v : f) {
+      for (size_t i = 0; i < n; ++i) v[i] = RandomWide(rng, 35, rng() & 1);
+    }
+    f[0][0] = Pow2Minus1(35);
+    f[1][0] = Neg(Pow2Minus1(35));
+    auto ct = client.EncryptWideVector(f[0], 35);
+    Raw(",\"fresh\":{\"freshNoiseBudgetBits\":" +
+        std::to_string(client.NoiseBudget(ct.data(), ct.size())) + ",\"factors\":[");
+    for (size_t j = 0; j < f.size(); ++j) {
+      Raw(j ? ",[" : "[");
+      for (size_t i = 0; i < n; ++i) Raw((i ? "," : "") + Str(f[j][i].ToString()));
+      Raw("]");
+    }
+    Raw("],\"levels\":[");
+    for (int depth = 1; depth <= 4; ++depth) {
+      const auto fresh = client.EncryptWideVector(f[static_cast<size_t>(depth)], 35);
+      const auto t0 = Clock::now();
+      ct = server.Multiply(ct, fresh);
+      ChainLevel(client, ct, depth, n, Ms(t0, Clock::now()));
+      if (ct.empty()) break;
+    }
+    Raw("]}");
+  }
+  Raw("}");
+}
+
+// n = 16384: the chain, the slot round trip, arithmetic at the bound and the
+// refusal set.
+void Degree16384(std::mt19937_64& rng, HEContext* client_out,
+                 HEContext* server_out) {
+  HEContext client = HEContext::CreateClient(16384);
+  if (!client.IsValid()) {
+    Raw("{\"error\":\"client context invalid\"}");
+    return;
+  }
+  const std::vector<uint8_t> pk = client.GetPublicKey();
+  const std::vector<uint8_t> rk = client.GetRelinKeys();
+  HEContext server = HEContext::CreateServer(pk.data(), pk.size());
+  if (!server.IsValid() || !server.SetRelinKeys(rk.data(), rk.size()).ok()) {
+    Raw("{\"error\":\"server context invalid\"}");
+    return;
+  }
+  const size_t n = client.SlotCount();
+  Raw("{\"polyModulusDegree\":" + std::to_string(client.GetPolyModulusDegree()));
+  Raw(",\"slotCount\":" + std::to_string(n) + ",");
+  Moduli(client);
+
+  double encrypt_ms = 0, decrypt_ms = 0;
+  size_t ciphertext_bytes = 0;
+  {
+    std::vector<WideInt> v(n);
+    for (size_t i = 0; i < n; ++i) {
+      const uint32_t bits = 15 + static_cast<uint32_t>(rng() % (kMaxBoundBits - 14));
+      v[i] = RandomWide(rng, bits, rng() & 1);
+      v[i].magnitude[0] = (v[i].magnitude[0] & ~uint64_t{0x3fff}) | i;  // distinct
+    }
+    v[0] = Pow2Minus1(kMaxBoundBits);
+    v[1] = Neg(Pow2Minus1(kMaxBoundBits));
+    const auto t0 = Clock::now();
+    const auto ct = client.EncryptWideVector(v, kMaxBoundBits);
+    const auto t1 = Clock::now();
+    const auto dec = client.DecryptWideVector(ct.data(), ct.size());
+    const auto t2 = Clock::now();
+    encrypt_ms = Ms(t0, t1);
+    decrypt_ms = Ms(t1, t2);
+    ciphertext_bytes = ct.size();
+    Raw(",\"wideSlots\":{");
+    WideArray("in", v, n);
+    Raw(",");
+    WideArray("out", dec, n);
+    Raw("}");
+  }
+
+  int noise_after_multiply = 0;
+  double multiply_ms = 0;
+  {
+    std::vector<WideInt> a(n), b(n), c(n), d(n);
+    for (size_t i = 0; i < n; ++i) {
+      a[i] = RandomWide(rng, 89, rng() & 1);
+      b[i] = RandomWide(rng, 89, rng() & 1);
+      c[i] = RandomWide(rng, 177, rng() & 1);
+      d[i] = RandomWide(rng, 177, rng() & 1);
+    }
+    a[0] = Pow2Minus1(89);
+    b[0] = Neg(Pow2Minus1(89));
+    c[0] = Pow2Minus1(177);
+    d[0] = Pow2Minus1(177);
+    const auto ea = client.EncryptWideVector(a, 89);
+    const auto eb = client.EncryptWideVector(b, 89);
+    const auto ec = client.EncryptWideVector(c, 177);
+    const auto ed = client.EncryptWideVector(d, 177);
+    const auto t0 = Clock::now();
+    const auto prod = server.Multiply(ea, eb);
+    multiply_ms = Ms(t0, Clock::now());
+    const auto sum = server.Add(ec, ed);
+    noise_after_multiply = client.NoiseBudget(prod.data(), prod.size());
+    Raw(",\"arithmetic\":{\"productBoundBits\":" +
+        std::to_string(HEContext::CiphertextBoundBits(prod.data(), prod.size())) +
+        ",\"sumBoundBits\":" +
+        std::to_string(HEContext::CiphertextBoundBits(sum.data(), sum.size())) + ",");
+    WideArray("a", a, n);
+    Raw(",");
+    WideArray("b", b, n);
+    Raw(",");
+    WideArray("c", c, n);
+    Raw(",");
+    WideArray("d", d, n);
+    Raw(",");
+    WideArray("product", client.DecryptWideVector(prod.data(), prod.size()), n);
+    Raw(",");
+    WideArray("sum", client.DecryptWideVector(sum.data(), sum.size()), n);
+    Raw("},");
+  }
+  Refusals(client, server, n, 16384);
+  Raw(",\"measured\":{\"encryptMsPerCiphertext\":" + Num(encrypt_ms) +
+      ",\"decryptMsPerCiphertext\":" + Num(decrypt_ms) +
+      ",\"multiplyMs\":" + Num(multiply_ms) +
+      ",\"ciphertextBytes\":" + std::to_string(ciphertext_bytes) +
+      ",\"noiseBudgetBitsAfterMultiply\":" + std::to_string(noise_after_multiply) +
+      "}}");
+  *client_out = std::move(client);
+  *server_out = std::move(server);
 }
 
 }  // namespace
@@ -140,13 +415,8 @@ int main() {
 
   Raw("{\"polyModulusDegree\":" + std::to_string(client.GetPolyModulusDegree()));
   Raw(",\"slotCount\":" + std::to_string(n));
-  Raw(",\"maxBoundBits\":" + std::to_string(kMaxBoundBits));
-  Raw(",\"plainModuli\":[");
-  const auto moduli = client.GetPlainModuli();
-  for (size_t i = 0; i < moduli.size(); ++i) {
-    Raw((i ? "," : "") + Str(std::to_string(moduli[i])));
-  }
-  Raw("]");
+  Raw(",\"maxBoundBits\":" + std::to_string(kMaxBoundBits) + ",");
+  Moduli(client);
 
   // 1. Typed scalars.
   Raw(",\"typedScalars\":[");
@@ -345,84 +615,35 @@ int main() {
     WideArray("multiplyPlain", client.DecryptWideVector(mulp.data(), mulp.size()), n);
     Raw(",");
     WideArray("addPlain", client.DecryptWideVector(addp.data(), addp.size()), n);
-    Raw("}");
+    Raw("},");
   }
 
-  // 6. Refusals.
-  Raw(",\"refusals\":[");
-  Refusal("wide +2^178", Code(client, [&] { return client.EncryptWide(Pow2(178)); }));
-  Refusal("wide -2^178",
-          Code(client, [&] { return client.EncryptWide(Neg(Pow2(178))); }));
-  Refusal("vector slot above its declared bound", Code(client, [&] {
-            return client.EncryptInt64Vector({1, int64_t{1} << 40}, 32);
-          }));
-  Refusal("declared bound 179",
-          Code(client, [&] { return client.EncryptWideVector({WideInt()}, 179); }));
-  {
-    const auto x = client.EncryptWideVector({Pow2Minus1(100)}, 100);
-    Refusal("multiply of two 100-bit bounds",
-            Code(server, [&] { return server.Multiply(x, x); }));
-    const auto y = client.EncryptWide(Pow2Minus1(178), 178);
-    Refusal("add at the 178-bit bound", Code(server, [&] { return server.Add(y, y); }));
-    const auto z = client.EncryptWideVector({WideInt::FromInt64(1)}, 170);
-    Refusal("multiply plain past the bound", Code(server, [&] {
-              return server.MultiplyPlain(z.data(), z.size(), int64_t{1} << 20);
-            }));
-    const auto w = client.EncryptWide(Pow2(63), 64);
-    Refusal("DecryptInt64 of 2^63", Code(client, [&] {
-              client.DecryptInt64(w.data(), w.size());
-              return std::vector<uint8_t>{1};
-            }));
-    const auto e128 = client.EncryptInt64(128);
-    Refusal("DecryptInt8 of 128", Code(client, [&] {
-              client.DecryptInt8(e128.data(), e128.size());
-              return std::vector<uint8_t>{1};
-            }));
-  }
-  {
-    // Small values, so the bound stays in range while the noise runs out.
-    const auto one = client.EncryptWideVector({WideInt::FromInt64(1)}, 1);
-    const auto sq = server.Multiply(one, one);
-    const auto quad = server.Multiply(sq, sq);
-    Refusal("decrypt after the noise budget is exhausted", Code(client, [&] {
-              if (quad.empty()) return std::vector<uint8_t>{};
-              client.DecryptWideVector(quad.data(), quad.size());
-              return std::vector<uint8_t>{1};
-            }));
-  }
-  Refusal("fixed point NaN", Code(client, [&] {
-            return client.EncryptDouble(std::numeric_limits<double>::quiet_NaN());
-          }));
-  Refusal("fixed point infinity", Code(client, [&] {
-            return client.EncryptDouble(std::numeric_limits<double>::infinity());
-          }));
-  Refusal("fixed point 2^178", Code(client, [&] {
-            return client.EncryptDouble(std::ldexp(1.0, 178), 1, kMaxBoundBits);
-          }));
-  Refusal("fixed point scale 3",
-          Code(client, [&] { return client.EncryptDouble(1.0, 3); }));
-  Refusal("n + 1 values", Code(client, [&] {
-            return client.EncryptInt64Vector(std::vector<int64_t>(n + 1, 0));
-          }));
-  Refusal("poly modulus degree 4096",
-          HEContext::CreateClient(4096).IsValid() ? "none" : "kInvalidContext");
-  {
-    const int32_t id = wasi_he_context_create_client(0);
-    const int64_t values[] = {300};
-    uint32_t len = 0;
-    const uint8_t* p = wasi_he_encrypt_int64_vector(id, values, 1, 8, &len);
-    Refusal("wasi value above its declared bound",
-            p ? "none" : HEErrorName(static_cast<HEError>(wasi_he_last_error())));
-    wasi_he_context_destroy(id);
-  }
-  Raw("]");
+  // 6. Refusals at n = 8192.
+  Refusals(client, server, n, 8192);
 
   Raw(",\"measured\":{\"encryptMsPerCiphertext\":" + Num(encrypt_ms) +
       ",\"decryptMsPerCiphertext\":" + Num(decrypt_ms) +
       ",\"multiplyMs\":" + Num(multiply_ms) +
       ",\"ciphertextBytes\":" + std::to_string(ciphertext_bytes) +
       ",\"noiseBudgetBitsAfterMultiply\":" + std::to_string(noise_after_multiply) +
-      "}}");
+      "}");
+
+  // 7. n = 16384: chain, round trip, arithmetic, the same refusals. The
+  // placeholders are invalid contexts (degree 4096) until the section fills
+  // them.
+  HEContext client16 = HEContext::CreateClient(4096);
+  HEContext server16 = HEContext::CreateClient(4096);
+  Raw(",\"n16384\":");
+  Degree16384(rng, &client16, &server16);
+
+  // 8. Noise budget by multiplicative depth at both degrees.
+  Raw(",\"depth\":[");
+  Depth(client, server, rng);
+  if (client16.IsValid() && server16.IsValid()) {
+    Raw(",");
+    Depth(client16, server16, rng);
+  }
+  Raw("]}");
   std::fwrite(out.data(), 1, out.size(), stdout);
   std::fputc('\n', stdout);
   return 0;

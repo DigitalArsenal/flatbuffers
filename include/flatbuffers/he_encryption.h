@@ -31,9 +31,14 @@ namespace he {
 // Constants
 // =============================================================================
 
-// Polynomial modulus degree: 8192 (default) or 16384. Both use SEAL's
-// 128-bit-security coefficient modulus (218 and 438 bits). Each degree is
-// also the number of slots per ciphertext.
+// Polynomial modulus degree: 8192 (default) or 16384. Each degree is also the
+// number of slots per ciphertext. The coefficient modulus chain is SEAL's
+// CoeffModulus::BFVDefault(n, tc128) table (the HomomorphicEncryption.org
+// security standard, 128-bit classical security, ternary secret):
+//   n = 8192:  5 primes of 43, 43, 44, 44, 44 bits (218 bits)
+//   n = 16384: 9 primes of 48, 48, 48, 49, 49, 49, 49, 49, 49 bits (438 bits)
+// The last prime of each chain is the key-switching prime; the others carry
+// ciphertexts. GetCoeffModulusBits() reports the chain of a context.
 constexpr uint32_t kDefaultPolyModulusDegree = 8192;
 
 // Number of 60-bit plaintext moduli. A value is the CRT combination of one
@@ -261,6 +266,9 @@ class HEContext {
 
   /** The kPlainModulusCount plaintext moduli */
   std::vector<uint64_t> GetPlainModuli() const;
+
+  /** Bit sizes of the coefficient modulus primes, key-switching prime last */
+  std::vector<int> GetCoeffModulusBits() const;
 
   /**
    * Result of the last Encrypt* or homomorphic operation on this context.

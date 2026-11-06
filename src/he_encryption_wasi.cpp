@@ -27,6 +27,7 @@
 #include "flatbuffers/he_encryption.h"
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <map>
 #include <memory>
 #include <vector>
@@ -38,6 +39,19 @@ static int32_t g_next_he_context_id = 1;
 // Global buffer for HE output data
 static std::vector<uint8_t> g_he_output;
 
+// HEError code of the last encrypt, decrypt or operation call (0 = success).
+static int32_t g_he_last_error = 0;
+
+static int32_t DecryptErrorCode(const std::exception_ptr& e) {
+  try {
+    std::rethrow_exception(e);
+  } catch (const flatbuffers::he::HEException& he) {
+    return static_cast<int32_t>(he.code());
+  } catch (...) {
+    return static_cast<int32_t>(flatbuffers::he::HEError::kDecryptionFailed);
+  }
+}
+
 extern "C" {
 
 // =============================================================================
@@ -45,7 +59,7 @@ extern "C" {
 // =============================================================================
 
 // Create a client HE context with full key pair (secret + public).
-// poly_degree: polynomial modulus degree (0 = default 4096)
+// poly_degree: polynomial modulus degree, 8192 or 16384 (0 = default 8192)
 // Returns context ID (>0) on success, -1 on error.
 int32_t wasi_he_context_create_client(uint32_t poly_degree) {
   using namespace flatbuffers::he;
@@ -64,7 +78,7 @@ int32_t wasi_he_context_create_client(uint32_t poly_degree) {
 }
 
 // Create a client HE context with deterministic key generation from a seed.
-// poly_degree: polynomial modulus degree (0 = default 4096)
+// poly_degree: polynomial modulus degree, 8192 or 16384 (0 = default 8192)
 // seed: seed bytes for deterministic PRNG (at least 32 bytes)
 // seed_len: length of seed data
 // Returns context ID (>0) on success, -1 on error.
@@ -200,6 +214,7 @@ const uint8_t* wasi_he_encrypt_int64(int32_t ctx_id, int64_t value, uint32_t* ou
     return nullptr;
   }
   g_he_output = it->second->EncryptInt64(value);
+  g_he_last_error = static_cast<int32_t>(it->second->LastError().error);
   if (g_he_output.empty()) {
     *out_len = 0;
     return nullptr;
@@ -219,8 +234,11 @@ int64_t wasi_he_decrypt_int64(int32_t ctx_id, const uint8_t* ct, uint32_t ct_len
     return 0;
   }
   try {
-    return it->second->DecryptInt64(ct, ct_len);
+    const int64_t value = it->second->DecryptInt64(ct, ct_len);
+    g_he_last_error = 0;
+    return value;
   } catch (...) {
+    g_he_last_error = DecryptErrorCode(std::current_exception());
     return 0;
   }
 }
@@ -237,6 +255,7 @@ const uint8_t* wasi_he_encrypt_double(int32_t ctx_id, double value, uint32_t* ou
     return nullptr;
   }
   g_he_output = it->second->EncryptDouble(value);
+  g_he_last_error = static_cast<int32_t>(it->second->LastError().error);
   if (g_he_output.empty()) {
     *out_len = 0;
     return nullptr;
@@ -256,8 +275,11 @@ double wasi_he_decrypt_double(int32_t ctx_id, const uint8_t* ct, uint32_t ct_len
     return 0.0;
   }
   try {
-    return it->second->DecryptDouble(ct, ct_len);
+    const double value = it->second->DecryptDouble(ct, ct_len);
+    g_he_last_error = 0;
+    return value;
   } catch (...) {
+    g_he_last_error = DecryptErrorCode(std::current_exception());
     return 0.0;
   }
 }
@@ -277,6 +299,7 @@ const uint8_t* wasi_he_add(int32_t ctx_id,
     return nullptr;
   }
   g_he_output = it->second->Add(ct1, ct1_len, ct2, ct2_len);
+  g_he_last_error = static_cast<int32_t>(it->second->LastError().error);
   if (g_he_output.empty()) {
     *out_len = 0;
     return nullptr;
@@ -296,6 +319,7 @@ const uint8_t* wasi_he_sub(int32_t ctx_id,
     return nullptr;
   }
   g_he_output = it->second->Sub(ct1, ct1_len, ct2, ct2_len);
+  g_he_last_error = static_cast<int32_t>(it->second->LastError().error);
   if (g_he_output.empty()) {
     *out_len = 0;
     return nullptr;
@@ -315,6 +339,7 @@ const uint8_t* wasi_he_multiply(int32_t ctx_id,
     return nullptr;
   }
   g_he_output = it->second->Multiply(ct1, ct1_len, ct2, ct2_len);
+  g_he_last_error = static_cast<int32_t>(it->second->LastError().error);
   if (g_he_output.empty()) {
     *out_len = 0;
     return nullptr;
@@ -333,6 +358,7 @@ const uint8_t* wasi_he_negate(int32_t ctx_id,
     return nullptr;
   }
   g_he_output = it->second->Negate(ct, ct_len);
+  g_he_last_error = static_cast<int32_t>(it->second->LastError().error);
   if (g_he_output.empty()) {
     *out_len = 0;
     return nullptr;
@@ -352,6 +378,7 @@ const uint8_t* wasi_he_add_plain(int32_t ctx_id,
     return nullptr;
   }
   g_he_output = it->second->AddPlain(ct, ct_len, plain);
+  g_he_last_error = static_cast<int32_t>(it->second->LastError().error);
   if (g_he_output.empty()) {
     *out_len = 0;
     return nullptr;
@@ -371,12 +398,76 @@ const uint8_t* wasi_he_multiply_plain(int32_t ctx_id,
     return nullptr;
   }
   g_he_output = it->second->MultiplyPlain(ct, ct_len, plain);
+  g_he_last_error = static_cast<int32_t>(it->second->LastError().error);
   if (g_he_output.empty()) {
     *out_len = 0;
     return nullptr;
   }
   *out_len = static_cast<uint32_t>(g_he_output.size());
   return g_he_output.data();
+}
+
+// =============================================================================
+// Range and batching
+// =============================================================================
+
+// HEError code of the last encrypt, decrypt or operation call (0 = success;
+// e.g. kOutOfRange when a value or result is outside the range).
+int32_t wasi_he_last_error() { return g_he_last_error; }
+
+// Slots per ciphertext, or 0 if the context is unknown.
+uint32_t wasi_he_slot_count(int32_t ctx_id) {
+  auto it = g_he_contexts.find(ctx_id);
+  return it == g_he_contexts.end() ? 0 : it->second->SlotCount();
+}
+
+// Encrypt up to slot-count 64-bit integers, slot i = values[i].
+// bound_bits: every value satisfies |v| < 2^bound_bits (at most 178).
+// Returns pointer to ciphertext data, or nullptr on error.
+const uint8_t* wasi_he_encrypt_int64_vector(int32_t ctx_id,
+                                            const int64_t* values,
+                                            uint32_t count,
+                                            uint32_t bound_bits,
+                                            uint32_t* out_len) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end() || (!values && count) || !out_len) {
+    if (out_len) *out_len = 0;
+    return nullptr;
+  }
+  g_he_output = it->second->EncryptInt64Vector(
+      std::vector<int64_t>(values, values + count), bound_bits);
+  g_he_last_error = static_cast<int32_t>(it->second->LastError().error);
+  if (g_he_output.empty()) {
+    *out_len = 0;
+    return nullptr;
+  }
+  *out_len = static_cast<uint32_t>(g_he_output.size());
+  return g_he_output.data();
+}
+
+// Decrypt every slot into out (capacity at least the slot count).
+// Returns the number of slots written, or -1 on error (see
+// wasi_he_last_error).
+int32_t wasi_he_decrypt_int64_vector(int32_t ctx_id, const uint8_t* ct,
+                                     uint32_t ct_len, int64_t* out,
+                                     uint32_t out_capacity) {
+  auto it = g_he_contexts.find(ctx_id);
+  if (it == g_he_contexts.end() || !ct || ct_len == 0 || !out) return -1;
+  try {
+    const std::vector<int64_t> values =
+        it->second->DecryptInt64Vector(ct, ct_len);
+    if (values.size() > out_capacity) {
+      g_he_last_error =
+          static_cast<int32_t>(flatbuffers::he::HEError::kTooManyValues);
+      return -1;
+    }
+    std::memcpy(out, values.data(), values.size() * sizeof(int64_t));
+    g_he_last_error = 0;
+    return static_cast<int32_t>(values.size());
+  } catch (...) {
+    g_he_last_error = DecryptErrorCode(std::current_exception());
+    return -1;
+  }
 }
 
 }  // extern "C"

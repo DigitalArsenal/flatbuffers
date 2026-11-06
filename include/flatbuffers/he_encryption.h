@@ -17,8 +17,10 @@
 #ifndef FLATBUFFERS_HE_ENCRYPTION_H_
 #define FLATBUFFERS_HE_ENCRYPTION_H_
 
+#include <array>
 #include <cstdint>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -29,15 +31,23 @@ namespace he {
 // Constants
 // =============================================================================
 
-// Default polynomial modulus degree (affects security and performance)
-// 4096 = ~128-bit security, smaller ciphertexts (~2KB)
-// 8192 = ~192-bit security, larger ciphertexts (~4KB)
-// 16384 = ~256-bit security, largest ciphertexts (~8KB)
-constexpr uint32_t kDefaultPolyModulusDegree = 4096;
+// Polynomial modulus degree: 8192 (default) or 16384. Both use SEAL's
+// 128-bit-security coefficient modulus (218 and 438 bits). Each degree is
+// also the number of slots per ciphertext.
+constexpr uint32_t kDefaultPolyModulusDegree = 8192;
 
-// Scale factor for fixed-point encoding of floats/doubles
-// 2^16 gives ~4-5 decimal digits of precision while fitting
-// within the 20-bit BFV plain modulus for typical values
+// Number of 60-bit plaintext moduli. A value is the CRT combination of one
+// residue per modulus; their product T exceeds 2^179.
+constexpr uint32_t kPlainModulusCount = 3;
+constexpr int kPlainModulusBits = 60;
+
+// Every slot holds a signed integer v with |v| < 2^kMaxBoundBits.
+constexpr uint32_t kMaxBoundBits = 178;
+
+// Default bound (bits) for integer and fixed-point vectors.
+constexpr uint32_t kDefaultVectorBoundBits = 64;
+
+// Default fixed-point scale (a power of two).
 constexpr uint64_t kDefaultFloatScale = 1 << 16;
 
 // =============================================================================
@@ -56,7 +66,14 @@ enum class HEError {
   kSerializationFailed,
   kDeserializationFailed,
   kUnsupportedType,
+  kOutOfRange,             // a value, bound or result outside the range
+  kTooManyValues,          // a vector longer than the slot count
+  kInvalidScale,           // a fixed-point scale that is not a power of two
+  kNoiseBudgetExhausted,   // a ciphertext that can no longer be decrypted
 };
+
+/** Name of an error code, e.g. "kOutOfRange". */
+const char* HEErrorName(HEError error);
 
 struct HEResult {
   HEError error;
@@ -69,6 +86,40 @@ struct HEResult {
   static HEResult Error(HEError err, const std::string& msg) {
     return {err, msg};
   }
+};
+
+/** Thrown by decryption; carries the refusal code. */
+class HEException : public std::runtime_error {
+ public:
+  HEException(HEError code, const std::string& message)
+      : std::runtime_error(message), code_(code) {}
+  HEError code() const { return code_; }
+
+ private:
+  HEError code_;
+};
+
+// =============================================================================
+// WideInt - signed integer with a 192-bit magnitude
+// =============================================================================
+
+struct WideInt {
+  bool negative = false;
+  std::array<uint64_t, 3> magnitude{};  // little-endian limbs
+
+  static WideInt FromInt64(int64_t value);
+  static WideInt FromUInt64(uint64_t value);
+  /** Parse a decimal string ("-123"); false if malformed or above 2^192. */
+  static bool Parse(const std::string& text, WideInt* out);
+
+  bool IsZero() const;
+  /** Bit length of the magnitude (0 for zero). */
+  uint32_t BitLength() const;
+  bool FitsInt64() const;
+  int64_t ToInt64() const;  // requires FitsInt64()
+  /** Nearest double; exact when the magnitude has <= 53 significant bits. */
+  double ToDouble() const;
+  std::string ToString() const;
 };
 
 // =============================================================================
@@ -84,14 +135,15 @@ enum class HEScheme : uint8_t {
 // Ciphertext header for serialization
 // =============================================================================
 
-// Header prepended to serialized ciphertexts in FlatBuffer fields
-// Total: 12 bytes header + N bytes SEAL ciphertext data
+// Header prepended to serialized ciphertexts in FlatBuffer fields, followed
+// by kPlainModulusCount records (4-byte little-endian size + SEAL ciphertext),
+// one per plaintext modulus.
 struct CiphertextHeader {
   uint32_t length;           // Total length including header
   uint8_t scheme;            // HEScheme value
-  uint8_t reserved;          // Reserved for future use
-  uint16_t poly_degree_log2; // log2(poly_modulus_degree), e.g., 12 for 4096
-  uint32_t coeff_count;      // Number of polynomial coefficients
+  uint8_t bound_bits;        // every slot satisfies |v| < 2^bound_bits
+  uint16_t poly_degree_log2; // log2(poly_modulus_degree), e.g., 13 for 8192
+  uint32_t coeff_count;      // Number of ciphertext polynomials
 };
 
 static_assert(sizeof(CiphertextHeader) == 12,
@@ -204,6 +256,24 @@ class HEContext {
   /** Get the polynomial modulus degree */
   uint32_t GetPolyModulusDegree() const;
 
+  /** Slots per ciphertext (equal to the polynomial modulus degree) */
+  uint32_t SlotCount() const;
+
+  /** The kPlainModulusCount plaintext moduli */
+  std::vector<uint64_t> GetPlainModuli() const;
+
+  /**
+   * Result of the last Encrypt* or homomorphic operation on this context.
+   * A refusal returns an empty ciphertext and records its code here.
+   */
+  HEResult LastError() const;
+
+  /** Bound (bits) recorded in a ciphertext header; 0 if malformed */
+  static uint32_t CiphertextBoundBits(const uint8_t* ciphertext, size_t len);
+
+  /** Remaining noise budget (bits) of a ciphertext; client only */
+  int NoiseBudget(const uint8_t* ciphertext, size_t len) const;
+
   /** Serialize public key */
   std::vector<uint8_t> GetPublicKey() const;
 
@@ -232,14 +302,35 @@ class HEContext {
   std::vector<uint8_t> EncryptUInt32(uint32_t value) const;
   std::vector<uint8_t> EncryptUInt64(uint64_t value) const;
 
-  // Float/double use fixed-point encoding with configurable scale
-  std::vector<uint8_t> EncryptFloat(float value,
-                                     uint64_t scale = kDefaultFloatScale) const;
-  std::vector<uint8_t> EncryptDouble(double value,
-                                      uint64_t scale = kDefaultFloatScale) const;
+  // Float/double use fixed-point encoding: the slot holds round(value * scale)
+  // (scale a power of two); refused unless |round(value * scale)| <
+  // 2^bound_bits.
+  std::vector<uint8_t> EncryptFloat(
+      float value, uint64_t scale = kDefaultFloatScale,
+      uint32_t bound_bits = kDefaultVectorBoundBits) const;
+  std::vector<uint8_t> EncryptDouble(
+      double value, uint64_t scale = kDefaultFloatScale,
+      uint32_t bound_bits = kDefaultVectorBoundBits) const;
+
+  /** Encrypt one wide integer into slot 0 (|value| < 2^bound_bits) */
+  std::vector<uint8_t> EncryptWide(const WideInt& value,
+                                   uint32_t bound_bits = kMaxBoundBits) const;
+
+  // Batched: up to SlotCount() values, slot i = values[i], other slots 0.
+  std::vector<uint8_t> EncryptInt64Vector(
+      const std::vector<int64_t>& values,
+      uint32_t bound_bits = kDefaultVectorBoundBits) const;
+  std::vector<uint8_t> EncryptWideVector(
+      const std::vector<WideInt>& values,
+      uint32_t bound_bits = kMaxBoundBits) const;
+  std::vector<uint8_t> EncryptDoubleVector(
+      const std::vector<double>& values, uint64_t scale = kDefaultFloatScale,
+      uint32_t bound_bits = kDefaultVectorBoundBits) const;
 
   // -------------------------------------------------------------------------
   // Decryption (requires secret key - client context only)
+  // Scalar decryption reads slot 0. A slot outside the requested type, or
+  // outside the ciphertext's bound, throws HEException(kOutOfRange).
   // -------------------------------------------------------------------------
 
   int8_t DecryptInt8(const uint8_t* ciphertext, size_t len) const;
@@ -256,6 +347,17 @@ class HEContext {
   double DecryptDouble(const uint8_t* ciphertext, size_t len,
                        uint64_t scale = kDefaultFloatScale) const;
 
+  WideInt DecryptWide(const uint8_t* ciphertext, size_t len) const;
+
+  // Batched: all SlotCount() slots.
+  std::vector<int64_t> DecryptInt64Vector(const uint8_t* ciphertext,
+                                          size_t len) const;
+  std::vector<WideInt> DecryptWideVector(const uint8_t* ciphertext,
+                                         size_t len) const;
+  std::vector<double> DecryptDoubleVector(
+      const uint8_t* ciphertext, size_t len,
+      uint64_t scale = kDefaultFloatScale) const;
+
   // Convenience overloads taking vector
   int64_t DecryptInt64(const std::vector<uint8_t>& ciphertext) const {
     return DecryptInt64(ciphertext.data(), ciphertext.size());
@@ -263,6 +365,8 @@ class HEContext {
 
   // -------------------------------------------------------------------------
   // Homomorphic operations (work with public key only)
+  // Slot-wise; a scalar plain operand applies to every slot. An operation
+  // whose result bound would exceed kMaxBoundBits is refused (kOutOfRange).
   // -------------------------------------------------------------------------
 
   /** Add two ciphertexts: result = ct1 + ct2 */

@@ -99,7 +99,7 @@ using namespace flatbuffers::he;
 
 // Create client with full key pair
 auto client = HEContext::CreateClient(
-    4096,             // poly_modulus_degree (4096=128-bit security)
+    8192,             // poly_modulus_degree: 8192 slots, 128-bit security
     HEScheme::BFV    // BFV scheme for integer arithmetic
 );
 
@@ -154,6 +154,27 @@ auto ct_neg = Negate(ct_salary, server);
 | ct - plain | `SubPlain(ct, n)` | `SubPlain(ct, n, ctx)` | No |
 | ct * plain | `MultiplyPlain(ct, n)` | `MultiplyPlain(ct, n, ctx)` | No |
 
+### Batching
+
+```cpp
+// One ciphertext holds client.SlotCount() values (8192 at n = 8192).
+std::vector<int64_t> values = {1, -2, 3};
+auto ct = client.EncryptInt64Vector(values);           // |v| < 2^64
+auto doubled = server.MultiplyPlain(ct.data(), ct.size(), 2);  // every slot
+auto out = client.DecryptInt64Vector(doubled.data(), doubled.size());
+// out[0..2] = 2, -4, 6; the other slots are 0
+
+// Integers up to 2^178 - 1 in magnitude
+WideInt big;
+WideInt::Parse("-383123885216472214589586756787577295904684780545900543", &big);
+auto wide = client.EncryptWideVector({big});           // bound 2^178
+WideInt back = client.DecryptWideVector(wide.data(), wide.size())[0];
+
+// A value or result past the range is refused, never wrapped
+auto refused = client.EncryptInt64Vector({1LL << 40}, 32);  // empty
+// client.LastError().error == HEError::kOutOfRange
+```
+
 ### Key Serialization
 
 ```cpp
@@ -175,22 +196,23 @@ if (!result.ok()) {
 
 ## Security Parameters
 
-| Poly Modulus Degree | Security Level | Ciphertext Size | Performance |
-|---------------------|---------------|-----------------|-------------|
-| 4096 | ~128-bit | ~2 KB | Fast |
-| 8192 | ~192-bit | ~4 KB | Moderate |
-| 16384 | ~256-bit | ~8 KB | Slow |
+| Poly Modulus Degree | Coefficient Modulus | Security Level | Slots | Ciphertext Size |
+|---------------------|---------------------|----------------|-------|-----------------|
+| 8192 (default) | 218 bits | 128-bit | 8192 | 1,573,227 bytes (three moduli) |
+| 16384 | 438 bits | 128-bit | 16384 | larger |
 
-The default is 4096 (128-bit security), which is suitable for most applications.
+Other degrees give an invalid context.
 
 ### Float Precision
 
-Floating-point values use fixed-point encoding with a configurable scale factor. The default scale of 2^20 provides approximately 6 decimal digits of precision:
+Floating-point values use fixed-point encoding: the slot holds round(x · scale),
+with a power-of-two scale (default 2^16). The round trip returns exactly
+round(x · scale) / scale for every x whose scaled integer is inside the bound:
 
 ```cpp
-auto ct = client.EncryptDouble(3.14159, 1 << 20);  // ~6 digits
+auto ct = client.EncryptDouble(3.14159, 1 << 20);
 double val = client.DecryptDouble(ct.data(), ct.size(), 1 << 20);
-// val ≈ 3.14159
+// val == round(3.14159 * 2^20) / 2^20
 ```
 
 ## Batching and Range (registered 2026-11-06)
@@ -253,8 +275,11 @@ Every ciphertext carries a public bound b in its header: every slot satisfies
 
 ### Refusal rule
 
-Nothing wraps. A refusal throws `HEException` with a named `HEError` code
-before any encryption or homomorphic operation runs:
+Nothing wraps. A refusal happens before any encryption or homomorphic
+operation runs. `Encrypt*` and the operations return an empty result and
+record the code in `LastError()`; decryption throws `HEException`, whose
+`code()` is the code. (Amended 2026-11-06 with the implementation: the
+registration first said every refusal throws. Codes and cases are unchanged.)
 
 | Code | When |
 | --- | --- |
@@ -297,17 +322,19 @@ keys use the same three-record layout behind a one-byte record count.
 
 ## Ciphertext Binary Format
 
-Serialized ciphertexts include a 12-byte header:
+Serialized ciphertexts include a 12-byte header and one record per plaintext
+modulus:
 
 ```
 ┌──────────────────────────────────────────┐
 │  length (4 bytes)     Total size         │
 │  scheme (1 byte)      BFV=0, BGV=1       │
-│  reserved (1 byte)                        │
+│  bound_bits (1 byte)  |v| < 2^bound_bits │
 │  poly_degree_log2 (2) log2(N)            │
-│  coeff_count (4)      Polynomial coeffs  │
+│  coeff_count (4)      Polynomials        │
 ├──────────────────────────────────────────┤
-│  SEAL ciphertext data (N bytes)          │
+│  3 x (size (4 bytes, little-endian)      │
+│       + SEAL ciphertext)                 │
 └──────────────────────────────────────────┘
 ```
 
@@ -318,7 +345,7 @@ Serialized ciphertexts include a 12-byte header:
 | Purpose | Protect data at rest | Compute on encrypted data |
 | Key type | Symmetric (AES-256) | Asymmetric (public/secret) |
 | Computation | Must decrypt first | Arithmetic without decryption |
-| Ciphertext size | Same as plaintext | ~2-8 KB per value |
+| Ciphertext size | Same as plaintext | about 1.5 MB per 8192 slots |
 | Supported types | All field types | Scalar integers and floats |
 | Performance | Near-zero overhead | Significant overhead |
 | Use case | Storage encryption | Privacy-preserving computation |

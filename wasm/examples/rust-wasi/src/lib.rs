@@ -1587,8 +1587,8 @@ impl EncryptionModule {
     }
 
     /// Create a client HE context with full key material (secret + public).
-    /// `poly_degree` controls the polynomial modulus degree (e.g., 4096, 8192).
-    /// Pass 0 for the default (4096).
+    /// `poly_degree` controls the polynomial modulus degree (8192 or 16384).
+    /// Pass 0 for the default (8192).
     /// Returns a context ID that must be destroyed with `he_destroy_context`.
     pub fn he_create_client(&mut self, poly_degree: u32) -> Result<i32> {
         let create_fn: TypedFunction<u32, i32> = self

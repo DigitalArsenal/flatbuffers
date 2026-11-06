@@ -1008,7 +1008,7 @@ public class EncryptionModule : IDisposable
     /// Creates a client HE context with full key pair (secret + public).
     /// The client can encrypt, decrypt, and perform homomorphic operations.
     /// </summary>
-    /// <param name="polyDegree">Polynomial modulus degree (0 = default 4096). Must be a power of 2.</param>
+    /// <param name="polyDegree">Polynomial modulus degree (0 = default 8192). Must be 8192 or 16384.</param>
     /// <returns>Context ID (positive integer) for use with other HE methods.</returns>
     public int HECreateClient(uint polyDegree = 0)
     {

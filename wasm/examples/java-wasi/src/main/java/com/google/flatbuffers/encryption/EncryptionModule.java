@@ -1061,8 +1061,8 @@ public class EncryptionModule implements AutoCloseable {
     /**
      * Creates a client-side HE context with a full key pair (secret + public).
      *
-     * @param polyDegree Polynomial modulus degree (e.g., 4096, 8192, 16384).
-     *                   Pass 0 for the default (4096).
+     * @param polyDegree Polynomial modulus degree (8192 or 16384).
+     *                   Pass 0 for the default (8192).
      * @return Context ID (&gt;0) on success
      * @throws RuntimeException if context creation fails
      */

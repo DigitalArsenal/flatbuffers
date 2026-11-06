@@ -129,6 +129,7 @@ const expectedRefusals = {
   'multiply plain past the bound': 'kOutOfRange',
   'DecryptInt64 of 2^63': 'kOutOfRange',
   'DecryptInt8 of 128': 'kOutOfRange',
+  'decrypt after the noise budget is exhausted': 'kNoiseBudgetExhausted',
   'fixed point NaN': 'kOutOfRange',
   'fixed point infinity': 'kOutOfRange',
   'fixed point 2^178': 'kOutOfRange',

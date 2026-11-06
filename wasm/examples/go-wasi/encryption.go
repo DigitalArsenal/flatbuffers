@@ -1560,7 +1560,7 @@ func (em *EncryptionModule) HasHE() bool {
 }
 
 // HECreateClient creates a new HE context with full key material (client-side).
-// polyDegree controls the polynomial modulus degree (e.g., 4096, 8192).
+// polyDegree controls the polynomial modulus degree (8192 or 16384).
 // Returns a context ID that must be destroyed with HEDestroyContext.
 func (em *EncryptionModule) HECreateClient(ctx context.Context, polyDegree uint32) (int32, error) {
 	if em.heContextCreateClient == nil {

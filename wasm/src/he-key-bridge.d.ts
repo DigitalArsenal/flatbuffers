@@ -15,7 +15,7 @@ export type HkdfFunction = (
 
 /** Options for HE context derivation */
 export interface DeriveHEOptions {
-  /** Polynomial modulus degree (default: 4096) */
+  /** Polynomial modulus degree, 8192 or 16384 (default: 8192) */
   polyDegree?: number;
   /** Custom HKDF function (defaults to Web Crypto) */
   hkdfFn?: HkdfFunction;

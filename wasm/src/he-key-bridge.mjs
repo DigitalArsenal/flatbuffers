@@ -9,7 +9,7 @@
  *
  * Domain separation prevents key reuse between AES and HE cryptosystems:
  *   - Salt: "flatbuffers-he-v1"
- *   - Info: "seal-bfv-{polyDegree}" (e.g. "seal-bfv-4096")
+ *   - Info: "seal-bfv-{polyDegree}" (e.g. "seal-bfv-8192")
  */
 
 import { HEContext, DEFAULT_POLY_MODULUS_DEGREE } from './he-context.mjs';
@@ -64,7 +64,7 @@ async function defaultHkdf(ikm, salt, info, length) {
  * @param {object} hdEncryptionKey - Derived key from HDKeyManager.deriveEncryptionKey()
  *   Must have a `privateKey` property (Uint8Array).
  * @param {object} [options] - Options
- * @param {number} [options.polyDegree=4096] - Polynomial modulus degree (4096, 8192, 16384)
+ * @param {number} [options.polyDegree=8192] - Polynomial modulus degree (8192 or 16384)
  * @param {function} [options.hkdfFn] - Custom HKDF function (defaults to Web Crypto HKDF)
  *   Signature: (ikm, salt, info, length) => Promise<Uint8Array>
  * @returns {Promise<HEContext>} Deterministic HE client context
@@ -114,7 +114,7 @@ export function getHEPublicBundle(heContext) {
  * @param {number} [keyOptions.account=0] - Account index
  * @param {number} [keyOptions.index=0] - Key index
  * @param {object} [heOptions] - HE options
- * @param {number} [heOptions.polyDegree=4096] - Polynomial modulus degree
+ * @param {number} [heOptions.polyDegree=8192] - Polynomial modulus degree (8192 or 16384)
  * @param {function} [heOptions.hkdfFn] - Custom HKDF function
  * @returns {Promise<HEContext>} Deterministic HE client context
  */

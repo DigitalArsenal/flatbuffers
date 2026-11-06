@@ -42,7 +42,7 @@ export function getHEModule(): WasmHEModule | null;
 /** Get the last error message from WASM. */
 export function getLastError(): string;
 
-/** Default polynomial modulus degree (4096 = ~128-bit security) */
+/** Default polynomial modulus degree (8192 slots, 128-bit security; 8192 or 16384) */
 export const DEFAULT_POLY_MODULUS_DEGREE: number;
 
 /**
@@ -60,7 +60,7 @@ export class HEContext {
 
   /**
    * Create a client context with full key pair.
-   * @param polyModulusDegree Power of 2, typically 4096, 8192, or 16384
+   * @param polyModulusDegree 8192 or 16384
    */
   static createClient(polyModulusDegree?: number): HEContext;
 

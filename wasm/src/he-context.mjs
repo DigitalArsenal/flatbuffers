@@ -65,8 +65,8 @@ export function getLastError() {
   return errPtr ? wasmModule.UTF8ToString(errPtr) : '';
 }
 
-/** Default polynomial modulus degree (4096 = ~128-bit security) */
-export const DEFAULT_POLY_MODULUS_DEGREE = 4096;
+/** Default polynomial modulus degree (8192 slots, 128-bit security; 8192 or 16384) */
+export const DEFAULT_POLY_MODULUS_DEGREE = 8192;
 
 /**
  * HEContext provides homomorphic encryption operations.
@@ -100,7 +100,7 @@ export class HEContext {
    * Create a client context with full key pair.
    * Client can encrypt, decrypt, and perform HE operations.
    *
-   * @param {number} [polyModulusDegree=4096] - Power of 2, typically 4096, 8192, or 16384.
+   * @param {number} [polyModulusDegree=8192] - 8192 or 16384.
    *   Higher = more security but slower and larger ciphertexts.
    * @returns {HEContext}
    */
@@ -120,7 +120,7 @@ export class HEContext {
    * producing deterministic keys from the same seed.
    *
    * @param {Uint8Array} seed - 64-byte seed for deterministic key generation
-   * @param {number} [polyModulusDegree=4096] - Polynomial modulus degree
+   * @param {number} [polyModulusDegree=8192] - Polynomial modulus degree (8192 or 16384)
    * @returns {HEContext}
    */
   static createClientFromSeed(seed, polyModulusDegree = DEFAULT_POLY_MODULUS_DEGREE) {

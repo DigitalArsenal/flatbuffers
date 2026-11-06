@@ -925,7 +925,7 @@ class EncryptionModule:
         Create a client HE context with full key material (secret + public).
 
         Args:
-            poly_degree: Polynomial modulus degree (0 = default 4096).
+            poly_degree: Polynomial modulus degree (0 = default 8192; 8192 or 16384).
 
         Returns:
             Context ID (>0) for use with other HE methods.

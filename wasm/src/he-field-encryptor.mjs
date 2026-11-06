@@ -1,7 +1,7 @@
 /**
  * HE Field Encryptor with Companion Schema Generation
  *
- * HE ciphertexts (~32KB+ per field at polyDegree=4096) cannot replace fixed-size
+ * HE ciphertexts (about 1.5 MB per field at polyDegree=8192) cannot replace fixed-size
  * FlatBuffer scalar fields in-place. This module auto-generates a **companion
  * FlatBuffer schema** where HE-encrypted fields become `[ubyte]` vectors.
  *

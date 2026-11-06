@@ -14,9 +14,9 @@ table HEParams {
   /// The HE scheme being used
   scheme: HEScheme = BFV;
 
-  /// Polynomial modulus degree (power of 2: 4096, 8192, 16384)
+  /// Polynomial modulus degree (8192 or 16384)
   /// Higher values = more security but larger ciphertexts and slower operations
-  poly_modulus_degree: uint32 = 4096;
+  poly_modulus_degree: uint32 = 8192;
 
   /// Plain modulus (for BFV/BGV batching)
   plain_modulus: uint64;

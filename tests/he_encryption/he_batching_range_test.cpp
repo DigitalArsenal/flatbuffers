@@ -379,6 +379,17 @@ int main() {
               return std::vector<uint8_t>{1};
             }));
   }
+  {
+    // Small values, so the bound stays in range while the noise runs out.
+    const auto one = client.EncryptWideVector({WideInt::FromInt64(1)}, 1);
+    const auto sq = server.Multiply(one, one);
+    const auto quad = server.Multiply(sq, sq);
+    Refusal("decrypt after the noise budget is exhausted", Code(client, [&] {
+              if (quad.empty()) return std::vector<uint8_t>{};
+              client.DecryptWideVector(quad.data(), quad.size());
+              return std::vector<uint8_t>{1};
+            }));
+  }
   Refusal("fixed point NaN", Code(client, [&] {
             return client.EncryptDouble(std::numeric_limits<double>::quiet_NaN());
           }));

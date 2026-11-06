@@ -318,7 +318,9 @@ keys use the same three-record layout behind a one-byte record count.
 - Refusals: +/-2^178 (one step outside); a value above its declared bound;
   `Multiply` of two 100-bit-bound ciphertexts; `DecryptInt64` of 2^63;
   NaN and infinity in fixed point; scale 3; a vector of n + 1 values; poly
-  modulus degree 4096.
+  modulus degree 4096 (refused); a value of bound 1 squared twice, decrypted
+  after its noise budget runs out (added 2026-11-06 with the restated
+  acceptance).
 
 ## Ciphertext Binary Format
 

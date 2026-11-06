@@ -123,7 +123,7 @@ async function main() {
 
   // Test: Create client context
   await runTest('Create client context', async () => {
-    const ctxId = wasmModule._wasm_he_context_create_client(4096);
+    const ctxId = wasmModule._wasm_he_context_create_client(8192);
     assert(ctxId > 0, 'Context creation should return positive ID');
 
     // Clean up
@@ -136,7 +136,7 @@ async function main() {
   let relinKeys;
 
   await runTest('Get public key from client', async () => {
-    clientCtxId = wasmModule._wasm_he_context_create_client(4096);
+    clientCtxId = wasmModule._wasm_he_context_create_client(8192);
     assert(clientCtxId > 0, 'Context creation failed');
 
     const pkPtr = wasmModule._wasm_he_get_public_key(clientCtxId, lenPtr);

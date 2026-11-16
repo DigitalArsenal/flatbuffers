@@ -41,7 +41,7 @@ static CommentConfig comment_config = {
 namespace csharp {
 class CSharpGenerator : public BaseGenerator {
   struct FieldArrayLength {
-    std::string name;
+    const FieldDef* field;
     int length;
   };
 
@@ -2491,7 +2491,7 @@ public static class FlatbuffersEncryption
           } else if (struct_def.fixed && struct_has_create) {
             std::vector<FieldArrayLength> array_lengths;
             FieldArrayLength tmp_array_length = {
-                field.name,
+                &field,
                 field.value.type.fixed_length,
             };
             array_lengths.push_back(tmp_array_length);
@@ -2581,7 +2581,7 @@ public static class FlatbuffersEncryption
           if (field.value.type.struct_def != nullptr) {
             std::vector<FieldArrayLength> array_lengths;
             FieldArrayLength tmp_array_length = {
-                field.name,
+                &field,
                 field.value.type.fixed_length,
             };
             array_lengths.push_back(tmp_array_length);
@@ -2729,7 +2729,7 @@ public static class FlatbuffersEncryption
       const auto& field_type =
           is_array ? field.value.type.VectorType() : field.value.type;
       FieldArrayLength tmp_array_length = {
-          field.name,
+          &field,
           field_type.fixed_length,
       };
       array_lengths.push_back(tmp_array_length);
@@ -2745,7 +2745,7 @@ public static class FlatbuffersEncryption
         }
         std::string name;
         for (size_t i = 0; i < array_lengths.size(); ++i) {
-          name += "_" + array_lengths[i].name;
+          name += "_" + array_lengths[i].field->name;
         }
         code += "    var " + name + " = ";
         if (array_only_lengths.size() > 0) {
@@ -2775,7 +2775,7 @@ public static class FlatbuffersEncryption
           }
           code += "] = _o";
           for (size_t i = 0, j = 0; i < array_lengths.size(); ++i) {
-            code += "." + ConvertCase(array_lengths[i].name, Case::kUpperCamel);
+            code += "." + Name(*array_lengths[i].field);
             if (array_lengths[i].length <= 0) continue;
             code += "[idx" + NumToString(j++) + "]";
           }
@@ -2786,7 +2786,7 @@ public static class FlatbuffersEncryption
         } else {
           code += "_o";
           for (size_t i = 0; i < array_lengths.size(); ++i) {
-            code += "." + ConvertCase(array_lengths[i].name, Case::kUpperCamel);
+            code += "." + Name(*array_lengths[i].field);
           }
           code += ";";
         }

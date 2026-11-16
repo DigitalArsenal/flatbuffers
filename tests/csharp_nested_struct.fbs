@@ -1,0 +1,22 @@
+namespace NestedStructNames;
+
+struct Index {
+  HAS_VALUE:bool;
+  VALUE_0:int;
+}
+
+struct Pair {
+  TERMINAL_A:Index;
+}
+
+struct PairArray {
+  TERMINAL_LIST:[Index:2];
+}
+
+table Root {
+  PAIR_VALUE:Pair;
+  PAIR_ARRAY:PairArray;
+  PAIRS:[Pair];
+}
+
+root_type Root;

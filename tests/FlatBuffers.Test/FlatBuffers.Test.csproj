@@ -28,6 +28,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\csharp_nested_struct\NestedStructNames\*.cs" />
     <Compile Include="..\..\net\FlatBuffers\ByteBuffer.cs">
       <Link>FlatBuffers\ByteBuffer.cs</Link>
     </Compile>

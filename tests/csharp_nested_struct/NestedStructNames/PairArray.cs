@@ -18,11 +18,11 @@ public struct PairArray : IFlatbufferObject
 
   public NestedStructNames.Index TERMINAL_LIST(int j) { return (new NestedStructNames.Index()).__assign(__p.bb_pos + 0 + j * 8, __p.bb); }
 
-  public static Offset<NestedStructNames.PairArray> CreatePairArray(FlatBufferBuilder builder, bool[] TERMINAL_LIST_HAS_VALUE, int[] TERMINAL_LIST_@class) {
+  public static Offset<NestedStructNames.PairArray> CreatePairArray(FlatBufferBuilder builder, bool[] TERMINAL_LIST_HAS_VALUE, int[] TERMINAL_LIST_VALUE_0) {
     builder.Prep(4, 16);
     for (int _idx0 = 2; _idx0 > 0; _idx0--) {
       builder.Prep(4, 8);
-      builder.PutInt(TERMINAL_LIST_@class[_idx0-1]);
+      builder.PutInt(TERMINAL_LIST_VALUE_0[_idx0-1]);
       builder.Pad(3);
       builder.PutBool(TERMINAL_LIST_HAS_VALUE[_idx0-1]);
     }
@@ -41,12 +41,12 @@ public struct PairArray : IFlatbufferObject
     if (_o == null) return default(Offset<NestedStructNames.PairArray>);
     var _TERMINAL_LIST_HAS_VALUE = new bool[2];
     for (var idx0 = 0; idx0 < 2; ++idx0) {_TERMINAL_LIST_HAS_VALUE[idx0] = _o.TERMINAL_LIST[idx0].HAS_VALUE;}
-    var _TERMINAL_LIST_class = new int[2];
-    for (var idx0 = 0; idx0 < 2; ++idx0) {_TERMINAL_LIST_class[idx0] = _o.TERMINAL_LIST[idx0].@class;}
+    var _TERMINAL_LIST_VALUE_0 = new int[2];
+    for (var idx0 = 0; idx0 < 2; ++idx0) {_TERMINAL_LIST_VALUE_0[idx0] = _o.TERMINAL_LIST[idx0].VALUE_0;}
     return CreatePairArray(
       builder,
       _TERMINAL_LIST_HAS_VALUE,
-      _TERMINAL_LIST_class);
+      _TERMINAL_LIST_VALUE_0);
   }
 }
 

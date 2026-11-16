@@ -18,10 +18,10 @@ public struct Pair : IFlatbufferObject
 
   public NestedStructNames.Index TERMINAL_A { get { return (new NestedStructNames.Index()).__assign(__p.bb_pos + 0, __p.bb); } }
 
-  public static Offset<NestedStructNames.Pair> CreatePair(FlatBufferBuilder builder, bool TERMINAL_A_HAS_VALUE, int TERMINAL_A_@class) {
+  public static Offset<NestedStructNames.Pair> CreatePair(FlatBufferBuilder builder, bool TERMINAL_A_HAS_VALUE, int TERMINAL_A_VALUE_0) {
     builder.Prep(4, 8);
     builder.Prep(4, 8);
-    builder.PutInt(TERMINAL_A_@class);
+    builder.PutInt(TERMINAL_A_VALUE_0);
     builder.Pad(3);
     builder.PutBool(TERMINAL_A_HAS_VALUE);
     return new Offset<NestedStructNames.Pair>(builder.Offset);
@@ -37,11 +37,11 @@ public struct Pair : IFlatbufferObject
   public static Offset<NestedStructNames.Pair> Pack(FlatBufferBuilder builder, PairT _o) {
     if (_o == null) return default(Offset<NestedStructNames.Pair>);
     var _TERMINAL_A_HAS_VALUE = _o.TERMINAL_A.HAS_VALUE;
-    var _TERMINAL_A_class = _o.TERMINAL_A.@class;
+    var _TERMINAL_A_VALUE_0 = _o.TERMINAL_A.VALUE_0;
     return CreatePair(
       builder,
       _TERMINAL_A_HAS_VALUE,
-      _TERMINAL_A_class);
+      _TERMINAL_A_VALUE_0);
   }
 }
 

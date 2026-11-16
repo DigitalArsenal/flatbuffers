@@ -2,7 +2,7 @@ namespace NestedStructNames;
 
 struct Index {
   HAS_VALUE:bool;
-  class:int;
+  VALUE_0:int;
 }
 
 struct Pair {

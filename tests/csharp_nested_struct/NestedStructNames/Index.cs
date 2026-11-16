@@ -17,11 +17,11 @@ public struct Index : IFlatbufferObject
   public Index __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
 
   public bool HAS_VALUE { get { return 0!=__p.bb.Get(__p.bb_pos + 0); } }
-  public int @class { get { return __p.bb.GetInt(__p.bb_pos + 4); } }
+  public int VALUE_0 { get { return __p.bb.GetInt(__p.bb_pos + 4); } }
 
-  public static Offset<NestedStructNames.Index> CreateIndex(FlatBufferBuilder builder, bool HAS_VALUE, int @class) {
+  public static Offset<NestedStructNames.Index> CreateIndex(FlatBufferBuilder builder, bool HAS_VALUE, int VALUE_0) {
     builder.Prep(4, 8);
-    builder.PutInt(@class);
+    builder.PutInt(VALUE_0);
     builder.Pad(3);
     builder.PutBool(HAS_VALUE);
     return new Offset<NestedStructNames.Index>(builder.Offset);
@@ -33,25 +33,25 @@ public struct Index : IFlatbufferObject
   }
   public void UnPackTo(IndexT _o) {
     _o.HAS_VALUE = this.HAS_VALUE;
-    _o.@class = this.@class;
+    _o.VALUE_0 = this.VALUE_0;
   }
   public static Offset<NestedStructNames.Index> Pack(FlatBufferBuilder builder, IndexT _o) {
     if (_o == null) return default(Offset<NestedStructNames.Index>);
     return CreateIndex(
       builder,
       _o.HAS_VALUE,
-      _o.@class);
+      _o.VALUE_0);
   }
 }
 
 public class IndexT
 {
   public bool HAS_VALUE { get; set; }
-  public int @class { get; set; }
+  public int VALUE_0 { get; set; }
 
   public IndexT() {
     this.HAS_VALUE = false;
-    this.@class = 0;
+    this.VALUE_0 = 0;
   }
 }
 

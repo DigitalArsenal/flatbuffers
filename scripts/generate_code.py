@@ -451,7 +451,7 @@ type_field_collsion_schema = "type_field_collsion.fbs"
 
 flatc(["--csharp", "--gen-object-api"], schema=type_field_collsion_schema)
 
-# Nested object packers preserve declared names, including escaped keywords.
+# Nested object packers preserve declared field names.
 nested_struct_options = ["--csharp", "--gen-object-api", "--preserve-case"]
 nested_struct_output = tests_path / "csharp_nested_struct"
 flatc(
@@ -465,10 +465,14 @@ with tempfile.TemporaryDirectory(dir=tests_path) as repeated_output:
       prefix=repeated_output,
       schema="csharp_nested_struct.fbs",
   )
-  expected_files = sorted(p.relative_to(nested_struct_output)
-                          for p in nested_struct_output.rglob("*.cs"))
-  repeated_files = sorted(p.relative_to(repeated_output)
-                          for p in Path(repeated_output).rglob("*.cs"))
+  expected_files = sorted(
+      p.relative_to(nested_struct_output)
+      for p in nested_struct_output.rglob("*.cs")
+  )
+  repeated_files = sorted(
+      p.relative_to(repeated_output)
+      for p in Path(repeated_output).rglob("*.cs")
+  )
   assert expected_files == repeated_files
   for relative_path in expected_files:
     assert (nested_struct_output / relative_path).read_bytes() == (

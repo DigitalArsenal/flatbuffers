@@ -8,3 +8,4 @@ def flatc(options, schema):
 
 def GenerateLobster():
   flatc([], "basic.fbs")
+  flatc([], "enum_vectors.fbs")

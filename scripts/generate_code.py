@@ -19,6 +19,7 @@ import glob
 from pathlib import Path
 import shutil
 import subprocess
+import tempfile
 import generate_grpc_examples
 from util import args, flatc, flatc_path, root_path, tests_path
 
@@ -449,6 +450,30 @@ flatc(NO_INCL_OPTS + CPP_OPTS, schema=optional_scalars_schema)
 type_field_collsion_schema = "type_field_collsion.fbs"
 
 flatc(["--csharp", "--gen-object-api"], schema=type_field_collsion_schema)
+
+# Nested object packers preserve declared names, including escaped keywords.
+nested_struct_options = ["--csharp", "--gen-object-api", "--preserve-case"]
+nested_struct_output = tests_path / "csharp_nested_struct"
+flatc(
+    nested_struct_options,
+    prefix=str(nested_struct_output),
+    schema="csharp_nested_struct.fbs",
+)
+with tempfile.TemporaryDirectory(dir=tests_path) as repeated_output:
+  flatc(
+      nested_struct_options,
+      prefix=repeated_output,
+      schema="csharp_nested_struct.fbs",
+  )
+  expected_files = sorted(p.relative_to(nested_struct_output)
+                          for p in nested_struct_output.rglob("*.cs"))
+  repeated_files = sorted(p.relative_to(repeated_output)
+                          for p in Path(repeated_output).rglob("*.cs"))
+  assert expected_files == repeated_files
+  for relative_path in expected_files:
+    assert (nested_struct_output / relative_path).read_bytes() == (
+        Path(repeated_output) / relative_path
+    ).read_bytes(), str(relative_path)
 
 # Union / value collision
 flatc(

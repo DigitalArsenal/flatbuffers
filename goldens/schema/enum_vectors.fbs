@@ -1,0 +1,39 @@
+namespace EnumVectors;
+
+enum I8:byte { Zero = 0, Value = -42 }
+enum U8:ubyte { Zero = 0, Value = 42 }
+enum I16:short { Zero = 0, Value = -42 }
+enum U16:ushort { Zero = 0, Value = 42 }
+enum I32:int { Zero = 0, Value = -42 }
+enum U32:uint { Zero = 0, Value = 42 }
+enum I64:long { Zero = 0, Value = -42 }
+enum U64:ulong { Zero = 0, Value = 42 }
+
+struct Values {
+  value:I8;
+  enabled:bool;
+  disabled:bool;
+}
+
+table Payload { value:I8; }
+union Choice { Payload }
+
+table Vectors {
+  values_i8:[I8];
+  values_u8:[U8];
+  values_i16:[I16];
+  values_u16:[U16];
+  values_i32:[I32];
+  values_u32:[U32];
+  values_i64:[I64];
+  values_u64:[U64];
+  floats:[float];
+  doubles:[double];
+  bools:[bool];
+  values:Values;
+  choice:Choice;
+  scalar:I8 = Value;
+  optional:I8 = null;
+}
+
+root_type Vectors;

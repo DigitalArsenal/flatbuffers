@@ -93,6 +93,16 @@ class LobsterGenerator : public BaseGenerator {
     return value;
   }
 
+  std::string ScalarDefault(const FieldDef& field) {
+    if (field.IsOptional())
+      return IsFloat(field.value.type.base_type) ? "0.0" : "0";
+    const auto& value = field.value.constant;
+    // Lobster has no unary plus operator.
+    if (IsFloat(field.value.type.base_type) && !value.empty() && value[0] == '+')
+      return value.substr(1);
+    return value;
+  }
+
   // Returns the method name for use with add/put calls.
   std::string GenMethod(const Type& type) {
     return IsScalar(type.base_type)
@@ -128,9 +138,7 @@ class LobsterGenerator : public BaseGenerator {
               offsets + ")";
 
       } else {
-        auto defval = field.IsOptional()
-                          ? (IsFloat(field.value.type.base_type) ? "0.0" : "0")
-                          : field.value.constant;
+        auto defval = ScalarDefault(field);
         acc = "flatbuffers.field_" + GenTypeName(field.value.type) +
               "(buf_, pos_, " + offsets + ", " + defval + ")";
       }
@@ -243,7 +251,7 @@ class LobsterGenerator : public BaseGenerator {
               "):\n        b_.Prepend" + GenMethod(field.value.type) + "Slot(" +
               NumToString(offset) + ", " + NormalizedName(field);
       if (IsScalar(field.value.type.base_type) && !field.IsOptional())
-        code += ", " + field.value.constant;
+        code += ", " + ScalarDefault(field);
       code += ")\n        return this\n";
     }
     code += "    def end():\n        return b_.EndObject()\n\n";

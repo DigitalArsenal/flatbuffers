@@ -430,11 +430,11 @@ class Monster : flatbuffers.handle
     def inf_default() -> float:
         return flatbuffers.field_float32(buf_, pos_, 114, inf)
     def positive_inf_default() -> float:
-        return flatbuffers.field_float32(buf_, pos_, 116, +inf)
+        return flatbuffers.field_float32(buf_, pos_, 116, inf)
     def infinity_default() -> float:
         return flatbuffers.field_float32(buf_, pos_, 118, infinity)
     def positive_infinity_default() -> float:
-        return flatbuffers.field_float32(buf_, pos_, 120, +infinity)
+        return flatbuffers.field_float32(buf_, pos_, 120, infinity)
     def negative_inf_default() -> float:
         return flatbuffers.field_float32(buf_, pos_, 122, -inf)
     def negative_infinity_default() -> float:
@@ -615,13 +615,13 @@ struct MonsterBuilder:
         b_.PrependFloat32Slot(55, inf_default, inf)
         return this
     def add_positive_inf_default(positive_inf_default:float):
-        b_.PrependFloat32Slot(56, positive_inf_default, +inf)
+        b_.PrependFloat32Slot(56, positive_inf_default, inf)
         return this
     def add_infinity_default(infinity_default:float):
         b_.PrependFloat32Slot(57, infinity_default, infinity)
         return this
     def add_positive_infinity_default(positive_infinity_default:float):
-        b_.PrependFloat32Slot(58, positive_infinity_default, +infinity)
+        b_.PrependFloat32Slot(58, positive_infinity_default, infinity)
         return this
     def add_negative_inf_default(negative_inf_default:float):
         b_.PrependFloat32Slot(59, negative_inf_default, -inf)

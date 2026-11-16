@@ -268,4 +268,3 @@ def VectorsCreateBoolsVector(b_:flatbuffers.builder, v_:[bool]):
     b_.StartVector(1, v_.length, 1)
     reverse(v_) e_: b_.PrependBool(e_)
     return b_.EndVector(v_.length)
-

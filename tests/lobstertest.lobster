@@ -170,6 +170,44 @@ def test_optional_scalars():
     assert maybe_val_enum == optional_scalars.OptionalByte_None and maybe_present_enum == false
 
 
+def test_special_float_defaults():
+    def build(write_finite):
+        let b = flatbuffers.builder {}
+        let name = b.CreateString("float defaults")
+        let mon = MyGame.Example.MonsterBuilder { b }.start().add_name(name)
+        if write_finite:
+            mon.add_nan_default(1.25)
+            mon.add_inf_default(1.25)
+            mon.add_positive_inf_default(1.25)
+            mon.add_infinity_default(1.25)
+            mon.add_positive_infinity_default(1.25)
+            mon.add_negative_inf_default(-1.25)
+            mon.add_negative_infinity_default(-1.25)
+            mon.add_double_inf_default(1.25)
+        b.Finish(mon.end(), "MONS")
+        return MyGame.Example.GetRootAsMonster(b.SizedCopy())
+
+    let defaults = build(false)
+    assert defaults.nan_default() != defaults.nan_default()
+    assert defaults.inf_default() == inf
+    assert defaults.positive_inf_default() == inf
+    assert defaults.infinity_default() == inf
+    assert defaults.positive_infinity_default() == inf
+    assert defaults.negative_inf_default() == -inf
+    assert defaults.negative_infinity_default() == -inf
+    assert defaults.double_inf_default() == inf
+
+    let finite = build(true)
+    assert finite.nan_default() == 1.25
+    assert finite.inf_default() == 1.25
+    assert finite.positive_inf_default() == 1.25
+    assert finite.infinity_default() == 1.25
+    assert finite.positive_infinity_default() == 1.25
+    assert finite.negative_inf_default() == -1.25
+    assert finite.negative_infinity_default() == -1.25
+    assert finite.double_inf_default() == 1.25
+
+
 // Verify that the canonical flatbuffer file (produced by the C++ implementation)
 // is readable by the generated Lobster code.
 let fb2 = read_file("monsterdata_test.mon")
@@ -198,5 +236,6 @@ check_read_buffer(fb3)
 
 // Additional tests.
 test_optional_scalars()
+test_special_float_defaults()
 
 print "Lobster test successful!"

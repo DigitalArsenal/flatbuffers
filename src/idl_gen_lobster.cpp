@@ -86,6 +86,13 @@ class LobsterGenerator : public BaseGenerator {
     return "int";
   }
 
+  std::string ScalarConversion(const Type& type, const std::string& value) {
+    if (type.enum_def)
+      return NormalizedName(*type.enum_def) + "(" + value + ")";
+    if (IsBool(type.base_type)) return "bool(" + value + ")";
+    return value;
+  }
+
   // Returns the method name for use with add/put calls.
   std::string GenMethod(const Type& type) {
     return IsScalar(type.base_type)
@@ -126,10 +133,8 @@ class LobsterGenerator : public BaseGenerator {
                           : field.value.constant;
         acc = "flatbuffers.field_" + GenTypeName(field.value.type) +
               "(buf_, pos_, " + offsets + ", " + defval + ")";
-        if (IsBool(field.value.type.base_type)) acc = "bool(" + acc + ")";
       }
-      if (field.value.type.enum_def)
-        acc = NormalizedName(*field.value.type.enum_def) + "(" + acc + ")";
+      acc = ScalarConversion(field.value.type, acc);
       if (field.IsOptional()) {
         acc += ", flatbuffers.field_present(buf_, pos_, " + offsets + ")";
         code += def + "() -> " + LobsterType(field.value.type) +
@@ -181,16 +186,18 @@ class LobsterGenerator : public BaseGenerator {
           code += NamespacedName(*field.value.type.struct_def) + " { buf_, " +
                   start + " }\n";
         } else {
+          std::string acc;
           if (IsString(vectortype)) {
             code += def + "(i:int) -> string:\n        return ";
-            code += "flatbuffers.string";
+            acc = "flatbuffers.string";
           } else {
             code += def + "(i:int) -> " + LobsterType(vectortype) +
                     ":\n        return ";
-            code += "read_" + GenTypeName(vectortype) + "_le";
+            acc = "read_" + GenTypeName(vectortype) + "_le";
           }
-          code += "(buf_, buf_.flatbuffers.field_vector(pos_, " + offsets +
-                  ") + i * " + NumToString(InlineSize(vectortype)) + ")\n";
+          acc += "(buf_, buf_.flatbuffers.field_vector(pos_, " + offsets +
+                 ") + i * " + NumToString(InlineSize(vectortype)) + ")";
+          code += ScalarConversion(vectortype, acc) + "\n";
         }
         break;
       }

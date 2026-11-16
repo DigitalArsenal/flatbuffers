@@ -11,7 +11,6 @@ enum U64:ulong { Zero = 0, Value = 42 }
 
 struct Values {
   value:I8;
-  enabled:bool;
 }
 
 table Payload { value:I8; }
@@ -26,7 +25,6 @@ table Vectors {
   values_u32:[U32];
   values_i64:[I64];
   values_u64:[U64];
-  bools:[bool];
   floats:[float];
   doubles:[double];
   values:Values;

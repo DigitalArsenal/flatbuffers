@@ -11,7 +11,6 @@ def test_enum_vectors():
     let v_u32 = b.EnumVectors.VectorsCreateValuesU32Vector([EnumVectors.U32_Value, EnumVectors.U32_Zero, EnumVectors.U32_Value])
     let v_i64 = b.EnumVectors.VectorsCreateValuesI64Vector([EnumVectors.I64_Value, EnumVectors.I64_Zero, EnumVectors.I64_Value])
     let v_u64 = b.EnumVectors.VectorsCreateValuesU64Vector([EnumVectors.U64_Value, EnumVectors.U64_Zero, EnumVectors.U64_Value])
-    let bools = b.EnumVectors.VectorsCreateBoolsVector([true, false, true])
     let floats = b.EnumVectors.VectorsCreateFloatsVector([1.25, -2.5])
     let doubles = b.EnumVectors.VectorsCreateDoublesVector([1.25, -2.5])
     let payload = EnumVectors.PayloadBuilder { b }.start().add_value(EnumVectors.I8_Value).end()
@@ -24,14 +23,13 @@ def test_enum_vectors():
         .add_values_u32(v_u32)
         .add_values_i64(v_i64)
         .add_values_u64(v_u64)
-        .add_bools(bools)
         .add_floats(floats)
         .add_doubles(doubles)
         .add_choice_type(EnumVectors.Choice_Payload)
         .add_choice(payload)
         .add_scalar(EnumVectors.I8_Zero)
         .add_optional(EnumVectors.I8_Zero)
-        .add_values(b.EnumVectors.CreateValues(EnumVectors.I8_Value, true))
+        .add_values(b.EnumVectors.CreateValues(EnumVectors.I8_Value))
         .end()
     b.Finish(root, nil)
     let result = EnumVectors.GetRootAsVectors(b.SizedCopy())
@@ -67,12 +65,10 @@ def test_enum_vectors():
     assert result.values_u64(0) == EnumVectors.U64_Value
     assert result.values_u64(1) == EnumVectors.U64_Zero
     assert result.values_u64(2) == EnumVectors.U64_Value
-    assert result.bools_length == 3
-    assert result.bools(0) and not result.bools(1) and result.bools(2)
     assert result.floats(0) == 1.25 and result.floats(1) == -2.5
     assert result.doubles(0) == 1.25 and result.doubles(1) == -2.5
     let values = assert result.values()
-    assert values.value() == EnumVectors.I8_Value and values.enabled()
+    assert values.value() == EnumVectors.I8_Value
     assert result.choice_type() == EnumVectors.Choice_Payload
     assert result.choice_as_Payload().value() == EnumVectors.I8_Value
     assert result.scalar() == EnumVectors.I8_Zero

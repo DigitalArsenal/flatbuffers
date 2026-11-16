@@ -48,12 +48,9 @@ class Vectors
 class Values : flatbuffers.handle
     def value() -> I8:
         return I8(buf_.read_int8_le(pos_ + 0))
-    def enabled() -> bool:
-        return bool(buf_.read_int8_le(pos_ + 1))
 
-def CreateValues(b_:flatbuffers.builder, value:I8, enabled:bool):
-    b_.Prep(1, 2)
-    b_.PrependBool(enabled)
+def CreateValues(b_:flatbuffers.builder, value:I8):
+    b_.Prep(1, 1)
     b_.PrependInt8(value)
     return b_.Offset()
 
@@ -107,36 +104,32 @@ class Vectors : flatbuffers.handle
         return U64(read_uint64_le(buf_, buf_.flatbuffers.field_vector(pos_, 18) + i * 8))
     def values_u64_length() -> int:
         return flatbuffers.field_vector_len(buf_, pos_, 18)
-    def bools(i:int) -> bool:
-        return bool(read_int8_le(buf_, buf_.flatbuffers.field_vector(pos_, 20) + i * 1))
-    def bools_length() -> int:
-        return flatbuffers.field_vector_len(buf_, pos_, 20)
     def floats(i:int) -> float:
-        return read_float32_le(buf_, buf_.flatbuffers.field_vector(pos_, 22) + i * 4)
+        return read_float32_le(buf_, buf_.flatbuffers.field_vector(pos_, 20) + i * 4)
     def floats_length() -> int:
-        return flatbuffers.field_vector_len(buf_, pos_, 22)
+        return flatbuffers.field_vector_len(buf_, pos_, 20)
     def doubles(i:int) -> float:
-        return read_float64_le(buf_, buf_.flatbuffers.field_vector(pos_, 24) + i * 8)
+        return read_float64_le(buf_, buf_.flatbuffers.field_vector(pos_, 22) + i * 8)
     def doubles_length() -> int:
-        return flatbuffers.field_vector_len(buf_, pos_, 24)
+        return flatbuffers.field_vector_len(buf_, pos_, 22)
     def values() -> EnumVectors.Values?:
-        let o = flatbuffers.field_struct(buf_, pos_, 26)
+        let o = flatbuffers.field_struct(buf_, pos_, 24)
         return if o: EnumVectors.Values { buf_, o } else: nil
     def choice_type() -> Choice:
-        return Choice(flatbuffers.field_uint8(buf_, pos_, 28, 0))
+        return Choice(flatbuffers.field_uint8(buf_, pos_, 26, 0))
     def choice_as_Payload():
-        return EnumVectors.Payload { buf_, flatbuffers.field_table(buf_, pos_, 30) }
+        return EnumVectors.Payload { buf_, flatbuffers.field_table(buf_, pos_, 28) }
     def scalar() -> I8:
-        return I8(flatbuffers.field_int8(buf_, pos_, 32, -42))
+        return I8(flatbuffers.field_int8(buf_, pos_, 30, -42))
     def optional() -> I8, bool:
-        return I8(flatbuffers.field_int8(buf_, pos_, 34, 0)), flatbuffers.field_present(buf_, pos_, 34)
+        return I8(flatbuffers.field_int8(buf_, pos_, 32, 0)), flatbuffers.field_present(buf_, pos_, 32)
 
 def GetRootAsVectors(buf:string): return Vectors { buf, flatbuffers.indirect(buf, 0) }
 
 struct VectorsBuilder:
     b_:flatbuffers.builder
     def start():
-        b_.StartObject(16)
+        b_.StartObject(15)
         return this
     def add_values_i8(values_i8:flatbuffers.offset):
         b_.PrependUOffsetTRelativeSlot(0, values_i8)
@@ -162,29 +155,26 @@ struct VectorsBuilder:
     def add_values_u64(values_u64:flatbuffers.offset):
         b_.PrependUOffsetTRelativeSlot(7, values_u64)
         return this
-    def add_bools(bools:flatbuffers.offset):
-        b_.PrependUOffsetTRelativeSlot(8, bools)
-        return this
     def add_floats(floats:flatbuffers.offset):
-        b_.PrependUOffsetTRelativeSlot(9, floats)
+        b_.PrependUOffsetTRelativeSlot(8, floats)
         return this
     def add_doubles(doubles:flatbuffers.offset):
-        b_.PrependUOffsetTRelativeSlot(10, doubles)
+        b_.PrependUOffsetTRelativeSlot(9, doubles)
         return this
     def add_values(values:flatbuffers.offset):
-        b_.PrependStructSlot(11, values)
+        b_.PrependStructSlot(10, values)
         return this
     def add_choice_type(choice_type:Choice):
-        b_.PrependUint8Slot(12, choice_type, 0)
+        b_.PrependUint8Slot(11, choice_type, 0)
         return this
     def add_choice(choice:flatbuffers.offset):
-        b_.PrependUOffsetTRelativeSlot(13, choice)
+        b_.PrependUOffsetTRelativeSlot(12, choice)
         return this
     def add_scalar(scalar:I8):
-        b_.PrependInt8Slot(14, scalar, -42)
+        b_.PrependInt8Slot(13, scalar, -42)
         return this
     def add_optional(optional:I8):
-        b_.PrependInt8Slot(15, optional)
+        b_.PrependInt8Slot(14, optional)
         return this
     def end():
         return b_.EndObject()
@@ -243,13 +233,6 @@ def VectorsStartValuesU64Vector(b_:flatbuffers.builder, n_:int):
 def VectorsCreateValuesU64Vector(b_:flatbuffers.builder, v_:[U64]):
     b_.StartVector(8, v_.length, 8)
     reverse(v_) e_: b_.PrependUint64(e_)
-    return b_.EndVector(v_.length)
-
-def VectorsStartBoolsVector(b_:flatbuffers.builder, n_:int):
-    b_.StartVector(1, n_, 1)
-def VectorsCreateBoolsVector(b_:flatbuffers.builder, v_:[bool]):
-    b_.StartVector(1, v_.length, 1)
-    reverse(v_) e_: b_.PrependBool(e_)
     return b_.EndVector(v_.length)
 
 def VectorsStartFloatsVector(b_:flatbuffers.builder, n_:int):

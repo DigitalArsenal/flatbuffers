@@ -86,10 +86,9 @@ class LobsterGenerator : public BaseGenerator {
     return "int";
   }
 
-  std::string ScalarConversion(const Type& type, const std::string& value) {
+  std::string EnumConversion(const Type& type, const std::string& value) {
     if (type.enum_def)
       return NormalizedName(*type.enum_def) + "(" + value + ")";
-    if (IsBool(type.base_type)) return "bool(" + value + ")";
     return value;
   }
 
@@ -133,8 +132,9 @@ class LobsterGenerator : public BaseGenerator {
                           : field.value.constant;
         acc = "flatbuffers.field_" + GenTypeName(field.value.type) +
               "(buf_, pos_, " + offsets + ", " + defval + ")";
+        if (IsBool(field.value.type.base_type)) acc = "bool(" + acc + ")";
       }
-      acc = ScalarConversion(field.value.type, acc);
+      acc = EnumConversion(field.value.type, acc);
       if (field.IsOptional()) {
         acc += ", flatbuffers.field_present(buf_, pos_, " + offsets + ")";
         code += def + "() -> " + LobsterType(field.value.type) +
@@ -197,7 +197,7 @@ class LobsterGenerator : public BaseGenerator {
           }
           acc += "(buf_, buf_.flatbuffers.field_vector(pos_, " + offsets +
                  ") + i * " + NumToString(InlineSize(vectortype)) + ")";
-          code += ScalarConversion(vectortype, acc) + "\n";
+          code += EnumConversion(vectortype, acc) + "\n";
         }
         break;
       }

@@ -326,7 +326,7 @@ class Monster : flatbuffers.handle
     def testhashu64_fnv1a() -> int:
         return flatbuffers.field_uint64(buf_, pos_, 50, 0)
     def testarrayofbools(i:int) -> bool:
-        return bool(read_int8_le(buf_, buf_.flatbuffers.field_vector(pos_, 52) + i * 1))
+        return read_int8_le(buf_, buf_.flatbuffers.field_vector(pos_, 52) + i * 1)
     def testarrayofbools_length() -> int:
         return flatbuffers.field_vector_len(buf_, pos_, 52)
     def testf() -> float:

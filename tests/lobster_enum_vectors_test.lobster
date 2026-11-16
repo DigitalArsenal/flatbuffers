@@ -13,6 +13,7 @@ def test_enum_vectors():
     let v_u64 = b.EnumVectors.VectorsCreateValuesU64Vector([EnumVectors.U64_Value, EnumVectors.U64_Zero, EnumVectors.U64_Value])
     let floats = b.EnumVectors.VectorsCreateFloatsVector([1.25, -2.5])
     let doubles = b.EnumVectors.VectorsCreateDoublesVector([1.25, -2.5])
+    let bools = b.EnumVectors.VectorsCreateBoolsVector([true, false, true])
     let payload = EnumVectors.PayloadBuilder { b }.start().add_value(EnumVectors.I8_Value).end()
     let root = EnumVectors.VectorsBuilder { b }.start()
         .add_values_i8(v_i8)
@@ -25,11 +26,12 @@ def test_enum_vectors():
         .add_values_u64(v_u64)
         .add_floats(floats)
         .add_doubles(doubles)
+        .add_bools(bools)
         .add_choice_type(EnumVectors.Choice_Payload)
         .add_choice(payload)
         .add_scalar(EnumVectors.I8_Zero)
         .add_optional(EnumVectors.I8_Zero)
-        .add_values(b.EnumVectors.CreateValues(EnumVectors.I8_Value))
+        .add_values(b.EnumVectors.CreateValues(EnumVectors.I8_Value, true, false))
         .end()
     b.Finish(root, nil)
     let result = EnumVectors.GetRootAsVectors(b.SizedCopy())
@@ -67,8 +69,11 @@ def test_enum_vectors():
     assert result.values_u64(2) == EnumVectors.U64_Value
     assert result.floats(0) == 1.25 and result.floats(1) == -2.5
     assert result.doubles(0) == 1.25 and result.doubles(1) == -2.5
+    assert result.bools_length == 3
+    assert result.bools(0) and not result.bools(1) and result.bools(2)
     let values = assert result.values()
     assert values.value() == EnumVectors.I8_Value
+    assert values.enabled() and not values.disabled()
     assert result.choice_type() == EnumVectors.Choice_Payload
     assert result.choice_as_Payload().value() == EnumVectors.I8_Value
     assert result.scalar() == EnumVectors.I8_Zero
@@ -80,6 +85,7 @@ def test_enum_vectors():
     empty_builder.Finish(empty_root, nil)
     let empty = EnumVectors.GetRootAsVectors(empty_builder.SizedCopy())
     assert empty.values_i8_length == 0
+    assert empty.bools_length == 0
     assert empty.scalar() == EnumVectors.I8_Value
     let absent_value, absent_present = empty.optional()
     assert absent_value == EnumVectors.I8_Zero and not absent_present

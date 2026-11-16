@@ -14,6 +14,9 @@ struct Values {
   enabled:bool;
 }
 
+table Payload { value:I8; }
+union Choice { Payload }
+
 table Vectors {
   values_i8:[I8];
   values_u8:[U8];
@@ -27,6 +30,7 @@ table Vectors {
   floats:[float];
   doubles:[double];
   values:Values;
+  choice:Choice;
   scalar:I8 = Value;
   optional:I8 = null;
 }

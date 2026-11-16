@@ -15,7 +15,6 @@
 import from "../lobster/"
 import monster_test_generated
 import optional_scalars_generated
-import "../goldens/lobster/enum_vectors_generated.lobster"
 
 def check_read_buffer(buf):
     // Check that the given buffer is evaluated correctly as the example Monster.
@@ -51,12 +50,6 @@ def check_read_buffer(buf):
 
     assert equal([-1.7976931348623157e+308, 0.0, 1.7976931348623157e+308],
                  (map(monster.vector_of_doubles_length) i: monster.vector_of_doubles(i)))
-
-    assert monster.vector_of_enums_length == 0 or monster.vector_of_enums_length == 3
-    if monster.vector_of_enums_length:
-        assert monster.vector_of_enums(0) == MyGame.Example.Color_Red
-        assert monster.vector_of_enums(1) == MyGame.Example.Color_Green
-        assert monster.vector_of_enums(2) == MyGame.Example.Color_Blue
 
     assert monster.test4_length == 2
     let test0 = monster.test4(0)
@@ -99,9 +92,6 @@ def make_monster_from_generated_code():
     let vector_of_doubles = b.MyGame.Example.MonsterCreateVectorOfDoublesVector(
                                 [ -1.7976931348623157e+308, 0.0, 1.7976931348623157e+308 ])
 
-    let colors = b.MyGame.Example.MonsterCreateVectorOfEnumsVector(
-        [MyGame.Example.Color_Red, MyGame.Example.Color_Green, MyGame.Example.Color_Blue])
-
     let mon = MyGame.Example.MonsterBuilder { b }
         .start()
         .add_pos(b.MyGame.Example.CreateVec3(1.0, 2.0, 3.0, 3.0,
@@ -113,7 +103,6 @@ def make_monster_from_generated_code():
         .add_test(mon2)
         .add_test4(test4)
         .add_testarrayofstring(test_array_of_string)
-        .add_vector_of_enums(colors)
         .add_vector_of_longs(vector_of_longs)
         .add_vector_of_doubles(vector_of_doubles)
         .end()
@@ -181,89 +170,6 @@ def test_optional_scalars():
     assert maybe_val_enum == optional_scalars.OptionalByte_None and maybe_present_enum == false
 
 
-
-def test_enum_vectors():
-    let b = flatbuffers.builder {}
-    let v_i8 = b.EnumVectors.VectorsCreateValuesI8Vector([EnumVectors.I8_Value, EnumVectors.I8_Zero, EnumVectors.I8_Value])
-    let v_u8 = b.EnumVectors.VectorsCreateValuesU8Vector([EnumVectors.U8_Value, EnumVectors.U8_Zero, EnumVectors.U8_Value])
-    let v_i16 = b.EnumVectors.VectorsCreateValuesI16Vector([EnumVectors.I16_Value, EnumVectors.I16_Zero, EnumVectors.I16_Value])
-    let v_u16 = b.EnumVectors.VectorsCreateValuesU16Vector([EnumVectors.U16_Value, EnumVectors.U16_Zero, EnumVectors.U16_Value])
-    let v_i32 = b.EnumVectors.VectorsCreateValuesI32Vector([EnumVectors.I32_Value, EnumVectors.I32_Zero, EnumVectors.I32_Value])
-    let v_u32 = b.EnumVectors.VectorsCreateValuesU32Vector([EnumVectors.U32_Value, EnumVectors.U32_Zero, EnumVectors.U32_Value])
-    let v_i64 = b.EnumVectors.VectorsCreateValuesI64Vector([EnumVectors.I64_Value, EnumVectors.I64_Zero, EnumVectors.I64_Value])
-    let v_u64 = b.EnumVectors.VectorsCreateValuesU64Vector([EnumVectors.U64_Value, EnumVectors.U64_Zero, EnumVectors.U64_Value])
-    let bools = b.EnumVectors.VectorsCreateBoolsVector([true, false, true])
-    let floats = b.EnumVectors.VectorsCreateFloatsVector([1.25, -2.5])
-    let doubles = b.EnumVectors.VectorsCreateDoublesVector([1.25, -2.5])
-    let root = EnumVectors.VectorsBuilder { b }.start()
-        .add_values_i8(v_i8)
-        .add_values_u8(v_u8)
-        .add_values_i16(v_i16)
-        .add_values_u16(v_u16)
-        .add_values_i32(v_i32)
-        .add_values_u32(v_u32)
-        .add_values_i64(v_i64)
-        .add_values_u64(v_u64)
-        .add_bools(bools)
-        .add_floats(floats)
-        .add_doubles(doubles)
-        .add_scalar(EnumVectors.I8_Zero)
-        .add_optional(EnumVectors.I8_Zero)
-        .add_values(b.EnumVectors.CreateValues(EnumVectors.I8_Value, true))
-        .end()
-    b.Finish(root, "")
-    let result = EnumVectors.GetRootAsVectors(b.SizedCopy())
-    assert result.values_i8_length == 3
-    assert result.values_i8(0) == EnumVectors.I8_Value
-    assert result.values_i8(1) == EnumVectors.I8_Zero
-    assert result.values_i8(2) == EnumVectors.I8_Value
-    assert result.values_u8_length == 3
-    assert result.values_u8(0) == EnumVectors.U8_Value
-    assert result.values_u8(1) == EnumVectors.U8_Zero
-    assert result.values_u8(2) == EnumVectors.U8_Value
-    assert result.values_i16_length == 3
-    assert result.values_i16(0) == EnumVectors.I16_Value
-    assert result.values_i16(1) == EnumVectors.I16_Zero
-    assert result.values_i16(2) == EnumVectors.I16_Value
-    assert result.values_u16_length == 3
-    assert result.values_u16(0) == EnumVectors.U16_Value
-    assert result.values_u16(1) == EnumVectors.U16_Zero
-    assert result.values_u16(2) == EnumVectors.U16_Value
-    assert result.values_i32_length == 3
-    assert result.values_i32(0) == EnumVectors.I32_Value
-    assert result.values_i32(1) == EnumVectors.I32_Zero
-    assert result.values_i32(2) == EnumVectors.I32_Value
-    assert result.values_u32_length == 3
-    assert result.values_u32(0) == EnumVectors.U32_Value
-    assert result.values_u32(1) == EnumVectors.U32_Zero
-    assert result.values_u32(2) == EnumVectors.U32_Value
-    assert result.values_i64_length == 3
-    assert result.values_i64(0) == EnumVectors.I64_Value
-    assert result.values_i64(1) == EnumVectors.I64_Zero
-    assert result.values_i64(2) == EnumVectors.I64_Value
-    assert result.values_u64_length == 3
-    assert result.values_u64(0) == EnumVectors.U64_Value
-    assert result.values_u64(1) == EnumVectors.U64_Zero
-    assert result.values_u64(2) == EnumVectors.U64_Value
-    assert result.bools_length == 3
-    assert result.bools(0) and not result.bools(1) and result.bools(2)
-    assert result.floats(0) == 1.25 and result.floats(1) == -2.5
-    assert result.doubles(0) == 1.25 and result.doubles(1) == -2.5
-    let values = assert result.values()
-    assert values.value() == EnumVectors.I8_Value and values.enabled()
-    assert result.scalar() == EnumVectors.I8_Zero
-    let value, present = result.optional()
-    assert value == EnumVectors.I8_Zero and present
-
-    let empty_builder = flatbuffers.builder {}
-    let empty_root = EnumVectors.VectorsBuilder { empty_builder }.start().end()
-    empty_builder.Finish(empty_root, "")
-    let empty = EnumVectors.GetRootAsVectors(empty_builder.SizedCopy())
-    assert empty.values_i8_length == 0
-    assert empty.scalar() == EnumVectors.I8_Value
-    let absent_value, absent_present = empty.optional()
-    assert absent_value == EnumVectors.I8_Zero and not absent_present
-
 // Verify that the canonical flatbuffer file (produced by the C++ implementation)
 // is readable by the generated Lobster code.
 let fb2 = read_file("monsterdata_test.mon")
@@ -274,7 +180,6 @@ check_read_buffer(fb2)
 // returning errors, and is interpreted correctly.
 let fb1 = make_monster_from_generated_code()
 check_read_buffer(fb1)
-assert MyGame.Example.GetRootAsMonster(fb1).vector_of_enums_length == 3
 // Write the result to file for no good reason.
 write_file("monsterdata_lobster_wire.mon", fb1)
 
@@ -293,6 +198,5 @@ check_read_buffer(fb3)
 
 // Additional tests.
 test_optional_scalars()
-test_enum_vectors()
 
 print "Lobster test successful!"

@@ -326,7 +326,7 @@ class Monster : flatbuffers.handle
     def testhashu64_fnv1a() -> int:
         return flatbuffers.field_uint64(buf_, pos_, 50, 0)
     def testarrayofbools(i:int) -> bool:
-        return read_int8_le(buf_, buf_.flatbuffers.field_vector(pos_, 52) + i * 1)
+        return bool(read_int8_le(buf_, buf_.flatbuffers.field_vector(pos_, 52) + i * 1))
     def testarrayofbools_length() -> int:
         return flatbuffers.field_vector_len(buf_, pos_, 52)
     def testf() -> float:
@@ -405,7 +405,7 @@ class Monster : flatbuffers.handle
     def any_ambiguous_as_M3():
         return MyGame.Example.Monster { buf_, flatbuffers.field_table(buf_, pos_, 96) }
     def vector_of_enums(i:int) -> Color:
-        return read_uint8_le(buf_, buf_.flatbuffers.field_vector(pos_, 98) + i * 1)
+        return Color(read_uint8_le(buf_, buf_.flatbuffers.field_vector(pos_, 98) + i * 1))
     def vector_of_enums_length() -> int:
         return flatbuffers.field_vector_len(buf_, pos_, 98)
     def signed_enum() -> Race:
